@@ -36,7 +36,7 @@ ForeSight 旨在把常见 **统计学方法**、**机器学习模型** 和 **深
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/jhlucc/ForeSight.git
+git clone https://github.com/skygazer42/ForeSight.git
 cd ForeSight
 
 # 2. 创建 Python 环境 
