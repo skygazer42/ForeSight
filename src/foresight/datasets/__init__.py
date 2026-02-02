@@ -3,6 +3,7 @@ from .loaders import (
     load_cashflow_data,
     load_ice_cream_interest,
     load_catfish,
+    load_dataset,
     load_promotion_data,
     load_store_sales,
 )
@@ -14,5 +15,5 @@ __all__ = [
     "load_cashflow_data",
     "load_catfish",
     "load_ice_cream_interest",
+    "load_dataset",
 ]
-

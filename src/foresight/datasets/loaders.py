@@ -40,3 +40,22 @@ def load_catfish() -> pd.DataFrame:
 def load_ice_cream_interest() -> pd.DataFrame:
     path = _require_file(_repo_root() / "statistics time series" / "ice_cream_interest.csv")
     return pd.read_csv(path)
+
+
+def load_dataset(key: str, **kwargs) -> pd.DataFrame:
+    """
+    Convenience loader by dataset key for CLI and quick experiments.
+
+    Note: keyword support is intentionally minimal and dataset-specific.
+    """
+    if key == "store_sales":
+        return load_store_sales(nrows=kwargs.get("nrows"))
+    if key == "promotion_data":
+        return load_promotion_data(nrows=kwargs.get("nrows"))
+    if key == "cashflow_data":
+        return load_cashflow_data()
+    if key == "catfish":
+        return load_catfish()
+    if key == "ice_cream_interest":
+        return load_ice_cream_interest()
+    raise KeyError(f"Unknown dataset key: {key!r}")
