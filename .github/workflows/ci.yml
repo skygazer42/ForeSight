@@ -23,6 +23,9 @@ jobs:
       - name: No notebooks
         run: python tools/check_no_ipynb.py
 
+      - name: Lint
+        run: ruff check src tests tools
+
       - name: Compile
         run: python -m compileall -q src tools
 

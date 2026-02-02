@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 _DATASETS: dict[str, str] = {
     "store_sales": "Retail weekly store/department sales (data/store_sales.csv)",
     "promotion_data": "Retail weekly promotions (data/promotion_data.csv)",

@@ -1,5 +1,5 @@
-from foresight.datasets.registry import list_datasets
 from foresight.datasets.loaders import load_store_sales
+from foresight.datasets.registry import list_datasets
 
 
 def test_list_datasets_contains_store_sales():

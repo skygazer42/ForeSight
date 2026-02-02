@@ -1,12 +1,12 @@
-from .registry import list_datasets
 from .loaders import (
     load_cashflow_data,
-    load_ice_cream_interest,
     load_catfish,
     load_dataset,
+    load_ice_cream_interest,
     load_promotion_data,
     load_store_sales,
 )
+from .registry import list_datasets
 
 __all__ = [
     "list_datasets",
