@@ -51,7 +51,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'foresight'`
 
 **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=src pytest -q`
+Run: `pytest -q`
 Expected: PASS
 
 **Step 5: Commit**
@@ -106,7 +106,7 @@ Expected: FAIL with import error (`foresight.datasets...` missing)
 
 **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=src pytest -q`
+Run: `pytest -q`
 Expected: PASS
 
 **Step 5: Commit**
@@ -174,7 +174,7 @@ Expected: FAIL (missing modules)
 
 **Step 4: Run tests to verify they pass**
 
-Run: `PYTHONPATH=src pytest -q`
+Run: `pytest -q`
 Expected: PASS
 
 **Step 5: Commit**
@@ -211,7 +211,7 @@ Add `.github/workflows/ci.yml` to run:
 Run:
 ```bash
 python tools/check_no_ipynb.py
-PYTHONPATH=src pytest -q
+pytest -q
 ```
 Expected: exit 0
 
@@ -221,4 +221,3 @@ Expected: exit 0
 git add tools/check_no_ipynb.py .github/workflows/ci.yml pyproject.toml
 git commit -m "chore: add no-ipynb guard and CI workflow"
 ```
-
