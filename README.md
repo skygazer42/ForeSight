@@ -13,7 +13,7 @@
 ForeSight 旨在把常见 **统计学方法**、**机器学习模型** 和 **深度学习 Transformer 系列** 的时间序列预测实现集中于一个仓库，便于快速上手、横向对比与二次开发。每类模型都提供：
  
 1. **理论笔记 / Paper 速览**
-2. **Jupyter Notebook 演示**  
+2. **可运行的 Python 脚本演示（保留 cell 结构，便于在 VS Code 中交互运行）**
 3. **可复现实验脚本**  
 4. **数据指标**
    
@@ -48,10 +48,9 @@ pip install -r requirements.txt
 # 若未提供 requirements.txt，可手动安装常用库：
 # pip install numpy pandas scikit-learn matplotlib statsmodels torch pytorch-lightning
 
-# 4. 运行示例（以 Informer 为例）
-jupyter lab                    # 打开 Notebook
-# 或
-python "transformer time series/run_informer.py" --cfg configs/informer.yaml
+# 4. 运行示例（以 Prophet 脚本为例）
+python "ml time series/prophet.py"
+# Transformer 系列实验脚本参考：transformer time series/Time-Series/scripts/
 ```
 
 ---
@@ -73,7 +72,7 @@ python "transformer time series/run_informer.py" --cfg configs/informer.yaml
 * **概率预测**：CRPS · Pinball Loss
 * **异常检测**：Precision · Recall · F1
 
-实验结果示例请见各 Notebook 末尾或 `results/`。
+实验结果示例请见各示例脚本末尾或 `results/`。
 
 ---
 
@@ -103,7 +102,7 @@ python "transformer time series/run_informer.py" --cfg configs/informer.yaml
 
 1. **Fork** → 新建分支 → **提交 PR**
 2. 代码需通过 `flake8` / `black` 检查并附单元测试
-3. 提交前请确保 Notebook 能自顶向下顺利运行
+3. 提交前请确保示例脚本 / 训练脚本能自顶向下顺利运行
 
 ---
 
