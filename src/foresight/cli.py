@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 from pathlib import Path
 
@@ -100,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional path to write JSON leaderboard",
     )
+    leaderboard_naive.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
+    )
     leaderboard_naive.set_defaults(_handler=_cmd_leaderboard_naive)
 
     return p
@@ -150,7 +158,7 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         step=int(args.step),
         min_train_size=int(args.min_train_size),
     )
-    _print_and_maybe_write_json(payload, args.output)
+    _emit(payload, output=args.output, fmt="json")
 
     return 0
 
@@ -166,7 +174,7 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
         min_train_size=int(args.min_train_size),
         season_length=int(args.season_length),
     )
-    _print_and_maybe_write_json(payload, args.output)
+    _emit(payload, output=args.output, fmt="json")
     return 0
 
 
@@ -190,15 +198,73 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             season_length=int(args.season_length),
         ),
     ]
-    _print_and_maybe_write_json(rows, args.output)
+    _emit(rows, output=args.output, fmt=str(args.format))
     return 0
 
 
-def _print_and_maybe_write_json(payload: object, output: str) -> None:
-    text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+def _emit(payload: object, *, output: str, fmt: str) -> None:
+    text = _format_payload(payload, fmt=fmt)
     print(text)
 
     if output:
         out_path = Path(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text + "\n", encoding="utf-8")
+
+
+def _format_payload(payload: object, *, fmt: str) -> str:
+    if fmt == "json":
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    if fmt == "csv":
+        if not isinstance(payload, list):
+            raise TypeError("csv format expects a list of dict rows")
+        return _format_csv(payload)
+    if fmt == "md":
+        if not isinstance(payload, list):
+            raise TypeError("md format expects a list of dict rows")
+        return _format_markdown(payload)
+    raise ValueError(f"Unknown format: {fmt!r}")
+
+
+def _leaderboard_columns() -> list[str]:
+    # Stable output makes diffs and automation easier.
+    return [
+        "model",
+        "dataset",
+        "y_col",
+        "horizon",
+        "step",
+        "min_train_size",
+        "season_length",
+        "n_windows",
+        "mae",
+        "rmse",
+        "mape",
+        "smape",
+    ]
+
+
+def _format_csv(rows: list[dict]) -> str:
+    cols = _leaderboard_columns()
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({k: row.get(k, "") for k in cols})
+    return buf.getvalue().rstrip("\n")
+
+
+def _format_markdown(rows: list[dict]) -> str:
+    cols = _leaderboard_columns()
+
+    def _fmt(v: object) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, float):
+            return f"{v:.6g}"
+        return str(v)
+
+    header = "| " + " | ".join(cols) + " |"
+    sep = "| " + " | ".join(["---"] * len(cols)) + " |"
+    body = ["| " + " | ".join(_fmt(row.get(k, "")) for k in cols) + " |" for row in rows]
+    return "\n".join([header, sep, *body])
