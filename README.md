@@ -44,13 +44,16 @@ python -m venv .venv
 source .venv/bin/activate     
 
 # 3. 安装依赖
-pip install -r requirements.txt
-# 若未提供 requirements.txt，可手动安装常用库：
-# pip install numpy pandas scikit-learn matplotlib statsmodels torch pytorch-lightning
+pip install -e ".[dev]"
 
 # 4. 运行示例（以 Prophet 脚本为例）
 python "ml time series/prophet.py"
 # Transformer 系列实验脚本参考：transformer time series/Time-Series/scripts/
+
+# 5. CLI（可选）
+foresight --help
+foresight datasets list
+foresight leaderboard naive --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --season-length 12 --format md
 ```
 
 ---
