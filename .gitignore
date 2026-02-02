@@ -1,5 +1,6 @@
 *.ipynb
 .ipynb_checkpoints/
+.worktrees/
 
 # Python
 __pycache__/
