@@ -47,6 +47,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_naive_last.set_defaults(_handler=_cmd_eval_naive_last)
 
+    eval_seasonal_naive = eval_sub.add_parser(
+        "seasonal-naive", help="Evaluate seasonal naive baseline"
+    )
+    eval_seasonal_naive.add_argument("--dataset", required=True, help="Dataset key")
+    eval_seasonal_naive.add_argument("--y-col", required=True, help="Target column name")
+    eval_seasonal_naive.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    eval_seasonal_naive.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_seasonal_naive.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum training size for first window",
+    )
+    eval_seasonal_naive.add_argument(
+        "--season-length",
+        type=int,
+        required=True,
+        help="Season length for seasonal naive",
+    )
+    eval_seasonal_naive.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write JSON metrics",
+    )
+    eval_seasonal_naive.set_defaults(_handler=_cmd_eval_seasonal_naive)
+
+    leaderboard = sub.add_parser("leaderboard", help="Run a small builtin leaderboard")
+    leaderboard_sub = leaderboard.add_subparsers(dest="leaderboard_command", required=True)
+
+    leaderboard_naive = leaderboard_sub.add_parser("naive", help="Run naive baselines leaderboard")
+    leaderboard_naive.add_argument("--dataset", required=True, help="Dataset key")
+    leaderboard_naive.add_argument("--y-col", required=True, help="Target column name")
+    leaderboard_naive.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    leaderboard_naive.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    leaderboard_naive.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum training size for first window",
+    )
+    leaderboard_naive.add_argument(
+        "--season-length",
+        type=int,
+        required=True,
+        help="Season length for seasonal naive",
+    )
+    leaderboard_naive.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write JSON leaderboard",
+    )
+    leaderboard_naive.set_defaults(_handler=_cmd_leaderboard_naive)
+
     return p
 
 
@@ -95,12 +150,55 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         step=int(args.step),
         min_train_size=int(args.min_train_size),
     )
+    _print_and_maybe_write_json(payload, args.output)
+
+    return 0
+
+
+def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
+    from .eval import eval_seasonal_naive
+
+    payload = eval_seasonal_naive(
+        dataset=str(args.dataset),
+        y_col=str(args.y_col),
+        horizon=int(args.horizon),
+        step=int(args.step),
+        min_train_size=int(args.min_train_size),
+        season_length=int(args.season_length),
+    )
+    _print_and_maybe_write_json(payload, args.output)
+    return 0
+
+
+def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
+    from .eval import eval_naive_last, eval_seasonal_naive
+
+    rows = [
+        eval_naive_last(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+        ),
+        eval_seasonal_naive(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            season_length=int(args.season_length),
+        ),
+    ]
+    _print_and_maybe_write_json(rows, args.output)
+    return 0
+
+
+def _print_and_maybe_write_json(payload: object, output: str) -> None:
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     print(text)
 
-    if args.output:
-        out_path = Path(args.output)
+    if output:
+        out_path = Path(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text + "\n", encoding="utf-8")
-
-    return 0

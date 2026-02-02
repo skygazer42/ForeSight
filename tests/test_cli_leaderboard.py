@@ -18,37 +18,11 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_eval_naive_last_outputs_json(tmp_path: Path):
-    out = tmp_path / "metrics.json"
+def test_leaderboard_naive_outputs_json_list(tmp_path: Path):
+    out = tmp_path / "leaderboard.json"
     proc = _run_cli(
-        "eval",
-        "naive-last",
-        "--dataset",
-        "catfish",
-        "--y-col",
-        "Total",
-        "--horizon",
-        "3",
-        "--step",
-        "3",
-        "--min-train-size",
-        "12",
-        "--output",
-        str(out),
-    )
-    assert proc.returncode == 0
-    payload = json.loads(proc.stdout)
-    assert payload["model"] == "naive-last"
-    assert payload["dataset"] == "catfish"
-    assert "mae" in payload
-    assert out.exists()
-
-
-def test_eval_seasonal_naive_outputs_json(tmp_path: Path):
-    out = tmp_path / "metrics_seasonal.json"
-    proc = _run_cli(
-        "eval",
-        "seasonal-naive",
+        "leaderboard",
+        "naive",
         "--dataset",
         "catfish",
         "--y-col",
@@ -66,7 +40,8 @@ def test_eval_seasonal_naive_outputs_json(tmp_path: Path):
     )
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
-    assert payload["model"] == "seasonal-naive"
-    assert payload["dataset"] == "catfish"
-    assert "mae" in payload
+    assert isinstance(payload, list)
+    models = {row["model"] for row in payload}
+    assert {"naive-last", "seasonal-naive"}.issubset(models)
     assert out.exists()
+
