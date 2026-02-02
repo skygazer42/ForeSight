@@ -4,6 +4,7 @@ import argparse
 import csv
 import io
 import json
+import sys
 from pathlib import Path
 
 
@@ -26,6 +27,17 @@ def build_parser() -> argparse.ArgumentParser:
     datasets_preview.add_argument("key", help="Dataset key (see: `foresight datasets list`)")
     datasets_preview.add_argument("--nrows", type=int, default=20, help="Number of rows to preview")
     datasets_preview.set_defaults(_handler=_cmd_datasets_preview)
+
+    datasets_validate = datasets_sub.add_parser(
+        "validate", help="Smoke-check local dataset files and basic schemas"
+    )
+    datasets_validate.add_argument(
+        "--nrows",
+        type=int,
+        default=5,
+        help="Number of rows to load for large datasets (default: 5)",
+    )
+    datasets_validate.set_defaults(_handler=_cmd_datasets_validate)
 
     eval_p = sub.add_parser("eval", help="Evaluation utilities")
     eval_sub = eval_p.add_subparsers(dest="eval_command", required=True)
@@ -146,6 +158,44 @@ def _cmd_datasets_preview(args: argparse.Namespace) -> int:
     df = load_dataset(args.key, nrows=int(args.nrows))
     print(df.head(int(args.nrows)).to_string(index=False))
     return 0
+
+
+def _cmd_datasets_validate(args: argparse.Namespace) -> int:
+    from .datasets.loaders import load_dataset
+    from .datasets.registry import list_datasets
+
+    expected_cols = {
+        "store_sales": {"store", "dept", "week", "sales"},
+        "promotion_data": {"store", "dept", "week", "promotion_sales"},
+        "cashflow_data": {
+            "date",
+            "cashflow_category",
+            "cashflow_subcategory",
+            "cashflow",
+            "branch_id",
+        },
+        "catfish": {"Date", "Total"},
+        "ice_cream_interest": {"month", "interest"},
+    }
+
+    nrows = int(args.nrows)
+    failures = 0
+    for key in list_datasets():
+        try:
+            df = load_dataset(key, nrows=nrows)
+            if len(df) <= 0:
+                raise ValueError("loaded 0 rows")
+            req = expected_cols.get(key)
+            if req is not None:
+                missing = sorted(req.difference(df.columns))
+                if missing:
+                    raise ValueError(f"missing columns: {missing}")
+            print(f"OK {key} rows={len(df)} cols={len(df.columns)}")
+        except Exception as e:  # noqa: BLE001
+            failures += 1
+            print(f"FAIL {key}: {type(e).__name__}: {e}", file=sys.stderr)
+
+    return 1 if failures else 0
 
 
 def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
