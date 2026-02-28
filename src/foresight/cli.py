@@ -182,34 +182,19 @@ def _cmd_datasets_preview(args: argparse.Namespace) -> int:
 
 def _cmd_datasets_validate(args: argparse.Namespace) -> int:
     from .datasets.loaders import load_dataset
-    from .datasets.registry import list_datasets
-
-    expected_cols = {
-        "store_sales": {"store", "dept", "week", "sales"},
-        "promotion_data": {"store", "dept", "week", "promotion_sales"},
-        "cashflow_data": {
-            "date",
-            "cashflow_category",
-            "cashflow_subcategory",
-            "cashflow",
-            "branch_id",
-        },
-        "catfish": {"Date", "Total"},
-        "ice_cream_interest": {"month", "interest"},
-    }
+    from .datasets.registry import get_dataset_spec, list_datasets
 
     nrows = int(args.nrows)
     failures = 0
     for key in list_datasets():
         try:
+            spec = get_dataset_spec(key)
             df = load_dataset(key, nrows=nrows, data_dir=str(args.data_dir))
             if len(df) <= 0:
                 raise ValueError("loaded 0 rows")
-            req = expected_cols.get(key)
-            if req is not None:
-                missing = sorted(req.difference(df.columns))
-                if missing:
-                    raise ValueError(f"missing columns: {missing}")
+            missing = sorted(spec.expected_columns.difference(df.columns))
+            if missing:
+                raise ValueError(f"missing columns: {missing}")
             print(f"OK {key} rows={len(df)} cols={len(df.columns)}")
         except Exception as e:  # noqa: BLE001
             failures += 1

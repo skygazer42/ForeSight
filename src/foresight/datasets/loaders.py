@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .registry import list_datasets
+from .registry import DatasetSpec, get_dataset_spec
 
 
 def _repo_root(*, data_dir: str | Path | None = None) -> Path:
@@ -27,32 +27,30 @@ def _require_file(path: Path) -> Path:
     return path
 
 
-def load_store_sales(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "store_sales.csv")
-    return pd.read_csv(path, parse_dates=["week"], nrows=nrows)
+def _load_csv_spec(*, spec: DatasetSpec, nrows: int | None, data_dir: str | Path | None) -> pd.DataFrame:
+    path = _require_file(_repo_root(data_dir=data_dir) / spec.rel_path)
+    read_kwargs = {"nrows": nrows}
+    if spec.parse_dates:
+        read_kwargs["parse_dates"] = list(spec.parse_dates)
+    return pd.read_csv(path, **read_kwargs)
 
+def load_store_sales(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    return load_dataset("store_sales", nrows=nrows, data_dir=data_dir)
 
 def load_promotion_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "promotion_data.csv")
-    return pd.read_csv(path, parse_dates=["week"], nrows=nrows)
+    return load_dataset("promotion_data", nrows=nrows, data_dir=data_dir)
 
 
 def load_cashflow_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "cashflow_data.csv")
-    # Keep parsing conservative; some CSVs might not have a standard date column.
-    return pd.read_csv(path, nrows=nrows)
+    return load_dataset("cashflow_data", nrows=nrows, data_dir=data_dir)
 
 
 def load_catfish(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root(data_dir=data_dir) / "statistics time series" / "catfish.csv")
-    return pd.read_csv(path, parse_dates=["Date"], nrows=nrows)
+    return load_dataset("catfish", nrows=nrows, data_dir=data_dir)
 
 
 def load_ice_cream_interest(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
-    path = _require_file(
-        _repo_root(data_dir=data_dir) / "statistics time series" / "ice_cream_interest.csv"
-    )
-    return pd.read_csv(path, parse_dates=["month"], nrows=nrows)
+    return load_dataset("ice_cream_interest", nrows=nrows, data_dir=data_dir)
 
 
 def load_dataset(
@@ -66,14 +64,5 @@ def load_dataset(
 
     Note: keyword support is intentionally minimal and dataset-specific.
     """
-    if key == "store_sales":
-        return load_store_sales(nrows=nrows, data_dir=data_dir)
-    if key == "promotion_data":
-        return load_promotion_data(nrows=nrows, data_dir=data_dir)
-    if key == "cashflow_data":
-        return load_cashflow_data(nrows=nrows, data_dir=data_dir)
-    if key == "catfish":
-        return load_catfish(nrows=nrows, data_dir=data_dir)
-    if key == "ice_cream_interest":
-        return load_ice_cream_interest(nrows=nrows, data_dir=data_dir)
-    raise KeyError(f"Unknown dataset key: {key!r}. Try one of: {', '.join(list_datasets())}")
+    spec = get_dataset_spec(key)
+    return _load_csv_spec(spec=spec, nrows=nrows, data_dir=data_dir)
