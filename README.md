@@ -104,8 +104,10 @@ foresight leaderboard naive --dataset catfish --y-col Total --horizon 3 --step 3
 ## 🤝 贡献指南 | Contributing
 
 1. **Fork** → 新建分支 → **提交 PR**
-2. 代码需通过 `flake8` / `black` 检查并附单元测试
+2. 代码需通过 `ruff check` / `ruff format` 检查并附单元测试（`pytest`）
 3. 提交前请确保示例脚本 / 训练脚本能自顶向下顺利运行
+
+开发环境与常用命令见 `docs/DEVELOPMENT.md`。
 
 ---
 
