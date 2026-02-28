@@ -13,16 +13,33 @@ def _repo_root() -> Path:
 
 def _is_ignored_dir(path: Path) -> bool:
     parts = set(path.parts)
-    return bool(parts.intersection({".git", ".venv", "venv", "__pycache__", ".ipynb_checkpoints"}))
+    return bool(
+        parts.intersection(
+            {
+                ".git",
+                ".venv",
+                "venv",
+                "__pycache__",
+                ".ipynb_checkpoints",
+                ".worktrees",
+                "worktrees",
+            }
+        )
+    )
 
 
-def main() -> int:
-    root = _repo_root()
+def find_notebooks(root: Path) -> list[Path]:
     hits: list[Path] = []
     for p in root.rglob("*.ipynb"):
         if _is_ignored_dir(p):
             continue
         hits.append(p.relative_to(root))
+    return sorted(hits)
+
+
+def main() -> int:
+    root = _repo_root()
+    hits = find_notebooks(root)
 
     if hits:
         print("Found Jupyter notebooks (*.ipynb). This repo enforces 'no notebooks':", file=sys.stderr)
@@ -36,4 +53,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
