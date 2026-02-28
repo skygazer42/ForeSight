@@ -8,8 +8,13 @@ import pandas as pd
 from .registry import list_datasets
 
 
-def _repo_root() -> Path:
+def _repo_root(*, data_dir: str | Path | None = None) -> Path:
     # src/foresight/datasets/loaders.py -> repo root is 3 levels up from `src/`
+    if isinstance(data_dir, str) and not data_dir.strip():
+        data_dir = None
+    if data_dir is not None:
+        return Path(data_dir).expanduser()
+
     env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
     if env_dir:
         return Path(env_dir).expanduser()
@@ -22,46 +27,53 @@ def _require_file(path: Path) -> Path:
     return path
 
 
-def load_store_sales(*, nrows: int | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root() / "data" / "store_sales.csv")
+def load_store_sales(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "store_sales.csv")
     return pd.read_csv(path, parse_dates=["week"], nrows=nrows)
 
 
-def load_promotion_data(*, nrows: int | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root() / "data" / "promotion_data.csv")
+def load_promotion_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "promotion_data.csv")
     return pd.read_csv(path, parse_dates=["week"], nrows=nrows)
 
 
-def load_cashflow_data(*, nrows: int | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root() / "data" / "cashflow_data.csv")
+def load_cashflow_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    path = _require_file(_repo_root(data_dir=data_dir) / "data" / "cashflow_data.csv")
     # Keep parsing conservative; some CSVs might not have a standard date column.
     return pd.read_csv(path, nrows=nrows)
 
 
-def load_catfish(*, nrows: int | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root() / "statistics time series" / "catfish.csv")
+def load_catfish(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    path = _require_file(_repo_root(data_dir=data_dir) / "statistics time series" / "catfish.csv")
     return pd.read_csv(path, parse_dates=["Date"], nrows=nrows)
 
 
-def load_ice_cream_interest(*, nrows: int | None = None) -> pd.DataFrame:
-    path = _require_file(_repo_root() / "statistics time series" / "ice_cream_interest.csv")
+def load_ice_cream_interest(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+    path = _require_file(
+        _repo_root(data_dir=data_dir) / "statistics time series" / "ice_cream_interest.csv"
+    )
     return pd.read_csv(path, parse_dates=["month"], nrows=nrows)
 
 
-def load_dataset(key: str, **kwargs) -> pd.DataFrame:
+def load_dataset(
+    key: str,
+    *,
+    nrows: int | None = None,
+    data_dir: str | Path | None = None,
+) -> pd.DataFrame:
     """
     Convenience loader by dataset key for CLI and quick experiments.
 
     Note: keyword support is intentionally minimal and dataset-specific.
     """
     if key == "store_sales":
-        return load_store_sales(nrows=kwargs.get("nrows"))
+        return load_store_sales(nrows=nrows, data_dir=data_dir)
     if key == "promotion_data":
-        return load_promotion_data(nrows=kwargs.get("nrows"))
+        return load_promotion_data(nrows=nrows, data_dir=data_dir)
     if key == "cashflow_data":
-        return load_cashflow_data(nrows=kwargs.get("nrows"))
+        return load_cashflow_data(nrows=nrows, data_dir=data_dir)
     if key == "catfish":
-        return load_catfish(nrows=kwargs.get("nrows"))
+        return load_catfish(nrows=nrows, data_dir=data_dir)
     if key == "ice_cream_interest":
-        return load_ice_cream_interest(nrows=kwargs.get("nrows"))
+        return load_ice_cream_interest(nrows=nrows, data_dir=data_dir)
     raise KeyError(f"Unknown dataset key: {key!r}. Try one of: {', '.join(list_datasets())}")

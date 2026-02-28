@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -24,8 +25,9 @@ def eval_naive_last(
     horizon: int,
     step: int,
     min_train_size: int,
+    data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    df = load_dataset(dataset)
+    df = load_dataset(dataset, data_dir=data_dir)
     if y_col not in df.columns:
         raise KeyError(f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}")
 
@@ -64,8 +66,9 @@ def eval_seasonal_naive(
     step: int,
     min_train_size: int,
     season_length: int,
+    data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    df = load_dataset(dataset)
+    df = load_dataset(dataset, data_dir=data_dir)
     if y_col not in df.columns:
         raise KeyError(f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}")
 

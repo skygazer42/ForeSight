@@ -19,6 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show full tracebacks on errors.",
     )
+    p.add_argument(
+        "--data-dir",
+        type=str,
+        default="",
+        help="Base directory to resolve dataset files (overrides FORESIGHT_DATA_DIR).",
+    )
 
     sub = p.add_subparsers(dest="command")
 
@@ -169,7 +175,7 @@ def _cmd_datasets_list(_args: argparse.Namespace) -> int:
 def _cmd_datasets_preview(args: argparse.Namespace) -> int:
     from .datasets.loaders import load_dataset
 
-    df = load_dataset(args.key, nrows=int(args.nrows))
+    df = load_dataset(args.key, nrows=int(args.nrows), data_dir=str(args.data_dir))
     print(df.head(int(args.nrows)).to_string(index=False))
     return 0
 
@@ -196,7 +202,7 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
     failures = 0
     for key in list_datasets():
         try:
-            df = load_dataset(key, nrows=nrows)
+            df = load_dataset(key, nrows=nrows, data_dir=str(args.data_dir))
             if len(df) <= 0:
                 raise ValueError("loaded 0 rows")
             req = expected_cols.get(key)
@@ -221,6 +227,7 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         horizon=int(args.horizon),
         step=int(args.step),
         min_train_size=int(args.min_train_size),
+        data_dir=str(args.data_dir),
     )
     _emit(payload, output=args.output, fmt="json")
 
@@ -237,6 +244,7 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
         step=int(args.step),
         min_train_size=int(args.min_train_size),
         season_length=int(args.season_length),
+        data_dir=str(args.data_dir),
     )
     _emit(payload, output=args.output, fmt="json")
     return 0
@@ -252,6 +260,7 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
+            data_dir=str(args.data_dir),
         ),
         eval_seasonal_naive(
             dataset=str(args.dataset),
@@ -260,6 +269,7 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             season_length=int(args.season_length),
+            data_dir=str(args.data_dir),
         ),
     ]
     _emit(rows, output=args.output, fmt=str(args.format))
