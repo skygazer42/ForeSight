@@ -83,7 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write JSON metrics",
+        help="Optional path to write metrics output",
+    )
+    eval_naive_last.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
     )
     eval_naive_last.set_defaults(_handler=_cmd_eval_naive_last)
 
@@ -110,7 +116,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write JSON metrics",
+        help="Optional path to write metrics output",
+    )
+    eval_seasonal_naive.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
     )
     eval_seasonal_naive.set_defaults(_handler=_cmd_eval_seasonal_naive)
 
@@ -253,7 +265,7 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         min_train_size=int(args.min_train_size),
         data_dir=str(args.data_dir),
     )
-    _emit(payload, output=args.output, fmt="json")
+    _emit(payload, output=args.output, fmt=str(args.format))
 
     return 0
 
@@ -270,7 +282,7 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
         season_length=int(args.season_length),
         data_dir=str(args.data_dir),
     )
-    _emit(payload, output=args.output, fmt="json")
+    _emit(payload, output=args.output, fmt=str(args.format))
     return 0
 
 
@@ -314,13 +326,23 @@ def _format_payload(payload: object, *, fmt: str) -> str:
     if fmt == "json":
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
     if fmt == "csv":
-        if not isinstance(payload, list):
-            raise TypeError("csv format expects a list of dict rows")
-        return _format_csv(payload)
+        rows: list[dict]
+        if isinstance(payload, dict):
+            rows = [payload]
+        elif isinstance(payload, list):
+            rows = payload
+        else:
+            raise TypeError("csv format expects a dict row or list of dict rows")
+        return _format_csv(rows)
     if fmt == "md":
-        if not isinstance(payload, list):
-            raise TypeError("md format expects a list of dict rows")
-        return _format_markdown(payload)
+        rows_md: list[dict]
+        if isinstance(payload, dict):
+            rows_md = [payload]
+        elif isinstance(payload, list):
+            rows_md = payload
+        else:
+            raise TypeError("md format expects a dict row or list of dict rows")
+        return _format_markdown(rows_md)
     raise ValueError(f"Unknown format: {fmt!r}")
 
 
