@@ -23,6 +23,20 @@ dev = [
   "pytest>=7.0",
   "ruff>=0.5",
 ]
+ml = [
+  "scikit-learn>=1.0",
+]
+stats = [
+  "statsmodels>=0.14",
+]
+torch = [
+  "torch>=2.0",
+]
+all = [
+  "scikit-learn>=1.0",
+  "statsmodels>=0.14",
+  "torch>=2.0",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }

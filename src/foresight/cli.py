@@ -6,6 +6,7 @@ import io
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,6 +28,87 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     sub = p.add_subparsers(dest="command")
+
+    models = sub.add_parser("models", help="Model registry utilities")
+    models_sub = models.add_subparsers(dest="models_command", required=True)
+
+    models_list = models_sub.add_parser("list", help="List available models")
+    models_list.add_argument(
+        "--format",
+        choices=["tsv", "json"],
+        default="tsv",
+        help="Output format (default: tsv)",
+    )
+    models_list.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    models_list.set_defaults(_handler=_cmd_models_list)
+
+    models_info = models_sub.add_parser("info", help="Show details about a model")
+    models_info.add_argument("key", help="Model key (see: `foresight models list`)")
+    models_info.add_argument(
+        "--format",
+        choices=["json"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    models_info.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    models_info.set_defaults(_handler=_cmd_models_info)
+
+    cv = sub.add_parser("cv", help="Cross-validation utilities")
+    cv_sub = cv.add_subparsers(dest="cv_command", required=True)
+
+    cv_run = cv_sub.add_parser("run", help="Run rolling-origin CV and output predictions")
+    cv_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    cv_run.add_argument("--dataset", required=True, help="Dataset key")
+    cv_run.add_argument(
+        "--y-col",
+        type=str,
+        default="",
+        help="Optional target column name (default: use dataset spec default_y).",
+    )
+    cv_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    cv_run.add_argument("--step-size", type=int, default=1, help="CV step size (default: 1)")
+    cv_run.add_argument("--min-train-size", type=int, required=True, help="Minimum train size")
+    cv_run.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help="Optional rolling train window size (default: expanding window).",
+    )
+    cv_run.add_argument(
+        "--n-windows",
+        type=int,
+        default=None,
+        help="Optional limit to the last N CV windows.",
+    )
+    cv_run.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help="Model parameter as key=value (repeatable). Example: --model-param season_length=12",
+    )
+    cv_run.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    cv_run.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help="Output format for predictions (default: csv)",
+    )
+    cv_run.set_defaults(_handler=_cmd_cv_run)
 
     datasets = sub.add_parser("datasets", help="Dataset utilities")
     datasets_sub = datasets.add_subparsers(dest="datasets_command", required=True)
@@ -62,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=5,
         help="Number of rows to load for large datasets (default: 5)",
+    )
+    datasets_validate.add_argument(
+        "--check-time",
+        action="store_true",
+        help="Check per-series ds ordering and duplicates (uses dataset spec).",
     )
     datasets_validate.set_defaults(_handler=_cmd_datasets_validate)
 
@@ -138,6 +225,133 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_seasonal_naive.set_defaults(_handler=_cmd_eval_seasonal_naive)
 
+    eval_run = eval_sub.add_parser("run", help="Evaluate any registered model")
+    eval_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    eval_run.add_argument("--dataset", required=True, help="Dataset key")
+    eval_run.add_argument(
+        "--y-col",
+        type=str,
+        default="",
+        help="Optional target column name (default: use dataset spec default_y).",
+    )
+    eval_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    eval_run.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_run.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum training size for first window",
+    )
+    eval_run.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
+    )
+    eval_run.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help="Optional rolling train window size (default: expanding window).",
+    )
+    eval_run.add_argument(
+        "--conformal-levels",
+        type=str,
+        default="",
+        help="Optional conformal levels as percentages or floats, e.g. 80,90 or 0.8,0.9",
+    )
+    eval_run.add_argument(
+        "--conformal-pooled",
+        action="store_true",
+        help="Pool residuals across steps instead of per-step conformal radii.",
+    )
+    eval_run.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help="Model parameter as key=value (repeatable). Example: --model-param season_length=12",
+    )
+    eval_run.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write metrics output",
+    )
+    eval_run.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    eval_run.set_defaults(_handler=_cmd_eval_run)
+
+    eval_csv = eval_sub.add_parser("csv", help="Evaluate a model on an arbitrary CSV file")
+    eval_csv.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    eval_csv.add_argument("--path", required=True, help="Path to a CSV file")
+    eval_csv.add_argument("--time-col", required=True, help="Time column name")
+    eval_csv.add_argument("--y-col", required=True, help="Target column name")
+    eval_csv.add_argument(
+        "--id-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated ID columns for panel data (e.g. store,dept)",
+    )
+    eval_csv.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse the time column as datetime.",
+    )
+    eval_csv.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    eval_csv.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_csv.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum training size for first window",
+    )
+    eval_csv.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
+    )
+    eval_csv.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help="Optional rolling train window size (default: expanding window).",
+    )
+    eval_csv.add_argument(
+        "--conformal-levels",
+        type=str,
+        default="",
+        help="Optional conformal levels as percentages or floats, e.g. 80,90 or 0.8,0.9",
+    )
+    eval_csv.add_argument(
+        "--conformal-pooled",
+        action="store_true",
+        help="Pool residuals across steps instead of per-step conformal radii.",
+    )
+    eval_csv.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help="Model parameter as key=value (repeatable). Example: --model-param season_length=12",
+    )
+    eval_csv.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write metrics output",
+    )
+    eval_csv.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    eval_csv.set_defaults(_handler=_cmd_eval_csv)
+
     leaderboard = sub.add_parser("leaderboard", help="Run a small builtin leaderboard")
     leaderboard_sub = leaderboard.add_subparsers(dest="leaderboard_command", required=True)
 
@@ -178,6 +392,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
     leaderboard_naive.set_defaults(_handler=_cmd_leaderboard_naive)
 
+    leaderboard_models = leaderboard_sub.add_parser(
+        "models", help="Run a leaderboard across registered models"
+    )
+    leaderboard_models.add_argument("--dataset", required=True, help="Dataset key")
+    leaderboard_models.add_argument(
+        "--y-col",
+        type=str,
+        default="",
+        help="Optional target column name (default: use dataset spec default_y).",
+    )
+    leaderboard_models.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    leaderboard_models.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    leaderboard_models.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum training size for first window",
+    )
+    leaderboard_models.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
+    )
+    leaderboard_models.add_argument(
+        "--models",
+        type=str,
+        default="",
+        help="Comma-separated model keys (default: all core models).",
+    )
+    leaderboard_models.add_argument(
+        "--include-optional",
+        action="store_true",
+        help="Include models requiring optional extras (e.g. statsmodels).",
+    )
+    leaderboard_models.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write leaderboard output",
+    )
+    leaderboard_models.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    leaderboard_models.set_defaults(_handler=_cmd_leaderboard_models)
+
     return p
 
 
@@ -207,6 +470,124 @@ def main(argv: list[str] | None = None) -> int:
             raise
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
+
+
+def _coerce_model_param_value(raw: str) -> Any:
+    s = str(raw).strip()
+    lower = s.lower()
+
+    if lower in {"true", "false"}:
+        return lower == "true"
+    if lower in {"none", "null"}:
+        return None
+
+    if "," in s:
+        parts = [p.strip() for p in s.split(",") if p.strip()]
+        return tuple(_coerce_model_param_value(p) for p in parts)
+
+    try:
+        return int(s)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        return float(s)
+    except Exception:  # noqa: BLE001
+        pass
+    return s
+
+
+def _parse_model_params(items: list[str]) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    for item in items:
+        if "=" not in str(item):
+            raise ValueError(f"--model-param must be key=value, got: {item!r}")
+        key, value = str(item).split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"--model-param must be key=value, got: {item!r}")
+        params[key] = _coerce_model_param_value(value)
+    return params
+
+
+def _emit_text(text: str, *, output: str) -> None:
+    print(text)
+    if output:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text + "\n", encoding="utf-8")
+
+
+def _emit_dataframe(df: Any, *, output: str, fmt: str) -> None:
+    if fmt == "csv":
+        text = df.to_csv(index=False).rstrip("\n")
+        _emit_text(text, output=output)
+        return
+    if fmt == "json":
+        text = df.to_json(orient="records", date_format="iso")
+        _emit_text(text, output=output)
+        return
+    raise ValueError(f"Unknown dataframe format: {fmt!r}")
+
+
+def _cmd_models_list(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec, list_models
+
+    rows: list[dict[str, Any]] = []
+    for key in list_models():
+        spec = get_model_spec(key)
+        rows.append(
+            {
+                "key": spec.key,
+                "requires": ",".join(spec.requires),
+                "description": spec.description,
+                "default_params": dict(spec.default_params),
+            }
+        )
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _emit(rows, output=str(args.output), fmt="json")
+        return 0
+
+    lines = [f"{r['key']}\t{r['requires']}\t{r['description']}" for r in rows]
+    _emit_text("\n".join(lines), output=str(args.output))
+    return 0
+
+
+def _cmd_models_info(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec
+
+    spec = get_model_spec(str(args.key))
+    payload = {
+        "key": spec.key,
+        "description": spec.description,
+        "requires": list(spec.requires),
+        "default_params": dict(spec.default_params),
+        "param_help": dict(spec.param_help),
+    }
+    _emit(payload, output=str(args.output), fmt=str(args.format))
+    return 0
+
+
+def _cmd_cv_run(args: argparse.Namespace) -> int:
+    from .cv import cross_validation_predictions
+
+    model_params = _parse_model_params(list(args.model_param))
+    y_col = str(args.y_col).strip() or None
+    df = cross_validation_predictions(
+        model=str(args.model),
+        dataset=str(args.dataset),
+        y_col=y_col,
+        horizon=int(args.horizon),
+        step_size=int(args.step_size),
+        min_train_size=int(args.min_train_size),
+        max_train_size=args.max_train_size,
+        n_windows=args.n_windows,
+        model_params=model_params,
+        data_dir=str(args.data_dir),
+    )
+    _emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+    return 0
 
 
 def _cmd_datasets_list(args: argparse.Namespace) -> int:
@@ -264,6 +645,19 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
                         raise ValueError(f"parse_dates column is not datetime: {col!r}")
                     if df[col].isna().any():
                         raise ValueError(f"parse_dates column contains NaT/NA values: {col!r}")
+
+            if bool(args.check_time):
+                from .data.format import to_long, validate_long_df
+
+                long_df = to_long(
+                    df,
+                    time_col=spec.time_col,
+                    y_col=spec.default_y,
+                    id_cols=tuple(spec.group_cols),
+                    dropna=True,
+                )
+                long_df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+                validate_long_df(long_df, require_sorted=True, require_unique_ds=True)
             print(f"OK {key} rows={len(df)} cols={len(df.columns)}")
         except Exception as e:  # noqa: BLE001
             failures += 1
@@ -306,6 +700,72 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_eval_run(args: argparse.Namespace) -> int:
+    from .eval_forecast import eval_model
+
+    model_params = _parse_model_params(list(args.model_param))
+    y_col = str(args.y_col).strip() or None
+    payload = eval_model(
+        model=str(args.model),
+        dataset=str(args.dataset),
+        y_col=y_col,
+        horizon=int(args.horizon),
+        step=int(args.step),
+        min_train_size=int(args.min_train_size),
+        max_windows=args.max_windows,
+        max_train_size=args.max_train_size,
+        conformal_levels=str(args.conformal_levels).strip() or None,
+        conformal_per_step=(not bool(args.conformal_pooled)),
+        model_params=model_params,
+        data_dir=str(args.data_dir),
+    )
+    _emit(payload, output=args.output, fmt=str(args.format))
+    return 0
+
+
+def _cmd_eval_csv(args: argparse.Namespace) -> int:
+    from .data.format import to_long
+    from .eval_forecast import eval_model_long_df
+    from .io import ensure_datetime, load_csv, parse_id_cols
+
+    model_params = _parse_model_params(list(args.model_param))
+    id_cols = parse_id_cols(str(args.id_cols))
+
+    df = load_csv(str(args.path))
+    if bool(args.parse_dates):
+        ensure_datetime(df, str(args.time_col))
+
+    long_df = to_long(
+        df,
+        time_col=str(args.time_col),
+        y_col=str(args.y_col),
+        id_cols=id_cols,
+        dropna=True,
+    )
+    payload = eval_model_long_df(
+        model=str(args.model),
+        long_df=long_df,
+        horizon=int(args.horizon),
+        step=int(args.step),
+        min_train_size=int(args.min_train_size),
+        max_windows=args.max_windows,
+        max_train_size=args.max_train_size,
+        conformal_levels=str(args.conformal_levels).strip() or None,
+        conformal_per_step=(not bool(args.conformal_pooled)),
+        model_params=model_params,
+    )
+    payload.update(
+        {
+            "dataset": str(args.path),
+            "time_col": str(args.time_col),
+            "y_col": str(args.y_col),
+            "id_cols": list(id_cols),
+        }
+    )
+    _emit(payload, output=str(args.output), fmt=str(args.format))
+    return 0
+
+
 def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
     from .eval import eval_naive_last, eval_seasonal_naive
 
@@ -331,6 +791,42 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
         ),
     ]
     _emit(rows, output=args.output, fmt=str(args.format))
+    return 0
+
+
+def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
+    from .eval_forecast import eval_model
+    from .models.registry import get_model_spec, list_models
+
+    y_col = str(args.y_col).strip() or None
+
+    if str(args.models).strip():
+        keys = [k.strip() for k in str(args.models).split(",") if k.strip()]
+    else:
+        keys = [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
+
+    rows: list[dict[str, Any]] = []
+    for key in keys:
+        try:
+            payload = eval_model(
+                model=str(key),
+                dataset=str(args.dataset),
+                y_col=y_col,
+                horizon=int(args.horizon),
+                step=int(args.step),
+                min_train_size=int(args.min_train_size),
+                max_windows=args.max_windows,
+                data_dir=str(args.data_dir),
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"SKIP {key}: {type(e).__name__}: {e}", file=sys.stderr)
+            continue
+
+        slim = {k: v for k, v in payload.items() if not str(k).endswith("_by_step")}
+        rows.append(slim)
+
+    rows.sort(key=lambda r: float(r.get("mae", float("inf"))))
+    _emit(rows, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -377,8 +873,12 @@ def _leaderboard_columns() -> list[str]:
         "horizon",
         "step",
         "min_train_size",
+        "max_windows",
         "season_length",
+        "n_series",
+        "n_series_skipped",
         "n_windows",
+        "n_points",
         "mae",
         "rmse",
         "mape",

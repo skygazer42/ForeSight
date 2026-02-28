@@ -12,6 +12,9 @@ class DatasetSpec:
     rel_path: Path
     expected_columns: set[str]
     parse_dates: list[str]
+    time_col: str
+    default_y: str
+    group_cols: tuple[str, ...] = ()
 
 
 _SPECS: dict[str, DatasetSpec] = {
@@ -21,6 +24,9 @@ _SPECS: dict[str, DatasetSpec] = {
         rel_path=Path("data/store_sales.csv"),
         expected_columns={"store", "dept", "week", "sales"},
         parse_dates=["week"],
+        time_col="week",
+        default_y="sales",
+        group_cols=("store", "dept"),
     ),
     "promotion_data": DatasetSpec(
         key="promotion_data",
@@ -28,6 +34,9 @@ _SPECS: dict[str, DatasetSpec] = {
         rel_path=Path("data/promotion_data.csv"),
         expected_columns={"store", "dept", "week", "promotion_sales"},
         parse_dates=["week"],
+        time_col="week",
+        default_y="promotion_sales",
+        group_cols=("store", "dept"),
     ),
     "cashflow_data": DatasetSpec(
         key="cashflow_data",
@@ -41,6 +50,9 @@ _SPECS: dict[str, DatasetSpec] = {
             "branch_id",
         },
         parse_dates=["date"],
+        time_col="date",
+        default_y="cashflow",
+        group_cols=("branch_id", "cashflow_category", "cashflow_subcategory"),
     ),
     "catfish": DatasetSpec(
         key="catfish",
@@ -48,6 +60,9 @@ _SPECS: dict[str, DatasetSpec] = {
         rel_path=Path("statistics time series/catfish.csv"),
         expected_columns={"Date", "Total"},
         parse_dates=["Date"],
+        time_col="Date",
+        default_y="Total",
+        group_cols=(),
     ),
     "ice_cream_interest": DatasetSpec(
         key="ice_cream_interest",
@@ -55,6 +70,9 @@ _SPECS: dict[str, DatasetSpec] = {
         rel_path=Path("statistics time series/ice_cream_interest.csv"),
         expected_columns={"month", "interest"},
         parse_dates=["month"],
+        time_col="month",
+        default_y="interest",
+        group_cols=(),
     ),
 }
 

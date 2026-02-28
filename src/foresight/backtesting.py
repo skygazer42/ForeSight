@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from .splits import rolling_origin_splits
+
 Forecaster = Callable[[Any, int], np.ndarray]
 
 
@@ -25,6 +27,7 @@ def walk_forward(
     horizon: int,
     step: int = 1,
     min_train_size: int,
+    max_train_size: int | None = None,
     max_windows: int | None = None,
     forecaster: Forecaster,
 ) -> WalkForwardResult:
@@ -42,29 +45,31 @@ def walk_forward(
         raise ValueError("step must be >= 1")
     if min_train_size <= 0:
         raise ValueError("min_train_size must be >= 1")
+    if max_train_size is not None and max_train_size <= 0:
+        raise ValueError("max_train_size must be >= 1")
     if max_windows is not None and max_windows <= 0:
         raise ValueError("max_windows must be >= 1")
-
-    max_train_end = series.size - horizon
-    if max_train_end < min_train_size:
-        raise ValueError(
-            f"Not enough data: need at least min_train_size+horizon={min_train_size + horizon}, got {series.size}"
-        )
 
     y_true_list: list[np.ndarray] = []
     y_pred_list: list[np.ndarray] = []
     train_ends: list[int] = []
 
-    for train_end in range(min_train_size, max_train_end + 1, step):
-        train = series[:train_end]
-        true = series[train_end : train_end + horizon]
+    for split in rolling_origin_splits(
+        series.size,
+        horizon=int(horizon),
+        step_size=int(step),
+        min_train_size=int(min_train_size),
+        max_train_size=max_train_size,
+    ):
+        train = series[split.train_start : split.train_end]
+        true = series[split.test_start : split.test_end]
         pred = np.asarray(forecaster(train, horizon), dtype=float)
         if pred.shape != (horizon,):
             raise ValueError(f"forecaster must return shape ({horizon},), got {pred.shape}")
 
         y_true_list.append(true)
         y_pred_list.append(pred)
-        train_ends.append(train_end)
+        train_ends.append(split.train_end)
         if max_windows is not None and len(y_true_list) >= max_windows:
             break
 

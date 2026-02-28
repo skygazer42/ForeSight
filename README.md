@@ -1,133 +1,308 @@
-# ForeSight 
+# ForeSight
 
-> **ARMA • GHTBLM • STM • Informer** 等时间序列模型实现与对比
-> *A curated collection of classic & modern time‑series forecasting models.*
+> A practical time-series forecasting playground + a lightweight benchmarking toolkit (`foresight`).
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/jhlucc/ForeSight)
 ![GitHub stars](https://img.shields.io/github/stars/jhlucc/ForeSight)
 ![License](https://img.shields.io/github/license/jhlucc/ForeSight)
-  
----  
-## 📖 项目简介 | Overview
-
-ForeSight 旨在把常见 **统计学方法**、**机器学习模型** 和 **深度学习 Transformer 系列** 的时间序列预测实现集中于一个仓库，便于快速上手、横向对比与二次开发。每类模型都提供：
- 
-1. **理论笔记 / Paper 速览**
-2. **可运行的 Python 脚本演示（保留 cell 结构，便于在 VS Code 中交互运行）**
-3. **可复现实验脚本**  
-4. **数据指标**
-   
---- 
-
-## 🗂️ 目录结构 | Repository Structure
-
-| 路径                         | 说明                 | 典型内容                                             |
-| -------------------------- | ------------------ | ------------------------------------------------ |
-| `data/`                    | 数据与预处理             | `prophet` 示例数据集等                                 |
-| `statistics time series/`  | 经典统计模型             | `ARMA`, `VAR`, `SARIMA`…                         |
-| `ml time series/`          | 机器学习方法             | `LightGBM`, `XGBoost`, `RandomForest`…           |
-| `transformer time series/` | 深度学习 / Transformer | `Informer`, `FEDformer`, `Autoformer`, `GPT‑TS`… |
-| `paper/`                   | 阅读笔记 & 资料          | 数据集介绍、论文摘要                                       |
-| `README.md`                | 项目说明               | ——                                               |
 
 ---
 
-## 🚀 快速开始 | Quick Start
+## 📖 项目简介 | Overview
+
+这个仓库有两条主线：
+
+1) **脚本/笔记集合（仓库根目录各子文件夹）**  
+   - `statistics time series/`：经典统计模型与示例脚本（ARMA/ARIMA/VAR…）  
+   - `ml time series/`：传统 ML 的时序建模脚本（Prophet/树模型特征工程…）  
+   - `transformer time series/`：深度学习/Transformer 系列实验区（Informer/FEDformer/Autoformer…）  
+   - `paper/`：阅读笔记与资料整理
+
+2) **`foresight` Python 包（`src/foresight/`）**  
+   一个“默认依赖很轻”的 forecasting toolkit：**模型注册表 + 统一评测/回测 + 指标 + CLI**。  
+   目标是让你用一套统一接口快速跑 baseline、做 walk-forward backtesting、输出可对比的 leaderboard。
+
+> 设计风格参考主流时间序列工具的常见模式：统一模型接口（sktime/Darts 风格）、长表/面板数据（StatsForecast/Prophet 常见列约定）、backtesting-first（walk-forward / cross-validation）。见文末 *Related Projects*。
+
+---
+
+## 🚀 快速开始 | Quick Start (CLI)
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/skygazer42/ForeSight.git
-cd ForeSight
-
-# 2. 创建 Python 环境 
+# 1) 环境
 python -m venv .venv
-source .venv/bin/activate     
+source .venv/bin/activate
 
-# 3. 安装依赖
+# 2) 安装（默认仅 numpy/pandas + dev 工具）
 pip install -e ".[dev]"
 
-# 4. 运行示例（以 Prophet 脚本为例）
-python "ml time series/prophet.py"
-# Transformer 系列实验脚本参考：transformer time series/Time-Series/scripts/
-
-# 5. CLI（可选）
-foresight --help
+# 3) 数据集
 foresight datasets list
-foresight leaderboard naive --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --season-length 12 --format md
+foresight datasets preview catfish --nrows 10
+
+# 4) 模型注册表
+foresight models list
+foresight models info theta
+
+# 5) 评测（任意注册模型）
+foresight eval run --model naive-last --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12
+foresight eval run --model seasonal-naive --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --model-param season_length=12
+
+# 6) Leaderboard（多个模型）
+foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive,theta,holt
+foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive --format md
+
+# 7) Cross-validation 预测明细表（用于分析/画图/区间校准）
+foresight cv run --model theta --dataset catfish --y-col Total --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30 --format csv
+
+# 8) Conformal intervals（基于回测残差的对称区间；快速 baseline）
+foresight eval run --model theta --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --conformal-levels 80,90
+
+# 9) 直接评测任意 CSV（无需注册到 datasets registry）
+foresight eval csv --model naive-last --path ./my.csv --time-col ds --y-col y --parse-dates --horizon 3 --step 1 --min-train-size 12
 ```
 
 ---
 
-## 🔍 数据集 | Datasets
+## 🧪 快速开始 | Quick Start (Python API)
 
-* **电力负荷**：`ElectricityLoadDiagrams`
-* **交通流量**：`PEMS‑Bay` / `PEMS‑D7`
-* **气象数据**：`Weather`、`ETTh1/ETTm1`
-* **金融行情**：自采股票 / 加密货币 K 线
+```python
+from foresight.eval_forecast import eval_model
+from foresight.intervals import bootstrap_intervals
+from foresight.models.registry import make_forecaster
 
-下载脚本与预处理说明见 `data/` 及子目录。
+metrics = eval_model(
+    model="theta",
+    dataset="catfish",
+    y_col="Total",
+    horizon=3,
+    step=3,
+    min_train_size=12,
+    model_params={"alpha": 0.2},
+)
 
----
+f = make_forecaster("moving-average", window=3)
+intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min_train_size=4)
+```
 
-## 📊 评估指标 | Metrics
-
-* **回归**：MAE · RMSE · MAPE · sMAPE
-* **概率预测**：CRPS · Pinball Loss
-* **异常检测**：Precision · Recall · F1
-
-实验结果示例请见各示例脚本末尾或 `results/`。
-
----
-
-## 🧠 已实现模型 | Implemented Models
-
-| 类别          | 名称（部分）                                                                         |
-| ----------- | ------------------------------------------------------------------------------ |
-| 统计          | ARMA · ARIMA · SARIMA · VAR · GARCH                                            |
-| ML          | LGBM · XGBoost · CatBoost · SVR · RandomForest                                 |
-| DL          | LSTM · Seq2Seq · TCN · N‑Beats                                                 |
-| Transformer | **Informer · FEDformer · Autoformer · ETSformer · Non‑stationary Transformer** |
-| 其它          | Prophet · NeuralProphet · GHTBLM · STM                                         |
+更多可运行示例见：
+- `examples/quickstart_eval.py`
+- `examples/leaderboard.py`
+- `examples/cv_and_conformal.py`
+- `examples/intermittent_demand.py`
 
 ---
 
-## 📌 TODO
+## 🗂️ 目录结构 | Repository Structure
 
-* [ ] 增加 **时序分类 / 异常检测** 任务
-* [ ] 引入 **多变量多步长** 统一评测框架
-* [ ] 提供 Docker 镜像与 CLI 工具
-
-欢迎 Issue / PR！
-
----
-
-## 🤝 贡献指南 | Contributing
-
-1. **Fork** → 新建分支 → **提交 PR**
-2. 代码需通过 `ruff check` / `ruff format` 检查并附单元测试（`pytest`）
-3. 提交前请确保示例脚本 / 训练脚本能自顶向下顺利运行
-
-开发环境与常用命令见 `docs/DEVELOPMENT.md`。
+| Path | What | Notes |
+| --- | --- | --- |
+| `src/foresight/` | Python package | CLI + model registry + eval/backtesting |
+| `examples/` | Runnable scripts | No notebooks; quick smoke demos |
+| `data/` | Local data files | Some datasets are bundled as CSV |
+| `statistics time series/` | Classic stats scripts | Educational / experiments |
+| `ml time series/` | ML scripts | Feature engineering & models |
+| `transformer time series/` | Transformer experiments | Larger dependencies; separate area |
+| `paper/` | Notes | Papers & summaries |
 
 ---
 
-## 📝 引用 | References
+## 🧠 Model Zoo (`foresight.models`)
 
-* Box G., Jenkins G. **Time Series Analysis: Forecasting and Control**
-* Haoyi Zhou *et al.* **Informer: Beyond Efficient Transformer for Long Sequence Time‑Series Forecasting** (AAAI 2021)
-* Tianqi Zhu *et al.* **FEDformer: Frequency Enhanced Decomposed Transformer for Long‑term Series Forecasting** (ICLR 2022)
-* *更多文献见* `paper/`
+`foresight` 内置的是“轻量、可跑、可回测”的模型集合（多数为纯 numpy 实现；少数为可选依赖封装）。
+
+### Core (no optional deps)
+
+- `naive-last`：最后值重复
+- `seasonal-naive`：季节性重复（`season_length`）
+- `mean` / `median`
+- `drift`：线性漂移外推
+- `moving-average`：滑动均值（`window`）
+- `seasonal-mean`：季节均值（`season_length`）
+- `ses`：Simple Exponential Smoothing（`alpha`）
+- `ses-auto`：SES 参数自动调参（`grid_size`）
+- `holt`：Holt 线性趋势（`alpha`, `beta`）
+- `holt-auto`：Holt 参数自动调参（`grid_size`）
+- `holt-damped`：Holt damped trend（`alpha`, `beta`, `phi`）
+- `holt-winters-add`：Holt-Winters 加性季节（`season_length`, `alpha`, `beta`, `gamma`）
+- `holt-winters-add-auto`：HW Add 参数自动调参（`season_length`, `grid_size`）
+- `theta`：Theta-style baseline（`alpha`）
+- `theta-auto`：Theta 参数自动调参（`grid_size`）
+- `ar-ols`：AR(p) by OLS（`p`）
+- `ar-ols-lags`：自定义 lag 集的 AR-OLS（`lags=1,2,12`）
+- `sar-ols`：季节性 AR-OLS（`p`, `P`, `season_length`）
+- `ar-ols-auto`：AIC 自动选择 AR(p)（`max_p`）
+- `lr-lag`：lag 特征 + 线性回归（`lags`）
+- `lr-lag-direct`：lag 特征 + 线性回归（direct multi-horizon, `lags`）
+- `fourier`：Fourier 回归季节项 + 趋势（`period`, `order`, `include_trend`）
+- `fourier-multi`：多季节 Fourier 回归（`periods=7,365`, `orders=2`）
+- `poly-trend`：多项式趋势回归（`degree`）
+- `fft`：FFT 频域外推 baseline（`top_k`, `include_trend`）
+- `analog-knn`：Analog kNN（非参数，lag window 最近邻）（`lags`, `k`, `normalize`, `weights`）
+- `kalman-level`：Kalman local-level（`process_variance`, `obs_variance`）
+- `kalman-trend`：Kalman local linear trend（`level_variance`, `trend_variance`, `obs_variance`）
+- `croston`：Croston classic 间歇需求（`alpha`）
+- `croston-sba`：Croston SBA bias correction（`alpha`）
+- `croston-sbj`：Croston SBJ bias correction（`alpha`）
+- `croston-opt`：Croston alpha 自动调参（`grid_size`）
+- `tsb`：TSB 间歇需求（`alpha`, `beta`）
+- `les`：LES（Linear-Exponential Smoothing，支持“无需求时线性衰减”）（`alpha`, `beta`）
+- `adida`：ADIDA 聚合/反聚合（`agg_period`, `base`, `alpha`）
+- `pipeline`：meta 模型：先做变换再跑 base 模型（`base`, `transforms`, 其余参数透传）
+- `ensemble-mean`：meta 模型：多个成员模型取平均（`members=naive-last,theta,...`）
+- `ensemble-median`：meta 模型：多个成员模型取中位数（`members=...`）
+
+### Optional extras
+
+- `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
+- `rf-lag`（requires `.[ml]`）：lag 特征 + RandomForest（direct multi-horizon, `lags`, `n_estimators`…）
+- `lasso-lag`（requires `.[ml]`）：lag 特征 + Lasso（direct multi-horizon, `lags`, `alpha`…）
+- `elasticnet-lag`（requires `.[ml]`）：lag 特征 + ElasticNet（direct multi-horizon, `lags`, `alpha`, `l1_ratio`…）
+- `knn-lag`（requires `.[ml]`）：lag 特征 + KNN（direct multi-horizon, `lags`, `n_neighbors`…）
+- `gbrt-lag`（requires `.[ml]`）：lag 特征 + GradientBoosting（direct multi-horizon, `lags`, `n_estimators`…）
+- `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
+- `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-tcn-direct`（requires `.[torch]`）：Torch TCN（direct multi-horizon, `lags`, `channels`, `epochs`…）
+- `torch-nbeats-direct`（requires `.[torch]`）：Torch N-BEATS（direct multi-horizon, `lags`, `num_blocks`, `layer_width`, `epochs`…）
+- `torch-nlinear-direct`（requires `.[torch]`）：Torch NLinear（last-value centering + linear, `lags`, `epochs`…）
+- `torch-dlinear-direct`（requires `.[torch]`）：Torch DLinear（moving-average decomposition + linear, `lags`, `ma_window`, `epochs`…）
+- `torch-transformer-direct`（requires `.[torch]`）：Torch Transformer encoder（direct multi-horizon, `lags`, `d_model`, `nhead`, `epochs`…）
+- `torch-patchtst-direct`（requires `.[torch]`）：Torch PatchTST-style（patching + encoder, `lags`, `patch_len`, `stride`, `epochs`…）
+- `torch-tsmixer-direct`（requires `.[torch]`）：Torch TSMixer-style（token/channel mixing, `lags`, `d_model`, `num_blocks`, `epochs`…）
+- `torch-cnn-direct`（requires `.[torch]`）：Torch Conv1D stack（direct multi-horizon, `lags`, `channels`, `kernel_size`, `epochs`…）
+- `torch-resnet1d-direct`（requires `.[torch]`）：Torch ResNet-1D（direct multi-horizon, `lags`, `channels`, `num_blocks`, `epochs`…）
+- `torch-wavenet-direct`（requires `.[torch]`）：Torch WaveNet-style（gated dilated CNN, `lags`, `channels`, `num_layers`, `epochs`…）
+- `torch-bilstm-direct`（requires `.[torch]`）：Torch BiLSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-bigru-direct`（requires `.[torch]`）：Torch BiGRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-attn-gru-direct`（requires `.[torch]`）：Torch GRU + attention pooling（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-fnet-direct`（requires `.[torch]`）：Torch FNet-style（Fourier mixing, `lags`, `d_model`, `epochs`…）
+- `torch-linear-attn-direct`（requires `.[torch]`）：Torch linear attention encoder（`lags`, `d_model`, `epochs`…）
+- `torch-inception-direct`（requires `.[torch]`）：Torch InceptionTime-style Conv1D（`lags`, `channels`, `epochs`…）
+- `torch-gmlp-direct`（requires `.[torch]`）：Torch gMLP-style（token gating + mixing, `lags`, `d_model`, `epochs`…）
+- `torch-nhits-direct`（requires `.[torch]`）：Torch N-HiTS-style（multi-rate residual MLP, `lags`, `pool_sizes`, `epochs`…）
+- `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
+- `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
+- `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
+- `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
+- `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）
+- `sarimax`（requires `.[stats]`）：SARIMAX / seasonal ARIMA（`order=...`, `seasonal_order=...`）
+- `autoreg`（requires `.[stats]`）：AutoReg（`lags`, `trend`, `seasonal`, `period`）
+- `uc-local-level`（requires `.[stats]`）：UnobservedComponents local level
+- `uc-local-linear-trend`（requires `.[stats]`）：UnobservedComponents local linear trend
+- `stl-arima`（requires `.[stats]`）：STL + ARIMA remainder forecasting（`period`, `order`, `seasonal`…）
+- `mstl-arima`（requires `.[stats]`）：MSTL（多季节 STL）+ ARIMA remainder forecasting（`periods=7,365`, `order=...`）
+- `mstl-auto-arima`（requires `.[stats]`）：MSTL + AutoARIMA-style 网格搜索（`periods=...`, `max_p/max_d/max_q`…）
+- `tbats-lite`（requires `.[stats]`）：TBATS-like（multi-season Fourier + ARIMA residuals，可选 Box-Cox）（`periods`, `orders`, `arima_order`, `boxcox_lambda`）
+- `ets`（requires `.[stats]`）：ETS / ExponentialSmoothing via statsmodels（`trend`, `seasonal`, `season_length`, `damped_trend`）
+
+查看完整列表/参数说明：
+
+```bash
+foresight models list
+foresight models info holt-winters-add
+```
 
 ---
 
-## ⚖️ 许可证 | License
+## 📐 Data Format (Panel-friendly)
 
-本项目采用 **GPL‑3.0** 许可证。详见 [LICENSE](./LICENSE)。
+`foresight` 的通用评测会把原始数据转换为一个 canonical long format：
+
+- `unique_id`：序列 ID（单序列时为空）
+- `ds`：时间列（datetime）
+- `y`：目标值（float）
+
+你可以直接使用 `foresight.data.to_long()`：
+
+```python
+from foresight.data import to_long
+```
+
+也可以用 `foresight.data.validate_long_df()` 对 `unique_id/ds/y` 做基础校验（时间排序/重复时间戳等）：
+
+```python
+from foresight.data import validate_long_df
+```
+
+这个格式和很多主流库的约定兼容（例如 StatsForecast 使用 `unique_id/ds/y`，Prophet 使用 `ds/y`）。
 
 ---
 
-## 🔗 联系方式 | Contact
+## 📊 Evaluation & Backtesting
 
-* **Author**: [@jhlucc](https://github.com/jhlucc)
+- **Walk-forward backtesting**（`foresight.backtesting.walk_forward`）
+- **Rolling/expanding windows**：支持 `max_train_size`（rolling window）或默认 expanding window
+- **Cross-validation predictions table**：`foresight.cv.cross_validation_predictions` / `foresight cv run`
+- 支持 **单序列** 与 **面板数据（按 `unique_id` 分组）**
+- 输出包含 **整体指标** + **按预测步长（horizon step）的指标列表**
 
-觉得有用就 **Star ✨**，欢迎交流合作！
+当前 CLI 默认输出的点预测指标：
+- MAE / RMSE / MAPE / sMAPE
+
+同时支持一个“快速 baseline”的 **conformal 对称区间**（从回测残差估计半径）：
+
+```bash
+foresight eval run --model theta --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --conformal-levels 80,90
+```
+
+更多可用指标（供自定义评测使用）见 `foresight.metrics`：
+- MSE, WAPE, MASE, RMSSE
+- Pinball loss / Interval coverage / Interval width / Interval score / MSIS
+
+---
+
+## 📦 Optional Dependencies
+
+默认安装只需要 `numpy` / `pandas`。
+
+```bash
+# ML extras (ridge-lag)
+pip install -e ".[ml]"
+
+# torch extras (torch-mlp-direct / torch-transformer-direct / torch-patchtst-direct / ...)
+pip install -e ".[torch]"
+
+# stats extras (arima / ets)
+pip install -e ".[stats]"
+
+# everything above
+pip install -e ".[all]"
+```
+
+---
+
+## 🤝 Contributing
+
+```bash
+ruff check src tests tools
+ruff format src tests tools
+pytest -q
+```
+
+开发说明见 `docs/DEVELOPMENT.md`。
+
+---
+
+## 🔎 Related Projects / Inspiration
+
+ForeSight 的 `foresight` toolkit 参考了这些主流项目的接口/数据形态与评测习惯（强烈推荐）：
+
+- **StatsForecast (Nixtla)**: fast statistical baselines + `unique_id/ds/y` + cross-validation  
+  https://github.com/Nixtla/statsforecast
+- **Prophet**: `ds/y` dataframe convention for forecasting  
+  https://facebook.github.io/prophet/
+- **sktime**: unified forecasting interface (`fit`/`predict`) and evaluation utilities  
+  https://www.sktime.org/
+- **Darts**: unified model API + backtesting helpers  
+  https://github.com/unit8co/darts
+- **GluonTS**: probabilistic forecasting datasets + benchmarking  
+  https://github.com/awslabs/gluonts
+- **PyTorch Forecasting**: deep learning forecasting pipelines  
+  https://pytorch-forecasting.readthedocs.io/
+
+---
+
+## ⚖️ License
+
+GPL-3.0-only. See `LICENSE`.
