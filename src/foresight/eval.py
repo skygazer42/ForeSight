@@ -25,6 +25,7 @@ def eval_naive_last(
     horizon: int,
     step: int,
     min_train_size: int,
+    max_windows: int | None = None,
     data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     df = load_dataset(dataset, data_dir=data_dir)
@@ -37,6 +38,7 @@ def eval_naive_last(
         horizon=horizon,
         step=step,
         min_train_size=min_train_size,
+        max_windows=max_windows,
         forecaster=naive_last,
     )
 
@@ -77,6 +79,7 @@ def eval_seasonal_naive(
     step: int,
     min_train_size: int,
     season_length: int,
+    max_windows: int | None = None,
     data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     df = load_dataset(dataset, data_dir=data_dir)
@@ -93,6 +96,7 @@ def eval_seasonal_naive(
         horizon=horizon,
         step=step,
         min_train_size=min_train_size,
+        max_windows=max_windows,
         forecaster=_forecaster,
     )
 

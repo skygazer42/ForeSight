@@ -80,6 +80,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum training size for first window",
     )
     eval_naive_last.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
+    )
+    eval_naive_last.add_argument(
         "--output",
         type=str,
         default="",
@@ -105,6 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         required=True,
         help="Minimum training size for first window",
+    )
+    eval_seasonal_naive.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
     )
     eval_seasonal_naive.add_argument(
         "--season-length",
@@ -139,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         required=True,
         help="Minimum training size for first window",
+    )
+    leaderboard_naive.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit on the number of walk-forward windows",
     )
     leaderboard_naive.add_argument(
         "--season-length",
@@ -263,6 +281,7 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         horizon=int(args.horizon),
         step=int(args.step),
         min_train_size=int(args.min_train_size),
+        max_windows=args.max_windows,
         data_dir=str(args.data_dir),
     )
     _emit(payload, output=args.output, fmt=str(args.format))
@@ -280,6 +299,7 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
         step=int(args.step),
         min_train_size=int(args.min_train_size),
         season_length=int(args.season_length),
+        max_windows=args.max_windows,
         data_dir=str(args.data_dir),
     )
     _emit(payload, output=args.output, fmt=str(args.format))
@@ -296,6 +316,7 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
+            max_windows=args.max_windows,
             data_dir=str(args.data_dir),
         ),
         eval_seasonal_naive(
@@ -305,6 +326,7 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             season_length=int(args.season_length),
+            max_windows=args.max_windows,
             data_dir=str(args.data_dir),
         ),
     ]
