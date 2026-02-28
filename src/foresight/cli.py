@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     datasets_sub = datasets.add_subparsers(dest="datasets_command", required=True)
 
     datasets_list = datasets_sub.add_parser("list", help="List available datasets")
+    datasets_list.add_argument(
+        "--with-path",
+        action="store_true",
+        help="Include resolved local file paths in the output.",
+    )
     datasets_list.set_defaults(_handler=_cmd_datasets_list)
 
     datasets_preview = datasets_sub.add_parser("preview", help="Preview a dataset (head)")
@@ -174,11 +179,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
-def _cmd_datasets_list(_args: argparse.Namespace) -> int:
-    from .datasets.registry import describe_dataset, list_datasets
+def _cmd_datasets_list(args: argparse.Namespace) -> int:
+    from .datasets.registry import describe_dataset, list_datasets, resolve_dataset_path
 
     for key in list_datasets():
-        print(f"{key}\t{describe_dataset(key)}")
+        if args.with_path:
+            path = resolve_dataset_path(key, data_dir=str(args.data_dir))
+            print(f"{key}\t{path.as_posix()}\t{describe_dataset(key)}")
+        else:
+            print(f"{key}\t{describe_dataset(key)}")
     return 0
 
 
