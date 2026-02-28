@@ -14,6 +14,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="ForeSight: time-series forecasting models and utilities.",
     )
     p.add_argument("--version", action="store_true", help="Print version and exit.")
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show full tracebacks on errors.",
+    )
 
     sub = p.add_subparsers(dest="command")
 
@@ -141,7 +146,16 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    return int(handler(args))
+    try:
+        return int(handler(args))
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return 130
+    except Exception as e:  # noqa: BLE001
+        if getattr(args, "debug", False):
+            raise
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
 
 
 def _cmd_datasets_list(_args: argparse.Namespace) -> int:
