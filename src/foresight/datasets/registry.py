@@ -39,7 +39,7 @@ _SPECS: dict[str, DatasetSpec] = {
             "cashflow",
             "branch_id",
         },
-        parse_dates=[],
+        parse_dates=["date"],
     ),
     "catfish": DatasetSpec(
         key="catfish",
