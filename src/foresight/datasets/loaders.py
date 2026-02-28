@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -9,6 +10,9 @@ from .registry import list_datasets
 
 def _repo_root() -> Path:
     # src/foresight/datasets/loaders.py -> repo root is 3 levels up from `src/`
+    env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
+    if env_dir:
+        return Path(env_dir).expanduser()
     return Path(__file__).resolve().parents[3]
 
 
