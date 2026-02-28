@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from .registry import list_datasets
+
 
 def _repo_root() -> Path:
     # src/foresight/datasets/loaders.py -> repo root is 3 levels up from `src/`
@@ -58,4 +60,4 @@ def load_dataset(key: str, **kwargs) -> pd.DataFrame:
         return load_catfish(nrows=kwargs.get("nrows"))
     if key == "ice_cream_interest":
         return load_ice_cream_interest(nrows=kwargs.get("nrows"))
-    raise KeyError(f"Unknown dataset key: {key!r}")
+    raise KeyError(f"Unknown dataset key: {key!r}. Try one of: {', '.join(list_datasets())}")
