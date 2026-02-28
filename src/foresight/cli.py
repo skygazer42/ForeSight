@@ -223,6 +223,17 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
             missing = sorted(spec.expected_columns.difference(df.columns))
             if missing:
                 raise ValueError(f"missing columns: {missing}")
+
+            if spec.parse_dates:
+                import pandas as pd
+
+                for col in spec.parse_dates:
+                    if col not in df.columns:
+                        raise ValueError(f"missing parse_dates column: {col!r}")
+                    if not pd.api.types.is_datetime64_any_dtype(df[col]):
+                        raise ValueError(f"parse_dates column is not datetime: {col!r}")
+                    if df[col].isna().any():
+                        raise ValueError(f"parse_dates column contains NaT/NA values: {col!r}")
             print(f"OK {key} rows={len(df)} cols={len(df.columns)}")
         except Exception as e:  # noqa: BLE001
             failures += 1
