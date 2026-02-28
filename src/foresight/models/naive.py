@@ -26,4 +26,3 @@ def seasonal_naive(train: Any, horizon: int, *, season_length: int) -> np.ndarra
     last_season = x[-season_length:]
     idx = np.arange(horizon) % season_length
     return last_season[idx].astype(float, copy=False)
-

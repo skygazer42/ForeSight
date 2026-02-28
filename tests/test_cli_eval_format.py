@@ -65,4 +65,3 @@ def test_eval_naive_last_md_output(tmp_path: Path):
     assert proc.returncode == 0
     assert "| model |" in proc.stdout
     assert out.exists()
-

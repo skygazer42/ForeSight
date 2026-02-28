@@ -23,4 +23,3 @@ def test_datasets_validate_single_dataset():
     out = proc.stdout + proc.stderr
     assert "OK catfish" in out
     assert "store_sales" not in out
-

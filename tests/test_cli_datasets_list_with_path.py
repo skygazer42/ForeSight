@@ -22,4 +22,3 @@ def test_datasets_list_with_path_mentions_csv_path():
     assert proc.returncode == 0
     out = proc.stdout + proc.stderr
     assert ".csv" in out
-

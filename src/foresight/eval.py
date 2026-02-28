@@ -30,7 +30,9 @@ def eval_naive_last(
 ) -> dict[str, Any]:
     df = load_dataset(dataset, data_dir=data_dir)
     if y_col not in df.columns:
-        raise KeyError(f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}")
+        raise KeyError(
+            f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}"
+        )
 
     y = _to_1d_float_series(df[y_col].dropna().to_numpy())
     res = walk_forward(
@@ -84,7 +86,9 @@ def eval_seasonal_naive(
 ) -> dict[str, Any]:
     df = load_dataset(dataset, data_dir=data_dir)
     if y_col not in df.columns:
-        raise KeyError(f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}")
+        raise KeyError(
+            f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}"
+        )
 
     y = _to_1d_float_series(df[y_col].dropna().to_numpy())
 

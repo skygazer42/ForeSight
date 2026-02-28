@@ -27,4 +27,3 @@ def test_datasets_preview_outputs_columns():
     proc = _run_cli("datasets", "preview", "store_sales", "--nrows", "50")
     assert proc.returncode == 0
     assert "sales" in (proc.stdout + proc.stderr)
-

@@ -37,4 +37,3 @@ def test_eval_respects_max_windows():
     )
     payload = json.loads(proc.stdout)
     assert payload["n_windows"] == 4
-

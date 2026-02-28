@@ -11,4 +11,3 @@ def test_eval_includes_basic_metadata():
     )
     assert "n_obs" in out
     assert "n_points" in out
-

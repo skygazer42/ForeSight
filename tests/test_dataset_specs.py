@@ -6,4 +6,3 @@ def test_dataset_spec_contains_expected_fields():
     assert spec.key == "store_sales"
     assert "sales" in spec.expected_columns
     assert str(spec.rel_path).endswith("data/store_sales.csv")
-

@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 
-def _run_cli(*args: str, env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    *args: str, env_extra: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     repo_root = Path(__file__).resolve().parents[1]
     src = repo_root / "src"
     env = dict(os.environ)
@@ -32,4 +34,3 @@ def test_unknown_dataset_key_shows_traceback_with_debug():
     assert proc.returncode != 0
     out = proc.stdout + proc.stderr
     assert "Traceback" in out
-

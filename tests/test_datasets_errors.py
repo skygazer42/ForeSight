@@ -9,4 +9,3 @@ def test_load_dataset_unknown_key_mentions_available_keys():
     msg = str(ei.value)
     assert "Unknown dataset key" in msg
     assert "store_sales" in msg
-

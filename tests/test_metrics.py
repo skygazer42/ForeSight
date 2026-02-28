@@ -10,4 +10,3 @@ def test_metrics_basic():
     assert round(rmse(y_true, y_pred), 6) == round(((0**2 + 1**2 + 2**2) / 3) ** 0.5, 6)
     assert mape(y_true, y_pred) > 0
     assert smape(y_true, y_pred) > 0
-

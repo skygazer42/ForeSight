@@ -23,4 +23,3 @@ def test_datasets_validate_exits_zero():
     out = proc.stdout + proc.stderr
     assert "OK store_sales" in out
     assert "OK catfish" in out
-

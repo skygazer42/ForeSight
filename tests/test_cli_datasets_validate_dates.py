@@ -26,8 +26,16 @@ def test_datasets_validate_fails_on_unparseable_dates(tmp_path: Path):
         encoding="utf-8",
     )
 
-    proc = _run_cli("--data-dir", str(root), "datasets", "validate", "--dataset", "cashflow_data", "--nrows", "5")
+    proc = _run_cli(
+        "--data-dir",
+        str(root),
+        "datasets",
+        "validate",
+        "--dataset",
+        "cashflow_data",
+        "--nrows",
+        "5",
+    )
     assert proc.returncode == 1
     out = proc.stdout + proc.stderr
     assert "FAIL cashflow_data" in out
-

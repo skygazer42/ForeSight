@@ -11,4 +11,3 @@ def test_eval_includes_metrics_by_step():
     )
     assert len(out["mae_by_step"]) == 4
     assert len(out["rmse_by_step"]) == 4
-

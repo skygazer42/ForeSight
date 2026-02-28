@@ -23,25 +23,37 @@ def _repo_root(*, data_dir: str | Path | None = None) -> Path:
 
 def _require_file(path: Path) -> Path:
     if not path.exists():
-        raise FileNotFoundError(f"Dataset file not found: {path}. Are you running from the repo root?")
+        raise FileNotFoundError(
+            f"Dataset file not found: {path}. Are you running from the repo root?"
+        )
     return path
 
 
-def _load_csv_spec(*, spec: DatasetSpec, nrows: int | None, data_dir: str | Path | None) -> pd.DataFrame:
+def _load_csv_spec(
+    *, spec: DatasetSpec, nrows: int | None, data_dir: str | Path | None
+) -> pd.DataFrame:
     path = _require_file(_repo_root(data_dir=data_dir) / spec.rel_path)
     read_kwargs = {"nrows": nrows}
     if spec.parse_dates:
         read_kwargs["parse_dates"] = list(spec.parse_dates)
     return pd.read_csv(path, **read_kwargs)
 
-def load_store_sales(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+
+def load_store_sales(
+    *, nrows: int | None = None, data_dir: str | Path | None = None
+) -> pd.DataFrame:
     return load_dataset("store_sales", nrows=nrows, data_dir=data_dir)
 
-def load_promotion_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+
+def load_promotion_data(
+    *, nrows: int | None = None, data_dir: str | Path | None = None
+) -> pd.DataFrame:
     return load_dataset("promotion_data", nrows=nrows, data_dir=data_dir)
 
 
-def load_cashflow_data(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+def load_cashflow_data(
+    *, nrows: int | None = None, data_dir: str | Path | None = None
+) -> pd.DataFrame:
     return load_dataset("cashflow_data", nrows=nrows, data_dir=data_dir)
 
 
@@ -49,7 +61,9 @@ def load_catfish(*, nrows: int | None = None, data_dir: str | Path | None = None
     return load_dataset("catfish", nrows=nrows, data_dir=data_dir)
 
 
-def load_ice_cream_interest(*, nrows: int | None = None, data_dir: str | Path | None = None) -> pd.DataFrame:
+def load_ice_cream_interest(
+    *, nrows: int | None = None, data_dir: str | Path | None = None
+) -> pd.DataFrame:
     return load_dataset("ice_cream_interest", nrows=nrows, data_dir=data_dir)
 
 

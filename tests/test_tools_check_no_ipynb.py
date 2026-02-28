@@ -18,4 +18,3 @@ def test_check_no_ipynb_ignores_worktrees(tmp_path: Path):
     find_notebooks = mod["find_notebooks"]
     hits = find_notebooks(tmp_path)
     assert hits == [Path("real.ipynb")]
-

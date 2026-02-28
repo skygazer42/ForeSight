@@ -23,4 +23,3 @@ def test_datasets_path_prints_a_csv_path():
     p = Path(proc.stdout.strip())
     assert p.suffix == ".csv"
     assert p.exists()
-

@@ -42,7 +42,9 @@ def main() -> int:
     hits = find_notebooks(root)
 
     if hits:
-        print("Found Jupyter notebooks (*.ipynb). This repo enforces 'no notebooks':", file=sys.stderr)
+        print(
+            "Found Jupyter notebooks (*.ipynb). This repo enforces 'no notebooks':", file=sys.stderr
+        )
         for p in hits:
             print(f" - {p}", file=sys.stderr)
         return 1

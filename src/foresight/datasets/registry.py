@@ -67,7 +67,9 @@ def get_dataset_spec(key: str) -> DatasetSpec:
     try:
         return _SPECS[key]
     except KeyError as e:
-        raise KeyError(f"Unknown dataset key: {key!r}. Try one of: {', '.join(list_datasets())}") from e
+        raise KeyError(
+            f"Unknown dataset key: {key!r}. Try one of: {', '.join(list_datasets())}"
+        ) from e
 
 
 def describe_dataset(key: str) -> str:
