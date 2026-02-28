@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: ruff check src tests tools
 
+      - name: Format
+        run: ruff format --check src tests tools
+
       - name: Compile
         run: python -m compileall -q src tools
 
