@@ -43,6 +43,11 @@ def eval_naive_last(
     y_true = res.y_true.reshape(-1)
     y_pred = res.y_pred.reshape(-1)
 
+    mae_by_step = [mae(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    rmse_by_step = [rmse(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    mape_by_step = [mape(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    smape_by_step = [smape(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+
     return {
         "model": "naive-last",
         "dataset": dataset,
@@ -57,6 +62,10 @@ def eval_naive_last(
         "rmse": rmse(y_true, y_pred),
         "mape": mape(y_true, y_pred),
         "smape": smape(y_true, y_pred),
+        "mae_by_step": mae_by_step,
+        "rmse_by_step": rmse_by_step,
+        "mape_by_step": mape_by_step,
+        "smape_by_step": smape_by_step,
     }
 
 
@@ -90,6 +99,11 @@ def eval_seasonal_naive(
     y_true = res.y_true.reshape(-1)
     y_pred = res.y_pred.reshape(-1)
 
+    mae_by_step = [mae(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    rmse_by_step = [rmse(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    mape_by_step = [mape(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+    smape_by_step = [smape(res.y_true[:, i], res.y_pred[:, i]) for i in range(res.horizon)]
+
     return {
         "model": "seasonal-naive",
         "dataset": dataset,
@@ -105,4 +119,8 @@ def eval_seasonal_naive(
         "rmse": rmse(y_true, y_pred),
         "mape": mape(y_true, y_pred),
         "smape": smape(y_true, y_pred),
+        "mae_by_step": mae_by_step,
+        "rmse_by_step": rmse_by_step,
+        "mape_by_step": mape_by_step,
+        "smape_by_step": smape_by_step,
     }
