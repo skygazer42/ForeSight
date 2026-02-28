@@ -25,6 +25,7 @@ def walk_forward(
     horizon: int,
     step: int = 1,
     min_train_size: int,
+    max_windows: int | None = None,
     forecaster: Forecaster,
 ) -> WalkForwardResult:
     """
@@ -41,6 +42,8 @@ def walk_forward(
         raise ValueError("step must be >= 1")
     if min_train_size <= 0:
         raise ValueError("min_train_size must be >= 1")
+    if max_windows is not None and max_windows <= 0:
+        raise ValueError("max_windows must be >= 1")
 
     max_train_end = series.size - horizon
     if max_train_end < min_train_size:
@@ -62,6 +65,8 @@ def walk_forward(
         y_true_list.append(true)
         y_pred_list.append(pred)
         train_ends.append(train_end)
+        if max_windows is not None and len(y_true_list) >= max_windows:
+            break
 
     y_true_arr = np.stack(y_true_list, axis=0)
     y_pred_arr = np.stack(y_pred_list, axis=0)
@@ -75,4 +80,3 @@ def walk_forward(
         step=step,
         min_train_size=min_train_size,
     )
-
