@@ -39,6 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     datasets_preview.add_argument("--nrows", type=int, default=20, help="Number of rows to preview")
     datasets_preview.set_defaults(_handler=_cmd_datasets_preview)
 
+    datasets_path = datasets_sub.add_parser("path", help="Print the local path for a dataset")
+    datasets_path.add_argument("key", help="Dataset key (see: `foresight datasets list`)")
+    datasets_path.set_defaults(_handler=_cmd_datasets_path)
+
     datasets_validate = datasets_sub.add_parser(
         "validate", help="Smoke-check local dataset files and basic schemas"
     )
@@ -183,6 +187,14 @@ def _cmd_datasets_preview(args: argparse.Namespace) -> int:
 
     df = load_dataset(args.key, nrows=int(args.nrows), data_dir=str(args.data_dir))
     print(df.head(int(args.nrows)).to_string(index=False))
+    return 0
+
+
+def _cmd_datasets_path(args: argparse.Namespace) -> int:
+    from .datasets.registry import resolve_dataset_path
+
+    path = resolve_dataset_path(str(args.key), data_dir=str(args.data_dir))
+    print(path.as_posix())
     return 0
 
 

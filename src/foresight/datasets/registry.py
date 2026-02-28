@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,3 +72,17 @@ def get_dataset_spec(key: str) -> DatasetSpec:
 
 def describe_dataset(key: str) -> str:
     return get_dataset_spec(key).description
+
+
+def resolve_dataset_path(key: str, *, data_dir: str | Path | None = None) -> Path:
+    spec = get_dataset_spec(key)
+
+    if isinstance(data_dir, str) and not data_dir.strip():
+        data_dir = None
+    if data_dir is not None:
+        base = Path(data_dir).expanduser()
+    else:
+        env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
+        base = Path(env_dir).expanduser() if env_dir else Path(__file__).resolve().parents[3]
+
+    return (base / spec.rel_path).resolve()
