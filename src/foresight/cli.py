@@ -43,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
         "validate", help="Smoke-check local dataset files and basic schemas"
     )
     datasets_validate.add_argument(
+        "--dataset",
+        type=str,
+        default="",
+        help="Optional dataset key to validate (default: validate all).",
+    )
+    datasets_validate.add_argument(
         "--nrows",
         type=int,
         default=5,
@@ -185,8 +191,9 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
     from .datasets.registry import get_dataset_spec, list_datasets
 
     nrows = int(args.nrows)
+    keys = [str(args.dataset)] if str(args.dataset) else list_datasets()
     failures = 0
-    for key in list_datasets():
+    for key in keys:
         try:
             spec = get_dataset_spec(key)
             df = load_dataset(key, nrows=nrows, data_dir=str(args.data_dir))
