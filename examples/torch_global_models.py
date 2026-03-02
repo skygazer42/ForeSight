@@ -205,6 +205,20 @@ def main() -> None:
             {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
         ),
         (
+            "torch-mamba-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "conv_kernel": 3,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-rwkv-global",
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "ffn_dim": 128, "epochs": 10},
+        ),
+        (
             "torch-transformer-encdec-global",
             {
                 "context_length": 96,

@@ -86,6 +86,45 @@ def test_torch_seq2seq_local_smoke():
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_torch_mamba_rwkv_local_smoke():
+    y = np.sin(np.arange(140, dtype=float) / 6.0) + 0.04 * np.arange(140, dtype=float)
+
+    f1 = make_forecaster(
+        "torch-mamba-direct",
+        lags=48,
+        d_model=32,
+        num_layers=1,
+        conv_kernel=3,
+        dropout=0.0,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat1 = f1(y, 5)
+    assert yhat1.shape == (5,)
+    assert np.all(np.isfinite(yhat1))
+
+    f2 = make_forecaster(
+        "torch-rwkv-direct",
+        lags=48,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=64,
+        dropout=0.0,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat2 = f2(y, 5)
+    assert yhat2.shape == (5,)
+    assert np.all(np.isfinite(yhat2))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_xformer_and_rnn_global_smoke():
     import pandas as pd
 
@@ -629,6 +668,47 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred24 = g24(long_df, cutoff, horizon)
     assert set(pred24.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
     assert np.all(np.isfinite(pred24["yhat"].to_numpy(dtype=float)))
+
+    g25 = make_global_forecaster(
+        "torch-mamba-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        conv_kernel=3,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred25 = g25(long_df, cutoff, horizon)
+    assert set(pred25.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred25["yhat"].to_numpy(dtype=float)))
+
+    g26 = make_global_forecaster(
+        "torch-rwkv-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=64,
+        dropout=0.0,
+        quantiles="0.1,0.5,0.9",
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred26 = g26(long_df, cutoff, horizon)
+    assert set(pred26.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred26["yhat"].to_numpy(dtype=float)))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")

@@ -73,6 +73,7 @@ from .torch_global import (
     torch_informer_global_forecaster,
     torch_itransformer_global_forecaster,
     torch_lstnet_global_forecaster,
+    torch_mamba_global_forecaster,
     torch_nbeats_global_forecaster,
     torch_nhits_global_forecaster,
     torch_nlinear_global_forecaster,
@@ -80,6 +81,7 @@ from .torch_global import (
     torch_patchtst_global_forecaster,
     torch_resnet1d_global_forecaster,
     torch_rnn_global_forecaster,
+    torch_rwkv_global_forecaster,
     torch_seq2seq_global_forecaster,
     torch_ssm_global_forecaster,
     torch_tcn_global_forecaster,
@@ -104,6 +106,7 @@ from .torch_nn import (
     torch_inception_direct_forecast,
     torch_linear_attention_direct_forecast,
     torch_lstm_direct_forecast,
+    torch_mamba_direct_forecast,
     torch_mlp_lag_direct_forecast,
     torch_nbeats_direct_forecast,
     torch_nhits_direct_forecast,
@@ -111,6 +114,7 @@ from .torch_nn import (
     torch_patchtst_direct_forecast,
     torch_qrnn_recursive_forecast,
     torch_resnet1d_direct_forecast,
+    torch_rwkv_direct_forecast,
     torch_tcn_direct_forecast,
     torch_tide_direct_forecast,
     torch_transformer_direct_forecast,
@@ -1074,6 +1078,166 @@ def _factory_torch_transformer_direct(
             nhead=nhead_int,
             num_layers=num_layers_int,
             dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_mamba_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    conv_kernel: int = 3,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    conv_kernel_int = int(conv_kernel)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_mamba_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            conv_kernel=conv_kernel_int,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_rwkv_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.0,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    ffn_dim_int = int(ffn_dim)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_rwkv_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            ffn_dim=ffn_dim_int,
             dropout=dropout_f,
             epochs=epochs_int,
             lr=lr_f,
@@ -3821,6 +3985,50 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
     ),
+    "torch-mamba-direct": ModelSpec(
+        key="torch-mamba-direct",
+        description="Torch Mamba-style selective SSM (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_mamba_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "conv_kernel": 3,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_layers": "Number of stacked Mamba blocks",
+            "dropout": "Dropout probability in [0,1)",
+            "conv_kernel": "Causal depthwise conv kernel size (>=1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-rwkv-direct": ModelSpec(
+        key="torch-rwkv-direct",
+        description="Torch RWKV-style time-mix + channel-mix (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_rwkv_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "ffn_dim": 128,
+            "dropout": 0.0,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_layers": "Number of stacked RWKV blocks",
+            "ffn_dim": "Channel-mix hidden size",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
     "torch-patchtst-direct": ModelSpec(
         key="torch-patchtst-direct",
         description="Torch PatchTST-style model (direct multi-horizon). Requires PyTorch.",
@@ -4958,6 +5166,82 @@ _REGISTRY: dict[str, ModelSpec] = {
             "sample_step": "Stride when generating training windows (>=1)",
             "d_model": "Model dimension",
             "num_layers": "Number of SSM blocks",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-mamba-global": ModelSpec(
+        key="torch-mamba-global",
+        description="Torch Mamba-style selective SSM (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_mamba_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "num_layers": 4,
+            "conv_kernel": 3,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "num_layers": "Number of stacked Mamba blocks",
+            "conv_kernel": "Causal depthwise conv kernel size (>=1)",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-rwkv-global": ModelSpec(
+        key="torch-rwkv-global",
+        description="Torch RWKV-style time-mix + channel-mix (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_rwkv_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "num_layers": 4,
+            "ffn_dim": 128,
+            "id_emb_dim": 8,
+            "dropout": 0.0,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "num_layers": "Number of stacked RWKV blocks",
+            "ffn_dim": "Channel-mix hidden size",
             "id_emb_dim": "Series-id embedding dim (panel/global models)",
             "dropout": "Dropout probability in [0,1)",
             "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",

@@ -22,6 +22,14 @@ def test_new_torch_global_models_are_registered():
     assert "torch-nonstationary-transformer-global" in keys
 
 
+def test_new_torch_mamba_rwkv_models_are_registered():
+    keys = set(list_models())
+    assert "torch-mamba-direct" in keys
+    assert "torch-rwkv-direct" in keys
+    assert "torch-mamba-global" in keys
+    assert "torch-rwkv-global" in keys
+
+
 def test_new_torch_xformer_attention_variants_are_registered():
     keys = set(list_models())
     assert "torch-xformer-probsparse-ln-gelu-direct" in keys
