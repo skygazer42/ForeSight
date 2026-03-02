@@ -158,6 +158,43 @@ def test_torch_xformer_and_rnn_global_smoke():
     assert set(pred5.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
     assert np.all(np.isfinite(pred5["yhat"].to_numpy(dtype=float)))
 
+    g6 = make_global_forecaster(
+        "torch-timesnet-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        top_k=2,
+        epochs=1,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred6 = g6(long_df, cutoff, horizon)
+    assert set(pred6.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred6["yhat"].to_numpy(dtype=float)))
+
+    g7 = make_global_forecaster(
+        "torch-seq2seq-attn-lstm-global",
+        context_length=32,
+        hidden_size=32,
+        num_layers=1,
+        attention="bahdanau",
+        teacher_forcing=0.6,
+        teacher_forcing_final=0.0,
+        quantiles="0.1,0.5,0.9",
+        epochs=1,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred7 = g7(long_df, cutoff, horizon)
+    assert set(pred7.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred7["yhat"].to_numpy(dtype=float)))
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_global_cv_preserves_quantile_columns():

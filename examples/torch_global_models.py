@@ -90,6 +90,21 @@ def main() -> None:
                 "quantiles": "0.1,0.5,0.9",
             },
         ),
+        (
+            "torch-timesnet-global",
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "top_k": 3, "epochs": 10},
+        ),
+        (
+            "torch-seq2seq-attn-lstm-global",
+            {
+                "context_length": 64,
+                "hidden_size": 64,
+                "attention": "bahdanau",
+                "teacher_forcing": 0.6,
+                "teacher_forcing_final": 0.0,
+                "epochs": 10,
+            },
+        ),
     ]
 
     for key, params in models:

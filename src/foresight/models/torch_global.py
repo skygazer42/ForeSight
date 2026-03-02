@@ -2739,3 +2739,849 @@ def torch_itransformer_global_forecaster(
         )
 
     return _f
+
+
+def _predict_torch_timesnet_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    d_model: int,
+    num_layers: int,
+    top_k: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    TimesNet-style global/panel model (lite).
+
+    Detects dominant periods from rFFT of the context y, then applies a shared
+    Conv2D block on period-reshaped views (weighted sum across top periods).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = ctx + h
+    input_dim = int(X_train.shape[2])
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+
+    k = int(top_k)
+    if k <= 0:
+        raise ValueError("top_k must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    def _detect_periods(y_ctx: Any) -> tuple[list[int], Any]:
+        # y_ctx: (B, ctx)
+        # Return (periods, weights) where weights is a 1D tensor on y_ctx.device
+        # and sum(weights)=1.
+        amp = torch.fft.rfft(y_ctx, dim=1).abs().mean(dim=0)  # (ctx//2+1,)
+        if int(amp.numel()) <= 1:
+            w = torch.ones((1,), dtype=torch.float32, device=y_ctx.device)
+            return [1], w
+
+        amp = amp.to(dtype=torch.float32)
+        amp = amp.clone()
+        amp[0] = 0.0  # ignore DC
+
+        k_eff = min(int(k), int(amp.numel() - 1))
+        vals, idx = torch.topk(amp, k=k_eff, largest=True)
+
+        period_to_val: dict[int, float] = {}
+        for f_i, v_i in zip(idx.tolist(), vals.tolist(), strict=True):
+            f = int(f_i)
+            if f <= 0:
+                continue
+            p = int(round(float(ctx) / float(f)))
+            p = max(1, min(int(p), int(seq_len)))
+            prev = period_to_val.get(p)
+            if prev is None or float(v_i) > float(prev):
+                period_to_val[p] = float(v_i)
+
+        if not period_to_val:
+            w = torch.ones((1,), dtype=torch.float32, device=y_ctx.device)
+            return [1], w
+
+        items = sorted(period_to_val.items(), key=lambda kv: kv[1], reverse=True)
+        periods = [int(p) for p, _v in items]
+        vals_t = torch.tensor(
+            [float(v) for _p, v in items], dtype=torch.float32, device=y_ctx.device
+        )
+        weights = torch.softmax(vals_t, dim=0)
+        return periods, weights
+
+    class _TimesBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, d, kernel_size=3, padding=1),
+                nn.GELU(),
+                nn.Dropout(p=drop),
+                nn.Conv2d(d, d, kernel_size=3, padding=1),
+                nn.Dropout(p=drop),
+            )
+            self.norm = nn.LayerNorm(d)
+
+        def forward(self, z: Any, periods: list[int], weights: Any) -> Any:
+            # z: (B, T, d)
+            B, T, D = z.shape
+            out = torch.zeros_like(z)
+            for w, p in zip(weights, periods, strict=True):
+                pp = int(p)
+                if pp <= 0:
+                    continue
+                pad_len = (pp - (int(T) % pp)) % pp
+                if pad_len:
+                    pad = z[:, -1:, :].expand(-1, int(pad_len), -1)
+                    z_pad = torch.cat([z, pad], dim=1)
+                else:
+                    z_pad = z
+
+                L = int(z_pad.shape[1])
+                z2 = z_pad.reshape(int(B), L // pp, pp, int(D)).permute(0, 3, 1, 2)
+                z2 = self.conv(z2)
+                z2 = z2.permute(0, 2, 3, 1).reshape(int(B), L, int(D))
+                z2 = z2[:, : int(T), :]
+                out = out + w * z2
+
+            return self.norm(z + out)
+
+    class _TimesNetGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+            self.blocks = nn.ModuleList([_TimesBlock() for _ in range(int(num_layers))])
+            self.head = nn.Linear(d, out_dim)
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            y_ctx = xb[:, : int(ctx), 0]
+            with torch.no_grad():
+                periods, weights = _detect_periods(y_ctx)
+
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)
+            z = self.in_proj(x2)
+            for blk in self.blocks:
+                z = blk(z, periods, weights)
+
+            yhat = self.head(z[:, -int(h) :, :])
+            return yhat.squeeze(-1) if out_dim == 1 else yhat
+
+    model = _TimesNetGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    rows: list[dict[str, Any]] = []
+    if qs:
+        if yhat_scaled.shape != (int(len(pred_uids)), h, out_dim):
+            raise ValueError(
+                f"Expected prediction shape ({len(pred_uids)}, {h}, {out_dim}), got {yhat_scaled.shape}"
+            )
+
+        yhat_all = yhat_scaled * pred_std.reshape(-1, 1, 1) + pred_mean.reshape(-1, 1, 1)
+        q_point = _pick_point_quantile(qs)
+        point_idx = int(qs.index(q_point))
+        yhat_point = yhat_all[:, :, point_idx]
+
+        for i, uid in enumerate(pred_uids):
+            ds_f = pred_ds_list[i]
+            for j in range(h):
+                row = {"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat_point[i, j])}
+                for kk, qv in enumerate(qs):
+                    row[_quantile_col(float(qv))] = float(yhat_all[i, j, kk])
+                rows.append(row)
+    else:
+        if yhat_scaled.shape != (int(len(pred_uids)), h):
+            raise ValueError(
+                f"Expected prediction shape ({len(pred_uids)}, {h}), got {yhat_scaled.shape}"
+            )
+
+        yhat = yhat_scaled * pred_std.reshape(-1, 1) + pred_mean.reshape(-1, 1)
+        for i, uid in enumerate(pred_uids):
+            ds_f = pred_ds_list[i]
+            for j in range(h):
+                rows.append({"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat[i, j])})
+
+    return pd.DataFrame(rows)
+
+
+def torch_timesnet_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    num_layers: int = 2,
+    top_k: int = 3,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    quantiles: Any = (),
+) -> Any:
+    """
+    TimesNet-style global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_timesnet_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            d_model=int(d_model),
+            num_layers=int(num_layers),
+            top_k=int(top_k),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_seq2seq_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    cell: str,
+    attention: str,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float,
+    id_emb_dim: int,
+    teacher_forcing: float,
+    teacher_forcing_final: float | None,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    Encoder-decoder Seq2Seq global/panel model (lite).
+
+    - Encoder: context window
+    - Decoder: step-wise generation over horizon, using known future covariates/time features
+    - Optional Bahdanau attention over encoder states
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+    q_point = _pick_point_quantile(qs)
+    point_idx = 0 if not qs else int(qs.index(q_point))
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    input_dim = int(X_train.shape[2])
+
+    cell_s = str(cell).lower().strip()
+    if cell_s not in {"lstm", "gru"}:
+        raise ValueError("cell must be one of: lstm, gru")
+    attn_s = str(attention).lower().strip()
+    if attn_s not in {"none", "bahdanau"}:
+        raise ValueError("attention must be one of: none, bahdanau")
+
+    hidden = int(hidden_size)
+    layers = int(num_layers)
+    if hidden <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+    rnn_drop = drop if layers > 1 else 0.0
+
+    tf0 = float(teacher_forcing)
+    if not (0.0 <= tf0 <= 1.0):
+        raise ValueError("teacher_forcing must be in [0,1]")
+    tf1 = None if teacher_forcing_final is None else float(teacher_forcing_final)
+    if tf1 is not None and not (0.0 <= tf1 <= 1.0):
+        raise ValueError("teacher_forcing_final must be in [0,1]")
+
+    class _Seq2SeqGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            proj_dim = int(hidden)
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), proj_dim)
+
+            if cell_s == "lstm":
+                self.enc = nn.LSTM(
+                    input_size=proj_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+                self.dec = nn.LSTM(
+                    input_size=proj_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+            else:
+                self.enc = nn.GRU(
+                    input_size=proj_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+                self.dec = nn.GRU(
+                    input_size=proj_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+
+            if attn_s == "bahdanau":
+                self.attn_enc = nn.Linear(hidden, hidden, bias=False)
+                self.attn_dec = nn.Linear(hidden, hidden, bias=False)
+                self.attn_v = nn.Linear(hidden, 1, bias=False)
+                self.attn_out = nn.Linear(2 * hidden, hidden)
+            else:
+                self.attn_enc = None
+                self.attn_dec = None
+                self.attn_v = None
+                self.attn_out = None
+
+            self.drop = nn.Dropout(p=drop)
+            self.head = nn.Linear(hidden, out_dim)
+
+        def _point(self, out_step: Any) -> Any:
+            if out_dim == 1:
+                return out_step[:, 0]
+            return out_step[:, int(point_idx)]
+
+        def _apply_attention(self, enc_out: Any, dec_h: Any) -> Any:
+            if self.attn_enc is None:
+                return dec_h
+            e = torch.tanh(self.attn_enc(enc_out) + self.attn_dec(dec_h).unsqueeze(1))
+            a = torch.softmax(self.attn_v(e), dim=1)  # (B, ctx, 1)
+            ctx_vec = torch.sum(a * enc_out, dim=1)  # (B, hidden)
+            fused = torch.cat([dec_h, ctx_vec], dim=1)
+            return torch.tanh(self.attn_out(fused))
+
+        def forward(
+            self,
+            xb: Any,
+            ids: Any,
+            *,
+            y_true: Any | None,
+            teacher_forcing_ratio: float,
+        ) -> Any:
+            B = int(xb.shape[0])
+
+            emb = self.id_emb(ids)
+            emb_ctx = emb.unsqueeze(1).expand(-1, int(ctx), -1)
+            enc_in = torch.cat([xb[:, : int(ctx), :], emb_ctx], dim=-1)
+            enc_z = self.in_proj(enc_in)
+
+            enc_out, enc_state = self.enc(enc_z)
+
+            # Decoder state init from encoder final state
+            dec_state = enc_state
+
+            # Start token uses last observed y in context
+            y_prev = xb[:, int(ctx - 1), 0]
+
+            preds: list[Any] = []
+            tf = float(teacher_forcing_ratio)
+            for t in range(int(h)):
+                fut_known = xb[:, int(ctx + t), 1:]
+                dec_step = torch.cat([y_prev.unsqueeze(1), fut_known], dim=1)
+                emb_t = emb  # (B, E)
+                dec_in = torch.cat([dec_step, emb_t], dim=1).unsqueeze(1)
+                dec_z = self.in_proj(dec_in)
+
+                dec_out, dec_state = self.dec(dec_z, dec_state)
+                dec_h = dec_out[:, 0, :]
+                dec_h = self._apply_attention(enc_out, dec_h)
+                dec_h = self.drop(dec_h)
+
+                out_step = self.head(dec_h)  # (B, out_dim)
+                preds.append(out_step)
+
+                if t == int(h - 1):
+                    break
+
+                y_pred_next = self._point(out_step)
+                if y_true is not None and tf > 0.0:
+                    coin = torch.rand((B,), device=xb.device) < tf
+                    y_prev = torch.where(coin, y_true[:, int(t)], y_pred_next)
+                else:
+                    y_prev = y_pred_next
+
+            pred = torch.stack(preds, dim=1)  # (B, h, out_dim)
+            return pred.squeeze(-1) if out_dim == 1 else pred
+
+    model = _Seq2SeqGlobal()
+
+    def _train_seq2seq(model_in: Any) -> Any:
+        if int(epochs) <= 0:
+            raise ValueError("epochs must be >= 1")
+        if float(lr) <= 0.0:
+            raise ValueError("lr must be > 0")
+        if int(batch_size) <= 0:
+            raise ValueError("batch_size must be >= 1")
+        if int(patience) <= 0:
+            raise ValueError("patience must be >= 1")
+        if float(val_split) < 0.0 or float(val_split) >= 0.5:
+            raise ValueError("val_split must be in [0, 0.5)")
+        if float(grad_clip_norm) < 0.0:
+            raise ValueError("grad_clip_norm must be >= 0")
+
+        torch.manual_seed(int(seed))
+
+        dev = torch.device(str(device))
+        if dev.type == "cuda" and not torch.cuda.is_available():
+            raise ValueError("device='cuda' requested but CUDA is not available")
+
+        model_in = model_in.to(dev)
+
+        X_t = torch.tensor(X_train, dtype=torch.float32, device=dev)
+        ids_t = torch.tensor(ids_train, dtype=torch.long, device=dev)
+        Y_t = torch.tensor(Y_train, dtype=torch.float32, device=dev)
+
+        n = int(X_t.shape[0])
+        val_n = 0
+        if float(val_split) > 0.0 and n >= 5:
+            val_n = max(1, int(round(float(val_split) * n)))
+            val_n = min(val_n, n - 1)
+
+        if val_n > 0:
+            train_end = n - val_n
+            X_tr, ids_tr, Y_tr = X_t[:train_end], ids_t[:train_end], Y_t[:train_end]
+            X_va, ids_va, Y_va = X_t[train_end:], ids_t[train_end:], Y_t[train_end:]
+        else:
+            X_tr, ids_tr, Y_tr = X_t, ids_t, Y_t
+            X_va, ids_va, Y_va = None, None, None
+
+        train_loader = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(X_tr, ids_tr, Y_tr),
+            batch_size=int(batch_size),
+            shuffle=True,
+        )
+        val_loader = (
+            None
+            if X_va is None
+            else torch.utils.data.DataLoader(
+                torch.utils.data.TensorDataset(X_va, ids_va, Y_va),
+                batch_size=int(batch_size),
+                shuffle=False,
+            )
+        )
+
+        opt_name = str(optimizer).lower().strip()
+        if opt_name in {"adam", ""}:
+            opt = torch.optim.Adam(
+                model_in.parameters(), lr=float(lr), weight_decay=float(weight_decay)
+            )
+        elif opt_name == "adamw":
+            opt = torch.optim.AdamW(
+                model_in.parameters(), lr=float(lr), weight_decay=float(weight_decay)
+            )
+        elif opt_name == "sgd":
+            opt = torch.optim.SGD(
+                model_in.parameters(),
+                lr=float(lr),
+                momentum=float(momentum),
+                weight_decay=float(weight_decay),
+            )
+        else:
+            raise ValueError("optimizer must be one of: adam, adamw, sgd")
+
+        if qs:
+            loss_fn: Any = _make_pinball_loss(qs)
+        else:
+            loss_name = str(loss).lower().strip()
+            if loss_name in {"mse", ""}:
+                loss_fn = nn.MSELoss()
+            elif loss_name in {"mae", "l1"}:
+                loss_fn = nn.L1Loss()
+            elif loss_name in {"huber", "smoothl1"}:
+                loss_fn = nn.SmoothL1Loss()
+            else:
+                raise ValueError("loss must be one of: mse, mae, huber")
+
+        sched_name = str(scheduler).lower().strip()
+        if sched_name in {"none", ""}:
+            sched = None
+        elif sched_name == "cosine":
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=int(epochs))
+        elif sched_name == "step":
+            sched = torch.optim.lr_scheduler.StepLR(
+                opt, step_size=int(scheduler_step_size), gamma=float(scheduler_gamma)
+            )
+        else:
+            raise ValueError("scheduler must be one of: none, cosine, step")
+
+        best_loss = float("inf")
+        best_state: dict[str, Any] | None = None
+        bad_epochs = 0
+
+        for ep in range(int(epochs)):
+            if tf1 is None or int(epochs) <= 1:
+                tf_ratio = tf0
+            else:
+                frac = float(ep) / float(int(epochs) - 1)
+                tf_ratio = tf0 + (float(tf1) - tf0) * frac
+
+            model_in.train()
+            total = 0.0
+            count = 0
+            for xb, idb, yb in train_loader:
+                opt.zero_grad(set_to_none=True)
+                pred = model_in(xb, idb, y_true=yb, teacher_forcing_ratio=float(tf_ratio))
+                loss_v = loss_fn(pred, yb)
+                loss_v.backward()
+                if float(grad_clip_norm) > 0.0:
+                    torch.nn.utils.clip_grad_norm_(
+                        model_in.parameters(), max_norm=float(grad_clip_norm)
+                    )
+                opt.step()
+
+                total += float(loss_v.detach().cpu().item()) * int(xb.shape[0])
+                count += int(xb.shape[0])
+
+            train_loss = total / max(1, count)
+
+            if val_loader is not None:
+                model_in.eval()
+                v_total = 0.0
+                v_count = 0
+                with torch.no_grad():
+                    for xb, idb, yb in val_loader:
+                        pred = model_in(xb, idb, y_true=None, teacher_forcing_ratio=0.0)
+                        v_loss = loss_fn(pred, yb)
+                        v_total += float(v_loss.detach().cpu().item()) * int(xb.shape[0])
+                        v_count += int(xb.shape[0])
+                monitor = v_total / max(1, v_count)
+            else:
+                monitor = train_loss
+
+            if float(monitor) + 1e-12 < best_loss:
+                best_loss = float(monitor)
+                bad_epochs = 0
+                if bool(restore_best):
+                    best_state = {
+                        k: v.detach().cpu().clone() for k, v in model_in.state_dict().items()
+                    }
+            else:
+                bad_epochs += 1
+                if bad_epochs >= int(patience):
+                    break
+
+            if sched is not None:
+                sched.step()
+
+        if bool(restore_best) and best_state is not None:
+            model_in.load_state_dict(best_state)
+
+        model_in.eval()
+        return model_in
+
+    model = _train_seq2seq(model)
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp, y_true=None, teacher_forcing_ratio=0.0).detach().cpu().numpy()
+
+    rows: list[dict[str, Any]] = []
+    if qs:
+        if yhat_scaled.shape != (int(len(pred_uids)), h, out_dim):
+            raise ValueError(
+                f"Expected prediction shape ({len(pred_uids)}, {h}, {out_dim}), got {yhat_scaled.shape}"
+            )
+        yhat_all = yhat_scaled * pred_std.reshape(-1, 1, 1) + pred_mean.reshape(-1, 1, 1)
+        yhat_point = yhat_all[:, :, point_idx]
+
+        for i, uid in enumerate(pred_uids):
+            ds_f = pred_ds_list[i]
+            for j in range(h):
+                row = {"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat_point[i, j])}
+                for kk, qv in enumerate(qs):
+                    row[_quantile_col(float(qv))] = float(yhat_all[i, j, kk])
+                rows.append(row)
+    else:
+        if yhat_scaled.shape != (int(len(pred_uids)), h):
+            raise ValueError(
+                f"Expected prediction shape ({len(pred_uids)}, {h}), got {yhat_scaled.shape}"
+            )
+        yhat = yhat_scaled * pred_std.reshape(-1, 1) + pred_mean.reshape(-1, 1)
+        for i, uid in enumerate(pred_uids):
+            ds_f = pred_ds_list[i]
+            for j in range(h):
+                rows.append({"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat[i, j])})
+
+    return pd.DataFrame(rows)
+
+
+def torch_seq2seq_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    cell: str = "lstm",
+    attention: str = "none",
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    id_emb_dim: int = 8,
+    teacher_forcing: float = 0.5,
+    teacher_forcing_final: float | None = None,
+    quantiles: Any = (),
+) -> Any:
+    """
+    Seq2Seq (encoder-decoder RNN) global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_seq2seq_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            cell=str(cell),
+            attention=str(attention),
+            hidden_size=int(hidden_size),
+            num_layers=int(num_layers),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            teacher_forcing=float(teacher_forcing),
+            teacher_forcing_final=teacher_forcing_final,
+            quantiles=quantiles,
+        )
+
+    return _f
