@@ -190,9 +190,14 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
 - `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
 - `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
+- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/performer/linformer/nystrom + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
+- `torch-seq2seq-*-direct`（requires `.[torch]`）：Seq2Seq RNN（LSTM/GRU，可选 Bahdanau attention，scheduled teacher forcing）
+- `torch-lstnet-direct`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway，lite）
 - `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
 - `torch-informer-global`（requires `.[torch]`）：Torch Informer（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `num_layers`, `epochs`…）
 - `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
+- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features）
+- `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
 - `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
 - `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）
 - `sarimax`（requires `.[stats]`）：SARIMAX / seasonal ARIMA（`order=...`, `seasonal_order=...`）

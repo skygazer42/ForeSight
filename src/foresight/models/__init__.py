@@ -91,6 +91,8 @@ from .torch_nn import (
     torch_tsmixer_direct_forecast,
     torch_wavenet_direct_forecast,
 )
+from .torch_seq2seq import torch_lstnet_direct_forecast, torch_seq2seq_direct_forecast
+from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
 
 __all__ = [
@@ -157,6 +159,9 @@ __all__ = [
     "torch_tide_direct_forecast",
     "torch_deepar_recursive_forecast",
     "torch_qrnn_recursive_forecast",
+    "torch_xformer_direct_forecast",
+    "torch_seq2seq_direct_forecast",
+    "torch_lstnet_direct_forecast",
     "croston_classic_forecast",
     "croston_sba_forecast",
     "croston_sbj_forecast",

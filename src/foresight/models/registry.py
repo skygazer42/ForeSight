@@ -65,7 +65,9 @@ from .theta import theta_auto_forecast, theta_forecast
 from .torch_global import (
     torch_autoformer_global_forecaster,
     torch_informer_global_forecaster,
+    torch_rnn_global_forecaster,
     torch_tft_global_forecaster,
+    torch_xformer_global_forecaster,
 )
 from .torch_nn import (
     torch_attn_gru_direct_forecast,
@@ -93,6 +95,8 @@ from .torch_nn import (
     torch_tsmixer_direct_forecast,
     torch_wavenet_direct_forecast,
 )
+from .torch_seq2seq import torch_lstnet_direct_forecast, torch_seq2seq_direct_forecast
+from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
 
 LocalForecasterFn = Callable[[Any, int], np.ndarray]
@@ -2190,6 +2194,302 @@ def _factory_torch_qrnn_recursive(
     return _f
 
 
+def _factory_torch_xformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    attn: str = "full",
+    pos_emb: str = "learned",
+    norm: str = "layer",
+    ffn: str = "gelu",
+    local_window: int = 16,
+    performer_features: int = 64,
+    linformer_k: int = 32,
+    nystrom_landmarks: int = 16,
+    horizon_tokens: str = "zeros",
+    revin: bool = False,
+    residual_gating: bool = False,
+    drop_path: float = 0.0,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    attn_s = str(attn)
+    pos_emb_s = str(pos_emb)
+    norm_s = str(norm)
+    ffn_s = str(ffn)
+    local_window_int = int(local_window)
+    performer_features_int = int(performer_features)
+    linformer_k_int = int(linformer_k)
+    nystrom_landmarks_int = int(nystrom_landmarks)
+    horizon_tokens_s = str(horizon_tokens)
+    revin_bool = bool(revin)
+    residual_gating_bool = bool(residual_gating)
+    drop_path_f = float(drop_path)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_xformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            attn=attn_s,
+            pos_emb=pos_emb_s,
+            norm=norm_s,
+            ffn=ffn_s,
+            local_window=local_window_int,
+            performer_features=performer_features_int,
+            linformer_k=linformer_k_int,
+            nystrom_landmarks=nystrom_landmarks_int,
+            horizon_tokens=horizon_tokens_s,
+            revin=revin_bool,
+            residual_gating=residual_gating_bool,
+            drop_path=drop_path_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_seq2seq_direct(
+    *,
+    lags: int = 48,
+    cell: str = "lstm",
+    attention: str = "none",
+    hidden_size: int = 32,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    teacher_forcing: float = 0.5,
+    teacher_forcing_final: float | None = None,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    cell_s = str(cell)
+    attention_s = str(attention)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    teacher_forcing_f = float(teacher_forcing)
+    teacher_forcing_final_v = (
+        None if teacher_forcing_final is None else float(teacher_forcing_final)
+    )
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_seq2seq_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cell=cell_s,
+            attention=attention_s,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            teacher_forcing=teacher_forcing_f,
+            teacher_forcing_final=teacher_forcing_final_v,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_lstnet_direct(
+    *,
+    lags: int = 96,
+    cnn_channels: int = 16,
+    kernel_size: int = 6,
+    rnn_hidden: int = 32,
+    skip: int = 24,
+    highway_window: int = 24,
+    dropout: float = 0.2,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    cnn_channels_int = int(cnn_channels)
+    kernel_size_int = int(kernel_size)
+    rnn_hidden_int = int(rnn_hidden)
+    skip_int = int(skip)
+    highway_window_int = int(highway_window)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_lstnet_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cnn_channels=cnn_channels_int,
+            kernel_size=kernel_size_int,
+            rnn_hidden=rnn_hidden_int,
+            skip=skip_int,
+            highway_window=highway_window_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
 def _factory_torch_linear_attn_direct(
     *,
     lags: int = 96,
@@ -4150,6 +4450,482 @@ _REGISTRY: dict[str, ModelSpec] = {
         requires=("stats",),
     ),
 }
+
+
+def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
+    extra: dict[str, ModelSpec] = {}
+
+    xformer_help = {
+        "lags": "Lag window length",
+        "d_model": "Transformer model dimension",
+        "nhead": "Attention heads",
+        "num_layers": "Number of encoder layers",
+        "dim_feedforward": "FFN hidden dimension",
+        "dropout": "Dropout probability in [0,1)",
+        "attn": "Attention type: full, local, performer, linformer, nystrom",
+        "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
+        "norm": "Normalization: layer, rms",
+        "ffn": "FFN: gelu, swiglu",
+        "local_window": "Local attention window radius (attn=local)",
+        "performer_features": "Performer random feature count (attn=performer)",
+        "linformer_k": "Linformer projection length (attn=linformer)",
+        "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "horizon_tokens": "Future token placeholders: zeros, learned",
+        "revin": "RevIN per-window normalization (true/false)",
+        "residual_gating": "Residual gating (true/false)",
+        "drop_path": "Stochastic depth drop probability in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    xformer_base_defaults = {
+        "lags": 96,
+        "d_model": 64,
+        "nhead": 4,
+        "num_layers": 2,
+        "dim_feedforward": 256,
+        "dropout": 0.1,
+        "attn": "full",
+        "pos_emb": "learned",
+        "norm": "layer",
+        "ffn": "gelu",
+        "local_window": 16,
+        "performer_features": 64,
+        "linformer_k": 32,
+        "nystrom_landmarks": 16,
+        "horizon_tokens": "zeros",
+        "revin": False,
+        "residual_gating": False,
+        "drop_path": 0.0,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    def _add_local_xformer(
+        key: str,
+        description: str,
+        **overrides: Any,
+    ) -> None:
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory_torch_xformer_direct,
+            default_params={**xformer_base_defaults, **overrides},
+            param_help=dict(xformer_help),
+            requires=("torch",),
+        )
+
+    # 21–40: 5 attention types x (LayerNorm/RMSNorm) x (GELU/SwiGLU) = 20
+    for attn_s, attn_label in [
+        ("full", "full"),
+        ("local", "local-window"),
+        ("performer", "performer"),
+        ("linformer", "linformer"),
+        ("nystrom", "nystrom"),
+    ]:
+        for norm_s, norm_label in [("layer", "LayerNorm"), ("rms", "RMSNorm")]:
+            for ffn_s, ffn_label in [("gelu", "GELU"), ("swiglu", "SwiGLU")]:
+                norm_short = "ln" if norm_s == "layer" else "rms"
+                key = f"torch-xformer-{attn_s}-{norm_short}-{ffn_s}-direct"
+                _add_local_xformer(
+                    key,
+                    f"Torch xFormer ({attn_label} attention) with {norm_label}+{ffn_label} (direct multi-horizon). Requires PyTorch.",
+                    attn=attn_s,
+                    norm=norm_s,
+                    ffn=ffn_s,
+                )
+
+    # 41–44: RoPE positional variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        _add_local_xformer(
+            f"torch-xformer-{attn_s}-rope-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with RoPE positional encoding (LN+GELU). Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="rope",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 45–48: sincos pos variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        _add_local_xformer(
+            f"torch-xformer-{attn_s}-sincos-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with sinusoidal positional encoding (LN+GELU). Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="sincos",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 49–52: Time2Vec pos variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        _add_local_xformer(
+            f"torch-xformer-{attn_s}-time2vec-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with Time2Vec positional features (LN+GELU). Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="time2vec",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 53–56: RevIN variants
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        _add_local_xformer(
+            f"torch-xformer-{attn_s}-revin-direct",
+            f"Torch xFormer ({attn_s} attention) with RevIN (direct multi-horizon). Requires PyTorch.",
+            attn=attn_s,
+            revin=True,
+        )
+
+    # 57–60: deeper/wider configs
+    _add_local_xformer(
+        "torch-xformer-full-deep-direct",
+        "Torch xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
+        attn="full",
+        num_layers=4,
+    )
+    _add_local_xformer(
+        "torch-xformer-performer-deep-direct",
+        "Torch xFormer (performer attention) deeper config (4 layers). Requires PyTorch.",
+        attn="performer",
+        num_layers=4,
+    )
+    _add_local_xformer(
+        "torch-xformer-full-wide-direct",
+        "Torch xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
+        attn="full",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+    _add_local_xformer(
+        "torch-xformer-performer-wide-direct",
+        "Torch xFormer (performer attention) wider config (d_model=128). Requires PyTorch.",
+        attn="performer",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+
+    # ---- Local RNN family (Seq2Seq + LSTNet) ----
+    seq2seq_help = {
+        "lags": "Lag window length (encoder length)",
+        "cell": "RNN cell: lstm, gru",
+        "attention": "Attention: none, bahdanau",
+        "hidden_size": "RNN hidden size",
+        "num_layers": "Number of stacked RNN layers",
+        "dropout": "Dropout probability in [0,1) (only if num_layers>1)",
+        "teacher_forcing": "Teacher forcing ratio at the start of training",
+        "teacher_forcing_final": "Teacher forcing ratio at the end of training (None keeps it constant)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+    seq2seq_base_defaults = {
+        "lags": 48,
+        "cell": "lstm",
+        "attention": "none",
+        "hidden_size": 32,
+        "num_layers": 1,
+        "dropout": 0.0,
+        "teacher_forcing": 0.5,
+        "teacher_forcing_final": None,
+        **_TORCH_COMMON_DEFAULTS,
+        "val_split": 0.1,
+    }
+
+    def _add_local_seq2seq(key: str, description: str, **overrides: Any) -> None:
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory_torch_seq2seq_direct,
+            default_params={**seq2seq_base_defaults, **overrides},
+            param_help=dict(seq2seq_help),
+            requires=("torch",),
+        )
+
+    _add_local_seq2seq(
+        "torch-seq2seq-lstm-direct",
+        "Torch Seq2Seq LSTM (encoder-decoder) direct multi-horizon. Requires PyTorch.",
+        cell="lstm",
+        attention="none",
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-gru-direct",
+        "Torch Seq2Seq GRU (encoder-decoder) direct multi-horizon. Requires PyTorch.",
+        cell="gru",
+        attention="none",
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-attn-lstm-direct",
+        "Torch Seq2Seq LSTM with Bahdanau attention (direct multi-horizon). Requires PyTorch.",
+        cell="lstm",
+        attention="bahdanau",
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-attn-gru-direct",
+        "Torch Seq2Seq GRU with Bahdanau attention (direct multi-horizon). Requires PyTorch.",
+        cell="gru",
+        attention="bahdanau",
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-lstm-deep-direct",
+        "Torch Seq2Seq LSTM deeper config (2 layers). Requires PyTorch.",
+        cell="lstm",
+        attention="none",
+        num_layers=2,
+        dropout=0.1,
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-gru-deep-direct",
+        "Torch Seq2Seq GRU deeper config (2 layers). Requires PyTorch.",
+        cell="gru",
+        attention="none",
+        num_layers=2,
+        dropout=0.1,
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-lstm-wide-direct",
+        "Torch Seq2Seq LSTM wider config (hidden_size=128). Requires PyTorch.",
+        cell="lstm",
+        attention="none",
+        hidden_size=128,
+    )
+    _add_local_seq2seq(
+        "torch-seq2seq-gru-wide-direct",
+        "Torch Seq2Seq GRU wider config (hidden_size=128). Requires PyTorch.",
+        cell="gru",
+        attention="none",
+        hidden_size=128,
+    )
+
+    lstnet_help = {
+        "lags": "Lag window length",
+        "cnn_channels": "CNN output channels",
+        "kernel_size": "CNN kernel size",
+        "rnn_hidden": "GRU hidden size",
+        "skip": "Skip period (0 disables)",
+        "highway_window": "Highway window length (0 disables)",
+        "dropout": "Dropout probability in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+    extra["torch-lstnet-direct"] = ModelSpec(
+        key="torch-lstnet-direct",
+        description="Torch LSTNet-style CNN+GRU(+skip)+highway (lite) direct multi-horizon. Requires PyTorch.",
+        factory=_factory_torch_lstnet_direct,
+        default_params={
+            "lags": 96,
+            "cnn_channels": 16,
+            "kernel_size": 6,
+            "rnn_hidden": 32,
+            "skip": 24,
+            "highway_window": 24,
+            "dropout": 0.2,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help=dict(lstnet_help),
+        requires=("torch",),
+    )
+
+    # ---- Global Transformer-family variants ----
+    xformer_global_help = {
+        "context_length": "Context window length (encoder length)",
+        "x_cols": "Optional covariate columns from long_df (comma-separated)",
+        "add_time_features": "Add built-in time features from ds (true/false)",
+        "normalize": "Z-score normalize per-series inside each cutoff window (true/false)",
+        "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+        "sample_step": "Stride when generating training windows (>=1)",
+        "d_model": "Transformer model dimension",
+        "nhead": "Attention heads",
+        "num_layers": "Number of encoder layers",
+        "dim_feedforward": "FFN hidden dimension",
+        "id_emb_dim": "Series-id embedding dim (panel/global models)",
+        "dropout": "Dropout probability in [0,1)",
+        "attn": "Attention type: full, local, performer, linformer, nystrom",
+        "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
+        "norm": "Normalization: layer, rms",
+        "ffn": "FFN: gelu, swiglu",
+        "local_window": "Local attention window radius (attn=local)",
+        "performer_features": "Performer random feature count (attn=performer)",
+        "linformer_k": "Linformer projection length (attn=linformer)",
+        "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "residual_gating": "Residual gating (true/false)",
+        "drop_path": "Stochastic depth drop probability in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+    xformer_global_base_defaults = {
+        "context_length": 96,
+        "x_cols": (),
+        "add_time_features": True,
+        "normalize": True,
+        "max_train_size": None,
+        "sample_step": 1,
+        "d_model": 64,
+        "nhead": 4,
+        "num_layers": 2,
+        "dim_feedforward": 256,
+        "id_emb_dim": 8,
+        "dropout": 0.1,
+        "attn": "full",
+        "pos_emb": "learned",
+        "norm": "layer",
+        "ffn": "gelu",
+        "local_window": 16,
+        "performer_features": 64,
+        "linformer_k": 32,
+        "nystrom_landmarks": 16,
+        "residual_gating": False,
+        "drop_path": 0.0,
+        **_TORCH_COMMON_DEFAULTS,
+        "epochs": 30,
+        "batch_size": 64,
+        "val_split": 0.1,
+    }
+
+    def _add_global_xformer(key: str, description: str, **overrides: Any) -> None:
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=torch_xformer_global_forecaster,
+            default_params={**xformer_global_base_defaults, **overrides},
+            param_help=dict(xformer_global_help),
+            requires=("torch",),
+            interface="global",
+        )
+
+    # 61–65: baseline attention variants
+    for attn_s in ["full", "local", "performer", "linformer", "nystrom"]:
+        _add_global_xformer(
+            f"torch-xformer-{attn_s}-global",
+            f"Torch global xFormer ({attn_s} attention) baseline. Requires PyTorch.",
+            attn=attn_s,
+        )
+
+    # 66–70: RMSNorm variants
+    for attn_s in ["full", "local", "performer", "linformer", "nystrom"]:
+        _add_global_xformer(
+            f"torch-xformer-{attn_s}-rms-global",
+            f"Torch global xFormer ({attn_s} attention) with RMSNorm. Requires PyTorch.",
+            attn=attn_s,
+            norm="rms",
+        )
+
+    # 71–74: SwiGLU variants (subset)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        _add_global_xformer(
+            f"torch-xformer-{attn_s}-swiglu-global",
+            f"Torch global xFormer ({attn_s} attention) with SwiGLU FFN. Requires PyTorch.",
+            attn=attn_s,
+            ffn="swiglu",
+        )
+
+    # 75–78: positional variants
+    _add_global_xformer(
+        "torch-xformer-full-rope-global",
+        "Torch global xFormer (full attention) with RoPE positional encoding. Requires PyTorch.",
+        attn="full",
+        pos_emb="rope",
+    )
+    _add_global_xformer(
+        "torch-xformer-performer-rope-global",
+        "Torch global xFormer (performer attention) with RoPE positional encoding. Requires PyTorch.",
+        attn="performer",
+        pos_emb="rope",
+    )
+    _add_global_xformer(
+        "torch-xformer-full-sincos-global",
+        "Torch global xFormer (full attention) with sinusoidal positional encoding. Requires PyTorch.",
+        attn="full",
+        pos_emb="sincos",
+    )
+    _add_global_xformer(
+        "torch-xformer-full-time2vec-global",
+        "Torch global xFormer (full attention) with Time2Vec positional features. Requires PyTorch.",
+        attn="full",
+        pos_emb="time2vec",
+    )
+
+    # 79–80: deeper/wider configs
+    _add_global_xformer(
+        "torch-xformer-full-deep-global",
+        "Torch global xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
+        attn="full",
+        num_layers=4,
+    )
+    _add_global_xformer(
+        "torch-xformer-full-wide-global",
+        "Torch global xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
+        attn="full",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+
+    # ---- Global RNN variants ----
+    rnn_global_help = {
+        "context_length": "Context window length (encoder length)",
+        "x_cols": "Optional covariate columns from long_df (comma-separated)",
+        "add_time_features": "Add built-in time features from ds (true/false)",
+        "normalize": "Z-score normalize per-series inside each cutoff window (true/false)",
+        "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+        "sample_step": "Stride when generating training windows (>=1)",
+        "cell": "RNN cell: lstm, gru",
+        "hidden_size": "RNN hidden size",
+        "num_layers": "Number of stacked RNN layers",
+        "dropout": "Dropout probability in [0,1) (only if num_layers>1)",
+        "id_emb_dim": "Series-id embedding dim (panel/global models)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+    rnn_global_base_defaults = {
+        "context_length": 96,
+        "x_cols": (),
+        "add_time_features": True,
+        "normalize": True,
+        "max_train_size": None,
+        "sample_step": 1,
+        "cell": "lstm",
+        "hidden_size": 64,
+        "num_layers": 1,
+        "dropout": 0.0,
+        "id_emb_dim": 8,
+        **_TORCH_COMMON_DEFAULTS,
+        "epochs": 30,
+        "batch_size": 64,
+        "val_split": 0.1,
+    }
+
+    def _add_global_rnn(key: str, description: str, **overrides: Any) -> None:
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=torch_rnn_global_forecaster,
+            default_params={**rnn_global_base_defaults, **overrides},
+            param_help=dict(rnn_global_help),
+            requires=("torch",),
+            interface="global",
+        )
+
+    _add_global_rnn(
+        "torch-rnn-lstm-global",
+        "Torch global RNN backbone (LSTM) with token-wise horizon head. Requires PyTorch.",
+        cell="lstm",
+    )
+    _add_global_rnn(
+        "torch-rnn-gru-global",
+        "Torch global RNN backbone (GRU) with token-wise horizon head. Requires PyTorch.",
+        cell="gru",
+    )
+    _add_global_rnn(
+        "torch-rnn-encoder-global",
+        "Torch global encoder-only RNN horizon head (seq2seq-lite). Requires PyTorch.",
+        cell="lstm",
+        hidden_size=32,
+    )
+
+    return extra
+
+
+_EXTRA_TORCH_VARIANTS = _make_torch_dl_variant_specs()
+_CLASH = set(_EXTRA_TORCH_VARIANTS).intersection(_REGISTRY)
+if _CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_CLASH)}")
+_REGISTRY.update(_EXTRA_TORCH_VARIANTS)
 
 
 def list_models() -> list[str]:

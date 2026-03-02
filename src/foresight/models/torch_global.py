@@ -962,3 +962,756 @@ def torch_autoformer_global_forecaster(
         )
 
     return _f
+
+
+def _positional_encoding_sincos(seq_len: int, d_model: int) -> np.ndarray:
+    pe = np.zeros((int(seq_len), int(d_model)), dtype=float)
+    position = np.arange(int(seq_len), dtype=float).reshape(-1, 1)
+    div_term = np.exp(
+        np.arange(0, int(d_model), 2, dtype=float) * (-math.log(10000.0) / float(d_model))
+    )
+    pe[:, 0::2] = np.sin(position * div_term)
+    pe[:, 1::2] = np.cos(position * div_term)
+    return pe
+
+
+def _predict_torch_xformer_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    d_model: int,
+    nhead: int,
+    num_layers: int,
+    dim_feedforward: int,
+    dropout: float,
+    id_emb_dim: int,
+    attn: str,
+    pos_emb: str,
+    norm: str,
+    ffn: str,
+    local_window: int,
+    performer_features: int,
+    linformer_k: int,
+    nystrom_landmarks: int,
+    residual_gating: bool,
+    drop_path: float,
+) -> pd.DataFrame:
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = ctx + h
+    input_dim = int(X_train.shape[2])
+
+    d = int(d_model)
+    heads = int(nhead)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+
+    attn_s = str(attn).lower().strip()
+    pos_s = str(pos_emb).lower().strip()
+    norm_s = str(norm).lower().strip()
+    ffn_s = str(ffn).lower().strip()
+
+    if attn_s not in {"full", "local", "performer", "linformer", "nystrom"}:
+        raise ValueError("attn must be one of: full, local, performer, linformer, nystrom")
+    if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
+        raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
+    if norm_s not in {"layer", "rms"}:
+        raise ValueError("norm must be one of: layer, rms")
+    if ffn_s not in {"gelu", "swiglu"}:
+        raise ValueError("ffn must be one of: gelu, swiglu")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+    drop_path_f = float(drop_path)
+    if not (0.0 <= drop_path_f < 1.0):
+        raise ValueError("drop_path must be in [0,1)")
+
+    head_dim = d // heads
+
+    def _make_rmsnorm(dim: int) -> Any:
+        class _RMSNorm(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.scale = nn.Parameter(torch.ones((dim,), dtype=torch.float32))
+
+            def forward(self, xb: Any) -> Any:
+                denom = torch.sqrt(torch.mean(xb * xb, dim=-1, keepdim=True) + 1e-8)
+                return (xb / denom) * self.scale
+
+        return _RMSNorm()
+
+    def _rope_apply(q: Any, k: Any) -> tuple[Any, Any]:
+        L = int(q.shape[2])
+        D = int(q.shape[3])
+        if D % 2 != 0:
+            return q, k
+        half = D // 2
+        pos = torch.arange(L, device=q.device, dtype=torch.float32).reshape(1, 1, L, 1)
+        freq = torch.exp(
+            torch.arange(half, device=q.device, dtype=torch.float32)
+            * (-math.log(10000.0) / float(half))
+        ).reshape(1, 1, 1, half)
+        ang = pos * freq
+        sin = torch.sin(ang)
+        cos = torch.cos(ang)
+
+        def _rot(xb: Any) -> Any:
+            x1 = xb[..., :half]
+            x2 = xb[..., half:]
+            return torch.cat([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
+
+        return _rot(q), _rot(k)
+
+    class _Time2Vec(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w0 = nn.Parameter(torch.randn(1, 1, 1))
+            self.b0 = nn.Parameter(torch.zeros(1, 1, 1))
+            self.W = nn.Parameter(torch.randn(1, 1, d - 1) * 0.1)
+            self.b = nn.Parameter(torch.zeros(1, 1, d - 1))
+
+        def forward(self, t: Any) -> Any:
+            v0 = self.w0 * t + self.b0
+            v1 = torch.sin(t * self.W + self.b)
+            return torch.cat([v0, v1], dim=-1)
+
+    class _SwiGLUFFN(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            hidden = int(dim_feedforward)
+            self.fc = nn.Linear(d, 2 * hidden)
+            self.proj = nn.Linear(hidden, d)
+            self.drop = nn.Dropout(p=drop)
+
+        def forward(self, xb: Any) -> Any:
+            x2 = self.fc(xb)
+            a, b = x2.chunk(2, dim=-1)
+            z = F.silu(a) * b
+            z = self.drop(z)
+            return self.proj(z)
+
+    class _GELUFFN(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            hidden = int(dim_feedforward)
+            self.fc1 = nn.Linear(d, hidden)
+            self.fc2 = nn.Linear(hidden, d)
+            self.drop = nn.Dropout(p=drop)
+
+        def forward(self, xb: Any) -> Any:
+            z = F.gelu(self.fc1(xb))
+            z = self.drop(z)
+            return self.fc2(z)
+
+    class _MultiheadSelfAttention(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.qkv = nn.Linear(d, 3 * d)
+            self.out = nn.Linear(d, d)
+
+            if attn_s == "linformer":
+                self.E = nn.Parameter(torch.randn(heads, int(linformer_k), seq_len) * 0.02)
+                self.F = nn.Parameter(torch.randn(heads, int(linformer_k), seq_len) * 0.02)
+            else:
+                self.register_parameter("E", None)
+                self.register_parameter("F", None)
+
+            if attn_s == "performer":
+                W = torch.randn(heads, head_dim, int(performer_features)) / math.sqrt(
+                    float(head_dim)
+                )
+                self.register_buffer("W", W, persistent=False)
+            else:
+                self.register_buffer("W", torch.empty(0), persistent=False)
+
+        def _split_heads(self, xb: Any) -> Any:
+            B, L, _D = xb.shape
+            return xb.view(B, L, heads, head_dim).transpose(1, 2)
+
+        def _merge_heads(self, xb: Any) -> Any:
+            B, Hh, L, dh = xb.shape
+            return xb.transpose(1, 2).contiguous().view(B, L, Hh * dh)
+
+        def forward(self, xb: Any) -> Any:
+            B, L, _ = xb.shape
+            qkv = self.qkv(xb)
+            q, k, v = qkv.chunk(3, dim=-1)
+            q = self._split_heads(q)
+            k = self._split_heads(k)
+            v = self._split_heads(v)
+
+            if pos_s == "rope":
+                q, k = _rope_apply(q, k)
+
+            scale = 1.0 / math.sqrt(float(head_dim))
+
+            if attn_s == "performer":
+                W = self.W
+                qf = torch.einsum("bhld,hdm->bhlm", q * scale, W)
+                kf = torch.einsum("bhld,hdm->bhlm", k, W)
+                qf = F.elu(qf) + 1.0
+                kf = F.elu(kf) + 1.0
+
+                kv = torch.einsum("bhlm,bhld->bhmd", kf, v)
+                z = torch.einsum("bhlm,bhm->bhl", qf, torch.sum(kf, dim=2) + 1e-8)
+                out = torch.einsum("bhlm,bhmd->bhld", qf, kv) / (z.unsqueeze(-1) + 1e-8)
+                return self.out(self._merge_heads(out))
+
+            if attn_s == "linformer":
+                E = self.E
+                Fp = self.F
+                k_proj = torch.einsum("hml,bhld->bhmd", E, k)
+                v_proj = torch.einsum("hml,bhld->bhmd", Fp, v)
+                scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k_proj)
+                w = torch.softmax(scores, dim=-1)
+                out = torch.einsum("bhlm,bhmd->bhld", w, v_proj)
+                return self.out(self._merge_heads(out))
+
+            if attn_s == "nystrom":
+                m = int(min(int(nystrom_landmarks), L))
+                chunk = int(math.ceil(L / m))
+                pad = int(m * chunk - L)
+                if pad > 0:
+                    q_pad = torch.cat([q, q[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
+                    k_pad = torch.cat([k, k[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
+                else:
+                    q_pad, k_pad = q, k
+                q_lm = q_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
+                k_lm = k_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
+
+                A = torch.softmax(torch.einsum("bhld,bhmd->bhlm", q * scale, k_lm), dim=-1)
+                Bmat = torch.softmax(torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm), dim=-1)
+                C = torch.softmax(torch.einsum("bhmd,bhld->bhml", q_lm * scale, k), dim=-1)
+                B_inv = torch.linalg.pinv(Bmat)
+                CV = torch.einsum("bhml,bhld->bhmd", C, v)
+                out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, B_inv, CV)
+                return self.out(self._merge_heads(out))
+
+            scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k)
+            if attn_s == "local":
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
+                mask = dist > int(w)
+                scores = scores.masked_fill(mask.reshape(1, 1, L, L), float("-inf"))
+            w = torch.softmax(scores, dim=-1)
+            out = torch.einsum("bhlm,bhmd->bhld", w, v)
+            return self.out(self._merge_heads(out))
+
+    class _XFormerBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attn = _MultiheadSelfAttention()
+            if norm_s == "rms":
+                self.norm1 = _make_rmsnorm(d)
+                self.norm2 = _make_rmsnorm(d)
+            else:
+                self.norm1 = nn.LayerNorm(d)
+                self.norm2 = nn.LayerNorm(d)
+            self.drop1 = nn.Dropout(p=drop)
+            self.drop2 = nn.Dropout(p=drop)
+            self.ffn = _SwiGLUFFN() if ffn_s == "swiglu" else _GELUFFN()
+            self.gate = None if not bool(residual_gating) else nn.Linear(d, d)
+
+        def _residual(self, xb: Any, update: Any) -> Any:
+            if self.gate is None:
+                return xb + update
+            g = torch.sigmoid(self.gate(xb))
+            return xb + g * update
+
+        def forward(self, xb: Any) -> Any:
+            z = self.attn(self.norm1(xb))
+            z = self.drop1(z)
+            if drop_path_f > 0.0 and self.training:
+                keep = 1.0 - drop_path_f
+                shape = (z.shape[0],) + (1,) * (z.ndim - 1)
+                mask = (torch.rand(shape, device=z.device) < keep).to(z.dtype)
+                z = z * mask / keep
+            xb = self._residual(xb, z)
+
+            z2 = self.ffn(self.norm2(xb))
+            z2 = self.drop2(z2)
+            if drop_path_f > 0.0 and self.training:
+                keep = 1.0 - drop_path_f
+                shape = (z2.shape[0],) + (1,) * (z2.ndim - 1)
+                mask = (torch.rand(shape, device=z2.device) < keep).to(z2.dtype)
+                z2 = z2 * mask / keep
+            xb = self._residual(xb, z2)
+            return xb
+
+    class _XFormerGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+
+            if pos_s == "learned":
+                self.pos = nn.Parameter(torch.zeros((1, seq_len, d), dtype=torch.float32))
+                self.register_buffer("pos_buf", torch.empty(0), persistent=False)
+                self.time2vec = None
+            elif pos_s == "sincos":
+                pe = _positional_encoding_sincos(seq_len, d)
+                self.register_buffer(
+                    "pos_buf", torch.tensor(pe, dtype=torch.float32).unsqueeze(0), persistent=False
+                )
+                self.pos = None
+                self.time2vec = None
+            elif pos_s == "time2vec":
+                self.pos = None
+                self.register_buffer("pos_buf", torch.empty(0), persistent=False)
+                self.time2vec = _Time2Vec()
+            else:
+                self.pos = None
+                self.register_buffer("pos_buf", torch.empty(0), persistent=False)
+                self.time2vec = None
+
+            self.blocks = nn.ModuleList([_XFormerBlock() for _ in range(int(num_layers))])
+            self.head = nn.Linear(d, 1)
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)
+            z = self.in_proj(x2)
+
+            if self.pos is not None:
+                z = z + self.pos
+            elif self.pos_buf.numel() > 0:
+                z = z + self.pos_buf
+            elif self.time2vec is not None:
+                t = torch.linspace(0.0, 1.0, steps=seq_len, device=z.device).reshape(1, seq_len, 1)
+                z = z + self.time2vec(t)
+
+            for blk in self.blocks:
+                z = blk(z)
+
+            yhat = self.head(z[:, -h:, :]).squeeze(-1)
+            return yhat
+
+    model = _XFormerGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop_global(model, X_train, ids_train, Y_train, cfg=cfg, device=str(device))
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    if yhat_scaled.shape != (int(len(pred_uids)), h):
+        raise ValueError(
+            f"Expected prediction shape ({len(pred_uids)}, {h}), got {yhat_scaled.shape}"
+        )
+
+    yhat = yhat_scaled * pred_std.reshape(-1, 1) + pred_mean.reshape(-1, 1)
+
+    rows: list[dict[str, Any]] = []
+    for i, uid in enumerate(pred_uids):
+        ds_f = pred_ds_list[i]
+        for j in range(h):
+            rows.append({"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat[i, j])})
+
+    return pd.DataFrame(rows)
+
+
+def torch_xformer_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    attn: str = "full",
+    pos_emb: str = "learned",
+    norm: str = "layer",
+    ffn: str = "gelu",
+    local_window: int = 16,
+    performer_features: int = 64,
+    linformer_k: int = 32,
+    nystrom_landmarks: int = 16,
+    residual_gating: bool = False,
+    drop_path: float = 0.0,
+) -> Any:
+    """
+    Configurable global/panel Transformer-family forecaster.
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_xformer_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            d_model=int(d_model),
+            nhead=int(nhead),
+            num_layers=int(num_layers),
+            dim_feedforward=int(dim_feedforward),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            attn=str(attn),
+            pos_emb=str(pos_emb),
+            norm=str(norm),
+            ffn=str(ffn),
+            local_window=int(local_window),
+            performer_features=int(performer_features),
+            linformer_k=int(linformer_k),
+            nystrom_landmarks=int(nystrom_landmarks),
+            residual_gating=bool(residual_gating),
+            drop_path=float(drop_path),
+        )
+
+    return _f
+
+
+def _predict_torch_rnn_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    cell: str,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float,
+    id_emb_dim: int,
+) -> pd.DataFrame:
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    input_dim = int(X_train.shape[2])
+
+    cell_s = str(cell).lower().strip()
+    if cell_s not in {"lstm", "gru"}:
+        raise ValueError("cell must be one of: lstm, gru")
+    hidden = int(hidden_size)
+    layers = int(num_layers)
+    if hidden <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+    rnn_drop = drop if layers > 1 else 0.0
+
+    class _RNNGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            in_dim = int(input_dim + id_emb_dim)
+            if cell_s == "lstm":
+                self.rnn = nn.LSTM(
+                    input_size=in_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+            else:
+                self.rnn = nn.GRU(
+                    input_size=in_dim,
+                    hidden_size=hidden,
+                    num_layers=layers,
+                    dropout=rnn_drop,
+                    batch_first=True,
+                )
+            self.head = nn.Linear(hidden, 1)
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)
+            z, _st = self.rnn(x2)
+            yhat = self.head(z[:, -h:, :]).squeeze(-1)
+            return yhat
+
+    model = _RNNGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop_global(model, X_train, ids_train, Y_train, cfg=cfg, device=str(device))
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    if yhat_scaled.shape != (int(len(pred_uids)), h):
+        raise ValueError(
+            f"Expected prediction shape ({len(pred_uids)}, {h}), got {yhat_scaled.shape}"
+        )
+
+    yhat = yhat_scaled * pred_std.reshape(-1, 1) + pred_mean.reshape(-1, 1)
+
+    rows: list[dict[str, Any]] = []
+    for i, uid in enumerate(pred_uids):
+        ds_f = pred_ds_list[i]
+        for j in range(h):
+            rows.append({"unique_id": uid, "ds": ds_f[j], "yhat": float(yhat[i, j])})
+
+    return pd.DataFrame(rows)
+
+
+def torch_rnn_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    cell: str = "lstm",
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    id_emb_dim: int = 8,
+) -> Any:
+    """
+    Simple global/panel RNN backbone (LSTM/GRU) with a token-wise horizon head.
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_rnn_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            cell=str(cell),
+            hidden_size=int(hidden_size),
+            num_layers=int(num_layers),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+        )
+
+    return _f
