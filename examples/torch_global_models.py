@@ -232,6 +232,40 @@ def main() -> None:
             {"context_length": 96, "d_model": 64, "num_layers": 2, "ffn_dim": 128, "epochs": 10},
         ),
         (
+            "torch-hyena-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "ffn_dim": 128,
+                "kernel_size": 64,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-dilated-rnn-global",
+            {
+                "context_length": 96,
+                "cell": "gru",
+                "d_model": 64,
+                "num_layers": 3,
+                "dilation_base": 2,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-kan-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "grid_size": 16,
+                "grid_range": 2.0,
+                "linear_skip": True,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-transformer-encdec-global",
             {
                 "context_length": 96,

@@ -144,6 +144,70 @@ def test_torch_mamba_rwkv_local_smoke():
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_torch_hyena_local_smoke():
+    y = np.sin(np.arange(140, dtype=float) / 7.0) + 0.04 * np.arange(140, dtype=float)
+    f = make_forecaster(
+        "torch-hyena-direct",
+        lags=48,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=64,
+        kernel_size=32,
+        dropout=0.0,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_torch_dilated_rnn_and_kan_local_smoke():
+    y = np.sin(np.arange(160, dtype=float) / 9.0) + 0.03 * np.arange(160, dtype=float)
+
+    f1 = make_forecaster(
+        "torch-dilated-rnn-direct",
+        lags=48,
+        cell="gru",
+        hidden_size=32,
+        num_layers=2,
+        dilation_base=2,
+        dropout=0.0,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat1 = f1(y, 5)
+    assert yhat1.shape == (5,)
+    assert np.all(np.isfinite(yhat1))
+
+    f2 = make_forecaster(
+        "torch-kan-direct",
+        lags=48,
+        d_model=32,
+        num_layers=1,
+        grid_size=8,
+        grid_range=2.0,
+        dropout=0.0,
+        linear_skip=True,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat2 = f2(y, 5)
+    assert yhat2.shape == (5,)
+    assert np.all(np.isfinite(yhat2))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_xformer_and_rnn_global_smoke():
     import pandas as pd
 
@@ -750,6 +814,70 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred26 = g26(long_df, cutoff, horizon)
     assert set(pred26.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
     assert np.all(np.isfinite(pred26["yhat"].to_numpy(dtype=float)))
+
+    g27 = make_global_forecaster(
+        "torch-hyena-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=64,
+        kernel_size=32,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred27 = g27(long_df, cutoff, horizon)
+    assert set(pred27.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred27["yhat"].to_numpy(dtype=float)))
+
+    g28 = make_global_forecaster(
+        "torch-dilated-rnn-global",
+        context_length=32,
+        cell="gru",
+        d_model=32,
+        num_layers=2,
+        dilation_base=2,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred28 = g28(long_df, cutoff, horizon)
+    assert set(pred28.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred28["yhat"].to_numpy(dtype=float)))
+
+    g29 = make_global_forecaster(
+        "torch-kan-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        grid_size=8,
+        grid_range=2.0,
+        dropout=0.0,
+        linear_skip=True,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred29 = g29(long_df, cutoff, horizon)
+    assert set(pred29.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred29["yhat"].to_numpy(dtype=float)))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")

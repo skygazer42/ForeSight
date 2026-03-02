@@ -64,11 +64,14 @@ from .statsmodels_wrap import (
 from .theta import theta_auto_forecast, theta_forecast
 from .torch_global import (
     torch_autoformer_global_forecaster,
+    torch_dilated_rnn_global_forecaster,
     torch_deepar_global_forecaster,
     torch_dlinear_global_forecaster,
     torch_fedformer_global_forecaster,
     torch_fnet_global_forecaster,
     torch_gmlp_global_forecaster,
+    torch_hyena_global_forecaster,
+    torch_kan_global_forecaster,
     torch_inception_global_forecaster,
     torch_informer_global_forecaster,
     torch_itransformer_global_forecaster,
@@ -99,11 +102,14 @@ from .torch_nn import (
     torch_bilstm_direct_forecast,
     torch_cnn_direct_forecast,
     torch_deepar_recursive_forecast,
+    torch_dilated_rnn_direct_forecast,
     torch_dlinear_direct_forecast,
     torch_fnet_direct_forecast,
     torch_gmlp_direct_forecast,
     torch_gru_direct_forecast,
+    torch_hyena_direct_forecast,
     torch_inception_direct_forecast,
+    torch_kan_direct_forecast,
     torch_linear_attention_direct_forecast,
     torch_lstm_direct_forecast,
     torch_mamba_direct_forecast,
@@ -1239,6 +1245,258 @@ def _factory_torch_rwkv_direct(
             num_layers=num_layers_int,
             ffn_dim=ffn_dim_int,
             dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_hyena_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    kernel_size: int = 64,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    ffn_dim_int = int(ffn_dim)
+    kernel_size_int = int(kernel_size)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_hyena_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            ffn_dim=ffn_dim_int,
+            kernel_size=kernel_size_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_dilated_rnn_direct(
+    *,
+    lags: int = 96,
+    cell: str = "gru",
+    hidden_size: int = 64,
+    num_layers: int = 3,
+    dilation_base: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    cell_s = str(cell)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    dilation_base_int = int(dilation_base)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_dilated_rnn_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cell=cell_s,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            dilation_base=dilation_base_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_kan_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    grid_size: int = 16,
+    grid_range: float = 2.0,
+    dropout: float = 0.1,
+    linear_skip: bool = True,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    grid_size_int = int(grid_size)
+    grid_range_f = float(grid_range)
+    dropout_f = float(dropout)
+    linear_skip_bool = bool(linear_skip)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_kan_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            grid_size=grid_size_int,
+            grid_range=grid_range_f,
+            dropout=dropout_f,
+            linear_skip=linear_skip_bool,
             epochs=epochs_int,
             lr=lr_f,
             weight_decay=weight_decay_f,
@@ -4035,6 +4293,80 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
     ),
+    "torch-hyena-direct": ModelSpec(
+        key="torch-hyena-direct",
+        description="Torch Hyena-style long convolution model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_hyena_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "ffn_dim": 128,
+            "kernel_size": 64,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_layers": "Number of Hyena blocks",
+            "ffn_dim": "Channel-mixing FFN hidden size",
+            "kernel_size": "Depthwise causal conv kernel size (>=1)",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-dilated-rnn-direct": ModelSpec(
+        key="torch-dilated-rnn-direct",
+        description="Torch Dilated RNN (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_dilated_rnn_direct,
+        default_params={
+            "lags": 96,
+            "cell": "gru",
+            "hidden_size": 64,
+            "num_layers": 3,
+            "dilation_base": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "cell": "Recurrent cell: gru or lstm",
+            "hidden_size": "Hidden size / model dimension",
+            "num_layers": "Number of dilated recurrent layers",
+            "dilation_base": "Dilation base (>=2); dilations are base^layer_index",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-kan-direct": ModelSpec(
+        key="torch-kan-direct",
+        description="Torch KAN-style spline MLP (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_kan_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "grid_size": 16,
+            "grid_range": 2.0,
+            "dropout": 0.1,
+            "linear_skip": True,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden width of the KAN network",
+            "num_layers": "Number of KAN spline layers",
+            "grid_size": "Number of spline knots (>=4)",
+            "grid_range": "Spline grid range (+/- range) in normalized y units",
+            "dropout": "Dropout probability in [0,1)",
+            "linear_skip": "Add a linear skip connection per layer (true/false)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
     "torch-patchtst-direct": ModelSpec(
         key="torch-patchtst-direct",
         description="Torch PatchTST-style model (direct multi-horizon). Requires PyTorch.",
@@ -5248,6 +5580,128 @@ _REGISTRY: dict[str, ModelSpec] = {
             "d_model": "Model dimension",
             "num_layers": "Number of stacked RWKV blocks",
             "ffn_dim": "Channel-mix hidden size",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-hyena-global": ModelSpec(
+        key="torch-hyena-global",
+        description="Torch Hyena-style long convolution (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_hyena_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "num_layers": 4,
+            "ffn_dim": 128,
+            "kernel_size": 64,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "num_layers": "Number of Hyena blocks",
+            "ffn_dim": "Channel-mixing FFN hidden size",
+            "kernel_size": "Depthwise causal conv kernel size (>=1)",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-dilated-rnn-global": ModelSpec(
+        key="torch-dilated-rnn-global",
+        description="Torch Dilated RNN (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_dilated_rnn_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "cell": "gru",
+            "d_model": 64,
+            "num_layers": 3,
+            "dilation_base": 2,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "cell": "Recurrent cell: gru or lstm",
+            "d_model": "Hidden size / model dimension",
+            "num_layers": "Number of dilated recurrent layers",
+            "dilation_base": "Dilation base (>=2); dilations are base^layer_index",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-kan-global": ModelSpec(
+        key="torch-kan-global",
+        description="Torch KAN-style spline MLP (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_kan_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "num_layers": 2,
+            "grid_size": 16,
+            "grid_range": 2.0,
+            "linear_skip": True,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Hidden width of the KAN network",
+            "num_layers": "Number of KAN spline layers",
+            "grid_size": "Number of spline knots (>=4)",
+            "grid_range": "Spline grid range (+/- range) in normalized y units",
+            "linear_skip": "Add a linear skip connection per layer (true/false)",
             "id_emb_dim": "Series-id embedding dim (panel/global models)",
             "dropout": "Dropout probability in [0,1)",
             "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",

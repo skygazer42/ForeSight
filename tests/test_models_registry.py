@@ -30,6 +30,20 @@ def test_new_torch_mamba_rwkv_models_are_registered():
     assert "torch-rwkv-global" in keys
 
 
+def test_new_torch_hyena_models_are_registered():
+    keys = set(list_models())
+    assert "torch-hyena-direct" in keys
+    assert "torch-hyena-global" in keys
+
+
+def test_new_torch_dilated_rnn_and_kan_models_are_registered():
+    keys = set(list_models())
+    assert "torch-dilated-rnn-direct" in keys
+    assert "torch-dilated-rnn-global" in keys
+    assert "torch-kan-direct" in keys
+    assert "torch-kan-global" in keys
+
+
 def test_new_torch_xformer_attention_variants_are_registered():
     keys = set(list_models())
     assert "torch-xformer-probsparse-ln-gelu-direct" in keys

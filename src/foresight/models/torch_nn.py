@@ -3619,3 +3619,460 @@ def torch_rwkv_direct_forecast(
     if bool(normalize):
         yhat = yhat * std + mean
     return np.asarray(yhat, dtype=float)
+
+
+def torch_hyena_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    kernel_size: int = 64,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Hyena-style long convolution sequence model (lite) for direct multi-horizon forecasting.
+
+    The core mixing operator is a depthwise causal Conv1D (per-channel long kernel) with gating,
+    followed by a channel-mixing FFN.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    hidden = int(ffn_dim)
+    if hidden <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    k = int(kernel_size)
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    class _HyenaBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm1 = nn.LayerNorm(d)
+            self.in_proj = nn.Linear(d, 2 * d)
+            self.dwconv = nn.Conv1d(d, d, kernel_size=int(k), groups=d)
+            self.out_proj = nn.Linear(d, d)
+            self.drop1 = nn.Dropout(p=drop) if drop > 0.0 else nn.Identity()
+
+            self.norm2 = nn.LayerNorm(d)
+            self.fc1 = nn.Linear(d, hidden)
+            self.fc2 = nn.Linear(hidden, d)
+            self.drop2 = nn.Dropout(p=drop) if drop > 0.0 else nn.Identity()
+
+        def forward(self, xb: Any) -> Any:  # (B, T, d)
+            z = self.norm1(xb)
+            g, v = self.in_proj(z).chunk(2, dim=-1)
+            g = torch.sigmoid(g)
+
+            v_ch = v.transpose(1, 2)  # (B, d, T)
+            v_pad = F.pad(v_ch, (int(k) - 1, 0))
+            y = self.dwconv(v_pad).transpose(1, 2)  # (B, T, d)
+            y = self.out_proj(g * y)
+            xb = xb + self.drop1(y)
+
+            z2 = self.norm2(xb)
+            y2 = F.gelu(self.fc1(z2))
+            y2 = self.fc2(self.drop2(y2))
+            xb = xb + self.drop2(y2)
+            return xb
+
+    class _HyenaDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.embed = nn.Linear(1, d)
+            self.pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
+            self.blocks = nn.ModuleList([_HyenaBlock() for _ in range(int(num_layers))])
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            if xb.ndim == 2:
+                xb = xb.unsqueeze(-1)
+            z = self.embed(xb) + self.pos
+            for blk in self.blocks:
+                z = blk(z)
+            z = self.norm(z)
+            return self.head(z[:, -1, :])
+
+    model = _HyenaDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_dilated_rnn_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    cell: str = "gru",
+    hidden_size: int = 64,
+    num_layers: int = 3,
+    dilation_base: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Dilated RNN (lite) for direct multi-horizon forecasting on lag windows.
+
+    Each recurrent layer uses a fixed dilation (1, dilation_base, dilation_base^2, ...),
+    which increases the receptive field without increasing sequence length.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    cell_s = str(cell).lower().strip()
+    if cell_s not in {"gru", "lstm"}:
+        raise ValueError("cell must be one of: gru, lstm")
+
+    d = int(hidden_size)
+    if d <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    L = int(num_layers)
+    if L <= 0:
+        raise ValueError("num_layers must be >= 1")
+    base = int(dilation_base)
+    if base <= 1:
+        raise ValueError("dilation_base must be >= 2")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    class _DilatedRNNDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.embed = nn.Linear(1, d)
+            self.drop_in = nn.Dropout(p=drop) if drop > 0.0 else nn.Identity()
+
+            dilations = [int(base**i) for i in range(L)]
+            self.dilations = dilations
+            if cell_s == "gru":
+                self.cells = nn.ModuleList([nn.GRUCell(d, d) for _ in dilations])
+            else:
+                self.cells = nn.ModuleList([nn.LSTMCell(d, d) for _ in dilations])
+
+            self.norms = nn.ModuleList([nn.LayerNorm(d) for _ in dilations])
+            self.drop = nn.Dropout(p=drop) if drop > 0.0 else nn.Identity()
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            if xb.ndim == 2:
+                xb = xb.unsqueeze(-1)
+            z = self.drop_in(self.embed(xb))  # (B, T, d)
+            B = int(z.shape[0])
+            T = int(z.shape[1])
+
+            for layer, dil in enumerate(self.dilations):
+                cell_mod = self.cells[layer]
+                norm = self.norms[layer]
+
+                if cell_s == "gru":
+                    h_states: list[Any] = []
+                    zeros = torch.zeros((B, d), device=z.device, dtype=z.dtype)
+                    for t in range(T):
+                        h_prev = h_states[t - dil] if t >= dil else zeros
+                        ht = cell_mod(z[:, t, :], h_prev)
+                        h_states.append(ht)
+                    z = torch.stack(h_states, dim=1)
+                else:
+                    h_states = []
+                    c_states: list[Any] = []
+                    zeros_h = torch.zeros((B, d), device=z.device, dtype=z.dtype)
+                    zeros_c = torch.zeros((B, d), device=z.device, dtype=z.dtype)
+                    for t in range(T):
+                        if t >= dil:
+                            h_prev = h_states[t - dil]
+                            c_prev = c_states[t - dil]
+                        else:
+                            h_prev = zeros_h
+                            c_prev = zeros_c
+                        ht, ct = cell_mod(z[:, t, :], (h_prev, c_prev))
+                        h_states.append(ht)
+                        c_states.append(ct)
+                    z = torch.stack(h_states, dim=1)
+
+                z = norm(z)
+                z = self.drop(F.gelu(z))
+
+            last = z[:, -1, :]
+            return self.head(last)
+
+    model = _DilatedRNNDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_kan_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    grid_size: int = 16,
+    grid_range: float = 2.0,
+    dropout: float = 0.1,
+    linear_skip: bool = True,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    KAN (Kolmogorov-Arnold Network) style spline MLP (lite) for direct forecasting.
+
+    Implements per-edge univariate functions via a shared triangular spline basis over a
+    fixed grid. This is a lightweight, self-contained approximation that is still fully
+    implemented (no external KAN packages).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    L = int(num_layers)
+    if L <= 0:
+        raise ValueError("num_layers must be >= 1")
+    K = int(grid_size)
+    if K < 4:
+        raise ValueError("grid_size must be >= 4")
+    grid_r = float(grid_range)
+    if grid_r <= 0.0:
+        raise ValueError("grid_range must be > 0")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+
+    class _KANSplineLayer(nn.Module):
+        def __init__(self, in_features: int, out_features: int) -> None:
+            super().__init__()
+            knots = torch.linspace(-grid_r, grid_r, int(K), dtype=torch.float32)
+            self.register_buffer("knots", knots, persistent=False)
+            if int(K) < 2:
+                raise ValueError("grid_size must be >= 2")
+            delta = float((2.0 * grid_r) / float(int(K) - 1))
+            self.register_buffer(
+                "inv_delta", torch.tensor(1.0 / max(delta, 1e-6), dtype=torch.float32), persistent=False
+            )
+            self.coeff = nn.Parameter(torch.empty((out_features, in_features, int(K))))
+            self.bias = nn.Parameter(torch.zeros((out_features,), dtype=torch.float32))
+            self.linear = nn.Linear(in_features, out_features) if bool(linear_skip) else None
+            nn.init.normal_(self.coeff, mean=0.0, std=0.02)
+
+        def forward(self, xb: Any) -> Any:  # (B, in_features)
+            xk = xb.unsqueeze(-1)  # (B, in, 1)
+            basis = torch.relu(1.0 - torch.abs(xk - self.knots.reshape(1, 1, -1)) * self.inv_delta)
+            y = torch.einsum("bik,oik->bo", basis, self.coeff)
+            if self.linear is not None:
+                y = y + self.linear(xb)
+            return y + self.bias
+
+    class _KANDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            layers: list[Any] = []
+            in_dim = int(lag_count)
+            for _i in range(int(L)):
+                layers.append(_KANSplineLayer(in_dim, d))
+                layers.append(nn.LayerNorm(d))
+                layers.append(nn.Dropout(p=drop) if drop > 0.0 else nn.Identity())
+                in_dim = d
+            self.net = nn.Sequential(*layers)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:
+            z = self.net(xb)
+            z = F.gelu(z)
+            return self.head(z)
+
+    model = _KANDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, -1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
