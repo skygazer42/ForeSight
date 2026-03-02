@@ -109,7 +109,7 @@ def torch_xformer_direct_forecast(
       - future tokens are zeros or learned "query" tokens
 
     It supports multiple attention approximations:
-      attn = full | local | logsparse | performer | linformer | nystrom | probsparse | autocorr | reformer
+      attn = full | local | logsparse | longformer | performer | linformer | nystrom | probsparse | autocorr | reformer
     """
     torch = _require_torch()
     nn = torch.nn
@@ -149,6 +149,7 @@ def torch_xformer_direct_forecast(
         "full",
         "local",
         "logsparse",
+        "longformer",
         "performer",
         "linformer",
         "nystrom",
@@ -157,7 +158,7 @@ def torch_xformer_direct_forecast(
         "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, logsparse, performer, linformer, nystrom, probsparse, autocorr, reformer"
+            "attn must be one of: full, local, logsparse, longformer, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -494,6 +495,30 @@ def torch_xformer_direct_forecast(
                 pow2 = (dist > 0) & ((dist & (dist - 1)) == 0)  # powers of two
                 allowed = (dist <= int(w)) | pow2
                 scores = scores.masked_fill((~allowed).reshape(1, 1, L, L), float("-inf"))
+            if attn_s == "longformer":
+                # Longformer-style sliding window + global tokens (lite).
+                #
+                # We treat the future placeholder/query tokens as "global queries" so each horizon token
+                # can attend to the full context (and vice versa). This keeps the model usable for
+                # direct multi-horizon forecasting while remaining mostly local/sparse.
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()  # (L,L)
+                local_allowed = dist <= int(w)
+
+                global_mask = torch.zeros((int(L),), dtype=torch.bool, device=xb.device)
+                # Future horizon query tokens are last `h` tokens in the (lags+horizon) sequence.
+                if int(h) > 0:
+                    global_mask[int(L) - int(h) :] = True
+                # Also mark the last observed/context token as global (helps routing information).
+                last_ctx = int(L) - int(h) - 1
+                if last_ctx >= 0:
+                    global_mask[int(last_ctx)] = True
+
+                allowed = (
+                    local_allowed | global_mask.reshape(int(L), 1) | global_mask.reshape(1, int(L))
+                )
+                scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
             w = torch.softmax(scores, dim=-1)
             out = torch.einsum("bhlm,bhmd->bhld", w, v)
             return self.out(self._merge_heads(out))

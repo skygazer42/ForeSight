@@ -100,6 +100,18 @@ def main() -> None:
             },
         ),
         (
+            "torch-xformer-longformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "local_window": 16,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-xformer-probsparse-global",
             {
                 "context_length": 96,
@@ -144,6 +156,34 @@ def main() -> None:
                 "num_layers": 2,
                 "patch_len": 16,
                 "stride": 8,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-crossformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "segment_len": 16,
+                "stride": 16,
+                "num_scales": 3,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-pyraformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "segment_len": 16,
+                "stride": 16,
+                "num_levels": 3,
                 "epochs": 10,
             },
         ),

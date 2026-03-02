@@ -1263,6 +1263,377 @@ def torch_patchtst_direct_forecast(
     return np.asarray(yhat, dtype=float)
 
 
+def torch_crossformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 192,
+    segment_len: int = 16,
+    stride: int = 16,
+    num_scales: int = 3,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Crossformer-style (lite): multi-scale segmented tokens + Transformer encoder (direct multi-horizon).
+
+    Notes:
+      - This is a lightweight approximation inspired by Crossformer ideas (segmentation + cross-scale mixing).
+      - For each scale i, we segment the lag window into length `segment_len * 2^i` tokens and concatenate
+        all scale tokens into a single Transformer encoder sequence.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    base_seg = int(segment_len)
+    base_stride = int(stride)
+    n_scales_req = int(num_scales)
+    if base_seg <= 0:
+        raise ValueError("segment_len must be >= 1")
+    if base_stride <= 0:
+        raise ValueError("stride must be >= 1")
+    if n_scales_req <= 0:
+        raise ValueError("num_scales must be >= 1")
+    if base_seg > lag_count:
+        raise ValueError("segment_len must be <= lags")
+
+    d = int(d_model)
+    heads = int(nhead)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    # Build scale configs (skip scales that don't fit).
+    scales: list[tuple[int, int, int]] = []  # (seg_len, step, n_tokens)
+    for i in range(int(n_scales_req)):
+        seg_i = int(base_seg * (2**i))
+        step_i = int(base_stride * (2**i))
+        if seg_i > lag_count:
+            break
+        if step_i <= 0:
+            continue
+        n_tokens_i = 1 + (lag_count - seg_i) // step_i
+        if n_tokens_i <= 0:
+            continue
+        scales.append((seg_i, step_i, int(n_tokens_i)))
+
+    if not scales:
+        raise ValueError("Invalid (segment_len, stride, num_scales) configuration for given lags")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    class _CrossFormerDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scale_proj = nn.ModuleList([nn.Linear(int(seg), d) for seg, _step, _nt in scales])
+            self.scale_pos = nn.ParameterList(
+                [
+                    nn.Parameter(torch.zeros((1, int(nt), d), dtype=torch.float32))
+                    for _seg, _step, nt in scales
+                ]
+            )
+            self.scale_emb = nn.Embedding(int(len(scales)), d)
+            self.drop = nn.Dropout(p=drop)
+
+            layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=int(dim_feedforward),
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            x0 = xb.squeeze(-1)  # (B, T)
+            tokens: list[Any] = []
+            for si, (seg_i, step_i, nt_i) in enumerate(scales):
+                segs = x0.unfold(dimension=1, size=int(seg_i), step=int(step_i))  # (B, nt, seg_i)
+                if segs.shape[1] != int(nt_i):
+                    # Should not happen given precomputed nt_i, but guard against shape drift.
+                    segs = segs[:, : int(nt_i), :]
+                z = self.scale_proj[si](segs)
+                z = z + self.scale_pos[si] + self.scale_emb.weight[int(si)].reshape(1, 1, d)
+                tokens.append(self.drop(z))
+
+            zcat = torch.cat(tokens, dim=1)
+            zcat = self.enc(zcat)
+            pooled = self.norm(zcat.mean(dim=1))
+            return self.head(pooled)
+
+    model = _CrossFormerDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_pyraformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 192,
+    segment_len: int = 16,
+    stride: int = 16,
+    num_levels: int = 3,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Pyraformer-style (lite): pyramid pooling over segment tokens + Transformer encoder (direct multi-horizon).
+
+    Notes:
+      - This is a lightweight approximation inspired by Pyraformer ideas (hierarchical multi-resolution tokens).
+      - Level 0 uses segmented tokens from the lag window; higher levels are built via pooling (factor 2).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    seg = int(segment_len)
+    step = int(stride)
+    levels_req = int(num_levels)
+    if seg <= 0:
+        raise ValueError("segment_len must be >= 1")
+    if step <= 0:
+        raise ValueError("stride must be >= 1")
+    if levels_req <= 0:
+        raise ValueError("num_levels must be >= 1")
+    if seg > lag_count:
+        raise ValueError("segment_len must be <= lags")
+
+    n0 = 1 + (lag_count - seg) // step
+    if n0 <= 0:
+        raise ValueError("Invalid segment configuration: produces no tokens")
+
+    d = int(d_model)
+    heads = int(nhead)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    # Determine actual pyramid sizes.
+    level_sizes: list[int] = [int(n0)]
+    for _i in range(int(levels_req) - 1):
+        nxt = int(level_sizes[-1] // 2)
+        if nxt <= 0:
+            break
+        level_sizes.append(nxt)
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    class _PyraFormerDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.patch_proj = nn.Linear(int(seg), d)
+            self.level_proj = nn.ModuleList(
+                [
+                    nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Dropout(p=drop))
+                    for _ in level_sizes[1:]
+                ]
+            )
+            self.pos = nn.ParameterList(
+                [
+                    nn.Parameter(torch.zeros((1, int(sz), d), dtype=torch.float32))
+                    for sz in level_sizes
+                ]
+            )
+            self.level_emb = nn.Embedding(int(len(level_sizes)), d)
+            self.drop = nn.Dropout(p=drop)
+
+            layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=int(dim_feedforward),
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            x0 = xb.squeeze(-1)  # (B, T)
+            segs = x0.unfold(dimension=1, size=int(seg), step=int(step))  # (B, n0, seg)
+            segs = segs[:, : int(level_sizes[0]), :]
+            z0 = self.patch_proj(segs)
+            z0 = z0 + self.pos[0] + self.level_emb.weight[0].reshape(1, 1, d)
+            z0 = self.drop(z0)
+
+            tokens: list[Any] = [z0]
+            z_prev = z0
+            for li in range(1, int(len(level_sizes))):
+                n_prev = int(z_prev.shape[1])
+                n_even = n_prev - (n_prev % 2)
+                if n_even <= 0:
+                    break
+                z_pool = (
+                    z_prev[:, :n_even, :].reshape(z_prev.shape[0], n_even // 2, 2, d).mean(dim=2)
+                )
+                z_pool = self.level_proj[int(li - 1)](z_pool)
+                z_pool = z_pool[:, : int(level_sizes[li]), :]
+                z_pool = z_pool + self.pos[li] + self.level_emb.weight[int(li)].reshape(1, 1, d)
+                z_pool = self.drop(z_pool)
+                tokens.append(z_pool)
+                z_prev = z_pool
+
+            zcat = torch.cat(tokens, dim=1)
+            zcat = self.enc(zcat)
+            pooled = self.norm(zcat.mean(dim=1))
+            return self.head(pooled)
+
+    model = _PyraFormerDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
 def torch_tsmixer_direct_forecast(
     train: Any,
     horizon: int,
@@ -4014,7 +4385,9 @@ def torch_kan_direct_forecast(
                 raise ValueError("grid_size must be >= 2")
             delta = float((2.0 * grid_r) / float(int(K) - 1))
             self.register_buffer(
-                "inv_delta", torch.tensor(1.0 / max(delta, 1e-6), dtype=torch.float32), persistent=False
+                "inv_delta",
+                torch.tensor(1.0 / max(delta, 1e-6), dtype=torch.float32),
+                persistent=False,
             )
             self.coeff = nn.Parameter(torch.empty((out_features, in_features, int(K))))
             self.bias = nn.Parameter(torch.zeros((out_features,), dtype=torch.float32))
@@ -4351,9 +4724,7 @@ def torch_etsformer_direct_forecast(
     class _ETSformerDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.alpha_logit = nn.Parameter(
-                torch.tensor(alpha_logit_init, dtype=torch.float32)
-            )
+            self.alpha_logit = nn.Parameter(torch.tensor(alpha_logit_init, dtype=torch.float32))
             self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
             self.embed = nn.Linear(1, d)
             self.pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
@@ -4379,20 +4750,20 @@ def torch_etsformer_direct_forecast(
             alpha = torch.sigmoid(self.alpha_logit)
             beta = torch.sigmoid(self.beta_logit)
 
-            l = y[:, 0]
+            level = y[:, 0]
             if T >= 2:
                 b = y[:, 1] - y[:, 0]
             else:
                 b = torch.zeros((B,), device=y.device, dtype=y.dtype)
 
-            levels: list[Any] = [l]
+            levels: list[Any] = [level]
             trends: list[Any] = [b]
             for t in range(1, T):
                 yt = y[:, t]
-                l_new = alpha * yt + (1.0 - alpha) * (l + b)
-                b_new = beta * (l_new - l) + (1.0 - beta) * b
-                l, b = l_new, b_new
-                levels.append(l)
+                level_new = alpha * yt + (1.0 - alpha) * (level + b)
+                b_new = beta * (level_new - level) + (1.0 - beta) * b
+                level, b = level_new, b_new
+                levels.append(level)
                 trends.append(b)
 
             level_seq = torch.stack(levels, dim=1)  # (B, T)
@@ -4531,9 +4902,7 @@ def torch_esrnn_direct_forecast(
     class _ESRNNDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.alpha_logit = nn.Parameter(
-                torch.tensor(alpha_logit_init, dtype=torch.float32)
-            )
+            self.alpha_logit = nn.Parameter(torch.tensor(alpha_logit_init, dtype=torch.float32))
             self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
 
             if cell_s == "gru":
@@ -4566,20 +4935,20 @@ def torch_esrnn_direct_forecast(
             alpha = torch.sigmoid(self.alpha_logit)
             beta = torch.sigmoid(self.beta_logit)
 
-            l = y[:, 0]
+            level = y[:, 0]
             if T >= 2:
                 b = y[:, 1] - y[:, 0]
             else:
                 b = torch.zeros((B,), device=y.device, dtype=y.dtype)
 
-            levels: list[Any] = [l]
+            levels: list[Any] = [level]
             trends: list[Any] = [b]
             for t in range(1, T):
                 yt = y[:, t]
-                l_new = alpha * yt + (1.0 - alpha) * (l + b)
-                b_new = beta * (l_new - l) + (1.0 - beta) * b
-                l, b = l_new, b_new
-                levels.append(l)
+                level_new = alpha * yt + (1.0 - alpha) * (level + b)
+                b_new = beta * (level_new - level) + (1.0 - beta) * b
+                level, b = level_new, b_new
+                levels.append(level)
                 trends.append(b)
 
             level_seq = torch.stack(levels, dim=1)  # (B, T)

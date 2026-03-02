@@ -183,6 +183,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-etsformer-direct`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual, `lags`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-esrnn-direct`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual, `lags`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-patchtst-direct`（requires `.[torch]`）：Torch PatchTST-style（patching + encoder, `lags`, `patch_len`, `stride`, `epochs`…）
+- `torch-crossformer-direct`（requires `.[torch]`）：Torch Crossformer-style（lite, multi-scale segmentation + encoder, `lags`, `segment_len`, `stride`, `num_scales`, `epochs`…）
+- `torch-pyraformer-direct`（requires `.[torch]`）：Torch Pyraformer-style（lite, pyramid pooling + encoder, `lags`, `segment_len`, `stride`, `num_levels`, `epochs`…）
 - `torch-tsmixer-direct`（requires `.[torch]`）：Torch TSMixer-style（token/channel mixing, `lags`, `d_model`, `num_blocks`, `epochs`…）
 - `torch-cnn-direct`（requires `.[torch]`）：Torch Conv1D stack（direct multi-horizon, `lags`, `channels`, `kernel_size`, `epochs`…）
 - `torch-resnet1d-direct`（requires `.[torch]`）：Torch ResNet-1D（direct multi-horizon, `lags`, `channels`, `num_blocks`, `epochs`…）
@@ -198,7 +200,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
 - `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
 - `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
-- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/logsparse/performer/linformer/nystrom/probsparse/autocorr/reformer + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
+- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/logsparse/longformer/performer/linformer/nystrom/probsparse/autocorr/reformer + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
 - `torch-seq2seq-*-direct`（requires `.[torch]`）：Seq2Seq RNN（LSTM/GRU，可选 Bahdanau attention，scheduled teacher forcing）
 - `torch-lstnet-direct`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway，lite）
 - `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
@@ -207,6 +209,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
 - `torch-fedformer-global`（requires `.[torch]`）：Torch FEDformer-style（lite，分解 + 频域混合/FFT）全局/面板训练（`context_length`, `d_model`, `num_layers`, `modes`, `ma_window`, `epochs`…）
 - `torch-patchtst-global`（requires `.[torch]`）：Torch PatchTST-style（lite）全局/面板训练（patch tokens + encoder，`context_length`, `patch_len`, `stride`, `epochs`…）
+- `torch-crossformer-global`（requires `.[torch]`）：Torch Crossformer-style（lite）全局/面板训练（multi-scale segmented tokens + encoder，`context_length`, `segment_len`, `stride`, `num_scales`, `epochs`…）
+- `torch-pyraformer-global`（requires `.[torch]`）：Torch Pyraformer-style（lite）全局/面板训练（pyramid pooling tokens + encoder，`context_length`, `segment_len`, `stride`, `num_levels`, `epochs`…）
 - `torch-tsmixer-global`（requires `.[torch]`）：Torch TSMixer-style（lite）全局/面板训练（token/channel mixing，`context_length`, `num_blocks`, `epochs`…）
 - `torch-itransformer-global`（requires `.[torch]`）：Torch iTransformer-style（lite）全局/面板训练（inverted tokens: variables-as-tokens，`context_length`, `d_model`, `epochs`…）
 - `torch-timesnet-global`（requires `.[torch]`）：Torch TimesNet-style（lite）全局/面板训练（FFT period detection + period Conv2D blocks，`context_length`, `top_k`, `epochs`…）
@@ -234,7 +238,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-esrnn-global`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual）全局/面板训练（`context_length`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-transformer-encdec-global`（requires `.[torch]`）：Torch encoder-decoder Transformer（lite）全局/面板训练（`context_length`, `d_model`, `nhead`, `epochs`…）
 - `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
-- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 logsparse/probsparse/autocorr/reformer 等）
+- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 logsparse/longformer/probsparse/autocorr/reformer 等）
 - `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
 - `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
 - `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）
@@ -383,6 +387,10 @@ ForeSight 的 `foresight` toolkit 参考了这些主流项目的接口/数据形
   https://github.com/Nixtla/neuralforecast
 - **PyTorch Forecasting**: deep learning forecasting pipelines  
   https://pytorch-forecasting.readthedocs.io/
+- **Crossformer**: Cross-Dimension Transformer for multivariate forecasting (ICLR 2023)  
+  https://github.com/Thinklab-SJTU/Crossformer
+- **Pyraformer**: Pyramidal Attention Transformer for long-range forecasting (ICLR 2022)  
+  https://github.com/ant-research/Pyraformer
 - **Kats**: (Meta/Facebook) time series analysis & forecasting toolbox  
   https://github.com/facebookresearch/Kats
 
