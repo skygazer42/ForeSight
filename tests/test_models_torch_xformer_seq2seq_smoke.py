@@ -372,6 +372,87 @@ def test_torch_xformer_and_rnn_global_smoke():
     assert set(pred15.columns) >= {"unique_id", "ds", "yhat"}
     assert np.all(np.isfinite(pred15["yhat"].to_numpy(dtype=float)))
 
+    g16 = make_global_forecaster(
+        "torch-fnet-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        dim_feedforward=64,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred16 = g16(long_df, cutoff, horizon)
+    assert set(pred16.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred16["yhat"].to_numpy(dtype=float)))
+
+    g17 = make_global_forecaster(
+        "torch-gmlp-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=32,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred17 = g17(long_df, cutoff, horizon)
+    assert set(pred17.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred17["yhat"].to_numpy(dtype=float)))
+
+    g18 = make_global_forecaster(
+        "torch-ssm-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred18 = g18(long_df, cutoff, horizon)
+    assert set(pred18.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred18["yhat"].to_numpy(dtype=float)))
+
+    g19 = make_global_forecaster(
+        "torch-transformer-encdec-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        dropout=0.0,
+        quantiles="0.1,0.5,0.9",
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred19 = g19(long_df, cutoff, horizon)
+    assert set(pred19.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred19["yhat"].to_numpy(dtype=float)))
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_global_cv_preserves_quantile_columns():

@@ -147,6 +147,29 @@ def main() -> None:
             },
         ),
         (
+            "torch-fnet-global",
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
+        ),
+        (
+            "torch-gmlp-global",
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
+        ),
+        (
+            "torch-ssm-global",
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
+        ),
+        (
+            "torch-transformer-encdec-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "epochs": 10,
+                "quantiles": "0.1,0.5,0.9",
+            },
+        ),
+        (
             "torch-seq2seq-attn-lstm-global",
             {
                 "context_length": 64,

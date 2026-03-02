@@ -208,6 +208,10 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-resnet1d-global`（requires `.[torch]`）：Torch ResNet-1D（Conv1D residual blocks, lite）全局/面板训练（`context_length`, `channels`, `num_blocks`, `epochs`…）
 - `torch-inception-global`（requires `.[torch]`）：Torch InceptionTime-style（multi-kernel Conv1D, lite）全局/面板训练（`context_length`, `channels`, `kernel_sizes`, `epochs`…）
 - `torch-lstnet-global`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway, lite）全局/面板训练（`context_length`, `cnn_channels`, `rnn_hidden`, `epochs`…）
+- `torch-fnet-global`（requires `.[torch]`）：Torch FNet-style（FFT token mixing, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
+- `torch-gmlp-global`（requires `.[torch]`）：Torch gMLP-style（spatial gating, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
+- `torch-ssm-global`（requires `.[torch]`）：Torch diagonal state-space（SSM, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
+- `torch-transformer-encdec-global`（requires `.[torch]`）：Torch encoder-decoder Transformer（lite）全局/面板训练（`context_length`, `d_model`, `nhead`, `epochs`…）
 - `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
 - `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features）
 - `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
