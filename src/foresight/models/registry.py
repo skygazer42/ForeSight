@@ -2396,6 +2396,8 @@ def _factory_torch_xformer_direct(
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
+    reformer_bucket_size: int = 8,
+    reformer_n_hashes: int = 1,
     probsparse_top_u: int = 32,
     autocorr_top_k: int = 4,
     horizon_tokens: str = "zeros",
@@ -2435,6 +2437,8 @@ def _factory_torch_xformer_direct(
     performer_features_int = int(performer_features)
     linformer_k_int = int(linformer_k)
     nystrom_landmarks_int = int(nystrom_landmarks)
+    reformer_bucket_size_int = int(reformer_bucket_size)
+    reformer_n_hashes_int = int(reformer_n_hashes)
     probsparse_top_u_int = int(probsparse_top_u)
     autocorr_top_k_int = int(autocorr_top_k)
     horizon_tokens_s = str(horizon_tokens)
@@ -2477,6 +2481,8 @@ def _factory_torch_xformer_direct(
             performer_features=performer_features_int,
             linformer_k=linformer_k_int,
             nystrom_landmarks=nystrom_landmarks_int,
+            reformer_bucket_size=reformer_bucket_size_int,
+            reformer_n_hashes=reformer_n_hashes_int,
             probsparse_top_u=probsparse_top_u_int,
             autocorr_top_k=autocorr_top_k_int,
             horizon_tokens=horizon_tokens_s,
@@ -5765,7 +5771,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "num_layers": "Number of encoder layers",
         "dim_feedforward": "FFN hidden dimension",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr",
+        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr, reformer",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
@@ -5773,6 +5779,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "reformer_bucket_size": "Reformer LSH bucket size (attn=reformer)",
+        "reformer_n_hashes": "Reformer LSH hash rounds (attn=reformer)",
         "probsparse_top_u": "Top-u queries for ProbSparse attention (attn=probsparse)",
         "autocorr_top_k": "Top-k delays for AutoCorrelation attention (attn=autocorr)",
         "horizon_tokens": "Future token placeholders: zeros, learned",
@@ -5797,6 +5805,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
+        "reformer_bucket_size": 8,
+        "reformer_n_hashes": 1,
         "probsparse_top_u": 32,
         "autocorr_top_k": 4,
         "horizon_tokens": "zeros",
@@ -5820,7 +5830,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
             requires=("torch",),
         )
 
-    # 21–40: 5 attention types x (LayerNorm/RMSNorm) x (GELU/SwiGLU) = 20
+    # Local xFormer variants: (attn) x (norm) x (ffn)
     for attn_s, attn_label in [
         ("full", "full"),
         ("local", "local-window"),
@@ -5829,6 +5839,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         ("nystrom", "nystrom"),
         ("probsparse", "prob-sparse"),
         ("autocorr", "auto-correlation"),
+        ("reformer", "reformer-lsh"),
     ]:
         for norm_s, norm_label in [("layer", "LayerNorm"), ("rms", "RMSNorm")]:
             for ffn_s, ffn_label in [("gelu", "GELU"), ("swiglu", "SwiGLU")]:
@@ -6046,7 +6057,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "dim_feedforward": "FFN hidden dimension",
         "id_emb_dim": "Series-id embedding dim (panel/global models)",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr",
+        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr, reformer",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
@@ -6054,6 +6065,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "reformer_bucket_size": "Reformer LSH bucket size (attn=reformer)",
+        "reformer_n_hashes": "Reformer LSH hash rounds (attn=reformer)",
         "probsparse_top_u": "Top-u queries for ProbSparse attention (attn=probsparse)",
         "autocorr_top_k": "Top-k delays for AutoCorrelation attention (attn=autocorr)",
         "residual_gating": "Residual gating (true/false)",
@@ -6082,6 +6095,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
+        "reformer_bucket_size": 8,
+        "reformer_n_hashes": 1,
         "probsparse_top_u": 32,
         "autocorr_top_k": 4,
         "residual_gating": False,
@@ -6105,7 +6120,16 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         )
 
     # 61–65: baseline attention variants
-    for attn_s in ["full", "local", "performer", "linformer", "nystrom", "probsparse", "autocorr"]:
+    for attn_s in [
+        "full",
+        "local",
+        "performer",
+        "linformer",
+        "nystrom",
+        "probsparse",
+        "autocorr",
+        "reformer",
+    ]:
         _add_global_xformer(
             f"torch-xformer-{attn_s}-global",
             f"Torch global xFormer ({attn_s} attention) baseline. Requires PyTorch.",
@@ -6113,7 +6137,16 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         )
 
     # 66–70: RMSNorm variants
-    for attn_s in ["full", "local", "performer", "linformer", "nystrom", "probsparse", "autocorr"]:
+    for attn_s in [
+        "full",
+        "local",
+        "performer",
+        "linformer",
+        "nystrom",
+        "probsparse",
+        "autocorr",
+        "reformer",
+    ]:
         _add_global_xformer(
             f"torch-xformer-{attn_s}-rms-global",
             f"Torch global xFormer ({attn_s} attention) with RMSNorm. Requires PyTorch.",

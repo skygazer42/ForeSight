@@ -1753,6 +1753,8 @@ def _predict_torch_xformer_global(
     performer_features: int,
     linformer_k: int,
     nystrom_landmarks: int,
+    reformer_bucket_size: int,
+    reformer_n_hashes: int,
     probsparse_top_u: int,
     autocorr_top_k: int,
     residual_gating: bool,
@@ -1821,9 +1823,10 @@ def _predict_torch_xformer_global(
         "nystrom",
         "probsparse",
         "autocorr",
+        "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, performer, linformer, nystrom, probsparse, autocorr"
+            "attn must be one of: full, local, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -1845,6 +1848,13 @@ def _predict_torch_xformer_global(
     auto_k = int(autocorr_top_k)
     if auto_k <= 0:
         raise ValueError("autocorr_top_k must be >= 1")
+
+    reformer_bs = int(reformer_bucket_size)
+    if reformer_bs <= 0:
+        raise ValueError("reformer_bucket_size must be >= 1")
+    reformer_hashes = int(reformer_n_hashes)
+    if reformer_hashes <= 0:
+        raise ValueError("reformer_n_hashes must be >= 1")
 
     head_dim = d // heads
 
@@ -1944,6 +1954,15 @@ def _predict_torch_xformer_global(
             else:
                 self.register_buffer("W", torch.empty(0), persistent=False)
 
+            if attn_s == "reformer":
+                n_buckets = int(max(1, int(math.ceil(float(seq_len) / float(reformer_bs)))))
+                R = torch.randn(int(reformer_hashes), heads, head_dim, n_buckets) / math.sqrt(
+                    float(head_dim)
+                )
+                self.register_buffer("R", R, persistent=False)
+            else:
+                self.register_buffer("R", torch.empty(0), persistent=False)
+
         def _split_heads(self, xb: Any) -> Any:
             B, L, _D = xb.shape
             return xb.view(B, L, heads, head_dim).transpose(1, 2)
@@ -1986,6 +2005,58 @@ def _predict_torch_xformer_global(
                 w = torch.softmax(scores, dim=-1)
                 out = torch.einsum("bhlm,bhmd->bhld", w, v_proj)
                 return self.out(self._merge_heads(out))
+
+            if attn_s == "reformer":
+                # Reformer LSH attention (lite): hash tokens into buckets with random projections,
+                # then do full attention within sorted chunks (and previous chunk) to approximate.
+                if self.R.numel() == 0:
+                    raise RuntimeError(
+                        "Reformer attention misconfigured (missing projection buffer)"
+                    )
+
+                bs = int(reformer_bs)
+                out_acc = torch.zeros_like(q)
+                n_hash = int(self.R.shape[0])
+
+                for r in range(n_hash):
+                    R = self.R[r]  # (H,dh,n_buckets)
+                    proj = torch.einsum("bhld,hdm->bhlm", q, R)  # (B,H,L,n_buckets)
+                    buckets = proj.argmax(dim=-1)  # (B,H,L)
+
+                    sort_idx = buckets.argsort(dim=-1)  # (B,H,L)
+                    gather_idx = sort_idx.unsqueeze(-1).expand(-1, -1, -1, head_dim)
+                    q_s = q.gather(dim=2, index=gather_idx)
+                    k_s = k.gather(dim=2, index=gather_idx)
+                    v_s = v.gather(dim=2, index=gather_idx)
+
+                    L_pad = int(int(math.ceil(float(L) / float(bs))) * bs)
+                    pad = int(L_pad - int(L))
+                    if pad > 0:
+                        q_s = torch.cat([q_s, q_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
+                        k_s = torch.cat([k_s, k_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
+                        v_s = torch.cat([v_s, v_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
+
+                    n_chunks = int(L_pad // bs)
+                    q_c = q_s.reshape(B, heads, n_chunks, bs, head_dim)
+                    k_c = k_s.reshape(B, heads, n_chunks, bs, head_dim)
+                    v_c = v_s.reshape(B, heads, n_chunks, bs, head_dim)
+
+                    k_prev = torch.cat([k_c[:, :, :1, :, :], k_c[:, :, :-1, :, :]], dim=2)
+                    v_prev = torch.cat([v_c[:, :, :1, :, :], v_c[:, :, :-1, :, :]], dim=2)
+                    k_cat = torch.cat([k_prev, k_c], dim=3)  # (B,H,nc,2*bs,dh)
+                    v_cat = torch.cat([v_prev, v_c], dim=3)
+
+                    scores = torch.einsum("bhnqd,bhnkd->bhnqk", q_c * scale, k_cat)
+                    w = torch.softmax(scores, dim=-1)
+                    out_c = torch.einsum("bhnqk,bhnkd->bhnqd", w, v_cat)
+
+                    out_s = out_c.reshape(B, heads, L_pad, head_dim)[:, :, :L, :]
+                    inv = sort_idx.argsort(dim=-1)
+                    out = out_s.gather(dim=2, index=inv.unsqueeze(-1).expand(-1, -1, -1, head_dim))
+                    out_acc = out_acc + out
+
+                out_acc = out_acc / float(max(1, n_hash))
+                return self.out(self._merge_heads(out_acc))
 
             if attn_s == "nystrom":
                 m = int(min(int(nystrom_landmarks), L))
@@ -2260,6 +2331,8 @@ def torch_xformer_global_forecaster(
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
+    reformer_bucket_size: int = 8,
+    reformer_n_hashes: int = 1,
     probsparse_top_u: int = 32,
     autocorr_top_k: int = 4,
     residual_gating: bool = False,
@@ -2313,6 +2386,8 @@ def torch_xformer_global_forecaster(
             performer_features=int(performer_features),
             linformer_k=int(linformer_k),
             nystrom_landmarks=int(nystrom_landmarks),
+            reformer_bucket_size=int(reformer_bucket_size),
+            reformer_n_hashes=int(reformer_n_hashes),
             probsparse_top_u=int(probsparse_top_u),
             autocorr_top_k=int(autocorr_top_k),
             residual_gating=bool(residual_gating),

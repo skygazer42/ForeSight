@@ -34,5 +34,7 @@ def test_new_torch_xformer_attention_variants_are_registered():
     keys = set(list_models())
     assert "torch-xformer-probsparse-ln-gelu-direct" in keys
     assert "torch-xformer-autocorr-ln-gelu-direct" in keys
+    assert "torch-xformer-reformer-ln-gelu-direct" in keys
     assert "torch-xformer-probsparse-global" in keys
     assert "torch-xformer-autocorr-global" in keys
+    assert "torch-xformer-reformer-global" in keys

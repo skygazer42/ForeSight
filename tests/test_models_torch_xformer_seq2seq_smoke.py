@@ -62,6 +62,25 @@ def test_torch_xformer_local_smoke():
     assert yhat3.shape == (5,)
     assert np.all(np.isfinite(yhat3))
 
+    f4 = make_forecaster(
+        "torch-xformer-reformer-ln-gelu-direct",
+        lags=48,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        reformer_bucket_size=8,
+        reformer_n_hashes=1,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat4 = f4(y, 5)
+    assert yhat4.shape == (5,)
+    assert np.all(np.isfinite(yhat4))
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_seq2seq_local_smoke():
@@ -203,6 +222,28 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred1c = g1c(long_df, cutoff, horizon)
     assert set(pred1c.columns) >= {"unique_id", "ds", "yhat"}
     assert np.all(np.isfinite(pred1c["yhat"].to_numpy(dtype=float)))
+
+    g1d = make_global_forecaster(
+        "torch-xformer-reformer-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        reformer_bucket_size=8,
+        reformer_n_hashes=1,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred1d = g1d(long_df, cutoff, horizon)
+    assert set(pred1d.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred1d["yhat"].to_numpy(dtype=float)))
 
     g2 = make_global_forecaster(
         "torch-rnn-gru-global",

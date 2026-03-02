@@ -112,6 +112,19 @@ def main() -> None:
             },
         ),
         (
+            "torch-xformer-reformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "reformer_bucket_size": 8,
+                "reformer_n_hashes": 1,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-patchtst-global",
             {
                 "context_length": 96,
