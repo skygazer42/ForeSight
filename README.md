@@ -181,6 +181,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-kan-direct`（requires `.[torch]`）：Torch KAN-style spline MLP（lite, `lags`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
 - `torch-scinet-direct`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction, `lags`, `d_model`, `num_stages`, `epochs`…）
 - `torch-etsformer-direct`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual, `lags`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
+- `torch-esrnn-direct`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual, `lags`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-patchtst-direct`（requires `.[torch]`）：Torch PatchTST-style（patching + encoder, `lags`, `patch_len`, `stride`, `epochs`…）
 - `torch-tsmixer-direct`（requires `.[torch]`）：Torch TSMixer-style（token/channel mixing, `lags`, `d_model`, `num_blocks`, `epochs`…）
 - `torch-cnn-direct`（requires `.[torch]`）：Torch Conv1D stack（direct multi-horizon, `lags`, `channels`, `kernel_size`, `epochs`…）
@@ -197,7 +198,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
 - `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
 - `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
-- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/performer/linformer/nystrom/probsparse/autocorr/reformer + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
+- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/logsparse/performer/linformer/nystrom/probsparse/autocorr/reformer + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
 - `torch-seq2seq-*-direct`（requires `.[torch]`）：Seq2Seq RNN（LSTM/GRU，可选 Bahdanau attention，scheduled teacher forcing）
 - `torch-lstnet-direct`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway，lite）
 - `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
@@ -230,9 +231,10 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-kan-global`（requires `.[torch]`）：Torch KAN-style spline MLP（lite）全局/面板训练（`context_length`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
 - `torch-scinet-global`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction）全局/面板训练（`context_length`, `d_model`, `num_stages`, `epochs`…）
 - `torch-etsformer-global`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual）全局/面板训练（`context_length`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
+- `torch-esrnn-global`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual）全局/面板训练（`context_length`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-transformer-encdec-global`（requires `.[torch]`）：Torch encoder-decoder Transformer（lite）全局/面板训练（`context_length`, `d_model`, `nhead`, `epochs`…）
 - `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
-- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 probsparse/autocorr/reformer 等）
+- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 logsparse/probsparse/autocorr/reformer 等）
 - `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
 - `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
 - `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）

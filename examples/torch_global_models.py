@@ -88,6 +88,18 @@ def main() -> None:
             },
         ),
         (
+            "torch-xformer-logsparse-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "local_window": 16,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-xformer-probsparse-global",
             {
                 "context_length": 96,
@@ -282,6 +294,18 @@ def main() -> None:
                 "context_length": 96,
                 "d_model": 64,
                 "nhead": 4,
+                "num_layers": 2,
+                "alpha_init": 0.3,
+                "beta_init": 0.1,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-esrnn-global",
+            {
+                "context_length": 96,
+                "cell": "gru",
+                "hidden_size": 64,
                 "num_layers": 2,
                 "alpha_init": 0.3,
                 "beta_init": 0.1,

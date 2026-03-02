@@ -4442,3 +4442,190 @@ def torch_etsformer_direct_forecast(
     if bool(normalize):
         yhat = yhat * std + mean
     return np.asarray(yhat, dtype=float)
+
+
+def torch_esrnn_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    cell: str = "gru",
+    hidden_size: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    alpha_init: float = 0.3,
+    beta_init: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    ESRNN-style hybrid (lite): exponential smoothing baseline + RNN residual model.
+
+    - Holt-style baseline forecast from the context window (learned alpha/beta).
+    - RNN (GRU/LSTM) reads residual tokens to predict horizon residual adjustments.
+    - Output = baseline + residual_adjustment.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    cell_s = str(cell).lower().strip()
+    if cell_s not in {"gru", "lstm"}:
+        raise ValueError("cell must be one of: gru, lstm")
+
+    d = int(hidden_size)
+    if d <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    L = int(num_layers)
+    if L <= 0:
+        raise ValueError("num_layers must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    alpha0 = float(alpha_init)
+    beta0 = float(beta_init)
+    if not (0.0 < alpha0 < 1.0):
+        raise ValueError("alpha_init must be in (0,1)")
+    if not (0.0 < beta0 < 1.0):
+        raise ValueError("beta_init must be in (0,1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    def _logit(p: float) -> float:
+        p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
+        return math.log(p2 / (1.0 - p2))
+
+    alpha_logit_init = _logit(alpha0)
+    beta_logit_init = _logit(beta0)
+
+    class _ESRNNDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.alpha_logit = nn.Parameter(
+                torch.tensor(alpha_logit_init, dtype=torch.float32)
+            )
+            self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
+
+            if cell_s == "gru":
+                self.rnn = nn.GRU(
+                    input_size=1,
+                    hidden_size=d,
+                    num_layers=int(L),
+                    dropout=float(drop) if int(L) > 1 else 0.0,
+                    batch_first=True,
+                )
+            else:
+                self.rnn = nn.LSTM(
+                    input_size=1,
+                    hidden_size=d,
+                    num_layers=int(L),
+                    dropout=float(drop) if int(L) > 1 else 0.0,
+                    batch_first=True,
+                )
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            if xb.ndim == 2:
+                xb = xb.unsqueeze(-1)
+
+            y = xb.squeeze(-1)  # (B, T)
+            B = int(y.shape[0])
+            T = int(y.shape[1])
+
+            alpha = torch.sigmoid(self.alpha_logit)
+            beta = torch.sigmoid(self.beta_logit)
+
+            l = y[:, 0]
+            if T >= 2:
+                b = y[:, 1] - y[:, 0]
+            else:
+                b = torch.zeros((B,), device=y.device, dtype=y.dtype)
+
+            levels: list[Any] = [l]
+            trends: list[Any] = [b]
+            for t in range(1, T):
+                yt = y[:, t]
+                l_new = alpha * yt + (1.0 - alpha) * (l + b)
+                b_new = beta * (l_new - l) + (1.0 - beta) * b
+                l, b = l_new, b_new
+                levels.append(l)
+                trends.append(b)
+
+            level_seq = torch.stack(levels, dim=1)  # (B, T)
+            trend_seq = torch.stack(trends, dim=1)  # (B, T)
+
+            fitted = torch.empty_like(y)
+            fitted[:, 0] = level_seq[:, 0]
+            if T > 1:
+                fitted[:, 1:] = level_seq[:, :-1] + trend_seq[:, :-1]
+
+            resid = (y - fitted).unsqueeze(-1)  # (B, T, 1)
+
+            steps = torch.arange(1, int(h) + 1, device=y.device, dtype=y.dtype).reshape(1, -1)
+            baseline = level_seq[:, -1].unsqueeze(1) + steps * trend_seq[:, -1].unsqueeze(1)
+
+            out, _st = self.rnn(resid)
+            last = self.norm(out[:, -1, :])
+            delta = self.head(last)
+            return baseline + delta
+
+    model = _ESRNNDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)

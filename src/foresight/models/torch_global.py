@@ -1818,6 +1818,7 @@ def _predict_torch_xformer_global(
     if attn_s not in {
         "full",
         "local",
+        "logsparse",
         "performer",
         "linformer",
         "nystrom",
@@ -1826,7 +1827,7 @@ def _predict_torch_xformer_global(
         "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, performer, linformer, nystrom, probsparse, autocorr, reformer"
+            "attn must be one of: full, local, logsparse, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -2129,6 +2130,13 @@ def _predict_torch_xformer_global(
                 dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
                 mask = dist > int(w)
                 scores = scores.masked_fill(mask.reshape(1, 1, L, L), float("-inf"))
+            if attn_s == "logsparse":
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
+                pow2 = (dist > 0) & ((dist & (dist - 1)) == 0)
+                allowed = (dist <= int(w)) | pow2
+                scores = scores.masked_fill((~allowed).reshape(1, 1, L, L), float("-inf"))
             w = torch.softmax(scores, dim=-1)
             out = torch.einsum("bhlm,bhmd->bhld", w, v)
             return self.out(self._merge_heads(out))
@@ -8826,6 +8834,323 @@ def torch_etsformer_global_forecaster(
             nhead=int(nhead),
             num_layers=int(num_layers),
             dim_feedforward=int(dim_feedforward),
+            dropout=float(dropout),
+            alpha_init=float(alpha_init),
+            beta_init=float(beta_init),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_esrnn_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    cell: str,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float,
+    alpha_init: float,
+    beta_init: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    ESRNN-style hybrid (lite), global/panel:
+      - Holt-style exponential smoothing baseline on the context y channel
+      - RNN residual model over (residual_y + covariates/time features)
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = int(ctx + h)
+    input_dim = int(X_train.shape[2])
+
+    cell_s = str(cell).lower().strip()
+    if cell_s not in {"gru", "lstm"}:
+        raise ValueError("cell must be one of: gru, lstm")
+
+    d = int(hidden_size)
+    if d <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    L = int(num_layers)
+    if L <= 0:
+        raise ValueError("num_layers must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    alpha0 = float(alpha_init)
+    beta0 = float(beta_init)
+    if not (0.0 < alpha0 < 1.0):
+        raise ValueError("alpha_init must be in (0,1)")
+    if not (0.0 < beta0 < 1.0):
+        raise ValueError("beta_init must be in (0,1)")
+
+    def _logit(p: float) -> float:
+        p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
+        return math.log(p2 / (1.0 - p2))
+
+    alpha_logit_init = _logit(alpha0)
+    beta_logit_init = _logit(beta0)
+
+    class _ESRNNGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.alpha_logit = nn.Parameter(
+                torch.tensor(alpha_logit_init, dtype=torch.float32)
+            )
+            self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+            self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+            if cell_s == "gru":
+                self.rnn = nn.GRU(
+                    input_size=d,
+                    hidden_size=d,
+                    num_layers=int(L),
+                    dropout=float(drop) if int(L) > 1 else 0.0,
+                    batch_first=True,
+                )
+            else:
+                self.rnn = nn.LSTM(
+                    input_size=d,
+                    hidden_size=d,
+                    num_layers=int(L),
+                    dropout=float(drop) if int(L) > 1 else 0.0,
+                    batch_first=True,
+                )
+            self.norm = nn.LayerNorm(d)
+            self.out = nn.Linear(d, int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:  # xb: (B, seq_len, input_dim)
+            y_ctx = xb[:, :ctx, 0]  # (B, ctx)
+            B = int(y_ctx.shape[0])
+
+            alpha = torch.sigmoid(self.alpha_logit)
+            beta = torch.sigmoid(self.beta_logit)
+
+            l = y_ctx[:, 0]
+            if int(ctx) >= 2:
+                b = y_ctx[:, 1] - y_ctx[:, 0]
+            else:
+                b = torch.zeros((B,), device=y_ctx.device, dtype=y_ctx.dtype)
+
+            levels: list[Any] = [l]
+            trends: list[Any] = [b]
+            for t in range(1, int(ctx)):
+                yt = y_ctx[:, t]
+                l_new = alpha * yt + (1.0 - alpha) * (l + b)
+                b_new = beta * (l_new - l) + (1.0 - beta) * b
+                l, b = l_new, b_new
+                levels.append(l)
+                trends.append(b)
+
+            level_seq = torch.stack(levels, dim=1)  # (B, ctx)
+            trend_seq = torch.stack(trends, dim=1)  # (B, ctx)
+
+            fitted = torch.empty_like(y_ctx)
+            fitted[:, 0] = level_seq[:, 0]
+            if int(ctx) > 1:
+                fitted[:, 1:] = level_seq[:, :-1] + trend_seq[:, :-1]
+            resid_ctx = y_ctx - fitted
+
+            resid_y = torch.cat(
+                [resid_ctx, torch.zeros((B, int(h)), device=xb.device, dtype=xb.dtype)], dim=1
+            ).unsqueeze(-1)
+
+            if int(input_dim) > 1:
+                xb_resid = torch.cat([resid_y, xb[:, :, 1:]], dim=-1)
+            else:
+                xb_resid = resid_y
+
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb_resid.shape[1], -1)
+            x2 = torch.cat([xb_resid, emb_t], dim=-1)
+
+            steps = torch.arange(1, int(h) + 1, device=xb.device, dtype=xb.dtype).reshape(1, -1)
+            baseline = level_seq[:, -1].unsqueeze(1) + steps * trend_seq[:, -1].unsqueeze(1)
+
+            z0 = self.drop(self.in_proj(x2))
+            out, _st = self.rnn(z0)
+            out = self.norm(out)
+            delta = self.out(out[:, -h:, :])
+            if out_dim == 1:
+                return baseline + delta.squeeze(-1)
+            return baseline.unsqueeze(-1) + delta
+
+    model = _ESRNNGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_esrnn_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    cell: str = "gru",
+    hidden_size: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    alpha_init: float = 0.3,
+    beta_init: float = 0.1,
+    id_emb_dim: int = 8,
+    quantiles: Any = (),
+) -> Any:
+    """
+    ESRNN-style global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_esrnn_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            cell=str(cell),
+            hidden_size=int(hidden_size),
+            num_layers=int(num_layers),
             dropout=float(dropout),
             alpha_init=float(alpha_init),
             beta_init=float(beta_init),

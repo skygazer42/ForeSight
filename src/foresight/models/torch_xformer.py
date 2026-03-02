@@ -109,7 +109,7 @@ def torch_xformer_direct_forecast(
       - future tokens are zeros or learned "query" tokens
 
     It supports multiple attention approximations:
-      attn = full | local | performer | linformer | nystrom | probsparse | autocorr | reformer
+      attn = full | local | logsparse | performer | linformer | nystrom | probsparse | autocorr | reformer
     """
     torch = _require_torch()
     nn = torch.nn
@@ -148,6 +148,7 @@ def torch_xformer_direct_forecast(
     if attn_s not in {
         "full",
         "local",
+        "logsparse",
         "performer",
         "linformer",
         "nystrom",
@@ -156,7 +157,7 @@ def torch_xformer_direct_forecast(
         "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, performer, linformer, nystrom, probsparse, autocorr, reformer"
+            "attn must be one of: full, local, logsparse, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -484,6 +485,15 @@ def torch_xformer_direct_forecast(
                 dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
                 mask = dist > int(w)
                 scores = scores.masked_fill(mask.reshape(1, 1, L, L), float("-inf"))
+            if attn_s == "logsparse":
+                # LogSparse (LogTrans-style) attention mask (lite):
+                # allow local window connections + log-distance (power-of-two) connections.
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()  # (L,L)
+                pow2 = (dist > 0) & ((dist & (dist - 1)) == 0)  # powers of two
+                allowed = (dist <= int(w)) | pow2
+                scores = scores.masked_fill((~allowed).reshape(1, 1, L, L), float("-inf"))
             w = torch.softmax(scores, dim=-1)
             out = torch.einsum("bhlm,bhmd->bhld", w, v)
             return self.out(self._merge_heads(out))
