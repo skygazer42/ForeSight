@@ -2232,6 +2232,8 @@ def _factory_torch_xformer_direct(
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
+    probsparse_top_u: int = 32,
+    autocorr_top_k: int = 4,
     horizon_tokens: str = "zeros",
     revin: bool = False,
     residual_gating: bool = False,
@@ -2269,6 +2271,8 @@ def _factory_torch_xformer_direct(
     performer_features_int = int(performer_features)
     linformer_k_int = int(linformer_k)
     nystrom_landmarks_int = int(nystrom_landmarks)
+    probsparse_top_u_int = int(probsparse_top_u)
+    autocorr_top_k_int = int(autocorr_top_k)
     horizon_tokens_s = str(horizon_tokens)
     revin_bool = bool(revin)
     residual_gating_bool = bool(residual_gating)
@@ -2309,6 +2313,8 @@ def _factory_torch_xformer_direct(
             performer_features=performer_features_int,
             linformer_k=linformer_k_int,
             nystrom_landmarks=nystrom_landmarks_int,
+            probsparse_top_u=probsparse_top_u_int,
+            autocorr_top_k=autocorr_top_k_int,
             horizon_tokens=horizon_tokens_s,
             revin=revin_bool,
             residual_gating=residual_gating_bool,
@@ -5475,7 +5481,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "num_layers": "Number of encoder layers",
         "dim_feedforward": "FFN hidden dimension",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, performer, linformer, nystrom",
+        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
@@ -5483,6 +5489,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "probsparse_top_u": "Top-u queries for ProbSparse attention (attn=probsparse)",
+        "autocorr_top_k": "Top-k delays for AutoCorrelation attention (attn=autocorr)",
         "horizon_tokens": "Future token placeholders: zeros, learned",
         "revin": "RevIN per-window normalization (true/false)",
         "residual_gating": "Residual gating (true/false)",
@@ -5505,6 +5513,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
+        "probsparse_top_u": 32,
+        "autocorr_top_k": 4,
         "horizon_tokens": "zeros",
         "revin": False,
         "residual_gating": False,
@@ -5533,6 +5543,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         ("performer", "performer"),
         ("linformer", "linformer"),
         ("nystrom", "nystrom"),
+        ("probsparse", "prob-sparse"),
+        ("autocorr", "auto-correlation"),
     ]:
         for norm_s, norm_label in [("layer", "LayerNorm"), ("rms", "RMSNorm")]:
             for ffn_s, ffn_label in [("gelu", "GELU"), ("swiglu", "SwiGLU")]:
@@ -5750,7 +5762,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "dim_feedforward": "FFN hidden dimension",
         "id_emb_dim": "Series-id embedding dim (panel/global models)",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, performer, linformer, nystrom",
+        "attn": "Attention type: full, local, performer, linformer, nystrom, probsparse, autocorr",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
@@ -5758,6 +5770,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
+        "probsparse_top_u": "Top-u queries for ProbSparse attention (attn=probsparse)",
+        "autocorr_top_k": "Top-k delays for AutoCorrelation attention (attn=autocorr)",
         "residual_gating": "Residual gating (true/false)",
         "drop_path": "Stochastic depth drop probability in [0,1)",
         "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
@@ -5784,6 +5798,8 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
+        "probsparse_top_u": 32,
+        "autocorr_top_k": 4,
         "residual_gating": False,
         "drop_path": 0.0,
         "quantiles": (),
@@ -5805,7 +5821,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         )
 
     # 61–65: baseline attention variants
-    for attn_s in ["full", "local", "performer", "linformer", "nystrom"]:
+    for attn_s in ["full", "local", "performer", "linformer", "nystrom", "probsparse", "autocorr"]:
         _add_global_xformer(
             f"torch-xformer-{attn_s}-global",
             f"Torch global xFormer ({attn_s} attention) baseline. Requires PyTorch.",
@@ -5813,7 +5829,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         )
 
     # 66–70: RMSNorm variants
-    for attn_s in ["full", "local", "performer", "linformer", "nystrom"]:
+    for attn_s in ["full", "local", "performer", "linformer", "nystrom", "probsparse", "autocorr"]:
         _add_global_xformer(
             f"torch-xformer-{attn_s}-rms-global",
             f"Torch global xFormer ({attn_s} attention) with RMSNorm. Requires PyTorch.",

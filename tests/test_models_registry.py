@@ -20,3 +20,11 @@ def test_new_torch_global_models_are_registered():
     assert "torch-deepar-global" in keys
     assert "torch-fedformer-global" in keys
     assert "torch-nonstationary-transformer-global" in keys
+
+
+def test_new_torch_xformer_attention_variants_are_registered():
+    keys = set(list_models())
+    assert "torch-xformer-probsparse-ln-gelu-direct" in keys
+    assert "torch-xformer-autocorr-ln-gelu-direct" in keys
+    assert "torch-xformer-probsparse-global" in keys
+    assert "torch-xformer-autocorr-global" in keys

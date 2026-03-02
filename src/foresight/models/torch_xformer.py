@@ -75,6 +75,8 @@ def torch_xformer_direct_forecast(
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
+    probsparse_top_u: int = 32,
+    autocorr_top_k: int = 4,
     horizon_tokens: str = "zeros",
     revin: bool = False,
     residual_gating: bool = False,
@@ -141,8 +143,18 @@ def torch_xformer_direct_forecast(
     ffn_s = str(ffn).lower().strip()
     horizon_tokens_s = str(horizon_tokens).lower().strip()
 
-    if attn_s not in {"full", "local", "performer", "linformer", "nystrom"}:
-        raise ValueError("attn must be one of: full, local, performer, linformer, nystrom")
+    if attn_s not in {
+        "full",
+        "local",
+        "performer",
+        "linformer",
+        "nystrom",
+        "probsparse",
+        "autocorr",
+    }:
+        raise ValueError(
+            "attn must be one of: full, local, performer, linformer, nystrom, probsparse, autocorr"
+        )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
     if norm_s not in {"layer", "rms"}:
@@ -160,6 +172,13 @@ def torch_xformer_direct_forecast(
         raise ValueError("linformer_k must be >= 1")
     if int(nystrom_landmarks) <= 0:
         raise ValueError("nystrom_landmarks must be >= 1")
+
+    probs_u = int(probsparse_top_u)
+    if probs_u <= 0:
+        raise ValueError("probsparse_top_u must be >= 1")
+    auto_k = int(autocorr_top_k)
+    if auto_k <= 0:
+        raise ValueError("autocorr_top_k must be >= 1")
 
     x_work = x
     mean = 0.0
@@ -340,6 +359,50 @@ def torch_xformer_direct_forecast(
                 B_inv = torch.linalg.pinv(Bmat)
                 CV = torch.einsum("bhml,bhld->bhmd", C, v)
                 out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, B_inv, CV)
+                return self.out(self._merge_heads(out))
+
+            if attn_s == "autocorr":
+                # AutoCorrelation-style attention (lite): pick top-k delays and aggregate shifted V.
+                top_k = int(min(L, auto_k))
+                qf = torch.fft.rfft(q, dim=2)
+                kf = torch.fft.rfft(k, dim=2)
+                corr_f = (qf * torch.conj(kf)).sum(dim=-1)  # (B,H,Lf)
+                corr = torch.fft.irfft(corr_f, n=L, dim=2)  # (B,H,L)
+
+                delays = corr.topk(k=top_k, dim=-1).indices  # (B,H,K)
+                weights = torch.softmax(corr.gather(dim=-1, index=delays), dim=-1)  # (B,H,K)
+
+                pos = torch.arange(L, device=xb.device).reshape(1, 1, L)
+                out = torch.zeros_like(v)
+                for i in range(top_k):
+                    dly = delays[:, :, i]  # (B,H)
+                    idx_t = (pos + dly.unsqueeze(-1)) % int(L)
+                    v_shift = v.gather(
+                        dim=2, index=idx_t.unsqueeze(-1).expand(-1, -1, -1, v.shape[-1])
+                    )
+                    out = out + weights[:, :, i].unsqueeze(-1).unsqueeze(-1) * v_shift
+                return self.out(self._merge_heads(out))
+
+            if attn_s == "probsparse":
+                # Informer ProbSparse-style attention (lite): compute attention for top-u queries,
+                # use mean(V) for the rest.
+                scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k)  # (B,H,L,L)
+                importance = scores.max(dim=-1).values - scores.mean(dim=-1)  # (B,H,L)
+                u = int(min(L, probs_u))
+                top_q = importance.topk(k=u, dim=-1).indices  # (B,H,u)
+
+                scores_top = scores.gather(
+                    dim=2, index=top_q.unsqueeze(-1).expand(-1, -1, -1, int(L))
+                )  # (B,H,u,L)
+                w = torch.softmax(scores_top, dim=-1)
+                out_top = w @ v  # (B,H,u,dh)
+
+                base = v.mean(dim=2, keepdim=True).expand(-1, -1, int(L), -1).clone()
+                out = base.scatter(
+                    dim=2,
+                    index=top_q.unsqueeze(-1).expand(-1, -1, -1, v.shape[-1]),
+                    src=out_top,
+                )
                 return self.out(self._merge_heads(out))
 
             scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k)  # (B,H,L,L)

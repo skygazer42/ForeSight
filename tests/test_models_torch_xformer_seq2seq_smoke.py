@@ -26,6 +26,42 @@ def test_torch_xformer_local_smoke():
     assert yhat.shape == (5,)
     assert np.all(np.isfinite(yhat))
 
+    f2 = make_forecaster(
+        "torch-xformer-probsparse-ln-gelu-direct",
+        lags=48,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        probsparse_top_u=16,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat2 = f2(y, 5)
+    assert yhat2.shape == (5,)
+    assert np.all(np.isfinite(yhat2))
+
+    f3 = make_forecaster(
+        "torch-xformer-autocorr-ln-gelu-direct",
+        lags=48,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        autocorr_top_k=4,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat3 = f3(y, 5)
+    assert yhat3.shape == (5,)
+    assert np.all(np.isfinite(yhat3))
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_seq2seq_local_smoke():
@@ -86,6 +122,48 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred1 = g1(long_df, cutoff, horizon)
     assert set(pred1.columns) >= {"unique_id", "ds", "yhat"}
     assert np.all(np.isfinite(pred1["yhat"].to_numpy(dtype=float)))
+
+    g1b = make_global_forecaster(
+        "torch-xformer-probsparse-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        probsparse_top_u=16,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred1b = g1b(long_df, cutoff, horizon)
+    assert set(pred1b.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred1b["yhat"].to_numpy(dtype=float)))
+
+    g1c = make_global_forecaster(
+        "torch-xformer-autocorr-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        autocorr_top_k=4,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred1c = g1c(long_df, cutoff, horizon)
+    assert set(pred1c.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred1c["yhat"].to_numpy(dtype=float)))
 
     g2 = make_global_forecaster(
         "torch-rnn-gru-global",

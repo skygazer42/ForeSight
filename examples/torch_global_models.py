@@ -88,6 +88,30 @@ def main() -> None:
             },
         ),
         (
+            "torch-xformer-probsparse-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "probsparse_top_u": 32,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-xformer-autocorr-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "dim_feedforward": 256,
+                "autocorr_top_k": 4,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-patchtst-global",
             {
                 "context_length": 96,
