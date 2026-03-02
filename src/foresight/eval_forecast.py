@@ -75,7 +75,7 @@ def eval_model_long_df(
 
     if interface == "global":
         from .cv import cross_validation_predictions_long_df
-        from .eval_predictions import evaluate_predictions
+        from .eval_predictions import evaluate_predictions, evaluate_quantile_predictions
 
         pred_df = cross_validation_predictions_long_df(
             model=str(model),
@@ -108,6 +108,11 @@ def eval_model_long_df(
             "mape_by_step": list(metrics_payload.get("mape_by_step", [])),
             "smape_by_step": list(metrics_payload.get("smape_by_step", [])),
         }
+
+        q_payload = evaluate_quantile_predictions(pred_df)
+        if q_payload.get("quantiles"):
+            for k, v in q_payload.items():
+                out[f"q_{k}"] = v
 
         levels = _parse_levels(conformal_levels)
         if levels:

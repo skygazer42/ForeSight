@@ -8,7 +8,7 @@ from foresight.models.registry import make_global_forecaster
 
 def main() -> None:
     """
-    Demo: global/panel Torch models (TFT/Informer/Autoformer-lite) with covariates + time features.
+    Demo: global/panel Torch models with covariates + time features (and optional quantiles).
 
     Run:
       pip install -e ".[dev,torch]"
@@ -56,14 +56,39 @@ def main() -> None:
     cutoff = ds[-(horizon + 1)]
 
     models = [
-        ("torch-tft-global", {"context_length": 64, "epochs": 15, "batch_size": 64}),
+        ("torch-tft-global", {"context_length": 64, "epochs": 10, "batch_size": 64}),
         (
             "torch-informer-global",
-            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 15},
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
         ),
         (
             "torch-autoformer-global",
-            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 15},
+            {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
+        ),
+        (
+            "torch-patchtst-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "patch_len": 16,
+                "stride": 8,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-tsmixer-global",
+            {"context_length": 96, "d_model": 64, "num_blocks": 4, "epochs": 10},
+        ),
+        (
+            "torch-itransformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "epochs": 10,
+                "quantiles": "0.1,0.5,0.9",
+            },
         ),
     ]
 

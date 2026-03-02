@@ -197,9 +197,9 @@ def cross_validation_predictions_long_df(
 
         cutoffs = [ref_ds[sp.train_end - 1] for sp in splits]
 
-        rows: list[dict[str, Any]] = []
         total_series = int(df["unique_id"].nunique())
         series_skipped_any = 0
+        frames: list[pd.DataFrame] = []
 
         y_lookup = df[["unique_id", "ds", "y"]]
 
@@ -214,43 +214,37 @@ def cross_validation_predictions_long_df(
             if missing:
                 raise KeyError(f"Global prediction table missing columns: {sorted(missing)}")
 
+            # Keep any extra prediction columns (e.g. quantiles like yhat_p10/yhat_p90).
+            pred_cols = [c for c in pred.columns if c not in {"unique_id", "ds"}]
+
             merged = pred.merge(y_lookup, on=["unique_id", "ds"], how="left", validate="one_to_one")
             # Some series may be skipped by the model; keep only rows with observed y for metrics.
-            merged = merged.dropna(subset=["y", "yhat", "ds"])
+            merged = merged.dropna(subset=["y", "ds", *pred_cols])
             if merged.empty:
                 continue
+
+            merged = merged.sort_values(["unique_id", "ds"], kind="mergesort")
+            sizes = merged.groupby("unique_id", sort=False).size()
+            valid_uids = sizes.index[sizes.to_numpy(dtype=int, copy=False) == int(horizon)]
+            if len(valid_uids) == 0:
+                continue
+
+            merged = merged[merged["unique_id"].isin(valid_uids)].copy()
+            merged["step"] = merged.groupby("unique_id", sort=False).cumcount() + 1
+            merged["cutoff"] = cutoff
+            merged["model"] = str(model)
 
             skipped_here = total_series - int(merged["unique_id"].nunique())
             if skipped_here > 0:
                 series_skipped_any += int(skipped_here)
 
-            for uid, g in merged.groupby("unique_id", sort=False):
-                g = g.sort_values("ds", kind="mergesort")
-                y_true = g["y"].to_numpy(dtype=float, copy=False)
-                yhat = g["yhat"].to_numpy(dtype=float, copy=False)
-                ds_true = g["ds"].to_numpy(copy=False)
+            cols = ["unique_id", "ds", "cutoff", "step", "y", *pred_cols, "model"]
+            frames.append(merged.loc[:, cols])
 
-                # Ensure exactly horizon points; if the model returned fewer, skip.
-                if y_true.shape[0] != int(horizon) or yhat.shape[0] != int(horizon):
-                    continue
-
-                for i in range(int(horizon)):
-                    rows.append(
-                        {
-                            "unique_id": str(uid),
-                            "ds": ds_true[i],
-                            "cutoff": cutoff,
-                            "step": int(i + 1),
-                            "y": float(y_true[i]),
-                            "yhat": float(yhat[i]),
-                            "model": str(model),
-                        }
-                    )
-
-        if not rows:
+        if not frames:
             raise ValueError("Global model produced 0 predictions for the requested CV parameters.")
 
-        out = pd.DataFrame(rows)
+        out = pd.concat(frames, axis=0, ignore_index=True)
         out.attrs["n_series"] = total_series
         out.attrs["n_series_skipped"] = int(series_skipped_any)
         out.attrs["reference_unique_id"] = str(ref_uid)

@@ -196,6 +196,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
 - `torch-informer-global`（requires `.[torch]`）：Torch Informer（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `num_layers`, `epochs`…）
 - `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
+- `torch-patchtst-global`（requires `.[torch]`）：Torch PatchTST-style（lite）全局/面板训练（patch tokens + encoder，`context_length`, `patch_len`, `stride`, `epochs`…）
+- `torch-tsmixer-global`（requires `.[torch]`）：Torch TSMixer-style（lite）全局/面板训练（token/channel mixing，`context_length`, `num_blocks`, `epochs`…）
+- `torch-itransformer-global`（requires `.[torch]`）：Torch iTransformer-style（lite）全局/面板训练（inverted tokens: variables-as-tokens，`context_length`, `d_model`, `epochs`…）
 - `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features）
 - `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
 - `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
@@ -216,6 +219,20 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 foresight models list
 foresight models info holt-winters-add
 ```
+
+### Probabilistic Forecasting (Quantiles)
+
+部分 **global/panel Torch 模型**支持 `quantiles` 参数（分位数回归 / pinball loss），例如：
+
+```bash
+foresight eval run --model torch-itransformer-global --dataset catfish --y-col Total --horizon 7 --step 7 --min-train-size 60 \
+  --model-param quantiles=0.1,0.5,0.9
+```
+
+当 `quantiles` 非空时：
+- 预测表会多输出 `yhat_p10 / yhat_p50 / yhat_p90 ...` 等列（与 quantiles 对应）
+- `yhat` 默认取 `p50`（或最接近 0.5 的分位数）
+- `eval` 的输出会附加 `q_` 前缀的指标（pinball / coverage / interval_score 等）
 
 ---
 
