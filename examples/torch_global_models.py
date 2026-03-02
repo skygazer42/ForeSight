@@ -95,6 +95,28 @@ def main() -> None:
             {"context_length": 96, "d_model": 64, "num_layers": 2, "top_k": 3, "epochs": 10},
         ),
         (
+            "torch-tcn-global",
+            {"context_length": 96, "channels": (64, 64, 64), "kernel_size": 3, "epochs": 10},
+        ),
+        (
+            "torch-nbeats-global",
+            {"context_length": 96, "num_blocks": 3, "layer_width": 256, "epochs": 10},
+        ),
+        (
+            "torch-nhits-global",
+            {
+                "context_length": 128,
+                "pool_sizes": (1, 2, 4),
+                "num_blocks": 6,
+                "layer_width": 256,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-tide-global",
+            {"context_length": 96, "d_model": 64, "hidden_size": 128, "epochs": 10},
+        ),
+        (
             "torch-seq2seq-attn-lstm-global",
             {
                 "context_length": 64,

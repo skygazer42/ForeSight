@@ -200,6 +200,10 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tsmixer-global`（requires `.[torch]`）：Torch TSMixer-style（lite）全局/面板训练（token/channel mixing，`context_length`, `num_blocks`, `epochs`…）
 - `torch-itransformer-global`（requires `.[torch]`）：Torch iTransformer-style（lite）全局/面板训练（inverted tokens: variables-as-tokens，`context_length`, `d_model`, `epochs`…）
 - `torch-timesnet-global`（requires `.[torch]`）：Torch TimesNet-style（lite）全局/面板训练（FFT period detection + period Conv2D blocks，`context_length`, `top_k`, `epochs`…）
+- `torch-tcn-global`（requires `.[torch]`）：Torch TCN（causal dilated Conv1D residual blocks）全局/面板训练（`context_length`, `channels`, `epochs`…）
+- `torch-nbeats-global`（requires `.[torch]`）：Torch N-BEATS-style（generic residual MLP blocks）全局/面板训练（`context_length`, `num_blocks`, `layer_width`, `epochs`…）
+- `torch-nhits-global`（requires `.[torch]`）：Torch N-HiTS-style（multi-rate residual MLP, lite）全局/面板训练（`context_length`, `pool_sizes`, `num_blocks`, `epochs`…）
+- `torch-tide-global`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, lite）全局/面板训练（`context_length`, `d_model`, `epochs`…）
 - `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
 - `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features）
 - `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
