@@ -453,6 +453,105 @@ def test_torch_xformer_and_rnn_global_smoke():
     assert set(pred19.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
     assert np.all(np.isfinite(pred19["yhat"].to_numpy(dtype=float)))
 
+    g20 = make_global_forecaster(
+        "torch-nlinear-global",
+        context_length=32,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        quantiles="0.1,0.5,0.9",
+        device="cpu",
+        seed=0,
+    )
+    pred20 = g20(long_df, cutoff, horizon)
+    assert set(pred20.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred20["yhat"].to_numpy(dtype=float)))
+
+    g21 = make_global_forecaster(
+        "torch-dlinear-global",
+        context_length=32,
+        ma_window=7,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        quantiles="0.1,0.5,0.9",
+        device="cpu",
+        seed=0,
+    )
+    pred21 = g21(long_df, cutoff, horizon)
+    assert set(pred21.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred21["yhat"].to_numpy(dtype=float)))
+
+    g22 = make_global_forecaster(
+        "torch-deepar-global",
+        context_length=32,
+        hidden_size=32,
+        num_layers=1,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        quantiles="0.1,0.5,0.9",
+        device="cpu",
+        seed=0,
+    )
+    pred22 = g22(long_df, cutoff, horizon)
+    assert set(pred22.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred22["yhat"].to_numpy(dtype=float)))
+
+    g23 = make_global_forecaster(
+        "torch-fedformer-global",
+        context_length=32,
+        d_model=32,
+        num_layers=1,
+        ffn_dim=64,
+        modes=8,
+        ma_window=7,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        quantiles="0.1,0.5,0.9",
+        device="cpu",
+        seed=0,
+    )
+    pred23 = g23(long_df, cutoff, horizon)
+    assert set(pred23.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred23["yhat"].to_numpy(dtype=float)))
+
+    g24 = make_global_forecaster(
+        "torch-nonstationary-transformer-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        quantiles="0.1,0.5,0.9",
+        device="cpu",
+        seed=0,
+    )
+    pred24 = g24(long_df, cutoff, horizon)
+    assert set(pred24.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
+    assert np.all(np.isfinite(pred24["yhat"].to_numpy(dtype=float)))
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_global_cv_preserves_quantile_columns():

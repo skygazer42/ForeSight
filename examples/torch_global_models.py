@@ -66,6 +66,28 @@ def main() -> None:
             {"context_length": 96, "d_model": 64, "num_layers": 2, "epochs": 10},
         ),
         (
+            "torch-fedformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_layers": 2,
+                "ffn_dim": 256,
+                "modes": 16,
+                "ma_window": 7,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-nonstationary-transformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-patchtst-global",
             {
                 "context_length": 96,
@@ -168,6 +190,18 @@ def main() -> None:
                 "epochs": 10,
                 "quantiles": "0.1,0.5,0.9",
             },
+        ),
+        (
+            "torch-nlinear-global",
+            {"context_length": 96, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
+        ),
+        (
+            "torch-dlinear-global",
+            {"context_length": 96, "ma_window": 7, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
+        ),
+        (
+            "torch-deepar-global",
+            {"context_length": 96, "hidden_size": 64, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
         ),
         (
             "torch-seq2seq-attn-lstm-global",

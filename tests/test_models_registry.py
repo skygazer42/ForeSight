@@ -11,3 +11,12 @@ def test_model_spec_has_description():
     spec = get_model_spec("naive-last")
     assert isinstance(spec.description, str)
     assert spec.description
+
+
+def test_new_torch_global_models_are_registered():
+    keys = set(list_models())
+    assert "torch-nlinear-global" in keys
+    assert "torch-dlinear-global" in keys
+    assert "torch-deepar-global" in keys
+    assert "torch-fedformer-global" in keys
+    assert "torch-nonstationary-transformer-global" in keys

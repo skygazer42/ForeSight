@@ -195,7 +195,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-lstnet-direct`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway，lite）
 - `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
 - `torch-informer-global`（requires `.[torch]`）：Torch Informer（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `num_layers`, `epochs`…）
+- `torch-nonstationary-transformer-global`（requires `.[torch]`）：Torch Non-stationary Transformer（lite，RevIN + de-stationary attention factors）全局/面板训练（`context_length`, `d_model`, `nhead`, `num_layers`, `epochs`…）
 - `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
+- `torch-fedformer-global`（requires `.[torch]`）：Torch FEDformer-style（lite，分解 + 频域混合/FFT）全局/面板训练（`context_length`, `d_model`, `num_layers`, `modes`, `ma_window`, `epochs`…）
 - `torch-patchtst-global`（requires `.[torch]`）：Torch PatchTST-style（lite）全局/面板训练（patch tokens + encoder，`context_length`, `patch_len`, `stride`, `epochs`…）
 - `torch-tsmixer-global`（requires `.[torch]`）：Torch TSMixer-style（lite）全局/面板训练（token/channel mixing，`context_length`, `num_blocks`, `epochs`…）
 - `torch-itransformer-global`（requires `.[torch]`）：Torch iTransformer-style（lite）全局/面板训练（inverted tokens: variables-as-tokens，`context_length`, `d_model`, `epochs`…）
@@ -203,6 +205,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tcn-global`（requires `.[torch]`）：Torch TCN（causal dilated Conv1D residual blocks）全局/面板训练（`context_length`, `channels`, `epochs`…）
 - `torch-nbeats-global`（requires `.[torch]`）：Torch N-BEATS-style（generic residual MLP blocks）全局/面板训练（`context_length`, `num_blocks`, `layer_width`, `epochs`…）
 - `torch-nhits-global`（requires `.[torch]`）：Torch N-HiTS-style（multi-rate residual MLP, lite）全局/面板训练（`context_length`, `pool_sizes`, `num_blocks`, `epochs`…）
+- `torch-nlinear-global`（requires `.[torch]`）：Torch NLinear-style（last-value centering + linear head, lite）全局/面板训练（`context_length`, `epochs`…）
+- `torch-dlinear-global`（requires `.[torch]`）：Torch DLinear-style（moving-average decomposition + linear heads, lite）全局/面板训练（`context_length`, `ma_window`, `epochs`…）
+- `torch-deepar-global`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN NLL, lite）全局/面板训练（`context_length`, `hidden_size`, `epochs`…）
 - `torch-tide-global`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, lite）全局/面板训练（`context_length`, `d_model`, `epochs`…）
 - `torch-wavenet-global`（requires `.[torch]`）：Torch WaveNet-style（gated dilated CNN, lite）全局/面板训练（`context_length`, `channels`, `num_layers`, `epochs`…）
 - `torch-resnet1d-global`（requires `.[torch]`）：Torch ResNet-1D（Conv1D residual blocks, lite）全局/面板训练（`context_length`, `channels`, `num_blocks`, `epochs`…）
