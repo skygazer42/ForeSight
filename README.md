@@ -69,7 +69,7 @@ foresight eval csv --model naive-last --path ./my.csv --time-col ds --y-col y --
 ```python
 from foresight.eval_forecast import eval_model
 from foresight.intervals import bootstrap_intervals
-from foresight.models.registry import make_forecaster
+from foresight.models.registry import make_forecaster, make_global_forecaster
 
 metrics = eval_model(
     model="theta",
@@ -83,6 +83,11 @@ metrics = eval_model(
 
 f = make_forecaster("moving-average", window=3)
 intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min_train_size=4)
+
+# Global / panel model (requires torch; trains across all series in a long-format DataFrame)
+# g = make_global_forecaster("torch-informer-global", context_length=96, epochs=10, x_cols=("promo",))
+# cutoff = sorted(long_df["ds"].unique())[-(14 + 1)]  # leave 14 steps for the horizon
+# pred_df = g(long_df, cutoff=cutoff, horizon=14)  # returns: unique_id, ds, yhat
 ```
 
 更多可运行示例见：
@@ -90,6 +95,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `examples/leaderboard.py`
 - `examples/cv_and_conformal.py`
 - `examples/intermittent_demand.py`
+- `examples/torch_global_models.py`
 
 ---
 
@@ -184,6 +190,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
 - `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
 - `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
+- `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
+- `torch-informer-global`（requires `.[torch]`）：Torch Informer（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `num_layers`, `epochs`…）
+- `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
 - `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
 - `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）
 - `sarimax`（requires `.[stats]`）：SARIMAX / seasonal ARIMA（`order=...`, `seasonal_order=...`）
@@ -212,6 +221,21 @@ foresight models info holt-winters-add
 - `unique_id`：序列 ID（单序列时为空）
 - `ds`：时间列（datetime）
 - `y`：目标值（float）
+
+这个格式也支持 **额外的协变量列（covariates / exogenous features）**：只要保留在 long_df 里即可。  
+当你需要把原始 DataFrame 转成 long_df 并保留协变量时，可使用 `x_cols=...`：
+
+```python
+from foresight.data import to_long
+
+long_df = to_long(
+    raw_df,
+    time_col="ds",
+    y_col="y",
+    id_cols=("store", "dept"),
+    x_cols=("promo", "price"),
+)
+```
 
 你可以直接使用 `foresight.data.to_long()`：
 
@@ -298,8 +322,12 @@ ForeSight 的 `foresight` toolkit 参考了这些主流项目的接口/数据形
   https://github.com/unit8co/darts
 - **GluonTS**: probabilistic forecasting datasets + benchmarking  
   https://github.com/awslabs/gluonts
+- **NeuralForecast (Nixtla)**: modern neural forecasting models (TFT / Informer / Autoformer / …)  
+  https://github.com/Nixtla/neuralforecast
 - **PyTorch Forecasting**: deep learning forecasting pipelines  
   https://pytorch-forecasting.readthedocs.io/
+- **Kats**: (Meta/Facebook) time series analysis & forecasting toolbox  
+  https://github.com/facebookresearch/Kats
 
 ---
 

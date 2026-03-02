@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from ..transforms import fit_transform, inverse_forecast, normalize_transform_list
 from .analog import analog_knn_forecast
@@ -61,6 +62,11 @@ from .statsmodels_wrap import (
     unobserved_components_forecast,
 )
 from .theta import theta_auto_forecast, theta_forecast
+from .torch_global import (
+    torch_autoformer_global_forecaster,
+    torch_informer_global_forecaster,
+    torch_tft_global_forecaster,
+)
 from .torch_nn import (
     torch_attn_gru_direct_forecast,
     torch_bigru_direct_forecast,
@@ -89,8 +95,10 @@ from .torch_nn import (
 )
 from .trend import poly_trend_forecast
 
-ForecasterFn = Callable[[Any, int], np.ndarray]
-ModelFactory = Callable[..., ForecasterFn]
+LocalForecasterFn = Callable[[Any, int], np.ndarray]
+GlobalForecasterFn = Callable[[pd.DataFrame, Any, int], pd.DataFrame]
+ModelFactory = Callable[..., Any]
+ForecasterFn = LocalForecasterFn
 
 
 @dataclass(frozen=True)
@@ -101,6 +109,9 @@ class ModelSpec:
     default_params: dict[str, Any] = field(default_factory=dict)
     param_help: dict[str, str] = field(default_factory=dict)
     requires: tuple[str, ...] = ()
+    interface: str = (
+        "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df
+    )
 
 
 _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
@@ -3842,6 +3853,120 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
     ),
+    "torch-tft-global": ModelSpec(
+        key="torch-tft-global",
+        description="Torch Temporal Fusion Transformer (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_tft_global_forecaster,
+        default_params={
+            "context_length": 48,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "lstm_layers": 1,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Embedding dimension",
+            "nhead": "Attention heads",
+            "lstm_layers": "Number of LSTM layers",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-informer-global": ModelSpec(
+        key="torch-informer-global",
+        description="Torch Informer (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_informer_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Transformer model dimension",
+            "nhead": "Attention heads",
+            "num_layers": "Encoder layers",
+            "dim_feedforward": "Transformer FFN dimension",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-autoformer-global": ModelSpec(
+        key="torch-autoformer-global",
+        description="Torch Autoformer (lite) with series decomposition, trained globally across panel series. Requires PyTorch.",
+        factory=torch_autoformer_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "ma_window": 7,
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Transformer model dimension",
+            "nhead": "Attention heads",
+            "num_layers": "Encoder layers",
+            "dim_feedforward": "Transformer FFN dimension",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "ma_window": "Moving-average window for trend/seasonal decomposition",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
     "pipeline": ModelSpec(
         key="pipeline",
         description="Meta-model: apply transforms then run a base model (params forwarded).",
@@ -4045,6 +4170,31 @@ def make_forecaster(key: str, **params: Any) -> ForecasterFn:
     The returned callable is suitable for `foresight.backtesting.walk_forward`.
     """
     spec = get_model_spec(key)
+    if str(spec.interface).lower().strip() != "local":
+        raise ValueError(
+            f"Model {key!r} uses interface={spec.interface!r} (not 'local'). "
+            "Use `make_global_forecaster()` instead."
+        )
     merged = dict(spec.default_params)
     merged.update(params)
     return spec.factory(**merged)
+
+
+def make_global_forecaster(key: str, **params: Any) -> GlobalForecasterFn:
+    """
+    Build a (long_df, cutoff, horizon) -> predictions DataFrame callable.
+
+    Global models are trained across all series in a long-format (panel) DataFrame.
+    """
+    spec = get_model_spec(key)
+    if str(spec.interface).lower().strip() != "global":
+        raise ValueError(
+            f"Model {key!r} uses interface={spec.interface!r} (not 'global'). "
+            "Use `make_forecaster()` instead."
+        )
+    merged = dict(spec.default_params)
+    merged.update(params)
+    out = spec.factory(**merged)
+    if not callable(out):
+        raise TypeError(f"Global model factory must return a callable, got: {type(out).__name__}")
+    return out

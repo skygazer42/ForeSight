@@ -538,6 +538,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
         rows.append(
             {
                 "key": spec.key,
+                "interface": str(spec.interface),
                 "requires": ",".join(spec.requires),
                 "description": spec.description,
                 "default_params": dict(spec.default_params),
@@ -560,6 +561,7 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
     spec = get_model_spec(str(args.key))
     payload = {
         "key": spec.key,
+        "interface": str(spec.interface),
         "description": spec.description,
         "requires": list(spec.requires),
         "default_params": dict(spec.default_params),
@@ -727,6 +729,7 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     from .data.format import to_long
     from .eval_forecast import eval_model_long_df
     from .io import ensure_datetime, load_csv, parse_id_cols
+    from .models.registry import get_model_spec
 
     model_params = _parse_model_params(list(args.model_param))
     id_cols = parse_id_cols(str(args.id_cols))
@@ -735,11 +738,25 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     if bool(args.parse_dates):
         ensure_datetime(df, str(args.time_col))
 
+    model_spec = get_model_spec(str(args.model))
+    x_cols: tuple[str, ...] = ()
+    if model_spec.interface == "global" and "x_cols" in model_params:
+        raw = model_params.get("x_cols")
+        if raw is not None:
+            if isinstance(raw, str):
+                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
+            elif isinstance(raw, list | tuple):
+                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
+            else:
+                s = str(raw).strip()
+                x_cols = (s,) if s else ()
+
     long_df = to_long(
         df,
         time_col=str(args.time_col),
         y_col=str(args.y_col),
         id_cols=id_cols,
+        x_cols=x_cols,
         dropna=True,
     )
     payload = eval_model_long_df(

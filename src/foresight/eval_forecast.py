@@ -11,7 +11,7 @@ from .data.format import to_long
 from .datasets.loaders import load_dataset
 from .datasets.registry import get_dataset_spec
 from .metrics import mae, mape, rmse, smape
-from .models.registry import make_forecaster
+from .models.registry import get_model_spec, make_forecaster
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
@@ -70,6 +70,87 @@ def eval_model_long_df(
         raise ValueError("long_df is empty")
 
     df = df.sort_values(["unique_id", "ds"], kind="mergesort")
+    model_spec = get_model_spec(str(model))
+    interface = str(model_spec.interface).lower().strip()
+
+    if interface == "global":
+        from .cv import cross_validation_predictions_long_df
+        from .eval_predictions import evaluate_predictions
+
+        pred_df = cross_validation_predictions_long_df(
+            model=str(model),
+            long_df=df,
+            horizon=int(horizon),
+            step_size=int(step),
+            min_train_size=int(min_train_size),
+            model_params=model_params,
+            max_train_size=max_train_size,
+            n_windows=max_windows,
+        )
+
+        metrics_payload = evaluate_predictions(pred_df)
+        out: dict[str, Any] = {
+            "model": str(model),
+            "horizon": int(horizon),
+            "step": int(step),
+            "min_train_size": int(min_train_size),
+            "max_windows": None if max_windows is None else int(max_windows),
+            "max_train_size": None if max_train_size is None else int(max_train_size),
+            "n_series": int(pred_df.attrs.get("n_series", pred_df["unique_id"].nunique())),
+            "n_series_skipped": int(pred_df.attrs.get("n_series_skipped", 0)),
+            "n_points": int(metrics_payload["n_points"]),
+            "mae": float(metrics_payload["mae"]),
+            "rmse": float(metrics_payload["rmse"]),
+            "mape": float(metrics_payload["mape"]),
+            "smape": float(metrics_payload["smape"]),
+            "mae_by_step": list(metrics_payload.get("mae_by_step", [])),
+            "rmse_by_step": list(metrics_payload.get("rmse_by_step", [])),
+            "mape_by_step": list(metrics_payload.get("mape_by_step", [])),
+            "smape_by_step": list(metrics_payload.get("smape_by_step", [])),
+        }
+
+        levels = _parse_levels(conformal_levels)
+        if levels:
+            out["conformal_levels"] = list(levels)
+            out["conformal_per_step"] = bool(conformal_per_step)
+
+            abs_err_pooled = np.abs(
+                pred_df["y"].to_numpy(dtype=float, copy=False)
+                - pred_df["yhat"].to_numpy(dtype=float, copy=False)
+            )
+            abs_err_by_step = []
+            if bool(conformal_per_step):
+                for i in range(int(horizon)):
+                    step_i = int(i + 1)
+                    mask = pred_df["step"].to_numpy(copy=False) == step_i
+                    abs_err_by_step.append(abs_err_pooled[mask])
+            else:
+                abs_err_by_step = [abs_err_pooled] * int(horizon)
+
+            for lv in levels:
+                pct = int(round(lv * 100))
+                radius = np.array(
+                    [np.quantile(err, lv, method="higher") for err in abs_err_by_step], dtype=float
+                )
+
+                cov_by_step: list[float] = []
+                for i in range(int(horizon)):
+                    step_i = int(i + 1)
+                    mask = pred_df["step"].to_numpy(copy=False) == step_i
+                    yt_i = pred_df.loc[mask, "y"].to_numpy(dtype=float, copy=False)
+                    yp_i = pred_df.loc[mask, "yhat"].to_numpy(dtype=float, copy=False)
+                    lo = yp_i - float(radius[i])
+                    hi = yp_i + float(radius[i])
+                    cov_by_step.append(float(np.mean((yt_i >= lo) & (yt_i <= hi))))
+
+                out[f"radius_{pct}_by_step"] = radius.astype(float).tolist()
+                out[f"coverage_{pct}_by_step"] = cov_by_step
+                out[f"mean_width_{pct}_by_step"] = (2.0 * radius).astype(float).tolist()
+                out[f"coverage_{pct}"] = float(np.mean(cov_by_step))
+                out[f"mean_width_{pct}"] = float(np.mean(2.0 * radius))
+
+        return out
+
     forecaster = make_forecaster(str(model), **(model_params or {}))
 
     y_true_all: list[np.ndarray] = []
@@ -209,11 +290,25 @@ def eval_model(
     y_col_final = str(y_col) if (y_col is not None and str(y_col).strip()) else spec.default_y
 
     df = load_dataset(str(dataset), data_dir=data_dir)
+    model_spec = get_model_spec(str(model))
+    x_cols: tuple[str, ...] = ()
+    if model_spec.interface == "global" and model_params and "x_cols" in model_params:
+        raw = model_params.get("x_cols")
+        if raw is not None:
+            if isinstance(raw, str):
+                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
+            elif isinstance(raw, list | tuple):
+                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
+            else:
+                s = str(raw).strip()
+                x_cols = (s,) if s else ()
+
     long_df = to_long(
         df,
         time_col=spec.time_col,
         y_col=y_col_final,
         id_cols=tuple(spec.group_cols),
+        x_cols=x_cols,
         dropna=True,
     )
     if long_df.empty:

@@ -26,6 +26,7 @@ def to_long(
     time_col: str,
     y_col: str,
     id_cols: Iterable[str] = (),
+    x_cols: Iterable[str] = (),
     dropna: bool = True,
 ) -> pd.DataFrame:
     """
@@ -41,13 +42,21 @@ def to_long(
         raise KeyError(f"y_col not found: {y_col!r}")
 
     id_cols_tup = tuple(id_cols)
+    x_cols_tup = tuple(x_cols)
     out = pd.DataFrame(index=df.index)
     out["unique_id"] = _build_unique_id(df, id_cols=id_cols_tup)
     out["ds"] = df[time_col]
     out["y"] = df[y_col]
 
+    for col in x_cols_tup:
+        if col in {"unique_id", "ds", "y"}:
+            raise ValueError(f"x_cols cannot include reserved column name: {col!r}")
+        if col not in df.columns:
+            raise KeyError(f"x col not found: {col!r}")
+        out[col] = df[col]
+
     if dropna:
-        out = out.dropna(subset=["ds", "y"])
+        out = out.dropna(subset=["ds", "y", *x_cols_tup])
 
     return out.reset_index(drop=True)
 

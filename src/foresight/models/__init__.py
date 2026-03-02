@@ -25,7 +25,13 @@ from .intermittent import (
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
 from .naive import naive_last, seasonal_naive
-from .registry import ModelSpec, get_model_spec, list_models, make_forecaster
+from .registry import (
+    ModelSpec,
+    get_model_spec,
+    list_models,
+    make_forecaster,
+    make_global_forecaster,
+)
 from .regression import (
     elasticnet_lag_direct_forecast,
     gbrt_lag_direct_forecast,
@@ -169,4 +175,5 @@ __all__ = [
     "list_models",
     "get_model_spec",
     "make_forecaster",
+    "make_global_forecaster",
 ]

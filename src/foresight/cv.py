@@ -9,7 +9,7 @@ import pandas as pd
 from .data.format import to_long
 from .datasets.loaders import load_dataset
 from .datasets.registry import get_dataset_spec
-from .models.registry import make_forecaster
+from .models.registry import get_model_spec, make_forecaster, make_global_forecaster
 from .splits import rolling_origin_splits
 
 
@@ -41,18 +41,222 @@ def cross_validation_predictions(
     )
 
     df = load_dataset(str(dataset), data_dir=data_dir)
+
+    model_spec = get_model_spec(str(model))
+    x_cols: tuple[str, ...] = ()
+    if model_spec.interface == "global" and model_params and "x_cols" in model_params:
+        raw = model_params.get("x_cols")
+        if raw is not None:
+            if isinstance(raw, str):
+                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
+            elif isinstance(raw, list | tuple):
+                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
+            else:
+                s = str(raw).strip()
+                x_cols = (s,) if s else ()
+
     long_df = to_long(
         df,
         time_col=spec.time_col,
         y_col=y_col_final,
         id_cols=tuple(spec.group_cols),
+        x_cols=x_cols,
         dropna=True,
     )
     if long_df.empty:
         raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
 
-    long_df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
-    forecaster = make_forecaster(str(model), **(model_params or {}))
+    return cross_validation_predictions_long_df(
+        model=str(model),
+        long_df=long_df,
+        horizon=int(horizon),
+        step_size=int(step_size),
+        min_train_size=int(min_train_size),
+        model_params=model_params,
+        max_train_size=max_train_size,
+        n_windows=n_windows,
+    )
+
+
+def cross_validation_predictions_long_df(
+    *,
+    model: str,
+    long_df: pd.DataFrame,
+    horizon: int,
+    step_size: int,
+    min_train_size: int,
+    model_params: dict[str, Any] | None = None,
+    max_train_size: int | None = None,
+    n_windows: int | None = None,
+) -> pd.DataFrame:
+    """
+    Cross-validation predictions table for a canonical long DataFrame.
+
+    Dispatches based on model interface:
+      - local: per-series training with (train_1d, horizon) -> yhat
+      - global: panel training with (long_df, cutoff, horizon) -> pred_df
+    """
+    if not isinstance(long_df, pd.DataFrame):
+        raise TypeError("long_df must be a pandas DataFrame")
+    if long_df.empty:
+        raise ValueError("long_df is empty")
+
+    model_spec = get_model_spec(str(model))
+    interface = str(model_spec.interface).lower().strip()
+
+    df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+
+    if interface == "local":
+        forecaster = make_forecaster(str(model), **(model_params or {}))
+
+        rows: list[dict[str, Any]] = []
+        n_series = 0
+        n_series_skipped = 0
+
+        for uid, g in df.groupby("unique_id", sort=False):
+            n_series += 1
+            ds_arr = g["ds"].to_numpy(copy=False)
+            y_arr = g["y"].to_numpy(dtype=float, copy=False)
+
+            try:
+                splits = list(
+                    rolling_origin_splits(
+                        y_arr.size,
+                        horizon=int(horizon),
+                        step_size=int(step_size),
+                        min_train_size=int(min_train_size),
+                        max_train_size=max_train_size,
+                    )
+                )
+            except ValueError:
+                n_series_skipped += 1
+                continue
+
+            if n_windows is not None:
+                if int(n_windows) <= 0:
+                    raise ValueError("n_windows must be >= 1")
+                splits = splits[-int(n_windows) :]
+
+            for split in splits:
+                train = y_arr[split.train_start : split.train_end]
+                yhat = np.asarray(forecaster(train, int(horizon)), dtype=float)
+                if yhat.shape != (int(horizon),):
+                    raise ValueError(
+                        f"forecaster must return shape ({int(horizon)},), got {yhat.shape}"
+                    )
+
+                y_true = y_arr[split.test_start : split.test_end]
+                ds_true = ds_arr[split.test_start : split.test_end]
+                if y_true.shape != (int(horizon),) or ds_true.shape != (int(horizon),):
+                    raise RuntimeError("Internal error: unexpected slice length for horizon.")
+
+                cutoff = ds_arr[split.train_end - 1]
+                for i in range(int(horizon)):
+                    rows.append(
+                        {
+                            "unique_id": str(uid),
+                            "ds": ds_true[i],
+                            "cutoff": cutoff,
+                            "step": int(i + 1),
+                            "y": float(y_true[i]),
+                            "yhat": float(yhat[i]),
+                            "model": str(model),
+                        }
+                    )
+
+        if not rows:
+            raise ValueError("No series had enough data for the requested CV parameters.")
+
+        out = pd.DataFrame(rows)
+        out.attrs["n_series"] = int(n_series)
+        out.attrs["n_series_skipped"] = int(n_series_skipped)
+        return out
+
+    if interface == "global":
+        global_forecaster = make_global_forecaster(
+            str(model), **(model_params or {}), max_train_size=max_train_size
+        )
+
+        # Choose global cutoffs from a reference series (first group). This matches many panel datasets
+        # where series share a common timestamp grid, while still allowing missing series to be skipped.
+        ref_uid, ref_g = next(iter(df.groupby("unique_id", sort=False)))
+        ref_ds = ref_g["ds"].to_numpy(copy=False)
+        splits = list(
+            rolling_origin_splits(
+                int(ref_ds.size),
+                horizon=int(horizon),
+                step_size=int(step_size),
+                min_train_size=int(min_train_size),
+                max_train_size=max_train_size,
+            )
+        )
+        if n_windows is not None:
+            if int(n_windows) <= 0:
+                raise ValueError("n_windows must be >= 1")
+            splits = splits[-int(n_windows) :]
+
+        cutoffs = [ref_ds[sp.train_end - 1] for sp in splits]
+
+        rows: list[dict[str, Any]] = []
+        total_series = int(df["unique_id"].nunique())
+        series_skipped_any = 0
+
+        y_lookup = df[["unique_id", "ds", "y"]]
+
+        for cutoff in cutoffs:
+            pred = global_forecaster(df, cutoff, int(horizon))
+            if not isinstance(pred, pd.DataFrame):
+                raise TypeError(
+                    f"Global forecaster must return a pandas DataFrame, got: {type(pred).__name__}"
+                )
+            required = {"unique_id", "ds", "yhat"}
+            missing = required.difference(pred.columns)
+            if missing:
+                raise KeyError(f"Global prediction table missing columns: {sorted(missing)}")
+
+            merged = pred.merge(y_lookup, on=["unique_id", "ds"], how="left", validate="one_to_one")
+            # Some series may be skipped by the model; keep only rows with observed y for metrics.
+            merged = merged.dropna(subset=["y", "yhat", "ds"])
+            if merged.empty:
+                continue
+
+            skipped_here = total_series - int(merged["unique_id"].nunique())
+            if skipped_here > 0:
+                series_skipped_any += int(skipped_here)
+
+            for uid, g in merged.groupby("unique_id", sort=False):
+                g = g.sort_values("ds", kind="mergesort")
+                y_true = g["y"].to_numpy(dtype=float, copy=False)
+                yhat = g["yhat"].to_numpy(dtype=float, copy=False)
+                ds_true = g["ds"].to_numpy(copy=False)
+
+                # Ensure exactly horizon points; if the model returned fewer, skip.
+                if y_true.shape[0] != int(horizon) or yhat.shape[0] != int(horizon):
+                    continue
+
+                for i in range(int(horizon)):
+                    rows.append(
+                        {
+                            "unique_id": str(uid),
+                            "ds": ds_true[i],
+                            "cutoff": cutoff,
+                            "step": int(i + 1),
+                            "y": float(y_true[i]),
+                            "yhat": float(yhat[i]),
+                            "model": str(model),
+                        }
+                    )
+
+        if not rows:
+            raise ValueError("Global model produced 0 predictions for the requested CV parameters.")
+
+        out = pd.DataFrame(rows)
+        out.attrs["n_series"] = total_series
+        out.attrs["n_series_skipped"] = int(series_skipped_any)
+        out.attrs["reference_unique_id"] = str(ref_uid)
+        return out
+
+    raise ValueError(f"Unknown model interface: {model_spec.interface!r}")
 
     rows: list[dict[str, Any]] = []
     n_series = 0
