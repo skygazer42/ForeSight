@@ -67,11 +67,13 @@ from .torch_global import (
     torch_dilated_rnn_global_forecaster,
     torch_deepar_global_forecaster,
     torch_dlinear_global_forecaster,
+    torch_etsformer_global_forecaster,
     torch_fedformer_global_forecaster,
     torch_fnet_global_forecaster,
     torch_gmlp_global_forecaster,
     torch_hyena_global_forecaster,
     torch_kan_global_forecaster,
+    torch_scinet_global_forecaster,
     torch_inception_global_forecaster,
     torch_informer_global_forecaster,
     torch_itransformer_global_forecaster,
@@ -104,12 +106,14 @@ from .torch_nn import (
     torch_deepar_recursive_forecast,
     torch_dilated_rnn_direct_forecast,
     torch_dlinear_direct_forecast,
+    torch_etsformer_direct_forecast,
     torch_fnet_direct_forecast,
     torch_gmlp_direct_forecast,
     torch_gru_direct_forecast,
     torch_hyena_direct_forecast,
     torch_inception_direct_forecast,
     torch_kan_direct_forecast,
+    torch_scinet_direct_forecast,
     torch_linear_attention_direct_forecast,
     torch_lstm_direct_forecast,
     torch_mamba_direct_forecast,
@@ -1497,6 +1501,178 @@ def _factory_torch_kan_direct(
             grid_range=grid_range_f,
             dropout=dropout_f,
             linear_skip=linear_skip_bool,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_scinet_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_stages: int = 3,
+    conv_kernel: int = 5,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_stages_int = int(num_stages)
+    conv_kernel_int = int(conv_kernel)
+    ffn_dim_int = int(ffn_dim)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_scinet_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_stages=num_stages_int,
+            conv_kernel=conv_kernel_int,
+            ffn_dim=ffn_dim_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_etsformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    alpha_init: float = 0.3,
+    beta_init: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    alpha_init_f = float(alpha_init)
+    beta_init_f = float(beta_init)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_etsformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            alpha_init=alpha_init_f,
+            beta_init=beta_init_f,
             epochs=epochs_int,
             lr=lr_f,
             weight_decay=weight_decay_f,
@@ -4367,6 +4543,58 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
     ),
+    "torch-scinet-direct": ModelSpec(
+        key="torch-scinet-direct",
+        description="Torch SCINet-style sample-convolution interaction network (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_scinet_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_stages": 3,
+            "conv_kernel": 5,
+            "ffn_dim": 128,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_stages": "Number of SCINet interaction stages",
+            "conv_kernel": "Conv1D kernel size (>=1) inside interaction blocks",
+            "ffn_dim": "FFN hidden size inside blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-etsformer-direct": ModelSpec(
+        key="torch-etsformer-direct",
+        description="Torch ETSformer-style exponential smoothing + Transformer residual model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_etsformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "alpha_init": 0.3,
+            "beta_init": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Transformer embedding dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of Transformer encoder layers",
+            "dim_feedforward": "Transformer FFN dimension",
+            "dropout": "Dropout probability in [0,1)",
+            "alpha_init": "Initial smoothing alpha in (0,1) (learned during training)",
+            "beta_init": "Initial smoothing beta in (0,1) (learned during training)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
     "torch-patchtst-direct": ModelSpec(
         key="torch-patchtst-direct",
         description="Torch PatchTST-style model (direct multi-horizon). Requires PyTorch.",
@@ -5704,6 +5932,90 @@ _REGISTRY: dict[str, ModelSpec] = {
             "linear_skip": "Add a linear skip connection per layer (true/false)",
             "id_emb_dim": "Series-id embedding dim (panel/global models)",
             "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-scinet-global": ModelSpec(
+        key="torch-scinet-global",
+        description="Torch SCINet-style sample-convolution interaction network (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_scinet_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "num_stages": 3,
+            "conv_kernel": 5,
+            "ffn_dim": 128,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "num_stages": "Number of SCINet interaction stages",
+            "conv_kernel": "Conv1D kernel size (>=1) inside interaction blocks",
+            "ffn_dim": "FFN hidden size inside blocks",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
+    "torch-etsformer-global": ModelSpec(
+        key="torch-etsformer-global",
+        description="Torch ETSformer-style exponential smoothing + Transformer residual model (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_etsformer_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "alpha_init": 0.3,
+            "beta_init": 0.1,
+            "id_emb_dim": 8,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Transformer model dimension",
+            "nhead": "Attention heads",
+            "num_layers": "Transformer encoder layers",
+            "dim_feedforward": "Transformer FFN dimension",
+            "dropout": "Dropout probability in [0,1)",
+            "alpha_init": "Initial smoothing alpha in (0,1) (learned during training)",
+            "beta_init": "Initial smoothing beta in (0,1) (learned during training)",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
             "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
             "max_train_size": "Optional per-series rolling training window length (None for expanding)",
             **_TORCH_COMMON_PARAM_HELP,

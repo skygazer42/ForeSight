@@ -208,6 +208,49 @@ def test_torch_dilated_rnn_and_kan_local_smoke():
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_torch_scinet_and_etsformer_local_smoke():
+    y = np.sin(np.arange(160, dtype=float) / 8.0) + 0.03 * np.arange(160, dtype=float)
+
+    f1 = make_forecaster(
+        "torch-scinet-direct",
+        lags=48,
+        d_model=32,
+        num_stages=2,
+        conv_kernel=5,
+        ffn_dim=64,
+        dropout=0.0,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat1 = f1(y, 5)
+    assert yhat1.shape == (5,)
+    assert np.all(np.isfinite(yhat1))
+
+    f2 = make_forecaster(
+        "torch-etsformer-direct",
+        lags=48,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        dropout=0.0,
+        alpha_init=0.3,
+        beta_init=0.1,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    yhat2 = f2(y, 5)
+    assert yhat2.shape == (5,)
+    assert np.all(np.isfinite(yhat2))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_xformer_and_rnn_global_smoke():
     import pandas as pd
 
@@ -878,6 +921,50 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred29 = g29(long_df, cutoff, horizon)
     assert set(pred29.columns) >= {"unique_id", "ds", "yhat"}
     assert np.all(np.isfinite(pred29["yhat"].to_numpy(dtype=float)))
+
+    g30 = make_global_forecaster(
+        "torch-scinet-global",
+        context_length=32,
+        d_model=32,
+        num_stages=2,
+        conv_kernel=5,
+        ffn_dim=64,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred30 = g30(long_df, cutoff, horizon)
+    assert set(pred30.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred30["yhat"].to_numpy(dtype=float)))
+
+    g31 = make_global_forecaster(
+        "torch-etsformer-global",
+        context_length=32,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        alpha_init=0.3,
+        beta_init=0.1,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred31 = g31(long_df, cutoff, horizon)
+    assert set(pred31.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred31["yhat"].to_numpy(dtype=float)))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")

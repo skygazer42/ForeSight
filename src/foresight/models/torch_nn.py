@@ -4076,3 +4076,369 @@ def torch_kan_direct_forecast(
     if bool(normalize):
         yhat = yhat * std + mean
     return np.asarray(yhat, dtype=float)
+
+
+def torch_scinet_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_stages: int = 3,
+    conv_kernel: int = 5,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    SCINet-style sample-convolution interaction network (lite) for direct forecasting.
+
+    This is a lightweight variant that repeatedly splits the sequence into even/odd
+    subsequences, applies convolutional mixing, and merges back (with residual FFN).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    stages = int(num_stages)
+    if stages <= 0:
+        raise ValueError("num_stages must be >= 1")
+    k = int(conv_kernel)
+    if k <= 0:
+        raise ValueError("conv_kernel must be >= 1")
+    hidden = int(ffn_dim)
+    if hidden <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    pad_left = (k - 1) // 2
+    pad_right = (k - 1) - pad_left
+
+    class _SCIBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm1 = nn.LayerNorm(d)
+            self.even_conv = nn.Conv1d(d, d, kernel_size=int(k), padding=0)
+            self.odd_conv = nn.Conv1d(d, d, kernel_size=int(k), padding=0)
+            self.cross_even = nn.Linear(d, d)
+            self.cross_odd = nn.Linear(d, d)
+            self.out_proj = nn.Linear(d, d)
+            self.drop1 = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+            self.norm2 = nn.LayerNorm(d)
+            self.fc1 = nn.Linear(d, hidden)
+            self.fc2 = nn.Linear(hidden, d)
+            self.drop2 = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+        def _same_conv(self, conv: Any, xbt: Any) -> Any:
+            # xbt: (B, T, d)
+            x_ch = xbt.transpose(1, 2)  # (B, d, T)
+            x_pad = F.pad(x_ch, (int(pad_left), int(pad_right)))
+            y = conv(x_pad).transpose(1, 2)
+            return y
+
+        def _pad_to(self, xbt: Any, target_len: int) -> Any:
+            if int(xbt.shape[1]) == int(target_len):
+                return xbt
+            if int(xbt.shape[1]) > int(target_len):
+                return xbt[:, : int(target_len), :]
+            pad_n = int(target_len) - int(xbt.shape[1])
+            return F.pad(xbt, (0, 0, 0, pad_n))
+
+        def forward(self, xb: Any) -> Any:  # (B, T, d)
+            z = self.norm1(xb)
+            even = z[:, ::2, :]
+            odd = z[:, 1::2, :]
+
+            even_h = F.gelu(self._same_conv(self.even_conv, even))
+            odd_h = F.gelu(self._same_conv(self.odd_conv, odd))
+
+            even_len = int(even.shape[1])
+            odd_len = int(odd.shape[1])
+            odd_to_even = self._pad_to(odd_h, even_len)
+            even_to_odd = self._pad_to(even_h, odd_len)
+
+            even2 = even + self.cross_even(odd_to_even)
+            odd2 = odd + self.cross_odd(even_to_odd)
+
+            # Merge (interleave) back.
+            out = torch.zeros_like(z)
+            out[:, ::2, :] = even2
+            out[:, 1::2, :] = odd2
+
+            xb = xb + self.drop1(self.out_proj(out))
+
+            z2 = self.norm2(xb)
+            y2 = F.gelu(self.fc1(z2))
+            y2 = self.fc2(self.drop2(y2))
+            xb = xb + self.drop2(y2)
+            return xb
+
+    class _SCINetDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.embed = nn.Linear(1, d)
+            self.pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
+            self.blocks = nn.ModuleList([_SCIBlock() for _ in range(int(stages))])
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:
+            if xb.ndim == 2:
+                xb = xb.unsqueeze(-1)
+            z = self.embed(xb) + self.pos
+            for blk in self.blocks:
+                z = blk(z)
+            z = self.norm(z)
+            return self.head(z[:, -1, :])
+
+    model = _SCINetDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_etsformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    alpha_init: float = 0.3,
+    beta_init: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    ETSformer-style exponential smoothing + Transformer residual model (lite).
+
+    - Compute a Holt-style baseline forecast from the context window (learned alpha/beta).
+    - Feed residual tokens into a Transformer encoder to predict horizon residual adjustments.
+    - Output = baseline + residual_adjustment.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    heads = int(nhead)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    alpha0 = float(alpha_init)
+    beta0 = float(beta_init)
+    if not (0.0 < alpha0 < 1.0):
+        raise ValueError("alpha_init must be in (0,1)")
+    if not (0.0 < beta0 < 1.0):
+        raise ValueError("beta_init must be in (0,1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    def _logit(p: float) -> float:
+        p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
+        return math.log(p2 / (1.0 - p2))
+
+    alpha_logit_init = _logit(alpha0)
+    beta_logit_init = _logit(beta0)
+
+    class _ETSformerDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.alpha_logit = nn.Parameter(
+                torch.tensor(alpha_logit_init, dtype=torch.float32)
+            )
+            self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
+            self.embed = nn.Linear(1, d)
+            self.pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
+            layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=int(dim_feedforward),
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            if xb.ndim == 2:
+                xb = xb.unsqueeze(-1)
+            y = xb.squeeze(-1)  # (B, T)
+            B = int(y.shape[0])
+            T = int(y.shape[1])
+
+            alpha = torch.sigmoid(self.alpha_logit)
+            beta = torch.sigmoid(self.beta_logit)
+
+            l = y[:, 0]
+            if T >= 2:
+                b = y[:, 1] - y[:, 0]
+            else:
+                b = torch.zeros((B,), device=y.device, dtype=y.dtype)
+
+            levels: list[Any] = [l]
+            trends: list[Any] = [b]
+            for t in range(1, T):
+                yt = y[:, t]
+                l_new = alpha * yt + (1.0 - alpha) * (l + b)
+                b_new = beta * (l_new - l) + (1.0 - beta) * b
+                l, b = l_new, b_new
+                levels.append(l)
+                trends.append(b)
+
+            level_seq = torch.stack(levels, dim=1)  # (B, T)
+            trend_seq = torch.stack(trends, dim=1)  # (B, T)
+
+            fitted = torch.empty_like(y)
+            fitted[:, 0] = level_seq[:, 0]
+            if T > 1:
+                fitted[:, 1:] = level_seq[:, :-1] + trend_seq[:, :-1]
+
+            resid = (y - fitted).unsqueeze(-1)  # (B, T, 1)
+
+            steps = torch.arange(1, int(h) + 1, device=y.device, dtype=y.dtype).reshape(1, -1)
+            baseline = level_seq[:, -1].unsqueeze(1) + steps * trend_seq[:, -1].unsqueeze(1)
+
+            z = self.embed(resid) + self.pos
+            z = self.enc(z)
+            delta = self.head(z[:, -1, :])
+            return baseline + delta
+
+    model = _ETSformerDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)

@@ -179,6 +179,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-hyena-direct`（requires `.[torch]`）：Torch Hyena-style long convolution（lite, `lags`, `d_model`, `num_layers`, `kernel_size`, `epochs`…）
 - `torch-dilated-rnn-direct`（requires `.[torch]`）：Torch Dilated RNN（lite, `lags`, `cell`, `hidden_size`, `dilation_base`, `epochs`…）
 - `torch-kan-direct`（requires `.[torch]`）：Torch KAN-style spline MLP（lite, `lags`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
+- `torch-scinet-direct`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction, `lags`, `d_model`, `num_stages`, `epochs`…）
+- `torch-etsformer-direct`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual, `lags`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-patchtst-direct`（requires `.[torch]`）：Torch PatchTST-style（patching + encoder, `lags`, `patch_len`, `stride`, `epochs`…）
 - `torch-tsmixer-direct`（requires `.[torch]`）：Torch TSMixer-style（token/channel mixing, `lags`, `d_model`, `num_blocks`, `epochs`…）
 - `torch-cnn-direct`（requires `.[torch]`）：Torch Conv1D stack（direct multi-horizon, `lags`, `channels`, `kernel_size`, `epochs`…）
@@ -226,6 +228,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-hyena-global`（requires `.[torch]`）：Torch Hyena-style long convolution（lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `kernel_size`, `epochs`…）
 - `torch-dilated-rnn-global`（requires `.[torch]`）：Torch Dilated RNN（lite）全局/面板训练（`context_length`, `cell`, `d_model`, `dilation_base`, `epochs`…）
 - `torch-kan-global`（requires `.[torch]`）：Torch KAN-style spline MLP（lite）全局/面板训练（`context_length`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
+- `torch-scinet-global`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction）全局/面板训练（`context_length`, `d_model`, `num_stages`, `epochs`…）
+- `torch-etsformer-global`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual）全局/面板训练（`context_length`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
 - `torch-transformer-encdec-global`（requires `.[torch]`）：Torch encoder-decoder Transformer（lite）全局/面板训练（`context_length`, `d_model`, `nhead`, `epochs`…）
 - `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
 - `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 probsparse/autocorr/reformer 等）

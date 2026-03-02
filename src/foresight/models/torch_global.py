@@ -8220,6 +8220,622 @@ def torch_kan_global_forecaster(
     return _f
 
 
+def _predict_torch_scinet_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    d_model: int,
+    num_stages: int,
+    conv_kernel: int,
+    ffn_dim: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    SCINet-style (lite) global/panel model.
+
+    Repeatedly splits tokens into even/odd subsequences, applies convolutional interaction,
+    merges back, and predicts the horizon tokens.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = int(ctx + h)
+    input_dim = int(X_train.shape[2])
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    stages = int(num_stages)
+    if stages <= 0:
+        raise ValueError("num_stages must be >= 1")
+    k = int(conv_kernel)
+    if k <= 0:
+        raise ValueError("conv_kernel must be >= 1")
+    hidden = int(ffn_dim)
+    if hidden <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    pad_left = (k - 1) // 2
+    pad_right = (k - 1) - pad_left
+
+    class _SCIBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm1 = nn.LayerNorm(d)
+            self.even_conv = nn.Conv1d(d, d, kernel_size=int(k), padding=0)
+            self.odd_conv = nn.Conv1d(d, d, kernel_size=int(k), padding=0)
+            self.cross_even = nn.Linear(d, d)
+            self.cross_odd = nn.Linear(d, d)
+            self.out_proj = nn.Linear(d, d)
+            self.drop1 = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+            self.norm2 = nn.LayerNorm(d)
+            self.fc1 = nn.Linear(d, hidden)
+            self.fc2 = nn.Linear(hidden, d)
+            self.drop2 = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+        def _same_conv(self, conv: Any, xbt: Any) -> Any:
+            x_ch = xbt.transpose(1, 2)
+            x_pad = F.pad(x_ch, (int(pad_left), int(pad_right)))
+            return conv(x_pad).transpose(1, 2)
+
+        def _pad_to(self, xbt: Any, target_len: int) -> Any:
+            if int(xbt.shape[1]) == int(target_len):
+                return xbt
+            if int(xbt.shape[1]) > int(target_len):
+                return xbt[:, : int(target_len), :]
+            pad_n = int(target_len) - int(xbt.shape[1])
+            return F.pad(xbt, (0, 0, 0, pad_n))
+
+        def forward(self, xb: Any) -> Any:  # (B, T, d)
+            z = self.norm1(xb)
+            even = z[:, ::2, :]
+            odd = z[:, 1::2, :]
+
+            even_h = F.gelu(self._same_conv(self.even_conv, even))
+            odd_h = F.gelu(self._same_conv(self.odd_conv, odd))
+
+            even_len = int(even.shape[1])
+            odd_len = int(odd.shape[1])
+            odd_to_even = self._pad_to(odd_h, even_len)
+            even_to_odd = self._pad_to(even_h, odd_len)
+
+            even2 = even + self.cross_even(odd_to_even)
+            odd2 = odd + self.cross_odd(even_to_odd)
+
+            out = torch.zeros_like(z)
+            out[:, ::2, :] = even2
+            out[:, 1::2, :] = odd2
+
+            xb = xb + self.drop1(self.out_proj(out))
+
+            z2 = self.norm2(xb)
+            y2 = F.gelu(self.fc1(z2))
+            y2 = self.fc2(self.drop2(y2))
+            xb = xb + self.drop2(y2)
+            return xb
+
+    class _SCINetGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+            self.pos = nn.Parameter(torch.zeros((1, int(seq_len), d), dtype=torch.float32))
+            self.blocks = nn.ModuleList([_SCIBlock() for _ in range(int(stages))])
+            self.norm = nn.LayerNorm(d)
+            self.out = nn.Linear(d, int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)
+            z = self.in_proj(x2) + self.pos
+            for blk in self.blocks:
+                z = blk(z)
+            z = self.norm(z)
+            yhat = self.out(z[:, -h:, :])
+            return yhat.squeeze(-1) if out_dim == 1 else yhat
+
+    model = _SCINetGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_scinet_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    num_stages: int = 3,
+    conv_kernel: int = 5,
+    ffn_dim: int = 128,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    quantiles: Any = (),
+) -> Any:
+    """
+    SCINet-style global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_scinet_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            d_model=int(d_model),
+            num_stages=int(num_stages),
+            conv_kernel=int(conv_kernel),
+            ffn_dim=int(ffn_dim),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_etsformer_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    d_model: int,
+    nhead: int,
+    num_layers: int,
+    dim_feedforward: int,
+    dropout: float,
+    alpha_init: float,
+    beta_init: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    ETSformer-style exponential smoothing + Transformer residual model (lite), global/panel.
+
+    - Holt-style baseline forecast from the context tokens (learned alpha/beta).
+    - Transformer on residual tokens (with future covariates/time features available).
+    - Output = baseline + residual_adjustment.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = int(ctx + h)
+    input_dim = int(X_train.shape[2])
+
+    d = int(d_model)
+    heads = int(nhead)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    alpha0 = float(alpha_init)
+    beta0 = float(beta_init)
+    if not (0.0 < alpha0 < 1.0):
+        raise ValueError("alpha_init must be in (0,1)")
+    if not (0.0 < beta0 < 1.0):
+        raise ValueError("beta_init must be in (0,1)")
+
+    def _logit(p: float) -> float:
+        p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
+        return math.log(p2 / (1.0 - p2))
+
+    alpha_logit_init = _logit(alpha0)
+    beta_logit_init = _logit(beta0)
+
+    class _ETSformerGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.alpha_logit = nn.Parameter(
+                torch.tensor(alpha_logit_init, dtype=torch.float32)
+            )
+            self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+            self.pos = nn.Parameter(torch.zeros((1, int(seq_len), d), dtype=torch.float32))
+            layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=int(dim_feedforward),
+                dropout=float(drop),
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.out = nn.Linear(d, int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:  # xb: (B, seq_len, input_dim)
+            y_ctx = xb[:, :ctx, 0]  # (B, ctx)
+            B = int(y_ctx.shape[0])
+
+            alpha = torch.sigmoid(self.alpha_logit)
+            beta = torch.sigmoid(self.beta_logit)
+
+            l = y_ctx[:, 0]
+            if int(ctx) >= 2:
+                b = y_ctx[:, 1] - y_ctx[:, 0]
+            else:
+                b = torch.zeros((B,), device=y_ctx.device, dtype=y_ctx.dtype)
+
+            levels: list[Any] = [l]
+            trends: list[Any] = [b]
+            for t in range(1, int(ctx)):
+                yt = y_ctx[:, t]
+                l_new = alpha * yt + (1.0 - alpha) * (l + b)
+                b_new = beta * (l_new - l) + (1.0 - beta) * b
+                l, b = l_new, b_new
+                levels.append(l)
+                trends.append(b)
+
+            level_seq = torch.stack(levels, dim=1)  # (B, ctx)
+            trend_seq = torch.stack(trends, dim=1)  # (B, ctx)
+
+            fitted = torch.empty_like(y_ctx)
+            fitted[:, 0] = level_seq[:, 0]
+            if int(ctx) > 1:
+                fitted[:, 1:] = level_seq[:, :-1] + trend_seq[:, :-1]
+            resid_ctx = y_ctx - fitted
+
+            resid_y = torch.cat(
+                [resid_ctx, torch.zeros((B, int(h)), device=xb.device, dtype=xb.dtype)], dim=1
+            ).unsqueeze(-1)
+
+            if int(input_dim) > 1:
+                xb_resid = torch.cat([resid_y, xb[:, :, 1:]], dim=-1)
+            else:
+                xb_resid = resid_y
+
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb_resid.shape[1], -1)
+            x2 = torch.cat([xb_resid, emb_t], dim=-1)
+
+            steps = torch.arange(1, int(h) + 1, device=xb.device, dtype=xb.dtype).reshape(1, -1)
+            baseline = level_seq[:, -1].unsqueeze(1) + steps * trend_seq[:, -1].unsqueeze(1)
+
+            z = self.in_proj(x2) + self.pos
+            z = self.enc(z)
+            delta = self.out(z[:, -h:, :])
+            if out_dim == 1:
+                return baseline + delta.squeeze(-1)
+            return baseline.unsqueeze(-1) + delta
+
+    model = _ETSformerGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_etsformer_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    alpha_init: float = 0.3,
+    beta_init: float = 0.1,
+    id_emb_dim: int = 8,
+    quantiles: Any = (),
+) -> Any:
+    """
+    ETSformer-style global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_etsformer_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            d_model=int(d_model),
+            nhead=int(nhead),
+            num_layers=int(num_layers),
+            dim_feedforward=int(dim_feedforward),
+            dropout=float(dropout),
+            alpha_init=float(alpha_init),
+            beta_init=float(beta_init),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
 def _predict_torch_transformer_encdec_global(
     df: pd.DataFrame,
     cutoff: Any,

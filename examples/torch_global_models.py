@@ -266,6 +266,29 @@ def main() -> None:
             },
         ),
         (
+            "torch-scinet-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "num_stages": 3,
+                "conv_kernel": 5,
+                "ffn_dim": 128,
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-etsformer-global",
+            {
+                "context_length": 96,
+                "d_model": 64,
+                "nhead": 4,
+                "num_layers": 2,
+                "alpha_init": 0.3,
+                "beta_init": 0.1,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-transformer-encdec-global",
             {
                 "context_length": 96,
