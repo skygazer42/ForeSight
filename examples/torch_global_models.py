@@ -117,6 +117,36 @@ def main() -> None:
             {"context_length": 96, "d_model": 64, "hidden_size": 128, "epochs": 10},
         ),
         (
+            "torch-wavenet-global",
+            {"context_length": 96, "channels": 32, "num_layers": 6, "kernel_size": 2, "epochs": 10},
+        ),
+        (
+            "torch-resnet1d-global",
+            {"context_length": 96, "channels": 32, "num_blocks": 4, "kernel_size": 3, "epochs": 10},
+        ),
+        (
+            "torch-inception-global",
+            {
+                "context_length": 96,
+                "channels": 32,
+                "num_blocks": 3,
+                "kernel_sizes": (3, 5, 7),
+                "epochs": 10,
+            },
+        ),
+        (
+            "torch-lstnet-global",
+            {
+                "context_length": 96,
+                "cnn_channels": 16,
+                "kernel_size": 6,
+                "rnn_hidden": 32,
+                "skip": 24,
+                "highway_window": 24,
+                "epochs": 10,
+            },
+        ),
+        (
             "torch-seq2seq-attn-lstm-global",
             {
                 "context_length": 64,

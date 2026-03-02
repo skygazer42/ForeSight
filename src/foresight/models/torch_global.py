@@ -4194,6 +4194,1074 @@ def torch_tide_global_forecaster(
     return _f
 
 
+def _predict_torch_wavenet_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    channels: int,
+    num_layers: int,
+    kernel_size: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    WaveNet-style global/panel model (gated dilated causal CNN).
+
+    Uses the full (context + horizon) token sequence with known future covariates/time features.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = ctx + h
+    input_dim = int(X_train.shape[2])
+
+    c = int(channels)
+    if c <= 0:
+        raise ValueError("channels must be >= 1")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    k = int(kernel_size)
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    in_ch = int(input_dim + int(id_emb_dim))
+
+    class _WaveNetGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Conv1d(int(in_ch), int(c), kernel_size=1)
+
+            self.filter_convs = nn.ModuleList()
+            self.gate_convs = nn.ModuleList()
+            self.res_convs = nn.ModuleList()
+            self.skip_convs = nn.ModuleList()
+            self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+            for i in range(int(num_layers)):
+                dilation = 2 ** int(i)
+                self.filter_convs.append(
+                    nn.Conv1d(int(c), int(c), kernel_size=int(k), dilation=int(dilation))
+                )
+                self.gate_convs.append(
+                    nn.Conv1d(int(c), int(c), kernel_size=int(k), dilation=int(dilation))
+                )
+                self.res_convs.append(nn.Conv1d(int(c), int(c), kernel_size=1))
+                self.skip_convs.append(nn.Conv1d(int(c), int(c), kernel_size=1))
+
+            self.out1 = nn.Conv1d(int(c), int(c), kernel_size=1)
+            self.out2 = nn.Conv1d(int(c), int(c), kernel_size=1)
+            self.head = nn.Linear(int(c), int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)  # (B,E)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)  # (B,T,C)
+
+            xch = x2.transpose(1, 2)  # (B,C,T)
+            xh = self.in_proj(xch)
+            skip = None
+
+            for i in range(int(num_layers)):
+                dilation = 2 ** int(i)
+                pad = int(dilation) * (int(k) - 1)
+                xpad = F.pad(xh, (int(pad), 0), mode="constant", value=0.0)
+                f = torch.tanh(self.filter_convs[i](xpad))
+                g = torch.sigmoid(self.gate_convs[i](xpad))
+                z = self.drop(f * g)
+                s = self.skip_convs[i](z)
+                skip = s if skip is None else skip + s
+                xh = self.res_convs[i](z) + xh
+
+            out = torch.relu(skip)
+            out = torch.relu(self.out1(out))
+            out = self.out2(out)  # (B,c,T)
+
+            zt = out.transpose(1, 2)  # (B,T,c)
+            yhat = self.head(zt[:, -int(seq_len) :, :])[:, -h:, :]
+            return yhat.squeeze(-1) if out_dim == 1 else yhat
+
+    model = _WaveNetGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_wavenet_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    channels: int = 32,
+    num_layers: int = 6,
+    kernel_size: int = 2,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    quantiles: Any = (),
+) -> Any:
+    """
+    Torch WaveNet-style global/panel forecaster.
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_wavenet_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            channels=int(channels),
+            num_layers=int(num_layers),
+            kernel_size=int(kernel_size),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_resnet1d_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    channels: int,
+    num_blocks: int,
+    kernel_size: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    ResNet-1D global/panel model (token-wise residual Conv1D blocks).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = ctx + h
+    input_dim = int(X_train.shape[2])
+
+    c = int(channels)
+    if c <= 0:
+        raise ValueError("channels must be >= 1")
+    if int(num_blocks) <= 0:
+        raise ValueError("num_blocks must be >= 1")
+    k = int(kernel_size)
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    pad = int(k) // 2
+    in_ch = int(input_dim + int(id_emb_dim))
+
+    class _ResBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv1 = nn.Conv1d(int(c), int(c), kernel_size=int(k), padding=int(pad))
+            self.conv2 = nn.Conv1d(int(c), int(c), kernel_size=int(k), padding=int(pad))
+            self.act = nn.ReLU()
+            self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+        def forward(self, xch: Any) -> Any:
+            z = self.act(self.conv1(xch))
+            z = self.drop(z)
+            z = self.conv2(z)
+            return self.act(xch + z)
+
+    class _ResNet1DGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Conv1d(int(in_ch), int(c), kernel_size=1)
+            self.blocks = nn.ModuleList([_ResBlock() for _ in range(int(num_blocks))])
+            self.head = nn.Linear(int(c), int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)  # (B,E)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)  # (B,T,C)
+
+            xch = x2.transpose(1, 2)  # (B,C,T)
+            z = self.in_proj(xch)
+            for blk in self.blocks:
+                z = blk(z)
+
+            zt = z.transpose(1, 2)  # (B,T,c)
+            yhat = self.head(zt[:, -int(seq_len) :, :])[:, -h:, :]
+            return yhat.squeeze(-1) if out_dim == 1 else yhat
+
+    model = _ResNet1DGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_resnet1d_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    channels: int = 32,
+    num_blocks: int = 4,
+    kernel_size: int = 3,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    quantiles: Any = (),
+) -> Any:
+    """
+    Torch ResNet-1D global/panel forecaster.
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_resnet1d_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            channels=int(channels),
+            num_blocks=int(num_blocks),
+            kernel_size=int(kernel_size),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_inception_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    channels: int,
+    num_blocks: int,
+    kernel_sizes: Any,
+    bottleneck_channels: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    InceptionTime-style global/panel model (lite).
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    seq_len = ctx + h
+    input_dim = int(X_train.shape[2])
+
+    c = int(channels)
+    if c <= 0:
+        raise ValueError("channels must be >= 1")
+    if int(num_blocks) <= 0:
+        raise ValueError("num_blocks must be >= 1")
+    b = int(bottleneck_channels)
+    if b <= 0:
+        raise ValueError("bottleneck_channels must be >= 1")
+
+    if isinstance(kernel_sizes, int):
+        ks = (int(kernel_sizes),)
+    elif isinstance(kernel_sizes, str):
+        parts = [p.strip() for p in kernel_sizes.split(",") if p.strip()]
+        ks = tuple(int(p) for p in parts)
+    elif isinstance(kernel_sizes, list | tuple):
+        ks = tuple(int(k) for k in kernel_sizes)
+    else:
+        ks = (int(kernel_sizes),)
+
+    ks = tuple(int(k) for k in ks if int(k) > 0)
+    if not ks:
+        raise ValueError("kernel_sizes must contain at least one positive int")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    in_ch = int(input_dim + int(id_emb_dim))
+
+    class _InceptionBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.bottleneck = nn.Conv1d(int(c), int(b), kernel_size=1)
+            self.convs = nn.ModuleList(
+                [nn.Conv1d(int(b), int(c), kernel_size=int(k), padding=int(k) // 2) for k in ks]
+            )
+            self.pool = nn.MaxPool1d(kernel_size=3, stride=1, padding=1)
+            self.pool_conv = nn.Conv1d(int(c), int(c), kernel_size=1)
+            self.proj = nn.Conv1d(int(c) * (len(ks) + 1), int(c), kernel_size=1)
+            self.act = nn.ReLU()
+            self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
+
+        def forward(self, xch: Any) -> Any:  # (B,c,T)
+            z0 = self.bottleneck(xch)
+            outs = [conv(z0) for conv in self.convs]
+            outs.append(self.pool_conv(self.pool(xch)))
+            z = torch.cat(outs, dim=1)
+            z = self.act(self.proj(z))
+            return self.drop(z)
+
+    class _InceptionGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.in_proj = nn.Conv1d(int(in_ch), int(c), kernel_size=1)
+            self.blocks = nn.ModuleList([_InceptionBlock() for _ in range(int(num_blocks))])
+            self.head = nn.Linear(int(c), int(out_dim))
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)  # (B,T,C)
+
+            xch = x2.transpose(1, 2)
+            z = self.in_proj(xch)
+            for blk in self.blocks:
+                z = z + blk(z)
+
+            zt = z.transpose(1, 2)
+            yhat = self.head(zt[:, -int(seq_len) :, :])[:, -h:, :]
+            return yhat.squeeze(-1) if out_dim == 1 else yhat
+
+    model = _InceptionGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_inception_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    channels: int = 32,
+    num_blocks: int = 3,
+    kernel_sizes: Any = (3, 5, 7),
+    bottleneck_channels: int = 16,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    quantiles: Any = (),
+) -> Any:
+    """
+    Torch InceptionTime-style global/panel forecaster.
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_inception_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            channels=int(channels),
+            num_blocks=int(num_blocks),
+            kernel_sizes=kernel_sizes,
+            bottleneck_channels=int(bottleneck_channels),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
+def _predict_torch_lstnet_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    # training params
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    # model params
+    cnn_channels: int,
+    kernel_size: int,
+    rnn_hidden: int,
+    skip: int,
+    highway_window: int,
+    dropout: float,
+    id_emb_dim: int,
+    quantiles: Any,
+) -> pd.DataFrame:
+    """
+    LSTNet-style global/panel model (CNN + GRU + skip GRU + highway, lite).
+
+    This is a deterministic/quantile-regression direct multi-horizon model.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    qs = _normalize_quantiles(quantiles)
+    out_dim = int(len(qs)) if qs else 1
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    input_dim = int(X_train.shape[2])
+
+    c = int(cnn_channels)
+    if c <= 0:
+        raise ValueError("cnn_channels must be >= 1")
+    k = int(kernel_size)
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    hidden = int(rnn_hidden)
+    if hidden <= 0:
+        raise ValueError("rnn_hidden must be >= 1")
+    skip_int = int(skip)
+    if skip_int < 0:
+        raise ValueError("skip must be >= 0")
+    hw = int(highway_window)
+    if hw < 0:
+        raise ValueError("highway_window must be >= 0")
+    if hw > 0 and int(ctx) < int(hw):
+        raise ValueError("highway_window must be <= context_length")
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    in_ch = int(input_dim + int(id_emb_dim))
+
+    class _LSTNetGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.conv = nn.Conv1d(int(in_ch), int(c), kernel_size=int(k))
+            self.drop = nn.Dropout(p=float(drop))
+            self.gru = nn.GRU(input_size=int(c), hidden_size=int(hidden), batch_first=True)
+            self.skip = int(skip_int)
+            self.skip_gru = (
+                None
+                if self.skip <= 0
+                else nn.GRU(input_size=int(c), hidden_size=int(hidden), batch_first=True)
+            )
+            feat_dim = int(hidden) * (2 if self.skip_gru is not None else 1)
+            self.proj = nn.Linear(int(feat_dim), int(h * out_dim))
+
+            self.hw = int(hw)
+            self.highway = None if self.hw <= 0 else nn.Linear(int(self.hw), int(h))
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)  # (B,E)
+            emb_t = emb.unsqueeze(1).expand(-1, xb.shape[1], -1)
+            x2 = torch.cat([xb, emb_t], dim=-1)  # (B,T,C)
+
+            xch = x2.transpose(1, 2)  # (B,C,T)
+            z = F.relu(self.conv(xch))  # (B, cnn_channels, T')
+            z = self.drop(z)
+            zt = z.transpose(1, 2)  # (B,T',cnn_channels)
+
+            _out, h_main = self.gru(zt)
+            h_main = h_main[-1]  # (B,H)
+
+            if self.skip_gru is not None:
+                T = int(zt.shape[1])
+                s = int(self.skip)
+                n = T // s
+                if n <= 0:
+                    h_skip = torch.zeros_like(h_main)
+                else:
+                    z2 = zt[:, -n * s :, :].reshape(zt.shape[0], n, s, zt.shape[2])
+                    z3 = z2[:, :, -1, :]  # (B,n,C)
+                    _out2, h_s = self.skip_gru(z3)
+                    h_skip = h_s[-1]
+                feat = torch.cat([h_main, h_skip], dim=-1)
+            else:
+                feat = h_main
+
+            out = self.proj(feat).reshape(-1, h, out_dim)  # (B,h,out_dim)
+
+            if self.highway is not None:
+                last = xb[:, int(ctx) - int(self.hw) : int(ctx), 0]
+                out = out + self.highway(last).unsqueeze(-1)
+
+            return out.squeeze(-1) if out_dim == 1 else out
+
+    model = _LSTNetGlobal()
+
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    loss_fn_override = None if not qs else _make_pinball_loss(qs)
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=loss_fn_override,
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=yhat_scaled,
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=qs,
+    )
+
+
+def torch_lstnet_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    cnn_channels: int = 16,
+    kernel_size: int = 6,
+    rnn_hidden: int = 32,
+    skip: int = 24,
+    highway_window: int = 24,
+    id_emb_dim: int = 8,
+    dropout: float = 0.2,
+    quantiles: Any = (),
+) -> Any:
+    """
+    Torch LSTNet-style global/panel forecaster (lite).
+
+    Returns a callable: (long_df, cutoff, horizon) -> prediction DataFrame (unique_id, ds, yhat).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_lstnet_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            cnn_channels=int(cnn_channels),
+            kernel_size=int(kernel_size),
+            rnn_hidden=int(rnn_hidden),
+            skip=int(skip),
+            highway_window=int(highway_window),
+            dropout=float(dropout),
+            id_emb_dim=int(id_emb_dim),
+            quantiles=quantiles,
+        )
+
+    return _f
+
+
 def _predict_torch_seq2seq_global(
     df: pd.DataFrame,
     cutoff: Any,

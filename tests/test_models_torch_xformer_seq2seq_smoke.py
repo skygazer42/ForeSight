@@ -74,7 +74,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         nhead=4,
         num_layers=1,
         dim_feedforward=64,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -90,7 +92,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         context_length=32,
         hidden_size=32,
         num_layers=1,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -110,7 +114,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         nhead=4,
         num_layers=1,
         dim_feedforward=64,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -128,7 +134,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         num_blocks=2,
         token_mixing_hidden=64,
         channel_mixing_hidden=64,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -146,7 +154,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         nhead=4,
         num_layers=1,
         dim_feedforward=64,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -164,7 +174,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         d_model=32,
         num_layers=1,
         top_k=2,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -184,7 +196,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         teacher_forcing=0.6,
         teacher_forcing_final=0.0,
         quantiles="0.1,0.5,0.9",
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -201,7 +215,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         channels=(32, 32),
         kernel_size=3,
         dilation_base=2,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -219,7 +235,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         num_layers=2,
         layer_width=64,
         dropout=0.0,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -238,7 +256,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         num_layers=2,
         layer_width=64,
         dropout=0.0,
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -256,7 +276,9 @@ def test_torch_xformer_and_rnn_global_smoke():
         hidden_size=64,
         dropout=0.0,
         quantiles="0.1,0.5,0.9",
+        sample_step=4,
         epochs=1,
+        val_split=0.0,
         batch_size=32,
         patience=2,
         x_cols=("promo",),
@@ -266,6 +288,89 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred11 = g11(long_df, cutoff, horizon)
     assert set(pred11.columns) >= {"unique_id", "ds", "yhat", "yhat_p10", "yhat_p50", "yhat_p90"}
     assert np.all(np.isfinite(pred11["yhat"].to_numpy(dtype=float)))
+
+    g12 = make_global_forecaster(
+        "torch-wavenet-global",
+        context_length=32,
+        channels=16,
+        num_layers=4,
+        kernel_size=2,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred12 = g12(long_df, cutoff, horizon)
+    assert set(pred12.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred12["yhat"].to_numpy(dtype=float)))
+
+    g13 = make_global_forecaster(
+        "torch-resnet1d-global",
+        context_length=32,
+        channels=16,
+        num_blocks=2,
+        kernel_size=3,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred13 = g13(long_df, cutoff, horizon)
+    assert set(pred13.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred13["yhat"].to_numpy(dtype=float)))
+
+    g14 = make_global_forecaster(
+        "torch-inception-global",
+        context_length=32,
+        channels=16,
+        num_blocks=2,
+        kernel_sizes=(3, 5),
+        bottleneck_channels=8,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred14 = g14(long_df, cutoff, horizon)
+    assert set(pred14.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred14["yhat"].to_numpy(dtype=float)))
+
+    g15 = make_global_forecaster(
+        "torch-lstnet-global",
+        context_length=32,
+        cnn_channels=8,
+        kernel_size=3,
+        rnn_hidden=16,
+        skip=8,
+        highway_window=16,
+        dropout=0.0,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
+        device="cpu",
+        seed=0,
+    )
+    pred15 = g15(long_df, cutoff, horizon)
+    assert set(pred15.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred15["yhat"].to_numpy(dtype=float)))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
@@ -297,9 +402,11 @@ def test_global_cv_preserves_quantile_columns():
             "nhead": 4,
             "num_layers": 1,
             "dim_feedforward": 64,
+            "sample_step": 4,
             "epochs": 1,
             "batch_size": 32,
             "patience": 2,
+            "val_split": 0.0,
             "x_cols": ("promo",),
             "quantiles": "0.1,0.5,0.9",
             "device": "cpu",
