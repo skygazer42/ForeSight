@@ -19,6 +19,7 @@ from models import GatedResidualNetwork
 from models import ScaledDotProductAttention
 from models import InterpretableMultiHeadAttention
 from models import VariableSelectionNetwork
+from models import ManualLSTM
 
 from quantile_loss import QuantileLossCalculator
 from quantile_loss import NormalizedQuantileLossCalculator
@@ -328,12 +329,14 @@ class TemporalFusionTransformer(pl.LightningModule):
                                                            dropout_rate=self.dropout_rate)
         
     def build_lstm(self):
-        self.historical_lstm = nn.LSTM(input_size = self.hidden_layer_size,
-                                       hidden_size = self.hidden_layer_size,
-                                       batch_first = True)
-        self.future_lstm = nn.LSTM(input_size = self.hidden_layer_size,
-                                   hidden_size = self.hidden_layer_size,
-                                   batch_first = True)
+        self.historical_lstm = ManualLSTM(
+            input_size=self.hidden_layer_size,
+            hidden_size=self.hidden_layer_size,
+        )
+        self.future_lstm = ManualLSTM(
+            input_size=self.hidden_layer_size,
+            hidden_size=self.hidden_layer_size,
+        )
         
     def build_post_lstm_gate_add_norm(self):
         self.post_seq_encoder_gate_add_norm = GateAddNormNetwork(self.hidden_layer_size,
@@ -845,5 +848,4 @@ scaled_att = ScaledDotProductAttention()
 scaled_att(a_lin, a_lin, a_lin, mask = get_decoder_mask(a))
 
 # %%
-
 

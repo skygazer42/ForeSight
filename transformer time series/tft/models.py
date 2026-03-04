@@ -10,6 +10,54 @@ from pytorch_lightning.callbacks import EarlyStopping
 
 import sklearn.preprocessing
 
+class ManualLSTM(nn.Module):
+    def __init__(self, input_size: int, hidden_size: int):
+        super().__init__()
+        self.input_size = int(input_size)
+        self.hidden_size = int(hidden_size)
+        if self.input_size <= 0:
+            raise ValueError("input_size must be >= 1")
+        if self.hidden_size <= 0:
+            raise ValueError("hidden_size must be >= 1")
+
+        self.x2h = nn.Linear(self.input_size, 4 * self.hidden_size, bias=True)
+        self.h2h = nn.Linear(self.hidden_size, 4 * self.hidden_size, bias=False)
+
+    def forward(self, x, hx=None):
+        if x.ndim != 3:
+            raise ValueError("Expected input x with shape (B, T, C)")
+        if int(x.shape[2]) != int(self.input_size):
+            raise ValueError(f"Expected input_size={self.input_size}, got C={int(x.shape[2])}")
+
+        B = int(x.shape[0])
+        T = int(x.shape[1])
+        if T <= 0:
+            raise ValueError("Sequence length T must be >= 1")
+
+        if hx is None:
+            h = x.new_zeros((B, self.hidden_size))
+            c = x.new_zeros((B, self.hidden_size))
+        else:
+            h0, c0 = hx
+            h = h0[0] if h0.ndim == 3 else h0
+            c = c0[0] if c0.ndim == 3 else c0
+
+        outs = []
+        for t in range(T):
+            x_t = x[:, t, :]
+            gates = self.x2h(x_t) + self.h2h(h)
+            i, f, g, o = gates.chunk(4, dim=-1)
+            i = torch.sigmoid(i)
+            f = torch.sigmoid(f)
+            g = torch.tanh(g)
+            o = torch.sigmoid(o)
+            c = f * c + i * g
+            h = o * torch.tanh(c)
+            outs.append(h.unsqueeze(1))
+
+        out = torch.cat(outs, dim=1)
+        return out, (h.unsqueeze(0), c.unsqueeze(0))
+
 class GatedLinearUnit(nn.Module):
     def __init__(self, input_size,
                  hidden_layer_size,

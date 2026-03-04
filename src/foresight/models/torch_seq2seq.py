@@ -8,6 +8,8 @@ from .torch_nn import (
     TorchTrainConfig,
     _as_1d_float_array,
     _make_lagged_xy_multi,
+    _make_manual_gru,
+    _make_manual_lstm,
     _normalize_series,
     _require_torch,
 )
@@ -290,11 +292,35 @@ def torch_seq2seq_direct_forecast(
             super().__init__()
             rnn_drop = drop if layers > 1 else 0.0
             if cell_s == "lstm":
-                self.enc = nn.LSTM(1, hidden, num_layers=layers, dropout=rnn_drop, batch_first=True)
-                self.dec = nn.LSTM(1, hidden, num_layers=layers, dropout=rnn_drop, batch_first=True)
+                self.enc = _make_manual_lstm(
+                    input_size=1,
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
+                )
+                self.dec = _make_manual_lstm(
+                    input_size=1,
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
+                )
             else:
-                self.enc = nn.GRU(1, hidden, num_layers=layers, dropout=rnn_drop, batch_first=True)
-                self.dec = nn.GRU(1, hidden, num_layers=layers, dropout=rnn_drop, batch_first=True)
+                self.enc = _make_manual_gru(
+                    input_size=1,
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
+                )
+                self.dec = _make_manual_gru(
+                    input_size=1,
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
+                )
 
             self.attn = _Bahdanau() if attn_s == "bahdanau" else None
             out_in = hidden if self.attn is None else 2 * hidden
@@ -455,12 +481,24 @@ def torch_lstnet_direct_forecast(
             super().__init__()
             self.conv = nn.Conv1d(1, c, kernel_size=k)
             self.drop = nn.Dropout(p=drop)
-            self.gru = nn.GRU(input_size=c, hidden_size=hidden, batch_first=True)
+            self.gru = _make_manual_gru(
+                input_size=int(c),
+                hidden_size=int(hidden),
+                num_layers=1,
+                dropout=0.0,
+                bidirectional=False,
+            )
             self.skip = int(skip_int)
             self.skip_gru = (
                 None
                 if self.skip <= 0
-                else nn.GRU(input_size=c, hidden_size=hidden, batch_first=True)
+                else _make_manual_gru(
+                    input_size=int(c),
+                    hidden_size=int(hidden),
+                    num_layers=1,
+                    dropout=0.0,
+                    bidirectional=False,
+                )
             )
             self.proj = nn.Linear(hidden * (2 if self.skip_gru is not None else 1), h)
 

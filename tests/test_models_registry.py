@@ -77,8 +77,10 @@ def test_new_torch_xformer_attention_variants_are_registered():
     assert "torch-xformer-reformer-ln-gelu-direct" in keys
     assert "torch-xformer-logsparse-ln-gelu-direct" in keys
     assert "torch-xformer-longformer-ln-gelu-direct" in keys
+    assert "torch-xformer-bigbird-ln-gelu-direct" in keys
     assert "torch-xformer-probsparse-global" in keys
     assert "torch-xformer-autocorr-global" in keys
     assert "torch-xformer-reformer-global" in keys
     assert "torch-xformer-logsparse-global" in keys
     assert "torch-xformer-longformer-global" in keys
+    assert "torch-xformer-bigbird-global" in keys

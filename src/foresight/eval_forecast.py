@@ -169,19 +169,19 @@ def eval_model_long_df(
     for _uid, g in df.groupby("unique_id", sort=False):
         n_series += 1
         y = g["y"].to_numpy(dtype=float, copy=False)
-        try:
-            res = walk_forward(
-                y,
-                horizon=int(horizon),
-                step=int(step),
-                min_train_size=int(min_train_size),
-                max_train_size=max_train_size,
-                max_windows=max_windows,
-                forecaster=forecaster,
-            )
-        except ValueError:
+        min_required = int(min_train_size) + int(horizon)
+        if y.size < min_required:
             n_series_skipped += 1
             continue
+        res = walk_forward(
+            y,
+            horizon=int(horizon),
+            step=int(step),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+            max_windows=max_windows,
+            forecaster=forecaster,
+        )
 
         y_true_all.append(res.y_true.reshape(-1))
         y_pred_all.append(res.y_pred.reshape(-1))

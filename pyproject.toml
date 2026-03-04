@@ -4,16 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foresight-ts"
-version = "0.1.0"
 description = "A curated collection of classic & modern time-series forecasting models and utilities."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "GPL-3.0-only" }
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [{ name = "ForeSight Contributors" }]
+dynamic = ["version"]
+keywords = ["time-series", "forecasting"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Operating System :: OS Independent",
+]
+
 dependencies = [
   "numpy>=1.24",
   "pandas>=2.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/skygazer42/ForeSight"
+Issues = "https://github.com/skygazer42/ForeSight/issues"
+Documentation = "https://github.com/skygazer42/ForeSight#readme"
 
 [project.scripts]
 foresight = "foresight.cli:main"
@@ -22,6 +36,8 @@ foresight = "foresight.cli:main"
 dev = [
   "pytest>=7.0",
   "ruff>=0.5",
+  "build>=1.0",
+  "twine>=5.0",
 ]
 ml = [
   "scikit-learn>=1.0",
@@ -40,6 +56,12 @@ all = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+
+[tool.setuptools.dynamic]
+version = { attr = "foresight.__version__" }
+
+[tool.setuptools.package-data]
+foresight = ["data/*.json", "data/*.csv", "py.typed"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

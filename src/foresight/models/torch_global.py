@@ -9,6 +9,12 @@ import numpy as np
 import pandas as pd
 
 from ..features.time import build_time_features
+from .torch_nn import (
+    _make_manual_gru,
+    _make_manual_gru_cell,
+    _make_manual_lstm,
+    _make_manual_lstm_cell,
+)
 
 
 def _require_torch() -> Any:
@@ -658,12 +664,13 @@ def _predict_torch_global(
             d = int(d_model)
             self.in_proj = nn.Linear(input_dim + int(id_emb_dim), d)
             self.pre_grn = _make_grn(d, max(8, d), d, dropout=float(dropout))
-            self.lstm = nn.LSTM(
+            rnn_drop = float(dropout) if int(lstm_layers) > 1 else 0.0
+            self.lstm = _make_manual_lstm(
                 input_size=d,
                 hidden_size=d,
                 num_layers=int(lstm_layers),
-                dropout=float(dropout) if int(lstm_layers) > 1 else 0.0,
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.attn = nn.MultiheadAttention(
                 d, int(nhead), dropout=float(dropout), batch_first=True
@@ -1750,6 +1757,7 @@ def _predict_torch_xformer_global(
     norm: str,
     ffn: str,
     local_window: int,
+    bigbird_random_k: int,
     performer_features: int,
     linformer_k: int,
     nystrom_landmarks: int,
@@ -1820,6 +1828,7 @@ def _predict_torch_xformer_global(
         "local",
         "logsparse",
         "longformer",
+        "bigbird",
         "performer",
         "linformer",
         "nystrom",
@@ -1828,7 +1837,7 @@ def _predict_torch_xformer_global(
         "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, logsparse, longformer, performer, linformer, nystrom, probsparse, autocorr, reformer"
+            "attn must be one of: full, local, logsparse, longformer, bigbird, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -1843,6 +1852,18 @@ def _predict_torch_xformer_global(
     drop_path_f = float(drop_path)
     if not (0.0 <= drop_path_f < 1.0):
         raise ValueError("drop_path must be in [0,1)")
+
+    if int(local_window) <= 0:
+        raise ValueError("local_window must be >= 1")
+    bigbird_k = int(bigbird_random_k)
+    if bigbird_k < 0:
+        raise ValueError("bigbird_random_k must be >= 0")
+    if int(performer_features) <= 0:
+        raise ValueError("performer_features must be >= 1")
+    if int(linformer_k) <= 0:
+        raise ValueError("linformer_k must be >= 1")
+    if int(nystrom_landmarks) <= 0:
+        raise ValueError("nystrom_landmarks must be >= 1")
 
     probs_u = int(probsparse_top_u)
     if probs_u <= 0:
@@ -1964,6 +1985,40 @@ def _predict_torch_xformer_global(
                 self.register_buffer("R", R, persistent=False)
             else:
                 self.register_buffer("R", torch.empty(0), persistent=False)
+
+            # BigBird random connections (precomputed for this fixed sequence length).
+            self.register_buffer("bigbird_rand", torch.empty(0, dtype=torch.bool), persistent=False)
+            if attn_s == "bigbird":
+                L = int(seq_len)
+                rng = np.random.default_rng(int(seed) + 1337)
+
+                idx_np = np.arange(L, dtype=int)
+                dist = np.abs(idx_np.reshape(-1, 1) - idx_np.reshape(1, -1))
+                local_allowed_np = dist <= int(local_window)
+
+                global_mask_np = np.zeros((L,), dtype=bool)
+                if int(h) > 0:
+                    global_mask_np[L - int(h) :] = True
+                last_ctx = L - int(h) - 1
+                if last_ctx >= 0:
+                    global_mask_np[int(last_ctx)] = True
+
+                base_allowed = (
+                    local_allowed_np | global_mask_np.reshape(L, 1) | global_mask_np.reshape(1, L)
+                )
+
+                rand_allowed = np.zeros((L, L), dtype=bool)
+                if int(bigbird_k) > 0:
+                    for i in range(L):
+                        cand = np.flatnonzero(~base_allowed[i])
+                        if cand.size == 0:
+                            continue
+                        pick = int(min(int(bigbird_k), int(cand.size)))
+                        chosen = rng.choice(cand, size=pick, replace=False)
+                        rand_allowed[i, chosen] = True
+                    rand_allowed |= rand_allowed.T
+
+                self.bigbird_rand = torch.tensor(rand_allowed, dtype=torch.bool)
 
         def _split_heads(self, xb: Any) -> Any:
             B, L, _D = xb.shape
@@ -2158,6 +2213,26 @@ def _predict_torch_xformer_global(
                 allowed = (
                     local_allowed | global_mask.reshape(int(L), 1) | global_mask.reshape(1, int(L))
                 )
+                scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
+            if attn_s == "bigbird":
+                # BigBird-style random + local + global (lite).
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
+                local_allowed = dist <= int(w)
+
+                global_mask = torch.zeros((int(L),), dtype=torch.bool, device=xb.device)
+                if int(h) > 0:
+                    global_mask[int(L) - int(h) :] = True
+                last_ctx = int(L) - int(h) - 1
+                if last_ctx >= 0:
+                    global_mask[int(last_ctx)] = True
+
+                allowed = (
+                    local_allowed | global_mask.reshape(int(L), 1) | global_mask.reshape(1, int(L))
+                )
+                if self.bigbird_rand.numel() > 0:
+                    allowed = allowed | self.bigbird_rand.to(device=xb.device)
                 scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
             w = torch.softmax(scores, dim=-1)
             out = torch.einsum("bhlm,bhmd->bhld", w, v)
@@ -2358,6 +2433,7 @@ def torch_xformer_global_forecaster(
     norm: str = "layer",
     ffn: str = "gelu",
     local_window: int = 16,
+    bigbird_random_k: int = 8,
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
@@ -2413,6 +2489,7 @@ def torch_xformer_global_forecaster(
             norm=str(norm),
             ffn=str(ffn),
             local_window=int(local_window),
+            bigbird_random_k=int(bigbird_random_k),
             performer_features=int(performer_features),
             linformer_k=int(linformer_k),
             nystrom_landmarks=int(nystrom_landmarks),
@@ -2518,20 +2595,20 @@ def _predict_torch_rnn_global(
             self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
             in_dim = int(input_dim + id_emb_dim)
             if cell_s == "lstm":
-                self.rnn = nn.LSTM(
-                    input_size=in_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.rnn = _make_manual_lstm(
+                    input_size=int(in_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             else:
-                self.rnn = nn.GRU(
-                    input_size=in_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.rnn = _make_manual_gru(
+                    input_size=int(in_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             self.head = nn.Linear(hidden, out_dim)
 
@@ -6528,12 +6605,24 @@ def _predict_torch_lstnet_global(
             self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
             self.conv = nn.Conv1d(int(in_ch), int(c), kernel_size=int(k))
             self.drop = nn.Dropout(p=float(drop))
-            self.gru = nn.GRU(input_size=int(c), hidden_size=int(hidden), batch_first=True)
+            self.gru = _make_manual_gru(
+                input_size=int(c),
+                hidden_size=int(hidden),
+                num_layers=1,
+                dropout=0.0,
+                bidirectional=False,
+            )
             self.skip = int(skip_int)
             self.skip_gru = (
                 None
                 if self.skip <= 0
-                else nn.GRU(input_size=int(c), hidden_size=int(hidden), batch_first=True)
+                else _make_manual_gru(
+                    input_size=int(c),
+                    hidden_size=int(hidden),
+                    num_layers=1,
+                    dropout=0.0,
+                    bidirectional=False,
+                )
             )
             feat_dim = int(hidden) * (2 if self.skip_gru is not None else 1)
             self.proj = nn.Linear(int(feat_dim), int(h * out_dim))
@@ -8442,9 +8531,13 @@ def _predict_torch_dilated_rnn_global(
             dilations = [int(base**i) for i in range(L)]
             self.dilations = dilations
             if cell_s == "gru":
-                self.cells = nn.ModuleList([nn.GRUCell(d, d) for _ in dilations])
+                self.cells = nn.ModuleList(
+                    [_make_manual_gru_cell(input_size=d, hidden_size=d) for _ in dilations]
+                )
             else:
-                self.cells = nn.ModuleList([nn.LSTMCell(d, d) for _ in dilations])
+                self.cells = nn.ModuleList(
+                    [_make_manual_lstm_cell(input_size=d, hidden_size=d) for _ in dilations]
+                )
 
             self.norms = nn.ModuleList([nn.LayerNorm(d) for _ in dilations])
             self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
@@ -9620,20 +9713,22 @@ def _predict_torch_esrnn_global(
             self.in_proj = nn.Linear(int(input_dim + id_emb_dim), d)
             self.drop = nn.Dropout(p=float(drop)) if float(drop) > 0.0 else nn.Identity()
             if cell_s == "gru":
-                self.rnn = nn.GRU(
-                    input_size=d,
-                    hidden_size=d,
+                rnn_drop = float(drop) if int(L) > 1 else 0.0
+                self.rnn = _make_manual_gru(
+                    input_size=int(d),
+                    hidden_size=int(d),
                     num_layers=int(L),
-                    dropout=float(drop) if int(L) > 1 else 0.0,
-                    batch_first=True,
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             else:
-                self.rnn = nn.LSTM(
-                    input_size=d,
-                    hidden_size=d,
+                rnn_drop = float(drop) if int(L) > 1 else 0.0
+                self.rnn = _make_manual_lstm(
+                    input_size=int(d),
+                    hidden_size=int(d),
                     num_layers=int(L),
-                    dropout=float(drop) if int(L) > 1 else 0.0,
-                    batch_first=True,
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             self.norm = nn.LayerNorm(d)
             self.out = nn.Linear(d, int(out_dim))
@@ -10656,12 +10751,12 @@ def _predict_torch_deepar_global(
             super().__init__()
             self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
             self.in_proj = nn.Linear(int(input_dim + id_emb_dim), int(hidden))
-            self.rnn = nn.GRU(
+            self.rnn = _make_manual_gru(
                 input_size=int(hidden),
                 hidden_size=int(hidden),
                 num_layers=int(layers),
                 dropout=float(rnn_drop),
-                batch_first=True,
+                bidirectional=False,
             )
             self.head = nn.Linear(int(hidden), 2)  # mu, raw_sigma
 
@@ -10932,34 +11027,34 @@ def _predict_torch_seq2seq_global(
             self.in_proj = nn.Linear(int(input_dim + id_emb_dim), proj_dim)
 
             if cell_s == "lstm":
-                self.enc = nn.LSTM(
-                    input_size=proj_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.enc = _make_manual_lstm(
+                    input_size=int(proj_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
-                self.dec = nn.LSTM(
-                    input_size=proj_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.dec = _make_manual_lstm(
+                    input_size=int(proj_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             else:
-                self.enc = nn.GRU(
-                    input_size=proj_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.enc = _make_manual_gru(
+                    input_size=int(proj_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
-                self.dec = nn.GRU(
-                    input_size=proj_dim,
-                    hidden_size=hidden,
-                    num_layers=layers,
-                    dropout=rnn_drop,
-                    batch_first=True,
+                self.dec = _make_manual_gru(
+                    input_size=int(proj_dim),
+                    hidden_size=int(hidden),
+                    num_layers=int(layers),
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
 
             if attn_s == "bahdanau":

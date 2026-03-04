@@ -28,6 +28,348 @@ def _require_torch() -> Any:
     return torch
 
 
+def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+
+    in_dim = int(input_size)
+    hid = int(hidden_size)
+    if in_dim <= 0:
+        raise ValueError("input_size must be >= 1")
+    if hid <= 0:
+        raise ValueError("hidden_size must be >= 1")
+
+    class _ManualGRUCell(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.x2h = nn.Linear(in_dim, 3 * hid, bias=True)
+            self.h2h = nn.Linear(hid, 3 * hid, bias=False)
+
+        def forward(self, x_t: Any, h_prev: Any) -> Any:
+            gi = self.x2h(x_t)
+            gh = self.h2h(h_prev)
+            i_r, i_z, i_n = gi.chunk(3, dim=-1)
+            h_r, h_z, h_n = gh.chunk(3, dim=-1)
+            r = torch.sigmoid(i_r + h_r)
+            z = torch.sigmoid(i_z + h_z)
+            n = torch.tanh(i_n + r * h_n)
+            return (1.0 - z) * n + z * h_prev
+
+    return _ManualGRUCell()
+
+
+def _make_manual_lstm_cell(*, input_size: int, hidden_size: int) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+
+    in_dim = int(input_size)
+    hid = int(hidden_size)
+    if in_dim <= 0:
+        raise ValueError("input_size must be >= 1")
+    if hid <= 0:
+        raise ValueError("hidden_size must be >= 1")
+
+    class _ManualLSTMCell(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.x2h = nn.Linear(in_dim, 4 * hid, bias=True)
+            self.h2h = nn.Linear(hid, 4 * hid, bias=False)
+
+        def forward(self, x_t: Any, state: tuple[Any, Any]) -> tuple[Any, Any]:
+            h_prev, c_prev = state
+            gates = self.x2h(x_t) + self.h2h(h_prev)
+            i, f, g, o = gates.chunk(4, dim=-1)
+            i = torch.sigmoid(i)
+            f = torch.sigmoid(f)
+            g = torch.tanh(g)
+            o = torch.sigmoid(o)
+            c_t = f * c_prev + i * g
+            h_t = o * torch.tanh(c_t)
+            return h_t, c_t
+
+    return _ManualLSTMCell()
+
+
+def _make_manual_gru(
+    *,
+    input_size: int,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float = 0.0,
+    bidirectional: bool = False,
+) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    in_dim = int(input_size)
+    hid = int(hidden_size)
+    layers = int(num_layers)
+    drop = float(dropout)
+    bidir = bool(bidirectional)
+    if in_dim <= 0:
+        raise ValueError("input_size must be >= 1")
+    if hid <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    class _GRULayer(nn.Module):
+        def __init__(self, *, in_dim: int) -> None:
+            super().__init__()
+            self.x2h = nn.Linear(int(in_dim), 3 * hid, bias=True)
+            self.h2h = nn.Linear(hid, 3 * hid, bias=False)
+
+        def step(self, x_t: Any, h_prev: Any) -> Any:
+            gi = self.x2h(x_t)
+            gh = self.h2h(h_prev)
+            i_r, i_z, i_n = gi.chunk(3, dim=-1)
+            h_r, h_z, h_n = gh.chunk(3, dim=-1)
+            r = torch.sigmoid(i_r + h_r)
+            z = torch.sigmoid(i_z + h_z)
+            n = torch.tanh(i_n + r * h_n)
+            return (1.0 - z) * n + z * h_prev
+
+    class _ManualGRU(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.input_size = in_dim
+            self.hidden_size = hid
+            self.num_layers = layers
+            self.dropout = drop
+            self.bidirectional = bidir
+
+            self.fwd = nn.ModuleList()
+            self.bwd = nn.ModuleList() if self.bidirectional else None
+
+            layer_in = int(self.input_size)
+            for _layer in range(int(self.num_layers)):
+                self.fwd.append(_GRULayer(in_dim=int(layer_in)))
+                if self.bidirectional:
+                    assert self.bwd is not None
+                    self.bwd.append(_GRULayer(in_dim=int(layer_in)))
+                    layer_in = 2 * int(self.hidden_size)
+                else:
+                    layer_in = int(self.hidden_size)
+
+        def _init_h0(self, xb: Any, hx: Any | None) -> list[Any]:
+            B = int(xb.shape[0])
+            dirs = 2 if self.bidirectional else 1
+            if hx is None:
+                return [
+                    xb.new_zeros((B, int(self.hidden_size)))
+                    for _ in range(int(self.num_layers) * dirs)
+                ]
+            h0 = hx
+            expected = (int(self.num_layers) * dirs, B, int(self.hidden_size))
+            if tuple(h0.shape) != expected:
+                raise ValueError(f"Expected h0 shape {expected}, got {tuple(h0.shape)}")
+            return [h0[i] for i in range(expected[0])]
+
+        def forward(self, xb: Any, hx: Any | None = None) -> tuple[Any, Any]:
+            if xb.ndim != 3:
+                raise ValueError("Expected xb with shape (B, T, C)")
+            if int(xb.shape[2]) != int(self.input_size):
+                raise ValueError(
+                    f"Expected input_size={int(self.input_size)}, got C={int(xb.shape[2])}"
+                )
+
+            B, T, _C = xb.shape
+            if int(T) <= 0:
+                raise ValueError("Sequence length T must be >= 1")
+
+            dirs = 2 if self.bidirectional else 1
+            h0_list = self._init_h0(xb, hx)
+
+            x = xb
+            h_n_out: list[Any] = []
+            for layer in range(int(self.num_layers)):
+                fwd_layer = self.fwd[layer]
+                h_f = h0_list[layer * dirs + 0]
+                outs_f: list[Any] = []
+                for t in range(int(T)):
+                    h_f = fwd_layer.step(x[:, t, :], h_f)
+                    outs_f.append(h_f)
+                out_f = torch.stack(outs_f, dim=1)
+
+                if self.bidirectional:
+                    assert self.bwd is not None
+                    bwd_layer = self.bwd[layer]
+                    h_b = h0_list[layer * dirs + 1]
+                    outs_b_rev: list[Any] = []
+                    for t in range(int(T) - 1, -1, -1):
+                        h_b = bwd_layer.step(x[:, t, :], h_b)
+                        outs_b_rev.append(h_b)
+                    outs_b_rev.reverse()
+                    out_b = torch.stack(outs_b_rev, dim=1)
+                    out = torch.cat([out_f, out_b], dim=-1)
+                    h_n_out.extend([h_f, h_b])
+                else:
+                    out = out_f
+                    h_n_out.append(h_f)
+
+                if layer < int(self.num_layers) - 1 and float(self.dropout) > 0.0 and self.training:
+                    out = F.dropout(out, p=float(self.dropout), training=True)
+                x = out
+
+            h_n = torch.stack(h_n_out, dim=0)
+            return x, h_n
+
+    return _ManualGRU()
+
+
+def _make_manual_lstm(
+    *,
+    input_size: int,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float = 0.0,
+    bidirectional: bool = False,
+) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    in_dim = int(input_size)
+    hid = int(hidden_size)
+    layers = int(num_layers)
+    drop = float(dropout)
+    bidir = bool(bidirectional)
+    if in_dim <= 0:
+        raise ValueError("input_size must be >= 1")
+    if hid <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    class _LSTMLayer(nn.Module):
+        def __init__(self, *, in_dim: int) -> None:
+            super().__init__()
+            self.x2h = nn.Linear(int(in_dim), 4 * hid, bias=True)
+            self.h2h = nn.Linear(hid, 4 * hid, bias=False)
+
+        def step(self, x_t: Any, state: tuple[Any, Any]) -> tuple[Any, Any]:
+            h_prev, c_prev = state
+            gates = self.x2h(x_t) + self.h2h(h_prev)
+            i, f, g, o = gates.chunk(4, dim=-1)
+            i = torch.sigmoid(i)
+            f = torch.sigmoid(f)
+            g = torch.tanh(g)
+            o = torch.sigmoid(o)
+            c_t = f * c_prev + i * g
+            h_t = o * torch.tanh(c_t)
+            return h_t, c_t
+
+    class _ManualLSTM(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.input_size = in_dim
+            self.hidden_size = hid
+            self.num_layers = layers
+            self.dropout = drop
+            self.bidirectional = bidir
+
+            self.fwd = nn.ModuleList()
+            self.bwd = nn.ModuleList() if self.bidirectional else None
+
+            layer_in = int(self.input_size)
+            for _layer in range(int(self.num_layers)):
+                self.fwd.append(_LSTMLayer(in_dim=int(layer_in)))
+                if self.bidirectional:
+                    assert self.bwd is not None
+                    self.bwd.append(_LSTMLayer(in_dim=int(layer_in)))
+                    layer_in = 2 * int(self.hidden_size)
+                else:
+                    layer_in = int(self.hidden_size)
+
+        def _init_state(self, xb: Any, hx: tuple[Any, Any] | None) -> tuple[list[Any], list[Any]]:
+            B = int(xb.shape[0])
+            dirs = 2 if self.bidirectional else 1
+            if hx is None:
+                h0 = [
+                    xb.new_zeros((B, int(self.hidden_size)))
+                    for _ in range(int(self.num_layers) * dirs)
+                ]
+                c0 = [
+                    xb.new_zeros((B, int(self.hidden_size)))
+                    for _ in range(int(self.num_layers) * dirs)
+                ]
+                return h0, c0
+
+            h0_t, c0_t = hx
+            expected = (int(self.num_layers) * dirs, B, int(self.hidden_size))
+            if tuple(h0_t.shape) != expected:
+                raise ValueError(f"Expected h0 shape {expected}, got {tuple(h0_t.shape)}")
+            if tuple(c0_t.shape) != expected:
+                raise ValueError(f"Expected c0 shape {expected}, got {tuple(c0_t.shape)}")
+            h0 = [h0_t[i] for i in range(expected[0])]
+            c0 = [c0_t[i] for i in range(expected[0])]
+            return h0, c0
+
+        def forward(
+            self, xb: Any, hx: tuple[Any, Any] | None = None
+        ) -> tuple[Any, tuple[Any, Any]]:
+            if xb.ndim != 3:
+                raise ValueError("Expected xb with shape (B, T, C)")
+            if int(xb.shape[2]) != int(self.input_size):
+                raise ValueError(
+                    f"Expected input_size={int(self.input_size)}, got C={int(xb.shape[2])}"
+                )
+
+            B, T, _C = xb.shape
+            if int(T) <= 0:
+                raise ValueError("Sequence length T must be >= 1")
+
+            dirs = 2 if self.bidirectional else 1
+            h0_list, c0_list = self._init_state(xb, hx)
+
+            x = xb
+            h_n_out: list[Any] = []
+            c_n_out: list[Any] = []
+            for layer in range(int(self.num_layers)):
+                fwd_layer = self.fwd[layer]
+                h_f = h0_list[layer * dirs + 0]
+                c_f = c0_list[layer * dirs + 0]
+                outs_f: list[Any] = []
+                for t in range(int(T)):
+                    h_f, c_f = fwd_layer.step(x[:, t, :], (h_f, c_f))
+                    outs_f.append(h_f)
+                out_f = torch.stack(outs_f, dim=1)
+
+                if self.bidirectional:
+                    assert self.bwd is not None
+                    bwd_layer = self.bwd[layer]
+                    h_b = h0_list[layer * dirs + 1]
+                    c_b = c0_list[layer * dirs + 1]
+                    outs_b_rev: list[Any] = []
+                    for t in range(int(T) - 1, -1, -1):
+                        h_b, c_b = bwd_layer.step(x[:, t, :], (h_b, c_b))
+                        outs_b_rev.append(h_b)
+                    outs_b_rev.reverse()
+                    out_b = torch.stack(outs_b_rev, dim=1)
+                    out = torch.cat([out_f, out_b], dim=-1)
+                    h_n_out.extend([h_f, h_b])
+                    c_n_out.extend([c_f, c_b])
+                else:
+                    out = out_f
+                    h_n_out.append(h_f)
+                    c_n_out.append(c_f)
+
+                if layer < int(self.num_layers) - 1 and float(self.dropout) > 0.0 and self.training:
+                    out = F.dropout(out, p=float(self.dropout), training=True)
+                x = out
+
+            h_n = torch.stack(h_n_out, dim=0)
+            c_n = torch.stack(c_n_out, dim=0)
+            return x, (h_n, c_n)
+
+    return _ManualLSTM()
+
+
 def _make_lagged_xy_multi(
     x: np.ndarray, *, lags: int, horizon: int
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -406,12 +748,13 @@ def torch_lstm_direct_forecast(
     class _LSTMDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.lstm = nn.LSTM(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.lstm = _make_manual_lstm(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.head = nn.Linear(int(hidden_size), h)
 
@@ -509,12 +852,13 @@ def torch_gru_direct_forecast(
     class _GRUDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.gru = nn.GRU(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.gru = _make_manual_gru(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.head = nn.Linear(int(hidden_size), h)
 
@@ -1634,6 +1978,158 @@ def torch_pyraformer_direct_forecast(
     return np.asarray(yhat, dtype=float)
 
 
+def torch_perceiver_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 192,
+    d_model: int = 64,
+    latent_len: int = 32,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Perceiver-style (lite): learnable latent array + cross-attention + latent Transformer (direct multi-horizon).
+
+    This design can scale to long inputs by keeping the latent length fixed while attending to the input tokens.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+
+    lat = int(latent_len)
+    if lat <= 0:
+        raise ValueError("latent_len must be >= 1")
+
+    heads = int(nhead)
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if int(num_layers) <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if int(dim_feedforward) <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    class _PerceiverDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.in_proj = nn.Linear(1, d)
+            self.pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
+            self.latents = nn.Parameter(torch.randn((1, lat, d), dtype=torch.float32) * 0.02)
+
+            self.cross_norm_q = nn.LayerNorm(d)
+            self.cross_norm_kv = nn.LayerNorm(d)
+            self.cross_attn = nn.MultiheadAttention(
+                embed_dim=d,
+                num_heads=heads,
+                dropout=drop,
+                batch_first=True,
+            )
+            self.drop = nn.Dropout(p=drop)
+
+            layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=int(dim_feedforward),
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.norm = nn.LayerNorm(d)
+            self.head = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
+            z = self.in_proj(xb) + self.pos  # (B,T,d)
+            B = int(z.shape[0])
+            lat_b = self.latents.expand(B, -1, -1)
+            upd, _w = self.cross_attn(
+                self.cross_norm_q(lat_b),
+                self.cross_norm_kv(z),
+                self.cross_norm_kv(z),
+                need_weights=False,
+            )
+            lat_b = lat_b + self.drop(upd)
+            lat_b = self.enc(lat_b)
+            pooled = self.norm(lat_b.mean(dim=1))
+            return self.head(pooled)
+
+    model = _PerceiverDirect()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
 def torch_tsmixer_direct_forecast(
     train: Any,
     horizon: int,
@@ -2252,13 +2748,13 @@ def torch_bilstm_direct_forecast(
     class _BiLSTMDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.lstm = nn.LSTM(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.lstm = _make_manual_lstm(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
+                dropout=float(rnn_drop),
                 bidirectional=True,
-                batch_first=True,
             )
             self.head = nn.Linear(2 * int(hidden_size), h)
 
@@ -2358,13 +2854,13 @@ def torch_bigru_direct_forecast(
     class _BiGRUDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.gru = nn.GRU(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.gru = _make_manual_gru(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
+                dropout=float(rnn_drop),
                 bidirectional=True,
-                batch_first=True,
             )
             self.head = nn.Linear(2 * int(hidden_size), h)
 
@@ -2466,12 +2962,13 @@ def torch_attn_gru_direct_forecast(
     class _AttnGRUDirect(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.gru = nn.GRU(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.gru = _make_manual_gru(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.attn = nn.Linear(int(hidden_size), 1)
             self.head = nn.Linear(int(hidden_size), h)
@@ -3125,12 +3622,13 @@ def torch_deepar_recursive_forecast(
     class _DeepAR(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.rnn = nn.GRU(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.rnn = _make_manual_gru(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.head = nn.Linear(int(hidden_size), 2)
 
@@ -3253,12 +3751,13 @@ def torch_qrnn_recursive_forecast(
     class _QRNN(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.rnn = nn.GRU(
+            rnn_drop = drop if int(num_layers) > 1 else 0.0
+            self.rnn = _make_manual_gru(
                 input_size=1,
                 hidden_size=int(hidden_size),
                 num_layers=int(num_layers),
-                dropout=(drop if int(num_layers) > 1 else 0.0),
-                batch_first=True,
+                dropout=float(rnn_drop),
+                bidirectional=False,
             )
             self.head = nn.Linear(int(hidden_size), 1)
 
@@ -4223,9 +4722,13 @@ def torch_dilated_rnn_direct_forecast(
             dilations = [int(base**i) for i in range(L)]
             self.dilations = dilations
             if cell_s == "gru":
-                self.cells = nn.ModuleList([nn.GRUCell(d, d) for _ in dilations])
+                self.cells = nn.ModuleList(
+                    [_make_manual_gru_cell(input_size=d, hidden_size=d) for _ in dilations]
+                )
             else:
-                self.cells = nn.ModuleList([nn.LSTMCell(d, d) for _ in dilations])
+                self.cells = nn.ModuleList(
+                    [_make_manual_lstm_cell(input_size=d, hidden_size=d) for _ in dilations]
+                )
 
             self.norms = nn.ModuleList([nn.LayerNorm(d) for _ in dilations])
             self.drop = nn.Dropout(p=drop) if drop > 0.0 else nn.Identity()
@@ -4906,20 +5409,22 @@ def torch_esrnn_direct_forecast(
             self.beta_logit = nn.Parameter(torch.tensor(beta_logit_init, dtype=torch.float32))
 
             if cell_s == "gru":
-                self.rnn = nn.GRU(
+                rnn_drop = float(drop) if int(L) > 1 else 0.0
+                self.rnn = _make_manual_gru(
                     input_size=1,
                     hidden_size=d,
                     num_layers=int(L),
-                    dropout=float(drop) if int(L) > 1 else 0.0,
-                    batch_first=True,
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             else:
-                self.rnn = nn.LSTM(
+                rnn_drop = float(drop) if int(L) > 1 else 0.0
+                self.rnn = _make_manual_lstm(
                     input_size=1,
                     hidden_size=d,
                     num_layers=int(L),
-                    dropout=float(drop) if int(L) > 1 else 0.0,
-                    batch_first=True,
+                    dropout=float(rnn_drop),
+                    bidirectional=False,
                 )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, h)

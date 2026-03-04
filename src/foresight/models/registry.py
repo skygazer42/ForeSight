@@ -137,6 +137,8 @@ from .torch_nn import (
     torch_tsmixer_direct_forecast,
     torch_wavenet_direct_forecast,
 )
+from .torch_rnn_paper_zoo import list_rnnpaper_specs, torch_rnnpaper_direct_forecast
+from .torch_rnn_zoo import list_rnnzoo_specs, torch_rnnzoo_direct_forecast
 from .torch_seq2seq import torch_lstnet_direct_forecast, torch_seq2seq_direct_forecast
 from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
@@ -3103,6 +3105,7 @@ def _factory_torch_xformer_direct(
     norm: str = "layer",
     ffn: str = "gelu",
     local_window: int = 16,
+    bigbird_random_k: int = 8,
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
@@ -3144,6 +3147,7 @@ def _factory_torch_xformer_direct(
     norm_s = str(norm)
     ffn_s = str(ffn)
     local_window_int = int(local_window)
+    bigbird_random_k_int = int(bigbird_random_k)
     performer_features_int = int(performer_features)
     linformer_k_int = int(linformer_k)
     nystrom_landmarks_int = int(nystrom_landmarks)
@@ -3188,6 +3192,7 @@ def _factory_torch_xformer_direct(
             norm=norm_s,
             ffn=ffn_s,
             local_window=local_window_int,
+            bigbird_random_k=bigbird_random_k_int,
             performer_features=performer_features_int,
             linformer_k=linformer_k_int,
             nystrom_landmarks=nystrom_landmarks_int,
@@ -7033,11 +7038,12 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "num_layers": "Number of encoder layers",
         "dim_feedforward": "FFN hidden dimension",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, logsparse, longformer, performer, linformer, nystrom, probsparse, autocorr, reformer",
+        "attn": "Attention type: full, local, logsparse, longformer, bigbird, performer, linformer, nystrom, probsparse, autocorr, reformer",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
-        "local_window": "Local attention window radius (attn=local/logsparse/longformer)",
+        "local_window": "Local attention window radius (attn=local/logsparse/longformer/bigbird)",
+        "bigbird_random_k": "Random key connections per token (attn=bigbird)",
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
@@ -7064,6 +7070,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "norm": "layer",
         "ffn": "gelu",
         "local_window": 16,
+        "bigbird_random_k": 8,
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
@@ -7098,6 +7105,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         ("local", "local-window"),
         ("logsparse", "log-sparse"),
         ("longformer", "longformer-windowed+global"),
+        ("bigbird", "bigbird-random+local+global"),
         ("performer", "performer"),
         ("linformer", "linformer"),
         ("nystrom", "nystrom"),
@@ -7321,11 +7329,12 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "dim_feedforward": "FFN hidden dimension",
         "id_emb_dim": "Series-id embedding dim (panel/global models)",
         "dropout": "Dropout probability in [0,1)",
-        "attn": "Attention type: full, local, logsparse, longformer, performer, linformer, nystrom, probsparse, autocorr, reformer",
+        "attn": "Attention type: full, local, logsparse, longformer, bigbird, performer, linformer, nystrom, probsparse, autocorr, reformer",
         "pos_emb": "Positional embedding: learned, sincos, rope, time2vec, none",
         "norm": "Normalization: layer, rms",
         "ffn": "FFN: gelu, swiglu",
-        "local_window": "Local attention window radius (attn=local/logsparse/longformer)",
+        "local_window": "Local attention window radius (attn=local/logsparse/longformer/bigbird)",
+        "bigbird_random_k": "Random key connections per token (attn=bigbird)",
         "performer_features": "Performer random feature count (attn=performer)",
         "linformer_k": "Linformer projection length (attn=linformer)",
         "nystrom_landmarks": "Nyström landmarks (attn=nystrom)",
@@ -7356,6 +7365,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "norm": "layer",
         "ffn": "gelu",
         "local_window": 16,
+        "bigbird_random_k": 8,
         "performer_features": 64,
         "linformer_k": 32,
         "nystrom_landmarks": 16,
@@ -7389,6 +7399,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "local",
         "logsparse",
         "longformer",
+        "bigbird",
         "performer",
         "linformer",
         "nystrom",
@@ -7408,6 +7419,7 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
         "local",
         "logsparse",
         "longformer",
+        "bigbird",
         "performer",
         "linformer",
         "nystrom",
@@ -7537,6 +7549,333 @@ def _make_torch_dl_variant_specs() -> dict[str, ModelSpec]:
     )
 
     return extra
+
+
+def _factory_torch_rnnzoo_direct(
+    *,
+    base: str,
+    variant: str = "direct",
+    lags: int = 24,
+    hidden_size: int = 32,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    proj_size: int = 16,
+    attn_hidden: int = 32,
+    clock_periods: Any = (1, 2, 4, 8),
+    qrnn_kernel_size: int = 3,
+    rhn_depth: int = 2,
+    phased_tau: float = 32.0,
+    phased_r_on: float = 0.05,
+    phased_leak: float = 0.001,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    base_s = str(base)
+    variant_s = str(variant)
+    lags_int = int(lags)
+    hidden_int = int(hidden_size)
+    layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    proj_int = int(proj_size)
+    attn_int = int(attn_hidden)
+    qrnn_k_int = int(qrnn_kernel_size)
+    rhn_depth_int = int(rhn_depth)
+    phased_tau_f = float(phased_tau)
+    phased_r_on_f = float(phased_r_on)
+    phased_leak_f = float(phased_leak)
+
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    clock_periods_val: Any = clock_periods
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_rnnzoo_direct_forecast(
+            train,
+            horizon,
+            base=base_s,
+            variant=variant_s,  # type: ignore[arg-type]
+            lags=lags_int,
+            hidden_size=hidden_int,
+            num_layers=layers_int,
+            dropout=dropout_f,
+            proj_size=proj_int,
+            attn_hidden=attn_int,
+            clock_periods=clock_periods_val,
+            qrnn_kernel_size=qrnn_k_int,
+            rhn_depth=rhn_depth_int,
+            phased_tau=phased_tau_f,
+            phased_r_on=phased_r_on_f,
+            phased_leak=phased_leak_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_rnnpaper_direct(
+    *,
+    paper: str,
+    lags: int = 24,
+    hidden_size: int = 32,
+    num_layers: int = 1,
+    dropout: float = 0.0,
+    # generic knobs used by some architectures
+    attn_hidden: int = 32,
+    kernel_size: int = 3,
+    hops: int = 2,
+    memory_slots: int = 16,
+    memory_dim: int = 32,
+    spectral_radius: float = 0.9,
+    leak: float = 1.0,
+    # training
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    paper_s = str(paper)
+    lags_int = int(lags)
+    hidden_int = int(hidden_size)
+    layers_int = int(num_layers)
+    dropout_f = float(dropout)
+
+    attn_int = int(attn_hidden)
+    kernel_int = int(kernel_size)
+    hops_int = int(hops)
+    mem_slots_int = int(memory_slots)
+    mem_dim_int = int(memory_dim)
+    spectral_f = float(spectral_radius)
+    leak_f = float(leak)
+
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_rnnpaper_direct_forecast(
+            train,
+            horizon,
+            paper=paper_s,
+            lags=lags_int,
+            hidden_size=hidden_int,
+            num_layers=layers_int,
+            dropout=dropout_f,
+            attn_hidden=attn_int,
+            kernel_size=kernel_int,
+            hops=hops_int,
+            memory_slots=mem_slots_int,
+            memory_dim=mem_dim_int,
+            spectral_radius=spectral_f,
+            leak=leak_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _make_torch_rnnpaper_specs() -> dict[str, ModelSpec]:
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "paper": "Paper-named RNN architecture (fixed per key)",
+        "lags": "Lag window length",
+        "hidden_size": "Hidden size",
+        "num_layers": "Stacked layers (only for some built-in torch RNN bases)",
+        "dropout": "Dropout probability in [0,1) (only if num_layers>1 for torch bases)",
+        "attn_hidden": "Attention MLP hidden size (for attention/memory variants)",
+        "kernel_size": "Conv1d kernel size (for QRNN / Conv* variants)",
+        "hops": "Attention hops (memory networks)",
+        "memory_slots": "External memory slots (NTM/DNC variants)",
+        "memory_dim": "External memory slot size (NTM/DNC variants)",
+        "spectral_radius": "Reservoir spectral radius (ESN/LSM/Conceptor variants)",
+        "leak": "Reservoir leaking rate in (0,1] (ESN/LSM/Conceptor variants)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "num_layers": 1,
+        "dropout": 0.0,
+        "attn_hidden": 32,
+        "kernel_size": 3,
+        "hops": 2,
+        "memory_slots": 16,
+        "memory_dim": 32,
+        "spectral_radius": 0.9,
+        "leak": 1.0,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    for spec in list_rnnpaper_specs():
+        extra[spec.key] = ModelSpec(
+            key=spec.key,
+            description=spec.description + ". Requires PyTorch.",
+            factory=_factory_torch_rnnpaper_direct,
+            default_params={**base_defaults, "paper": spec.paper_id},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
+
+
+def _make_torch_rnnzoo_specs() -> dict[str, ModelSpec]:
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "base": "Base RNN architecture (paper-named; fixed per key)",
+        "variant": "Architecture wrapper: direct, bidir, ln, attn, proj (fixed per key)",
+        "lags": "Lag window length",
+        "hidden_size": "Hidden size",
+        "num_layers": "Number of stacked layers (only for torch RNN/LSTM/GRU bases)",
+        "dropout": "Dropout probability in [0,1) (only if num_layers>1 for torch bases)",
+        "proj_size": "Projection size for variant=proj",
+        "attn_hidden": "Attention MLP hidden size for variant=attn",
+        "clock_periods": "Clockwork periods as tuple or comma-separated string (clockwork base)",
+        "qrnn_kernel_size": "QRNN Conv1d kernel size (qrnn base)",
+        "rhn_depth": "RHN transition depth (rhn base)",
+        "phased_tau": "Phased LSTM time-gate period (phased-lstm base)",
+        "phased_r_on": "Phased LSTM open ratio in (0,1) (phased-lstm base)",
+        "phased_leak": "Phased LSTM closed-phase leak in [0,1) (phased-lstm base)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "num_layers": 1,
+        "dropout": 0.0,
+        "proj_size": 16,
+        "attn_hidden": 32,
+        "clock_periods": (1, 2, 4, 8),
+        "qrnn_kernel_size": 3,
+        "rhn_depth": 2,
+        "phased_tau": 32.0,
+        "phased_r_on": 0.05,
+        "phased_leak": 0.001,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    for spec in list_rnnzoo_specs():
+        extra[spec.key] = ModelSpec(
+            key=spec.key,
+            description=spec.description + ". Requires PyTorch.",
+            factory=_factory_torch_rnnzoo_direct,
+            default_params={**base_defaults, "base": spec.base, "variant": str(spec.variant)},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
+
+
+_EXTRA_RNNPAPER = _make_torch_rnnpaper_specs()
+_RNNPAPER_CLASH = set(_EXTRA_RNNPAPER).intersection(_REGISTRY)
+if _RNNPAPER_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_RNNPAPER_CLASH)}")
+_REGISTRY.update(_EXTRA_RNNPAPER)
+
+
+_EXTRA_RNNZOO = _make_torch_rnnzoo_specs()
+_RNNZOO_CLASH = set(_EXTRA_RNNZOO).intersection(_REGISTRY)
+if _RNNZOO_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_RNNZOO_CLASH)}")
+_REGISTRY.update(_EXTRA_RNNZOO)
 
 
 _EXTRA_TORCH_VARIANTS = _make_torch_dl_variant_specs()

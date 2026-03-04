@@ -1,0 +1,22 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include pyproject.toml
+
+recursive-include src/foresight/data *.json *.csv
+include src/foresight/py.typed
+
+recursive-include docs *.md *.json
+recursive-include examples *.py
+recursive-include tools *.py
+
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
+prune .git
+prune .pytest_cache
+prune .ruff_cache
+prune .mypy_cache
+prune .worktrees
+prune build
+prune dist

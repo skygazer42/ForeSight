@@ -2,9 +2,9 @@
 
 > A practical time-series forecasting playground + a lightweight benchmarking toolkit (`foresight`).
 
-![GitHub last commit](https://img.shields.io/github/last-commit/jhlucc/ForeSight)
-![GitHub stars](https://img.shields.io/github/stars/jhlucc/ForeSight)
-![License](https://img.shields.io/github/license/jhlucc/ForeSight)
+![GitHub last commit](https://img.shields.io/github/last-commit/skygazer42/ForeSight)
+![GitHub stars](https://img.shields.io/github/stars/skygazer42/ForeSight)
+![License](https://img.shields.io/github/license/skygazer42/ForeSight)
 
 ---
 
@@ -33,12 +33,17 @@
 python -m venv .venv
 source .venv/bin/activate
 
-# 2) 安装（默认仅 numpy/pandas + dev 工具）
+# 2) 安装
+# (a) 从 PyPI 安装（推荐给使用者）
+pip install foresight-ts
+#
+# (b) 从源码安装（推荐给开发者；可跑 tests/tools）
 pip install -e ".[dev]"
 
 # 3) 数据集
 foresight datasets list
 foresight datasets preview catfish --nrows 10
+# 注：`catfish` / `ice_cream_interest` 在 wheel 中自带；其余数据集可用 `--data-dir` / `FORESIGHT_DATA_DIR` 指向数据根目录。
 
 # 4) 模型注册表
 foresight models list
@@ -51,6 +56,12 @@ foresight eval run --model seasonal-naive --dataset catfish --y-col Total --hori
 # 6) Leaderboard（多个模型）
 foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive,theta,holt
 foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive --format md
+
+# 6b) Leaderboard Sweep（多数据集×多模型 + 并行 + 断点续跑 + 汇总）
+foresight leaderboard sweep --datasets catfish,ice_cream_interest --horizon 3 --step 3 --min-train-size 12 --max-windows 2 --models naive-last,mean --jobs 2 --backend process --progress --chunk-size 0 --output /tmp/sweep.json --summary-output /tmp/summary.md --summary-format md --failures-output /tmp/failures.txt
+
+# 6c) 汇总对比（跨数据集聚合：rank/rel/score）
+foresight leaderboard summarize --input /tmp/sweep.json --format md --min-datasets 2
 
 # 7) Cross-validation 预测明细表（用于分析/画图/区间校准）
 foresight cv run --model theta --dataset catfish --y-col Total --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30 --format csv
@@ -96,6 +107,7 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `examples/cv_and_conformal.py`
 - `examples/intermittent_demand.py`
 - `examples/torch_global_models.py`
+- `examples/rnn_paper_zoo.py`
 
 ---
 
@@ -160,6 +172,13 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 
 ### Optional extras
 
+> 注：仓库内的 RNN 系列 Torch 模型均采用 **手动 unroll** 实现（不依赖 PyTorch 内置的循环模块），便于对照论文结构做消融与对比。
+> Tip：可以用 `foresight models list --prefix torch-rnnpaper` / `foresight models list --prefix torch-rnnzoo` 快速筛选。
+> Paper Zoo 结构索引见：`docs/rnn_paper_zoo.md`；RNN Zoo 结构索引见：`docs/rnn_zoo.md`。
+
+- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[all]"`
+- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[all]"`
+
 - `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
 - `rf-lag`（requires `.[ml]`）：lag 特征 + RandomForest（direct multi-horizon, `lags`, `n_estimators`…）
 - `lasso-lag`（requires `.[ml]`）：lag 特征 + Lasso（direct multi-horizon, `lags`, `alpha`…）
@@ -169,6 +188,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
 - `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
 - `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
+- `torch-rnnpaper-*-direct`（requires `.[torch]`）：RNN Paper Zoo（100 个具名论文结构，统一 direct forecasting 接口）
+- `torch-rnnzoo-*-direct`（requires `.[torch]`）：RNN Zoo（20 个 base × 5 个 wrapper = 100 个组合：direct/bidir/ln/attn/proj）
 - `torch-tcn-direct`（requires `.[torch]`）：Torch TCN（direct multi-horizon, `lags`, `channels`, `epochs`…）
 - `torch-nbeats-direct`（requires `.[torch]`）：Torch N-BEATS（direct multi-horizon, `lags`, `num_blocks`, `layer_width`, `epochs`…）
 - `torch-nlinear-direct`（requires `.[torch]`）：Torch NLinear（last-value centering + linear, `lags`, `epochs`…）

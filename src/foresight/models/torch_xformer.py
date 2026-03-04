@@ -72,6 +72,7 @@ def torch_xformer_direct_forecast(
     norm: str = "layer",
     ffn: str = "gelu",
     local_window: int = 16,
+    bigbird_random_k: int = 8,
     performer_features: int = 64,
     linformer_k: int = 32,
     nystrom_landmarks: int = 16,
@@ -109,7 +110,7 @@ def torch_xformer_direct_forecast(
       - future tokens are zeros or learned "query" tokens
 
     It supports multiple attention approximations:
-      attn = full | local | logsparse | longformer | performer | linformer | nystrom | probsparse | autocorr | reformer
+      attn = full | local | logsparse | longformer | bigbird | performer | linformer | nystrom | probsparse | autocorr | reformer
     """
     torch = _require_torch()
     nn = torch.nn
@@ -150,6 +151,7 @@ def torch_xformer_direct_forecast(
         "local",
         "logsparse",
         "longformer",
+        "bigbird",
         "performer",
         "linformer",
         "nystrom",
@@ -158,7 +160,7 @@ def torch_xformer_direct_forecast(
         "reformer",
     }:
         raise ValueError(
-            "attn must be one of: full, local, logsparse, longformer, performer, linformer, nystrom, probsparse, autocorr, reformer"
+            "attn must be one of: full, local, logsparse, longformer, bigbird, performer, linformer, nystrom, probsparse, autocorr, reformer"
         )
     if pos_s not in {"learned", "sincos", "rope", "time2vec", "none"}:
         raise ValueError("pos_emb must be one of: learned, sincos, rope, time2vec, none")
@@ -171,6 +173,9 @@ def torch_xformer_direct_forecast(
 
     if int(local_window) <= 0:
         raise ValueError("local_window must be >= 1")
+    bigbird_k = int(bigbird_random_k)
+    if bigbird_k < 0:
+        raise ValueError("bigbird_random_k must be >= 0")
     if int(performer_features) <= 0:
         raise ValueError("performer_features must be >= 1")
     if int(linformer_k) <= 0:
@@ -316,6 +321,40 @@ def torch_xformer_direct_forecast(
                 self.register_buffer("R", R, persistent=False)
             else:
                 self.register_buffer("R", torch.empty(0), persistent=False)
+
+            # BigBird random connections (precomputed for this fixed sequence length).
+            self.register_buffer("bigbird_rand", torch.empty(0, dtype=torch.bool), persistent=False)
+            if attn_s == "bigbird":
+                L = int(seq_len)
+                rng = np.random.default_rng(int(seed) + 1337)
+
+                idx_np = np.arange(L, dtype=int)
+                dist = np.abs(idx_np.reshape(-1, 1) - idx_np.reshape(1, -1))
+                local_allowed_np = dist <= int(local_window)
+
+                global_mask_np = np.zeros((L,), dtype=bool)
+                if int(h) > 0:
+                    global_mask_np[L - int(h) :] = True
+                last_ctx = L - int(h) - 1
+                if last_ctx >= 0:
+                    global_mask_np[int(last_ctx)] = True
+
+                base_allowed = (
+                    local_allowed_np | global_mask_np.reshape(L, 1) | global_mask_np.reshape(1, L)
+                )
+
+                rand_allowed = np.zeros((L, L), dtype=bool)
+                if int(bigbird_k) > 0:
+                    for i in range(L):
+                        cand = np.flatnonzero(~base_allowed[i])
+                        if cand.size == 0:
+                            continue
+                        pick = int(min(int(bigbird_k), int(cand.size)))
+                        chosen = rng.choice(cand, size=pick, replace=False)
+                        rand_allowed[i, chosen] = True
+                    rand_allowed |= rand_allowed.T
+
+                self.bigbird_rand = torch.tensor(rand_allowed, dtype=torch.bool)
 
         def _split_heads(self, xb: Any) -> Any:
             B, L, _D = xb.shape
@@ -518,6 +557,26 @@ def torch_xformer_direct_forecast(
                 allowed = (
                     local_allowed | global_mask.reshape(int(L), 1) | global_mask.reshape(1, int(L))
                 )
+                scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
+            if attn_s == "bigbird":
+                # BigBird-style random + local + global (lite).
+                w = int(local_window)
+                idx = torch.arange(L, device=xb.device)
+                dist = (idx.reshape(-1, 1) - idx.reshape(1, -1)).abs()
+                local_allowed = dist <= int(w)
+
+                global_mask = torch.zeros((int(L),), dtype=torch.bool, device=xb.device)
+                if int(h) > 0:
+                    global_mask[int(L) - int(h) :] = True
+                last_ctx = int(L) - int(h) - 1
+                if last_ctx >= 0:
+                    global_mask[int(last_ctx)] = True
+
+                allowed = (
+                    local_allowed | global_mask.reshape(int(L), 1) | global_mask.reshape(1, int(L))
+                )
+                if self.bigbird_rand.numel() > 0:
+                    allowed = allowed | self.bigbird_rand.to(device=xb.device)
                 scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
             w = torch.softmax(scores, dim=-1)
             out = torch.einsum("bhlm,bhmd->bhld", w, v)

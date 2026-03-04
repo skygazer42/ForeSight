@@ -1,30 +1,16 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd
 
-from .registry import DatasetSpec, get_dataset_spec
-
-
-def _repo_root(*, data_dir: str | Path | None = None) -> Path:
-    # src/foresight/datasets/loaders.py -> repo root is 3 levels up from `src/`
-    if isinstance(data_dir, str) and not data_dir.strip():
-        data_dir = None
-    if data_dir is not None:
-        return Path(data_dir).expanduser()
-
-    env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
-    if env_dir:
-        return Path(env_dir).expanduser()
-    return Path(__file__).resolve().parents[3]
+from .registry import DatasetSpec, get_dataset_spec, resolve_dataset_path
 
 
 def _require_file(path: Path) -> Path:
     if not path.exists():
         raise FileNotFoundError(
-            f"Dataset file not found: {path}. Are you running from the repo root?"
+            f"Dataset file not found: {path}. Provide `--data-dir ...` or set FORESIGHT_DATA_DIR."
         )
     return path
 
@@ -32,7 +18,7 @@ def _require_file(path: Path) -> Path:
 def _load_csv_spec(
     *, spec: DatasetSpec, nrows: int | None, data_dir: str | Path | None
 ) -> pd.DataFrame:
-    path = _require_file(_repo_root(data_dir=data_dir) / spec.rel_path)
+    path = _require_file(resolve_dataset_path(spec.key, data_dir=data_dir))
     read_kwargs = {"nrows": nrows}
     if spec.parse_dates:
         read_kwargs["parse_dates"] = list(spec.parse_dates)

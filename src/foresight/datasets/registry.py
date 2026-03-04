@@ -15,6 +15,7 @@ class DatasetSpec:
     time_col: str
     default_y: str
     group_cols: tuple[str, ...] = ()
+    package_rel_path: Path | None = None
 
 
 _SPECS: dict[str, DatasetSpec] = {
@@ -58,6 +59,7 @@ _SPECS: dict[str, DatasetSpec] = {
         key="catfish",
         description="Catfish sales",
         rel_path=Path("statistics time series/catfish.csv"),
+        package_rel_path=Path("data/catfish.csv"),
         expected_columns={"Date", "Total"},
         parse_dates=["Date"],
         time_col="Date",
@@ -68,6 +70,7 @@ _SPECS: dict[str, DatasetSpec] = {
         key="ice_cream_interest",
         description="Ice cream interest",
         rel_path=Path("statistics time series/ice_cream_interest.csv"),
+        package_rel_path=Path("data/ice_cream_interest.csv"),
         expected_columns={"month", "interest"},
         parse_dates=["month"],
         time_col="month",
@@ -101,8 +104,28 @@ def resolve_dataset_path(key: str, *, data_dir: str | Path | None = None) -> Pat
         data_dir = None
     if data_dir is not None:
         base = Path(data_dir).expanduser()
-    else:
-        env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
-        base = Path(env_dir).expanduser() if env_dir else Path(__file__).resolve().parents[3]
+        return (base / spec.rel_path).resolve()
 
-    return (base / spec.rel_path).resolve()
+    env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
+    if env_dir:
+        base = Path(env_dir).expanduser()
+        return (base / spec.rel_path).resolve()
+
+    # Installed-package fallback: for a small subset of datasets we ship CSVs
+    # under `foresight/data/` to support `pip install` demos.
+    if spec.package_rel_path is not None:
+        pkg_root = Path(__file__).resolve().parents[1]  # foresight/
+        pkg_path = (pkg_root / spec.package_rel_path).resolve()
+        if pkg_path.exists():
+            return pkg_path
+
+    # Dev fallback: when running from the repo, `parents[3]` resolves repo root.
+    repo_root = Path(__file__).resolve().parents[3]
+    repo_path = (repo_root / spec.rel_path).resolve()
+    if repo_path.exists():
+        return repo_path
+
+    raise FileNotFoundError(
+        f"Dataset file not found for key={key!r}. "
+        "Provide `--data-dir ...` or set FORESIGHT_DATA_DIR."
+    )
