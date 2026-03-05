@@ -932,6 +932,78 @@ def _factory_xgb_custom_lag_recursive(
     return _f
 
 
+def _factory_xgb_custom_step_lag(
+    *,
+    lags: int = 24,
+    step_scale: str = "one_based",
+    **xgb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    step_scale_s = str(step_scale)
+
+    params = dict(xgb_params)
+    params.setdefault("booster", "gbtree")
+    params.setdefault("objective", "reg:squarederror")
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(params),
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_custom_dirrec_lag(
+    *,
+    lags: int = 24,
+    **xgb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+
+    params = dict(xgb_params)
+    params.setdefault("booster", "gbtree")
+    params.setdefault("objective", "reg:squarederror")
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_xgb_custom_mimo_lag(
+    *,
+    lags: int = 24,
+    multi_strategy: str = "multi_output_tree",
+    **xgb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    multi_strategy_s = str(multi_strategy)
+
+    params = dict(xgb_params)
+    params.setdefault("booster", "gbtree")
+    params.setdefault("objective", "reg:squarederror")
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_mimo_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(params),
+            multi_strategy=multi_strategy_s,
+        )
+
+    return _f
+
+
 def _factory_xgb_step_lag(
     *,
     lags: int = 24,
@@ -6668,6 +6740,142 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         param_help={
             "lags": "Number of lag features",
+            "booster": "Booster type (gbtree, dart, gblinear, ...)",
+            "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-custom-step-lag": ModelSpec(
+        key="xgb-custom-step-lag",
+        description=(
+            "Customizable XGBoost (XGBRegressor) on lag features using a learned multi-horizon step-index "
+            "feature (single-model direct multi-horizon). Requires xgboost. "
+            "Accepts any XGBRegressor keyword via --model-param."
+        ),
+        factory=_factory_xgb_custom_step_lag,
+        default_params={
+            "lags": 24,
+            "step_scale": "one_based",
+            "booster": "gbtree",
+            "objective": "reg:squarederror",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "booster": "Booster type (gbtree, dart, gblinear, ...)",
+            "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-custom-dirrec-lag": ModelSpec(
+        key="xgb-custom-dirrec-lag",
+        description=(
+            "Customizable XGBoost (XGBRegressor) DirRec strategy on lag features (per-step models with "
+            "previous-step targets as extra regressors). Requires xgboost. "
+            "Accepts any XGBRegressor keyword via --model-param."
+        ),
+        factory=_factory_xgb_custom_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "booster": "gbtree",
+            "objective": "reg:squarederror",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "booster": "Booster type (gbtree, dart, gblinear, ...)",
+            "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-custom-mimo-lag": ModelSpec(
+        key="xgb-custom-mimo-lag",
+        description=(
+            "Customizable XGBoost (XGBRegressor) MIMO multi-output regression on lag features (single-model "
+            "direct multi-horizon). Requires xgboost>=2.0. "
+            "Accepts any XGBRegressor keyword via --model-param."
+        ),
+        factory=_factory_xgb_custom_mimo_lag,
+        default_params={
+            "lags": 24,
+            "multi_strategy": "multi_output_tree",
+            "booster": "gbtree",
+            "objective": "reg:squarederror",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "multi_strategy": "XGBoost multi-target strategy (multi_output_tree, one_output_per_tree)",
             "booster": "Booster type (gbtree, dart, gblinear, ...)",
             "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
             "n_estimators": "Number of boosting rounds",

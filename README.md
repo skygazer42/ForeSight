@@ -200,6 +200,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
 - `xgb-custom-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon；任意 XGBRegressor 参数可用 `--model-param` 透传）
 - `xgb-custom-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step；任意 XGBRegressor 参数可用 `--model-param` 透传）
+- `xgb-custom-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；可自定义 objective/booster 等；额外 `step_scale`）
+- `xgb-custom-dirrec-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（DirRec；可自定义 objective/booster 等）
+- `xgb-custom-mimo-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（MIMO multi-output；可自定义 objective/booster 等；支持 `multi_strategy`）
 - `xgb-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；额外加入 step index 特征，支持 `step_scale`）
 - `xgb-dirrec-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
 - `xgb-mimo-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（MIMO multi-output：单模型直接输出整个 horizon，`multi_strategy` 可配）
