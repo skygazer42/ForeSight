@@ -6,6 +6,13 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.7
+
+- Add more optional `xgboost` (`.[xgb]`) multi-horizon strategies on lag features:
+  - `xgb-step-lag`: single-model direct multi-horizon with an extra step-index feature.
+  - `xgb-dirrec-lag`: DirRec (direct-recursive) per-step models with previous-step features.
+  - `xgb-mimo-lag`: MIMO multi-output regression (single model predicts the full horizon).
+
 ## 0.2.6
 
 - Add optional `xgboost` (`.[xgb]`) customizable models:
