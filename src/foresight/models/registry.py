@@ -32,6 +32,14 @@ from .naive import naive_last, seasonal_naive
 from .regression import (
     adaboost_lag_direct_forecast,
     bagging_lag_direct_forecast,
+    catboost_custom_dirrec_lag_forecast,
+    catboost_custom_lag_direct_forecast,
+    catboost_custom_lag_recursive_forecast,
+    catboost_custom_step_lag_direct_forecast,
+    catboost_dirrec_lag_forecast,
+    catboost_lag_direct_forecast,
+    catboost_lag_recursive_forecast,
+    catboost_step_lag_direct_forecast,
     decision_tree_lag_direct_forecast,
     elasticnet_lag_direct_forecast,
     extra_trees_lag_direct_forecast,
@@ -1187,6 +1195,240 @@ def _factory_lgbm_dirrec_lag(
             min_child_weight=min_child_weight_f,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
+        )
+
+    return _f
+
+
+def _factory_catboost_custom_lag(
+    *,
+    lags: int = 24,
+    **cb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_custom_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cb_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_catboost_custom_lag_recursive(
+    *,
+    lags: int = 24,
+    **cb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_custom_lag_recursive_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cb_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_catboost_custom_step_lag(
+    *,
+    lags: int = 24,
+    step_scale: str = "one_based",
+    **cb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    step_scale_s = str(step_scale)
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_custom_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cb_params=dict(params),
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_catboost_custom_dirrec_lag(
+    *,
+    lags: int = 24,
+    **cb_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_custom_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            cb_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_catboost_lag(
+    *,
+    lags: int = 24,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    iterations_int = int(iterations)
+    learning_rate_f = float(learning_rate)
+    depth_int = int(depth)
+    l2_leaf_reg_f = float(l2_leaf_reg)
+    random_seed_int = int(random_seed)
+    thread_count_int = int(thread_count)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            iterations=iterations_int,
+            learning_rate=learning_rate_f,
+            depth=depth_int,
+            l2_leaf_reg=l2_leaf_reg_f,
+            random_seed=random_seed_int,
+            thread_count=thread_count_int,
+        )
+
+    return _f
+
+
+def _factory_catboost_lag_recursive(
+    *,
+    lags: int = 24,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    iterations_int = int(iterations)
+    learning_rate_f = float(learning_rate)
+    depth_int = int(depth)
+    l2_leaf_reg_f = float(l2_leaf_reg)
+    random_seed_int = int(random_seed)
+    thread_count_int = int(thread_count)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_lag_recursive_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            iterations=iterations_int,
+            learning_rate=learning_rate_f,
+            depth=depth_int,
+            l2_leaf_reg=l2_leaf_reg_f,
+            random_seed=random_seed_int,
+            thread_count=thread_count_int,
+        )
+
+    return _f
+
+
+def _factory_catboost_step_lag(
+    *,
+    lags: int = 24,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+    step_scale: str = "one_based",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    iterations_int = int(iterations)
+    learning_rate_f = float(learning_rate)
+    depth_int = int(depth)
+    l2_leaf_reg_f = float(l2_leaf_reg)
+    random_seed_int = int(random_seed)
+    thread_count_int = int(thread_count)
+    step_scale_s = str(step_scale)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            iterations=iterations_int,
+            learning_rate=learning_rate_f,
+            depth=depth_int,
+            l2_leaf_reg=l2_leaf_reg_f,
+            random_seed=random_seed_int,
+            thread_count=thread_count_int,
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_catboost_dirrec_lag(
+    *,
+    lags: int = 24,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    iterations_int = int(iterations)
+    learning_rate_f = float(learning_rate)
+    depth_int = int(depth)
+    l2_leaf_reg_f = float(l2_leaf_reg)
+    random_seed_int = int(random_seed)
+    thread_count_int = int(thread_count)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return catboost_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            iterations=iterations_int,
+            learning_rate=learning_rate_f,
+            depth=depth_int,
+            l2_leaf_reg=l2_leaf_reg_f,
+            random_seed=random_seed_int,
+            thread_count=thread_count_int,
         )
 
     return _f
@@ -7293,6 +7535,247 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_jobs": "LightGBM threads (avoid 0)",
         },
         requires=("lgbm",),
+    ),
+    "catboost-custom-lag": ModelSpec(
+        key="catboost-custom-lag",
+        description=(
+            "Customizable CatBoost (CatBoostRegressor) on lag features (direct multi-horizon). "
+            "Requires catboost. Accepts any CatBoostRegressor keyword via --model-param."
+        ),
+        factory=_factory_catboost_custom_lag,
+        default_params={
+            "lags": 24,
+            "loss_function": "RMSE",
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "verbose": False,
+            "allow_writing_files": False,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "loss_function": "Loss function (e.g. RMSE, MAE, Quantile:alpha=0.5, Poisson, ...)",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "verbose": "Verbosity (false to silence)",
+            "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-custom-lag-recursive": ModelSpec(
+        key="catboost-custom-lag-recursive",
+        description=(
+            "Customizable CatBoost (CatBoostRegressor) on lag features (one-step trained, recursive forecast). "
+            "Requires catboost. Accepts any CatBoostRegressor keyword via --model-param."
+        ),
+        factory=_factory_catboost_custom_lag_recursive,
+        default_params={
+            "lags": 24,
+            "loss_function": "RMSE",
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "verbose": False,
+            "allow_writing_files": False,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "loss_function": "Loss function (e.g. RMSE, MAE, Quantile:alpha=0.5, Poisson, ...)",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "verbose": "Verbosity (false to silence)",
+            "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-custom-step-lag": ModelSpec(
+        key="catboost-custom-step-lag",
+        description=(
+            "Customizable CatBoost (CatBoostRegressor) on lag features with a learned step-index feature "
+            "(single-model direct multi-horizon). Requires catboost. "
+            "Accepts any CatBoostRegressor keyword via --model-param."
+        ),
+        factory=_factory_catboost_custom_step_lag,
+        default_params={
+            "lags": 24,
+            "step_scale": "one_based",
+            "loss_function": "RMSE",
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "verbose": False,
+            "allow_writing_files": False,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "loss_function": "Loss function (e.g. RMSE, MAE, Quantile:alpha=0.5, Poisson, ...)",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "verbose": "Verbosity (false to silence)",
+            "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-custom-dirrec-lag": ModelSpec(
+        key="catboost-custom-dirrec-lag",
+        description=(
+            "Customizable CatBoost (CatBoostRegressor) DirRec strategy on lag features (per-step models with "
+            "previous-step features). Requires catboost. Accepts any CatBoostRegressor keyword via --model-param."
+        ),
+        factory=_factory_catboost_custom_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "loss_function": "RMSE",
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "verbose": False,
+            "allow_writing_files": False,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "loss_function": "Loss function (e.g. RMSE, MAE, Quantile:alpha=0.5, Poisson, ...)",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "verbose": "Verbosity (false to silence)",
+            "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-lag": ModelSpec(
+        key="catboost-lag",
+        description="CatBoost (CatBoostRegressor) on lag features (direct multi-horizon). Requires catboost.",
+        factory=_factory_catboost_lag,
+        default_params={
+            "lags": 24,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-lag-recursive": ModelSpec(
+        key="catboost-lag-recursive",
+        description=(
+            "CatBoost (CatBoostRegressor) on lag features (one-step trained, recursive forecast). Requires catboost."
+        ),
+        factory=_factory_catboost_lag_recursive,
+        default_params={
+            "lags": 24,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-step-lag": ModelSpec(
+        key="catboost-step-lag",
+        description=(
+            "CatBoost (CatBoostRegressor) on lag features with a learned step-index feature "
+            "(single-model direct multi-horizon). Requires catboost."
+        ),
+        factory=_factory_catboost_step_lag,
+        default_params={
+            "lags": 24,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "step_scale": "one_based",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+        },
+        requires=("catboost",),
+    ),
+    "catboost-dirrec-lag": ModelSpec(
+        key="catboost-dirrec-lag",
+        description=(
+            "CatBoost (CatBoostRegressor) DirRec strategy on lag features (per-step models with previous-step "
+            "features). Requires catboost."
+        ),
+        factory=_factory_catboost_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+        },
+        requires=("catboost",),
     ),
     "xgb-custom-lag": ModelSpec(
         key="xgb-custom-lag",

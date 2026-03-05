@@ -3038,3 +3038,400 @@ def lgbm_custom_dirrec_lag_forecast(
     Customizable LightGBM DirRec (direct-recursive) multi-horizon forecast on lag features.
     """
     return _lgbm_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, lgbm_params=lgbm_params)
+
+
+def _catboost_validate_common_regressor_params(params: dict[str, Any]) -> None:
+    if "iterations" in params and params["iterations"] is not None:
+        if int(params["iterations"]) <= 0:
+            raise ValueError("iterations must be >= 1")
+    if "learning_rate" in params and params["learning_rate"] is not None:
+        if float(params["learning_rate"]) <= 0:
+            raise ValueError("learning_rate must be > 0")
+    if "depth" in params and params["depth"] is not None:
+        if int(params["depth"]) <= 0:
+            raise ValueError("depth must be >= 1")
+    if "l2_leaf_reg" in params and params["l2_leaf_reg"] is not None:
+        if float(params["l2_leaf_reg"]) < 0:
+            raise ValueError("l2_leaf_reg must be >= 0")
+    if "thread_count" in params and params["thread_count"] is not None and int(params["thread_count"]) == 0:
+        raise ValueError("thread_count must be non-zero")
+
+
+def _require_catboost() -> Any:
+    try:
+        import catboost as cb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'catboost lag models require catboost. Install with: pip install -e ".[catboost]"'
+        ) from e
+    return cb
+
+
+def _catboost_lag_direct_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    cb = _require_catboost()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+    _catboost_validate_common_regressor_params(params)
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    out = np.empty((h,), dtype=float)
+    for j in range(h):
+        model = cb.CatBoostRegressor(**params)
+        model.fit(X, Y[:, j])
+        out[j] = float(model.predict(feat)[0])
+    return np.asarray(out, dtype=float)
+
+
+def _catboost_lag_recursive_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    cb = _require_catboost()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if x.size <= lags:
+        raise ValueError(
+            f"catboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
+        )
+
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+    _catboost_validate_common_regressor_params(params)
+
+    X, y = make_lagged_xy(x, lags=lags)
+    model = cb.CatBoostRegressor(**params)
+    model.fit(X, y)
+
+    history = x.astype(float, copy=True).tolist()
+    out: list[float] = []
+    for _h in range(h):
+        feat = np.asarray(history[-lags:], dtype=float).reshape(1, -1)
+        yhat = float(model.predict(feat)[0])
+        out.append(float(yhat))
+        history.append(float(yhat))
+    return np.asarray(out, dtype=float)
+
+
+def _catboost_lag_step_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    Single-model multi-horizon forecasting by adding a "step index" feature.
+
+    Trains one regressor on the expanded dataset:
+      (lag_window, step) -> y_{t+step}
+    """
+    cb = _require_catboost()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+    _catboost_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    rows = int(X_base.shape[0])
+
+    if step_scale not in {"one_based", "zero_based", "unit"}:
+        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+
+    if step_scale == "zero_based":
+        step = np.arange(h, dtype=float)
+    elif step_scale == "unit":
+        step = np.arange(1, h + 1, dtype=float) / float(h)
+    else:
+        step = np.arange(1, h + 1, dtype=float)
+
+    step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
+    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    X_long = np.concatenate([X_rep, step_idx], axis=1)
+    y_long = Y.reshape(-1).astype(float, copy=False)
+
+    model = cb.CatBoostRegressor(**params)
+    model.fit(X_long, y_long)
+
+    base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    base_rep = np.repeat(base_feat, repeats=h, axis=0)  # (h, lags)
+    feat = np.concatenate([base_rep, step.reshape(-1, 1)], axis=1)
+    out = model.predict(feat)
+    return np.asarray(out, dtype=float)
+
+
+def _catboost_lag_dirrec_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    DirRec (Direct-Recursive) strategy with per-step models.
+
+    Each step model uses lag features plus the previous steps as additional regressors.
+    During training we use the true previous-step values; during prediction we use the
+    model predictions from earlier steps.
+    """
+    cb = _require_catboost()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(cb_params)
+    params.setdefault("loss_function", "RMSE")
+    params.setdefault("verbose", False)
+    params.setdefault("allow_writing_files", False)
+    _catboost_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+
+    models: list[Any] = []
+    for j in range(h):
+        if j == 0:
+            Xj = X_base
+        else:
+            Xj = np.concatenate([X_base, Y[:, :j]], axis=1)
+        yj = Y[:, j]
+        model = cb.CatBoostRegressor(**params)
+        model.fit(Xj, yj)
+        models.append(model)
+
+    base_feat = x[-lags:].astype(float, copy=False)
+    out: list[float] = []
+    for j in range(h):
+        if j == 0:
+            feat = base_feat
+        else:
+            feat = np.concatenate([base_feat, np.asarray(out, dtype=float)], axis=0)
+        yhat = float(models[j].predict(feat.reshape(1, -1))[0])
+        out.append(yhat)
+    return np.asarray(out, dtype=float)
+
+
+def catboost_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+) -> np.ndarray:
+    """
+    CatBoost (CatBoostRegressor) on lag features (direct multi-horizon). Requires catboost.
+    """
+    params = {
+        "loss_function": "RMSE",
+        "iterations": int(iterations),
+        "learning_rate": float(learning_rate),
+        "depth": int(depth),
+        "l2_leaf_reg": float(l2_leaf_reg),
+        "random_seed": int(random_seed),
+        "thread_count": int(thread_count),
+        "verbose": False,
+        "allow_writing_files": False,
+    }
+    return _catboost_lag_direct_forecast_kwargs(train, horizon, lags=lags, cb_params=params)
+
+
+def catboost_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+) -> np.ndarray:
+    """
+    CatBoost (CatBoostRegressor) on lag features (one-step trained, recursive forecast). Requires catboost.
+    """
+    params = {
+        "loss_function": "RMSE",
+        "iterations": int(iterations),
+        "learning_rate": float(learning_rate),
+        "depth": int(depth),
+        "l2_leaf_reg": float(l2_leaf_reg),
+        "random_seed": int(random_seed),
+        "thread_count": int(thread_count),
+        "verbose": False,
+        "allow_writing_files": False,
+    }
+    return _catboost_lag_recursive_forecast_kwargs(train, horizon, lags=lags, cb_params=params)
+
+
+def catboost_step_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    CatBoost multi-horizon forecast using a single model with an extra "step" feature.
+    """
+    params = {
+        "loss_function": "RMSE",
+        "iterations": int(iterations),
+        "learning_rate": float(learning_rate),
+        "depth": int(depth),
+        "l2_leaf_reg": float(l2_leaf_reg),
+        "random_seed": int(random_seed),
+        "thread_count": int(thread_count),
+        "verbose": False,
+        "allow_writing_files": False,
+    }
+    return _catboost_lag_step_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        cb_params=params,
+        step_scale=step_scale,
+    )
+
+
+def catboost_dirrec_lag_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    iterations: int = 500,
+    learning_rate: float = 0.05,
+    depth: int = 6,
+    l2_leaf_reg: float = 3.0,
+    random_seed: int = 0,
+    thread_count: int = 1,
+) -> np.ndarray:
+    """
+    CatBoost DirRec (direct-recursive) multi-horizon forecast on lag features.
+    """
+    params = {
+        "loss_function": "RMSE",
+        "iterations": int(iterations),
+        "learning_rate": float(learning_rate),
+        "depth": int(depth),
+        "l2_leaf_reg": float(l2_leaf_reg),
+        "random_seed": int(random_seed),
+        "thread_count": int(thread_count),
+        "verbose": False,
+        "allow_writing_files": False,
+    }
+    return _catboost_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, cb_params=params)
+
+
+def catboost_custom_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable direct multi-horizon CatBoost (CatBoostRegressor) on lag features.
+
+    All CatBoost parameters are provided through `cb_params` and passed to `CatBoostRegressor`.
+    """
+    return _catboost_lag_direct_forecast_kwargs(train, horizon, lags=lags, cb_params=cb_params)
+
+
+def catboost_custom_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable recursive one-step CatBoost (CatBoostRegressor) on lag features.
+
+    All CatBoost parameters are provided through `cb_params` and passed to `CatBoostRegressor`.
+    """
+    return _catboost_lag_recursive_forecast_kwargs(train, horizon, lags=lags, cb_params=cb_params)
+
+
+def catboost_custom_step_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    Customizable CatBoost multi-horizon forecast using a single model with a "step" feature.
+    """
+    return _catboost_lag_step_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        cb_params=cb_params,
+        step_scale=step_scale,
+    )
+
+
+def catboost_custom_dirrec_lag_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    cb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable CatBoost DirRec (direct-recursive) multi-horizon forecast on lag features.
+    """
+    return _catboost_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, cb_params=cb_params)

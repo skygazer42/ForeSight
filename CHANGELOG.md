@@ -12,6 +12,10 @@ This project follows a lightweight changelog format.
   - `lgbm-lag`, `lgbm-lag-recursive`, `lgbm-step-lag`, `lgbm-dirrec-lag`.
   - Customizable variants: `lgbm-custom-lag`, `lgbm-custom-lag-recursive`, `lgbm-custom-step-lag`,
     `lgbm-custom-dirrec-lag`.
+- Add optional `catboost` (`.[catboost]`) lag-feature models:
+  - `catboost-lag`, `catboost-lag-recursive`, `catboost-step-lag`, `catboost-dirrec-lag`.
+  - Customizable variants: `catboost-custom-lag`, `catboost-custom-lag-recursive`,
+    `catboost-custom-step-lag`, `catboost-custom-dirrec-lag`.
 
 ## 0.2.7
 

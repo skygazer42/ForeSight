@@ -48,6 +48,9 @@ xgb = [
 lgbm = [
   "lightgbm>=4.0",
 ]
+catboost = [
+  "catboost>=1.2",
+]
 stats = [
   "statsmodels>=0.14",
 ]
@@ -58,6 +61,7 @@ all = [
   "scikit-learn>=1.0",
   "xgboost>=2.0",
   "lightgbm>=4.0",
+  "catboost>=1.2",
   "statsmodels>=0.14",
   "torch>=2.0",
 ]

@@ -176,8 +176,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 > Tip：可以用 `foresight models list --prefix torch-rnnpaper` / `foresight models list --prefix torch-rnnzoo` 快速筛选。
 > Paper Zoo 结构索引见：`docs/rnn_paper_zoo.md`；RNN Zoo 结构索引见：`docs/rnn_zoo.md`。
 
-- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[xgb]"` / `pip install "foresight-ts[lgbm]"` / `pip install "foresight-ts[all]"`
-- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[xgb]"` / `pip install -e ".[lgbm]"` / `pip install -e ".[all]"`
+- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[xgb]"` / `pip install "foresight-ts[lgbm]"` / `pip install "foresight-ts[catboost]"` / `pip install "foresight-ts[all]"`
+- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[xgb]"` / `pip install -e ".[lgbm]"` / `pip install -e ".[catboost]"` / `pip install -e ".[all]"`
 
 - `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
 - `ridge-lag-direct`（requires `.[ml]`）：lag 特征 + Ridge（direct multi-horizon, `lags`, `alpha`）
@@ -206,6 +206,14 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `lgbm-lag-recursive`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（recursive one-step, `lags`, `n_estimators`…）
 - `lgbm-step-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`）
 - `lgbm-dirrec-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
+- `catboost-custom-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（direct multi-horizon；任意参数可用 `--model-param` 透传）
+- `catboost-custom-lag-recursive`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（recursive one-step；任意参数可用 `--model-param` 透传）
+- `catboost-custom-step-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`；参数透传）
+- `catboost-custom-dirrec-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（DirRec：每步模型逐步加入前序步作为额外特征；参数透传）
+- `catboost-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（direct multi-horizon, `lags`, `iterations`…）
+- `catboost-lag-recursive`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（recursive one-step, `lags`, `iterations`…）
+- `catboost-step-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`）
+- `catboost-dirrec-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
 - `xgb-custom-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon；任意 XGBRegressor 参数可用 `--model-param` 透传）
 - `xgb-custom-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step；任意 XGBRegressor 参数可用 `--model-param` 透传）
 - `xgb-custom-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；可自定义 objective/booster 等；额外 `step_scale`）
