@@ -325,3 +325,553 @@ def gbrt_lag_direct_forecast(
     feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
     yhat = model.predict(feat)[0]
     return np.asarray(yhat, dtype=float)
+
+
+def ridge_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    alpha: float = 1.0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon Ridge regression on lag features (requires scikit-learn).
+
+    Unlike `ridge_lag_forecast` (recursive), this fits a multi-target model and predicts
+    all horizon steps directly from the last `lags` observed values.
+    """
+    try:
+        from sklearn.linear_model import Ridge  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'ridge_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    model = Ridge(alpha=float(alpha), fit_intercept=True)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def decision_tree_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    max_depth: int | None = 5,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon DecisionTreeRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.tree import DecisionTreeRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            "decision_tree_lag_direct_forecast requires scikit-learn. Install with: "
+            'pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if max_depth is not None and int(max_depth) <= 0:
+        raise ValueError("max_depth must be >= 1 or None")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    model = DecisionTreeRegressor(
+        max_depth=None if max_depth is None else int(max_depth),
+        random_state=int(random_state),
+    )
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def extra_trees_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 300,
+    max_depth: int | None = None,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon ExtraTreesRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.ensemble import ExtraTreesRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'extra_trees_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if max_depth is not None and int(max_depth) <= 0:
+        raise ValueError("max_depth must be >= 1 or None")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    model = ExtraTreesRegressor(
+        n_estimators=int(n_estimators),
+        max_depth=None if max_depth is None else int(max_depth),
+        random_state=int(random_state),
+    )
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def adaboost_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 300,
+    learning_rate: float = 0.05,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon AdaBoostRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.ensemble import AdaBoostRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'adaboost_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = AdaBoostRegressor(
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        random_state=int(random_state),
+    )
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def bagging_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 200,
+    max_samples: float = 0.8,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon BaggingRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.ensemble import BaggingRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'bagging_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if not (0.0 < float(max_samples) <= 1.0):
+        raise ValueError("max_samples must be in (0,1]")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = BaggingRegressor(
+        n_estimators=int(n_estimators),
+        max_samples=float(max_samples),
+        random_state=int(random_state),
+    )
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def hgb_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    max_iter: int = 300,
+    learning_rate: float = 0.05,
+    max_depth: int | None = 3,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon HistGradientBoostingRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'hgb_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be >= 1")
+    if max_depth is not None and int(max_depth) <= 0:
+        raise ValueError("max_depth must be >= 1 or None")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = HistGradientBoostingRegressor(
+        max_iter=int(max_iter),
+        learning_rate=float(learning_rate),
+        max_depth=None if max_depth is None else int(max_depth),
+        random_state=int(random_state),
+    )
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def svr_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    C: float = 1.0,
+    gamma: str | float = "scale",
+    epsilon: float = 0.1,
+) -> np.ndarray:
+    """
+    Direct multi-horizon SVR (RBF) on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+        from sklearn.svm import SVR  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'svr_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if float(C) <= 0:
+        raise ValueError("C must be > 0")
+    if float(epsilon) < 0:
+        raise ValueError("epsilon must be >= 0")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = SVR(C=float(C), gamma=gamma, epsilon=float(epsilon))
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def linear_svr_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    C: float = 1.0,
+    epsilon: float = 0.0,
+    max_iter: int = 5000,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon LinearSVR on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+        from sklearn.svm import LinearSVR  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'linear_svr_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if float(C) <= 0:
+        raise ValueError("C must be > 0")
+    if float(epsilon) < 0:
+        raise ValueError("epsilon must be >= 0")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = LinearSVR(
+        C=float(C),
+        epsilon=float(epsilon),
+        max_iter=int(max_iter),
+        random_state=int(random_state),
+    )
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def kernel_ridge_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    alpha: float = 1.0,
+    kernel: str = "rbf",
+    gamma: float | None = None,
+) -> np.ndarray:
+    """
+    Direct multi-horizon KernelRidge on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.kernel_ridge import KernelRidge  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'kernel_ridge_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if float(alpha) < 0:
+        raise ValueError("alpha must be >= 0")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    model = KernelRidge(alpha=float(alpha), kernel=str(kernel), gamma=gamma)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def mlp_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    hidden_layer_sizes: tuple[int, ...] = (64, 64),
+    alpha: float = 0.0001,
+    max_iter: int = 300,
+    random_state: int = 0,
+    learning_rate_init: float = 0.001,
+) -> np.ndarray:
+    """
+    Direct multi-horizon MLPRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.neural_network import MLPRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'mlp_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be >= 1")
+    if float(alpha) < 0:
+        raise ValueError("alpha must be >= 0")
+    if float(learning_rate_init) <= 0:
+        raise ValueError("learning_rate_init must be > 0")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    model = MLPRegressor(
+        hidden_layer_sizes=tuple(int(s) for s in hidden_layer_sizes),
+        alpha=float(alpha),
+        max_iter=int(max_iter),
+        random_state=int(random_state),
+        learning_rate_init=float(learning_rate_init),
+    )
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def huber_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    epsilon: float = 1.35,
+    alpha: float = 0.0001,
+    max_iter: int = 200,
+) -> np.ndarray:
+    """
+    Direct multi-horizon HuberRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import HuberRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'huber_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if float(epsilon) <= 1.0:
+        raise ValueError("epsilon must be > 1.0")
+    if float(alpha) < 0:
+        raise ValueError("alpha must be >= 0")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = HuberRegressor(epsilon=float(epsilon), alpha=float(alpha), max_iter=int(max_iter))
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def quantile_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    quantile: float = 0.5,
+    alpha: float = 0.0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon QuantileRegressor on lag features (requires scikit-learn).
+
+    This returns the specified conditional quantile as a point forecast.
+    """
+    try:
+        from sklearn.linear_model import QuantileRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'quantile_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    q = float(quantile)
+    if not (0.0 < q < 1.0):
+        raise ValueError("quantile must be in (0,1)")
+    if float(alpha) < 0:
+        raise ValueError("alpha must be >= 0")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = QuantileRegressor(quantile=q, alpha=float(alpha), fit_intercept=True)
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
+def sgd_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    alpha: float = 0.0001,
+    penalty: str = "l2",
+    max_iter: int = 2000,
+    random_state: int = 0,
+) -> np.ndarray:
+    """
+    Direct multi-horizon SGDRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import SGDRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'sgd_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if float(alpha) < 0:
+        raise ValueError("alpha must be >= 0")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    base = SGDRegressor(
+        alpha=float(alpha),
+        penalty=str(penalty),
+        max_iter=int(max_iter),
+        random_state=int(random_state),
+    )
+    model = MultiOutputRegressor(base)
+    model.fit(X, Y)
+
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)

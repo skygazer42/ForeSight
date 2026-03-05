@@ -6,6 +6,11 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.1
+
+- Add more `scikit-learn` lag-feature models (`.[ml]`), including trees/ensembles/SVR/MLP/robust/quantile
+  regressors (direct multi-horizon).
+
 ## 0.2.0
 
 - Packaging hardening for `pip install foresight-ts` (wheel/sdist, package data, CI install smoke).

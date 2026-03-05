@@ -30,14 +30,27 @@ from .intermittent import (
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
 from .naive import naive_last, seasonal_naive
 from .regression import (
+    adaboost_lag_direct_forecast,
+    bagging_lag_direct_forecast,
+    decision_tree_lag_direct_forecast,
     elasticnet_lag_direct_forecast,
+    extra_trees_lag_direct_forecast,
     gbrt_lag_direct_forecast,
+    hgb_lag_direct_forecast,
+    huber_lag_direct_forecast,
+    kernel_ridge_lag_direct_forecast,
     knn_lag_direct_forecast,
     lasso_lag_direct_forecast,
+    linear_svr_lag_direct_forecast,
     lr_lag_direct_forecast,
     lr_lag_forecast,
+    mlp_lag_direct_forecast,
+    quantile_lag_direct_forecast,
     rf_lag_direct_forecast,
+    ridge_lag_direct_forecast,
     ridge_lag_forecast,
+    sgd_lag_direct_forecast,
+    svr_lag_direct_forecast,
 )
 from .smoothing import (
     holt_auto_forecast,
@@ -508,6 +521,340 @@ def _factory_gbrt_lag(
             n_estimators=n_estimators_int,
             learning_rate=learning_rate_f,
             max_depth=max_depth_int,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_ridge_lag_direct(
+    *, lags: int = 12, alpha: float = 1.0, **_params: Any
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return ridge_lag_direct_forecast(train, horizon, lags=lags_int, alpha=alpha_f)
+
+    return _f
+
+
+def _factory_decision_tree_lag(
+    *, lags: int = 12, max_depth: int | None = 5, random_state: int = 0, **_params: Any
+) -> ForecasterFn:
+    lags_int = int(lags)
+    max_depth_opt = None if max_depth is None else int(max_depth)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return decision_tree_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            max_depth=max_depth_opt,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_extra_trees_lag(
+    *,
+    lags: int = 12,
+    n_estimators: int = 300,
+    max_depth: int | None = None,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    max_depth_opt = None if max_depth is None else int(max_depth)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return extra_trees_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            max_depth=max_depth_opt,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_adaboost_lag(
+    *,
+    lags: int = 12,
+    n_estimators: int = 300,
+    learning_rate: float = 0.05,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return adaboost_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_bagging_lag(
+    *,
+    lags: int = 12,
+    n_estimators: int = 200,
+    max_samples: float = 0.8,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    max_samples_f = float(max_samples)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return bagging_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            max_samples=max_samples_f,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_hgb_lag(
+    *,
+    lags: int = 12,
+    max_iter: int = 300,
+    learning_rate: float = 0.05,
+    max_depth: int | None = 3,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    max_iter_int = int(max_iter)
+    learning_rate_f = float(learning_rate)
+    max_depth_opt = None if max_depth is None else int(max_depth)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return hgb_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            max_iter=max_iter_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_opt,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_svr_lag(
+    *,
+    lags: int = 12,
+    C: float = 1.0,
+    gamma: Any = "scale",
+    epsilon: float = 0.1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    C_f = float(C)
+    gamma_v: Any = gamma
+    epsilon_f = float(epsilon)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return svr_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            C=C_f,
+            gamma=gamma_v,
+            epsilon=epsilon_f,
+        )
+
+    return _f
+
+
+def _factory_linear_svr_lag(
+    *,
+    lags: int = 12,
+    C: float = 1.0,
+    epsilon: float = 0.0,
+    max_iter: int = 5000,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    C_f = float(C)
+    epsilon_f = float(epsilon)
+    max_iter_int = int(max_iter)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return linear_svr_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            C=C_f,
+            epsilon=epsilon_f,
+            max_iter=max_iter_int,
+            random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_kernel_ridge_lag(
+    *,
+    lags: int = 12,
+    alpha: float = 1.0,
+    kernel: str = "rbf",
+    gamma: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    kernel_s = str(kernel)
+    gamma_opt = None if gamma is None else float(gamma)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return kernel_ridge_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            kernel=kernel_s,
+            gamma=gamma_opt,
+        )
+
+    return _f
+
+
+def _factory_mlp_lag(
+    *,
+    lags: int = 12,
+    hidden_layer_sizes: Any = (64, 64),
+    alpha: float = 0.0001,
+    max_iter: int = 300,
+    random_state: int = 0,
+    learning_rate_init: float = 0.001,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    random_state_int = int(random_state)
+    learning_rate_init_f = float(learning_rate_init)
+
+    sizes_raw = hidden_layer_sizes
+    if isinstance(sizes_raw, tuple | list):
+        sizes = tuple(int(s) for s in sizes_raw)
+    else:
+        sizes = (int(sizes_raw),)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return mlp_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_layer_sizes=sizes,
+            alpha=alpha_f,
+            max_iter=max_iter_int,
+            random_state=random_state_int,
+            learning_rate_init=learning_rate_init_f,
+        )
+
+    return _f
+
+
+def _factory_huber_lag(
+    *,
+    lags: int = 12,
+    epsilon: float = 1.35,
+    alpha: float = 0.0001,
+    max_iter: int = 200,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    epsilon_f = float(epsilon)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return huber_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            epsilon=epsilon_f,
+            alpha=alpha_f,
+            max_iter=max_iter_int,
+        )
+
+    return _f
+
+
+def _factory_quantile_lag(
+    *,
+    lags: int = 12,
+    quantile: float = 0.5,
+    alpha: float = 0.0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    quantile_f = float(quantile)
+    alpha_f = float(alpha)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return quantile_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            quantile=quantile_f,
+            alpha=alpha_f,
+        )
+
+    return _f
+
+
+def _factory_sgd_lag(
+    *,
+    lags: int = 12,
+    alpha: float = 0.0001,
+    penalty: str = "l2",
+    max_iter: int = 2000,
+    random_state: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    penalty_s = str(penalty)
+    max_iter_int = int(max_iter)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return sgd_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            penalty=penalty_s,
+            max_iter=max_iter_int,
             random_state=random_state_int,
         )
 
@@ -4548,6 +4895,192 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_estimators": "Number of boosting stages",
             "learning_rate": "Boosting learning rate",
             "max_depth": "Tree max_depth",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "ridge-lag-direct": ModelSpec(
+        key="ridge-lag-direct",
+        description="Ridge regression on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_ridge_lag_direct,
+        default_params={"lags": 12, "alpha": 1.0},
+        param_help={"lags": "Number of lag features", "alpha": "Ridge regularization strength"},
+        requires=("ml",),
+    ),
+    "decision-tree-lag": ModelSpec(
+        key="decision-tree-lag",
+        description="DecisionTreeRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_decision_tree_lag,
+        default_params={"lags": 12, "max_depth": 5, "random_state": 0},
+        param_help={
+            "lags": "Number of lag features",
+            "max_depth": "Tree max_depth (None for unlimited)",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "extra-trees-lag": ModelSpec(
+        key="extra-trees-lag",
+        description="ExtraTreesRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_extra_trees_lag,
+        default_params={"lags": 12, "n_estimators": 300, "max_depth": None, "random_state": 0},
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of trees",
+            "max_depth": "Tree max_depth (None for unlimited)",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "adaboost-lag": ModelSpec(
+        key="adaboost-lag",
+        description="AdaBoostRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_adaboost_lag,
+        default_params={"lags": 12, "n_estimators": 300, "learning_rate": 0.05, "random_state": 0},
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting stages",
+            "learning_rate": "Boosting learning rate",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "bagging-lag": ModelSpec(
+        key="bagging-lag",
+        description="BaggingRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_bagging_lag,
+        default_params={"lags": 12, "n_estimators": 200, "max_samples": 0.8, "random_state": 0},
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of estimators",
+            "max_samples": "Fraction of samples per estimator in (0,1]",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "hgb-lag": ModelSpec(
+        key="hgb-lag",
+        description="HistGradientBoostingRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_hgb_lag,
+        default_params={
+            "lags": 12,
+            "max_iter": 300,
+            "learning_rate": 0.05,
+            "max_depth": 3,
+            "random_state": 0,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "max_iter": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate",
+            "max_depth": "Tree max_depth (None for unlimited)",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "svr-lag": ModelSpec(
+        key="svr-lag",
+        description="SVR (RBF) on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_svr_lag,
+        default_params={"lags": 12, "C": 1.0, "gamma": "scale", "epsilon": 0.1},
+        param_help={
+            "lags": "Number of lag features",
+            "C": "SVR regularization (must be > 0)",
+            "gamma": "Kernel gamma: scale, auto, or a float",
+            "epsilon": "Epsilon-insensitive tube width (>=0)",
+        },
+        requires=("ml",),
+    ),
+    "linear-svr-lag": ModelSpec(
+        key="linear-svr-lag",
+        description="LinearSVR on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_linear_svr_lag,
+        default_params={"lags": 12, "C": 1.0, "epsilon": 0.0, "max_iter": 5000, "random_state": 0},
+        param_help={
+            "lags": "Number of lag features",
+            "C": "LinearSVR regularization (must be > 0)",
+            "epsilon": "Epsilon-insensitive tube width (>=0)",
+            "max_iter": "Max solver iterations",
+            "random_state": "Random seed",
+        },
+        requires=("ml",),
+    ),
+    "kernel-ridge-lag": ModelSpec(
+        key="kernel-ridge-lag",
+        description="KernelRidge on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_kernel_ridge_lag,
+        default_params={"lags": 12, "alpha": 1.0, "kernel": "rbf", "gamma": None},
+        param_help={
+            "lags": "Number of lag features",
+            "alpha": "Ridge regularization strength (>=0)",
+            "kernel": "Kernel name (e.g., rbf, linear, poly)",
+            "gamma": "Kernel gamma (None for default)",
+        },
+        requires=("ml",),
+    ),
+    "mlp-lag": ModelSpec(
+        key="mlp-lag",
+        description="MLPRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_mlp_lag,
+        default_params={
+            "lags": 12,
+            "hidden_layer_sizes": (64, 64),
+            "alpha": 0.0001,
+            "max_iter": 300,
+            "random_state": 0,
+            "learning_rate_init": 0.001,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "hidden_layer_sizes": "Hidden sizes as comma list (e.g. 64,64)",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max training iterations",
+            "random_state": "Random seed",
+            "learning_rate_init": "Initial learning rate (>0)",
+        },
+        requires=("ml",),
+    ),
+    "huber-lag": ModelSpec(
+        key="huber-lag",
+        description="HuberRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_huber_lag,
+        default_params={"lags": 12, "epsilon": 1.35, "alpha": 0.0001, "max_iter": 200},
+        param_help={
+            "lags": "Number of lag features",
+            "epsilon": "Huber epsilon (>1.0)",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max solver iterations",
+        },
+        requires=("ml",),
+    ),
+    "quantile-lag": ModelSpec(
+        key="quantile-lag",
+        description="QuantileRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_quantile_lag,
+        default_params={"lags": 12, "quantile": 0.5, "alpha": 0.0},
+        param_help={
+            "lags": "Number of lag features",
+            "quantile": "Target quantile in (0,1) (e.g. 0.5 for median)",
+            "alpha": "L2 regularization strength (>=0)",
+        },
+        requires=("ml",),
+    ),
+    "sgd-lag": ModelSpec(
+        key="sgd-lag",
+        description="SGDRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_sgd_lag,
+        default_params={
+            "lags": 12,
+            "alpha": 0.0001,
+            "penalty": "l2",
+            "max_iter": 2000,
+            "random_state": 0,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "alpha": "Regularization strength (>=0)",
+            "penalty": "Penalty: l2, l1, elasticnet",
+            "max_iter": "Max training iterations",
             "random_state": "Random seed",
         },
         requires=("ml",),

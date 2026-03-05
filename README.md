@@ -180,11 +180,24 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[all]"`
 
 - `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
+- `ridge-lag-direct`（requires `.[ml]`）：lag 特征 + Ridge（direct multi-horizon, `lags`, `alpha`）
 - `rf-lag`（requires `.[ml]`）：lag 特征 + RandomForest（direct multi-horizon, `lags`, `n_estimators`…）
+- `decision-tree-lag`（requires `.[ml]`）：lag 特征 + DecisionTreeRegressor（direct multi-horizon, `lags`, `max_depth`…）
+- `extra-trees-lag`（requires `.[ml]`）：lag 特征 + ExtraTreesRegressor（direct multi-horizon, `lags`, `n_estimators`…）
+- `adaboost-lag`（requires `.[ml]`）：lag 特征 + AdaBoostRegressor（direct multi-horizon, `lags`, `n_estimators`…）
+- `bagging-lag`（requires `.[ml]`）：lag 特征 + BaggingRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `lasso-lag`（requires `.[ml]`）：lag 特征 + Lasso（direct multi-horizon, `lags`, `alpha`…）
 - `elasticnet-lag`（requires `.[ml]`）：lag 特征 + ElasticNet（direct multi-horizon, `lags`, `alpha`, `l1_ratio`…）
 - `knn-lag`（requires `.[ml]`）：lag 特征 + KNN（direct multi-horizon, `lags`, `n_neighbors`…）
 - `gbrt-lag`（requires `.[ml]`）：lag 特征 + GradientBoosting（direct multi-horizon, `lags`, `n_estimators`…）
+- `hgb-lag`（requires `.[ml]`）：lag 特征 + HistGradientBoostingRegressor（direct multi-horizon, `lags`, `max_iter`…）
+- `svr-lag`（requires `.[ml]`）：lag 特征 + SVR(RBF)（direct multi-horizon, `lags`, `C`, `gamma`…）
+- `linear-svr-lag`（requires `.[ml]`）：lag 特征 + LinearSVR（direct multi-horizon, `lags`, `C`, `max_iter`…）
+- `kernel-ridge-lag`（requires `.[ml]`）：lag 特征 + KernelRidge（direct multi-horizon, `lags`, `kernel`, `gamma`…）
+- `mlp-lag`（requires `.[ml]`）：lag 特征 + MLPRegressor（direct multi-horizon, `lags`, `hidden_layer_sizes`…）
+- `huber-lag`（requires `.[ml]`）：lag 特征 + HuberRegressor（direct multi-horizon, `lags`, `epsilon`…）
+- `quantile-lag`（requires `.[ml]`）：lag 特征 + QuantileRegressor（direct multi-horizon, `lags`, `quantile`…）
+- `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
 - `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
 - `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
 - `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
