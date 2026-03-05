@@ -2446,6 +2446,56 @@ def _xgb_lag_dirrec_forecast_kwargs(
     return np.asarray(out, dtype=float)
 
 
+def _xgb_lag_mimo_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+    multi_strategy: str = "multi_output_tree",
+) -> np.ndarray:
+    """
+    MIMO (multi-input multi-output) strategy with a single multi-output regressor.
+
+    Requires XGBoost's multi-target regression support (xgboost>=2.0).
+    """
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(xgb_params)
+    params.setdefault("verbosity", 0)
+    params.setdefault("multi_strategy", str(multi_strategy))
+    obj = str(params.get("objective", "")).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    _xgb_validate_objective_label_constraints(obj, x)
+    _xgb_validate_common_regressor_params(params)
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    model = xgb.XGBRegressor(**params)
+    model.fit(X, Y)
+
+    pred = model.predict(feat)
+    out = np.asarray(pred, dtype=float).reshape(-1)
+    if out.shape[0] != h:
+        raise RuntimeError(f"Unexpected MIMO predict shape {out.shape}; expected ({h},)")
+    return out
+
+
 def xgb_step_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -2477,6 +2527,28 @@ def xgb_dirrec_lag_forecast(
     XGBoost DirRec (direct-recursive) multi-horizon forecast on lag features.
     """
     return _xgb_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, xgb_params=xgb_params)
+
+
+def xgb_mimo_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+    multi_strategy: str = "multi_output_tree",
+) -> np.ndarray:
+    """
+    XGBoost MIMO (multi-input multi-output) multi-horizon forecast on lag features.
+
+    Trains a single multi-output regressor to predict all horizon steps at once.
+    """
+    return _xgb_lag_mimo_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        xgb_params=xgb_params,
+        multi_strategy=multi_strategy,
+    )
 
 
 def xgb_custom_lag_direct_forecast(

@@ -68,6 +68,7 @@ from .regression import (
     xgb_logistic_lag_recursive_forecast,
     xgb_mae_lag_direct_forecast,
     xgb_mae_lag_recursive_forecast,
+    xgb_mimo_lag_direct_forecast,
     xgb_msle_lag_direct_forecast,
     xgb_msle_lag_recursive_forecast,
     xgb_poisson_lag_direct_forecast,
@@ -1047,6 +1048,68 @@ def _factory_xgb_dirrec_lag(
             horizon,
             lags=lags_int,
             xgb_params=dict(xgb_params),
+        )
+
+    return _f
+
+
+def _factory_xgb_mimo_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    multi_strategy: str = "multi_output_tree",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+    multi_strategy_s = str(multi_strategy)
+
+    xgb_params = {
+        "booster": "gbtree",
+        "objective": "reg:squarederror",
+        "n_estimators": n_estimators_int,
+        "learning_rate": learning_rate_f,
+        "max_depth": max_depth_int,
+        "subsample": subsample_f,
+        "colsample_bytree": colsample_bytree_f,
+        "reg_alpha": reg_alpha_f,
+        "reg_lambda": reg_lambda_f,
+        "min_child_weight": min_child_weight_f,
+        "gamma": gamma_f,
+        "random_state": random_state_int,
+        "n_jobs": n_jobs_int,
+        "tree_method": tree_method_s,
+    }
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_mimo_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(xgb_params),
+            multi_strategy=multi_strategy_s,
         )
 
     return _f
@@ -6699,6 +6762,47 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-mimo-lag": ModelSpec(
+        key="xgb-mimo-lag",
+        description=(
+            "XGBoost (XGBRegressor) MIMO multi-output regression on lag features (single-model direct "
+            "multi-horizon). Requires xgboost>=2.0."
+        ),
+        factory=_factory_xgb_mimo_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "multi_strategy": "multi_output_tree",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "multi_strategy": "XGBoost multi-target strategy (multi_output_tree, one_output_per_tree)",
         },
         requires=("xgb",),
     ),
