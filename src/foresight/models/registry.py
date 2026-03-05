@@ -41,6 +41,14 @@ from .regression import (
     kernel_ridge_lag_direct_forecast,
     knn_lag_direct_forecast,
     lasso_lag_direct_forecast,
+    lgbm_custom_dirrec_lag_forecast,
+    lgbm_custom_lag_direct_forecast,
+    lgbm_custom_lag_recursive_forecast,
+    lgbm_custom_step_lag_direct_forecast,
+    lgbm_dirrec_lag_forecast,
+    lgbm_lag_direct_forecast,
+    lgbm_lag_recursive_forecast,
+    lgbm_step_lag_direct_forecast,
     linear_svr_lag_direct_forecast,
     lr_lag_direct_forecast,
     lr_lag_forecast,
@@ -885,6 +893,300 @@ def _factory_sgd_lag(
             penalty=penalty_s,
             max_iter=max_iter_int,
             random_state=random_state_int,
+        )
+
+    return _f
+
+
+def _factory_lgbm_custom_lag(
+    *,
+    lags: int = 24,
+    **lgbm_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(lgbm_params)
+    params.setdefault("boosting_type", "gbdt")
+    params.setdefault("objective", "regression")
+    params.setdefault("verbosity", -1)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_custom_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            lgbm_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_lgbm_custom_lag_recursive(
+    *,
+    lags: int = 24,
+    **lgbm_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(lgbm_params)
+    params.setdefault("boosting_type", "gbdt")
+    params.setdefault("objective", "regression")
+    params.setdefault("verbosity", -1)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_custom_lag_recursive_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            lgbm_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_lgbm_custom_step_lag(
+    *,
+    lags: int = 24,
+    step_scale: str = "one_based",
+    **lgbm_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    step_scale_s = str(step_scale)
+    params = dict(lgbm_params)
+    params.setdefault("boosting_type", "gbdt")
+    params.setdefault("objective", "regression")
+    params.setdefault("verbosity", -1)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_custom_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            lgbm_params=dict(params),
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_lgbm_custom_dirrec_lag(
+    *,
+    lags: int = 24,
+    **lgbm_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    params = dict(lgbm_params)
+    params.setdefault("boosting_type", "gbdt")
+    params.setdefault("objective", "regression")
+    params.setdefault("verbosity", -1)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_custom_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            lgbm_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_lgbm_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    num_leaves_int = int(num_leaves)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            num_leaves=num_leaves_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+        )
+
+    return _f
+
+
+def _factory_lgbm_lag_recursive(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    num_leaves_int = int(num_leaves)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_lag_recursive_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            num_leaves=num_leaves_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+        )
+
+    return _f
+
+
+def _factory_lgbm_step_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    step_scale: str = "one_based",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    num_leaves_int = int(num_leaves)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    step_scale_s = str(step_scale)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            num_leaves=num_leaves_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_lgbm_dirrec_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    num_leaves_int = int(num_leaves)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return lgbm_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            num_leaves=num_leaves_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
         )
 
     return _f
@@ -6670,6 +6972,327 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
         },
         requires=("ml",),
+    ),
+    "lgbm-custom-lag": ModelSpec(
+        key="lgbm-custom-lag",
+        description=(
+            "Customizable LightGBM (LGBMRegressor) on lag features (direct multi-horizon). "
+            "Requires lightgbm. Accepts any LGBMRegressor keyword via --model-param."
+        ),
+        factory=_factory_lgbm_custom_lag,
+        default_params={
+            "lags": 24,
+            "boosting_type": "gbdt",
+            "objective": "regression",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "verbosity": -1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "boosting_type": "Boosting type (gbdt, dart, rf, ...)",
+            "objective": "Objective (regression, quantile, poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "verbosity": "Verbosity (-1 to silence)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-custom-lag-recursive": ModelSpec(
+        key="lgbm-custom-lag-recursive",
+        description=(
+            "Customizable LightGBM (LGBMRegressor) on lag features (one-step trained, recursive forecast). "
+            "Requires lightgbm. Accepts any LGBMRegressor keyword via --model-param."
+        ),
+        factory=_factory_lgbm_custom_lag_recursive,
+        default_params={
+            "lags": 24,
+            "boosting_type": "gbdt",
+            "objective": "regression",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "verbosity": -1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "boosting_type": "Boosting type (gbdt, dart, rf, ...)",
+            "objective": "Objective (regression, quantile, poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "verbosity": "Verbosity (-1 to silence)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-custom-step-lag": ModelSpec(
+        key="lgbm-custom-step-lag",
+        description=(
+            "Customizable LightGBM (LGBMRegressor) on lag features with a learned step-index feature "
+            "(single-model direct multi-horizon). Requires lightgbm. "
+            "Accepts any LGBMRegressor keyword via --model-param."
+        ),
+        factory=_factory_lgbm_custom_step_lag,
+        default_params={
+            "lags": 24,
+            "step_scale": "one_based",
+            "boosting_type": "gbdt",
+            "objective": "regression",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "verbosity": -1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "boosting_type": "Boosting type (gbdt, dart, rf, ...)",
+            "objective": "Objective (regression, quantile, poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "verbosity": "Verbosity (-1 to silence)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-custom-dirrec-lag": ModelSpec(
+        key="lgbm-custom-dirrec-lag",
+        description=(
+            "Customizable LightGBM (LGBMRegressor) DirRec strategy on lag features (per-step models with "
+            "previous-step features). Requires lightgbm. Accepts any LGBMRegressor keyword via --model-param."
+        ),
+        factory=_factory_lgbm_custom_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "boosting_type": "gbdt",
+            "objective": "regression",
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "verbosity": -1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "boosting_type": "Boosting type (gbdt, dart, rf, ...)",
+            "objective": "Objective (regression, quantile, poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "verbosity": "Verbosity (-1 to silence)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-lag": ModelSpec(
+        key="lgbm-lag",
+        description="LightGBM (LGBMRegressor) on lag features (direct multi-horizon). Requires lightgbm.",
+        factory=_factory_lgbm_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-lag-recursive": ModelSpec(
+        key="lgbm-lag-recursive",
+        description=(
+            "LightGBM (LGBMRegressor) on lag features (one-step trained, recursive forecast). Requires lightgbm."
+        ),
+        factory=_factory_lgbm_lag_recursive,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-step-lag": ModelSpec(
+        key="lgbm-step-lag",
+        description=(
+            "LightGBM (LGBMRegressor) on lag features with a learned step-index feature "
+            "(single-model direct multi-horizon). Requires lightgbm."
+        ),
+        factory=_factory_lgbm_step_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "step_scale": "one_based",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+        },
+        requires=("lgbm",),
+    ),
+    "lgbm-dirrec-lag": ModelSpec(
+        key="lgbm-dirrec-lag",
+        description=(
+            "LightGBM (LGBMRegressor) DirRec strategy on lag features (per-step models with previous-step "
+            "features). Requires lightgbm."
+        ),
+        factory=_factory_lgbm_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+        },
+        requires=("lgbm",),
     ),
     "xgb-custom-lag": ModelSpec(
         key="xgb-custom-lag",

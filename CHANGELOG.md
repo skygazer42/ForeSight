@@ -8,6 +8,10 @@ This project follows a lightweight changelog format.
   - `xgb-custom-step-lag`: step-index single-model direct multi-horizon.
   - `xgb-custom-dirrec-lag`: DirRec strategy (per-step models with previous-step features).
   - `xgb-custom-mimo-lag`: MIMO multi-output regression (single model predicts the full horizon).
+- Add optional `lightgbm` (`.[lgbm]`) lag-feature models:
+  - `lgbm-lag`, `lgbm-lag-recursive`, `lgbm-step-lag`, `lgbm-dirrec-lag`.
+  - Customizable variants: `lgbm-custom-lag`, `lgbm-custom-lag-recursive`, `lgbm-custom-step-lag`,
+    `lgbm-custom-dirrec-lag`.
 
 ## 0.2.7
 

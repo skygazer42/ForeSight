@@ -2579,3 +2579,462 @@ def xgb_custom_lag_recursive_forecast(
     All XGBoost parameters are provided through `xgb_params` and passed to `XGBRegressor`.
     """
     return _xgb_lag_recursive_forecast_kwargs(train, horizon, lags=lags, xgb_params=xgb_params)
+
+
+def _lgbm_validate_common_regressor_params(params: dict[str, Any]) -> None:
+    if "n_estimators" in params and params["n_estimators"] is not None:
+        if int(params["n_estimators"]) <= 0:
+            raise ValueError("n_estimators must be >= 1")
+    if "learning_rate" in params and params["learning_rate"] is not None:
+        if float(params["learning_rate"]) <= 0:
+            raise ValueError("learning_rate must be > 0")
+    if "max_depth" in params and params["max_depth"] is not None:
+        max_depth = int(params["max_depth"])
+        # LightGBM convention: -1 means "no limit".
+        if max_depth == 0 or max_depth < -1:
+            raise ValueError("max_depth must be -1 or >= 1")
+    if "num_leaves" in params and params["num_leaves"] is not None:
+        if int(params["num_leaves"]) < 2:
+            raise ValueError("num_leaves must be >= 2")
+    if "subsample" in params and params["subsample"] is not None:
+        subsample = float(params["subsample"])
+        if not (0.0 < subsample <= 1.0):
+            raise ValueError("subsample must be in (0,1]")
+    if "colsample_bytree" in params and params["colsample_bytree"] is not None:
+        colsample_bytree = float(params["colsample_bytree"])
+        if not (0.0 < colsample_bytree <= 1.0):
+            raise ValueError("colsample_bytree must be in (0,1]")
+    for key in ("reg_alpha", "reg_lambda", "min_child_weight", "min_split_gain"):
+        if key in params and params[key] is not None and float(params[key]) < 0:
+            raise ValueError(f"{key} must be >= 0")
+    if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+
+def _require_lightgbm() -> Any:
+    try:
+        import lightgbm as lgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'lightgbm lag models require lightgbm. Install with: pip install -e ".[lgbm]"'
+        ) from e
+    return lgb
+
+
+def _lgbm_predict(model: Any, X: Any) -> Any:
+    import warnings
+
+    # LightGBM's sklearn wrapper sets feature names even when fitting on numpy arrays
+    # ("Column_0", ...), then sklearn emits noisy warnings at predict-time. These
+    # models operate purely by shape, so we safely silence that specific warning.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "X does not have valid feature names, but LGBMRegressor was fitted with feature names"
+            ),
+            category=UserWarning,
+        )
+        return model.predict(X)
+
+
+def _lgbm_lag_direct_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    lgb = _require_lightgbm()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(lgbm_params)
+    params.setdefault("verbosity", -1)
+    _lgbm_validate_common_regressor_params(params)
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    out = np.empty((h,), dtype=float)
+    for j in range(h):
+        model = lgb.LGBMRegressor(**params)
+        model.fit(X, Y[:, j])
+        out[j] = float(_lgbm_predict(model, feat)[0])
+    return np.asarray(out, dtype=float)
+
+
+def _lgbm_lag_recursive_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    lgb = _require_lightgbm()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if x.size <= lags:
+        raise ValueError(
+            f"lightgbm recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
+        )
+
+    params = dict(lgbm_params)
+    params.setdefault("verbosity", -1)
+    _lgbm_validate_common_regressor_params(params)
+
+    X, y = make_lagged_xy(x, lags=lags)
+    model = lgb.LGBMRegressor(**params)
+    model.fit(X, y)
+
+    history = x.astype(float, copy=True).tolist()
+    out: list[float] = []
+    for _h in range(h):
+        feat = np.asarray(history[-lags:], dtype=float).reshape(1, -1)
+        yhat = float(_lgbm_predict(model, feat)[0])
+        out.append(float(yhat))
+        history.append(float(yhat))
+    return np.asarray(out, dtype=float)
+
+
+def _lgbm_lag_step_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    Single-model multi-horizon forecasting by adding a "step index" feature.
+
+    Trains one regressor on the expanded dataset:
+      (lag_window, step) -> y_{t+step}
+    """
+    lgb = _require_lightgbm()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(lgbm_params)
+    params.setdefault("verbosity", -1)
+    _lgbm_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    rows = int(X_base.shape[0])
+
+    if step_scale not in {"one_based", "zero_based", "unit"}:
+        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+
+    if step_scale == "zero_based":
+        step = np.arange(h, dtype=float)
+    elif step_scale == "unit":
+        step = np.arange(1, h + 1, dtype=float) / float(h)
+    else:
+        step = np.arange(1, h + 1, dtype=float)
+
+    step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
+    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    X_long = np.concatenate([X_rep, step_idx], axis=1)
+    y_long = Y.reshape(-1).astype(float, copy=False)
+
+    model = lgb.LGBMRegressor(**params)
+    model.fit(X_long, y_long)
+
+    base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    base_rep = np.repeat(base_feat, repeats=h, axis=0)  # (h, lags)
+    feat = np.concatenate([base_rep, step.reshape(-1, 1)], axis=1)
+    out = _lgbm_predict(model, feat)
+    return np.asarray(out, dtype=float)
+
+
+def _lgbm_lag_dirrec_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    DirRec (Direct-Recursive) strategy with per-step models.
+
+    Each step model uses lag features plus the previous steps as additional regressors.
+    During training we use the true previous-step values; during prediction we use the
+    model predictions from earlier steps.
+    """
+    lgb = _require_lightgbm()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(lgbm_params)
+    params.setdefault("verbosity", -1)
+    _lgbm_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+
+    models: list[Any] = []
+    for j in range(h):
+        if j == 0:
+            Xj = X_base
+        else:
+            Xj = np.concatenate([X_base, Y[:, :j]], axis=1)
+        yj = Y[:, j]
+        model = lgb.LGBMRegressor(**params)
+        model.fit(Xj, yj)
+        models.append(model)
+
+    base_feat = x[-lags:].astype(float, copy=False)
+    out: list[float] = []
+    for j in range(h):
+        if j == 0:
+            feat = base_feat
+        else:
+            feat = np.concatenate([base_feat, np.asarray(out, dtype=float)], axis=0)
+        yhat = float(_lgbm_predict(models[j], feat.reshape(1, -1))[0])
+        out.append(yhat)
+    return np.asarray(out, dtype=float)
+
+
+def lgbm_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+) -> np.ndarray:
+    """
+    LightGBM (LGBMRegressor) on lag features (direct multi-horizon). Requires lightgbm.
+    """
+    params = {
+        "boosting_type": "gbdt",
+        "objective": "regression",
+        "n_estimators": int(n_estimators),
+        "learning_rate": float(learning_rate),
+        "max_depth": int(max_depth),
+        "num_leaves": int(num_leaves),
+        "subsample": float(subsample),
+        "colsample_bytree": float(colsample_bytree),
+        "reg_alpha": float(reg_alpha),
+        "reg_lambda": float(reg_lambda),
+        "min_child_weight": float(min_child_weight),
+        "random_state": int(random_state),
+        "n_jobs": int(n_jobs),
+        "verbosity": -1,
+    }
+    return _lgbm_lag_direct_forecast_kwargs(train, horizon, lags=lags, lgbm_params=params)
+
+
+def lgbm_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+) -> np.ndarray:
+    """
+    LightGBM (LGBMRegressor) on lag features (one-step trained, recursive forecast). Requires lightgbm.
+    """
+    params = {
+        "boosting_type": "gbdt",
+        "objective": "regression",
+        "n_estimators": int(n_estimators),
+        "learning_rate": float(learning_rate),
+        "max_depth": int(max_depth),
+        "num_leaves": int(num_leaves),
+        "subsample": float(subsample),
+        "colsample_bytree": float(colsample_bytree),
+        "reg_alpha": float(reg_alpha),
+        "reg_lambda": float(reg_lambda),
+        "min_child_weight": float(min_child_weight),
+        "random_state": int(random_state),
+        "n_jobs": int(n_jobs),
+        "verbosity": -1,
+    }
+    return _lgbm_lag_recursive_forecast_kwargs(train, horizon, lags=lags, lgbm_params=params)
+
+
+def lgbm_step_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    LightGBM multi-horizon forecast using a single model with an extra "step" feature.
+    """
+    params = {
+        "boosting_type": "gbdt",
+        "objective": "regression",
+        "n_estimators": int(n_estimators),
+        "learning_rate": float(learning_rate),
+        "max_depth": int(max_depth),
+        "num_leaves": int(num_leaves),
+        "subsample": float(subsample),
+        "colsample_bytree": float(colsample_bytree),
+        "reg_alpha": float(reg_alpha),
+        "reg_lambda": float(reg_lambda),
+        "min_child_weight": float(min_child_weight),
+        "random_state": int(random_state),
+        "n_jobs": int(n_jobs),
+        "verbosity": -1,
+    }
+    return _lgbm_lag_step_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        lgbm_params=params,
+        step_scale=step_scale,
+    )
+
+
+def lgbm_dirrec_lag_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    num_leaves: int = 31,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 0.0,
+    min_child_weight: float = 0.001,
+    random_state: int = 0,
+    n_jobs: int = 1,
+) -> np.ndarray:
+    """
+    LightGBM DirRec (direct-recursive) multi-horizon forecast on lag features.
+    """
+    params = {
+        "boosting_type": "gbdt",
+        "objective": "regression",
+        "n_estimators": int(n_estimators),
+        "learning_rate": float(learning_rate),
+        "max_depth": int(max_depth),
+        "num_leaves": int(num_leaves),
+        "subsample": float(subsample),
+        "colsample_bytree": float(colsample_bytree),
+        "reg_alpha": float(reg_alpha),
+        "reg_lambda": float(reg_lambda),
+        "min_child_weight": float(min_child_weight),
+        "random_state": int(random_state),
+        "n_jobs": int(n_jobs),
+        "verbosity": -1,
+    }
+    return _lgbm_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, lgbm_params=params)
+
+
+def lgbm_custom_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable direct multi-horizon LightGBM (LGBMRegressor) on lag features.
+
+    All LightGBM parameters are provided through `lgbm_params` and passed to `LGBMRegressor`.
+    """
+    return _lgbm_lag_direct_forecast_kwargs(train, horizon, lags=lags, lgbm_params=lgbm_params)
+
+
+def lgbm_custom_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable recursive one-step LightGBM (LGBMRegressor) on lag features.
+
+    All LightGBM parameters are provided through `lgbm_params` and passed to `LGBMRegressor`.
+    """
+    return _lgbm_lag_recursive_forecast_kwargs(train, horizon, lags=lags, lgbm_params=lgbm_params)
+
+
+def lgbm_custom_step_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    Customizable LightGBM multi-horizon forecast using a single model with a "step" feature.
+    """
+    return _lgbm_lag_step_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        lgbm_params=lgbm_params,
+        step_scale=step_scale,
+    )
+
+
+def lgbm_custom_dirrec_lag_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    lgbm_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable LightGBM DirRec (direct-recursive) multi-horizon forecast on lag features.
+    """
+    return _lgbm_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, lgbm_params=lgbm_params)
