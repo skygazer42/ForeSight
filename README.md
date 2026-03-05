@@ -198,6 +198,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `huber-lag`（requires `.[ml]`）：lag 特征 + HuberRegressor（direct multi-horizon, `lags`, `epsilon`…）
 - `quantile-lag`（requires `.[ml]`）：lag 特征 + QuantileRegressor（direct multi-horizon, `lags`, `quantile`…）
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
+- `xgb-custom-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon；任意 XGBRegressor 参数可用 `--model-param` 透传）
+- `xgb-custom-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step；任意 XGBRegressor 参数可用 `--model-param` 透传）
 - `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-msle-lag`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（direct multi-horizon, `lags`…；y>=0）

@@ -6,6 +6,8 @@ import pytest
 from foresight.models.registry import get_model_spec, make_forecaster
 
 XGB_MODELS = [
+    "xgb-custom-lag",
+    "xgb-custom-lag-recursive",
     "xgb-dart-lag",
     "xgb-dart-lag-recursive",
     "xgb-gamma-lag",
@@ -59,6 +61,30 @@ def test_xgb_models_smoke_when_installed() -> None:
     horizon = 2
 
     cases = [
+        (
+            "xgb-custom-lag",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "booster": "gbtree",
+                "objective": "reg:squarederror",
+            },
+            y_pos,
+        ),
+        (
+            "xgb-custom-lag-recursive",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "booster": "gbtree",
+                "objective": "reg:squarederror",
+            },
+            y_pos,
+        ),
         ("xgb-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
         (
             "xgb-lag-recursive",

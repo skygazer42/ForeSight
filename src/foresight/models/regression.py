@@ -2188,3 +2188,162 @@ def xgb_tweedie_lag_recursive_forecast(
         tree_method=tree_method,
         objective_params={"tweedie_variance_power": tvp},
     )
+
+
+def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
+    """
+    Defensive ergonomics: a few XGBoost objectives have label-domain assumptions.
+
+    We validate these early to surface a clearer error than the underlying trainer.
+    """
+    if obj in {"count:poisson", "reg:tweedie", "reg:squaredlogerror"}:
+        if np.any(x < 0.0):
+            raise ValueError(f"{obj} requires non-negative series values")
+    if obj == "reg:gamma":
+        if np.any(x <= 0.0):
+            raise ValueError("reg:gamma requires strictly positive series values")
+    if obj == "reg:logistic":
+        if np.any((x < 0.0) | (x > 1.0)):
+            raise ValueError("reg:logistic requires series values in [0,1]")
+
+
+def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
+    if "n_estimators" in params and params["n_estimators"] is not None:
+        if int(params["n_estimators"]) <= 0:
+            raise ValueError("n_estimators must be >= 1")
+    if "max_depth" in params and params["max_depth"] is not None:
+        if int(params["max_depth"]) <= 0:
+            raise ValueError("max_depth must be >= 1")
+    if "learning_rate" in params and params["learning_rate"] is not None:
+        if float(params["learning_rate"]) <= 0:
+            raise ValueError("learning_rate must be > 0")
+    if "subsample" in params and params["subsample"] is not None:
+        subsample = float(params["subsample"])
+        if not (0.0 < subsample <= 1.0):
+            raise ValueError("subsample must be in (0,1]")
+    if "colsample_bytree" in params and params["colsample_bytree"] is not None:
+        colsample_bytree = float(params["colsample_bytree"])
+        if not (0.0 < colsample_bytree <= 1.0):
+            raise ValueError("colsample_bytree must be in (0,1]")
+    for key in ("reg_alpha", "reg_lambda", "min_child_weight", "gamma"):
+        if key in params and params[key] is not None and float(params[key]) < 0:
+            raise ValueError(f"{key} must be >= 0")
+    if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+
+def _xgb_lag_direct_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(xgb_params)
+    params.setdefault("verbosity", 0)
+    obj = str(params.get("objective", "")).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    _xgb_validate_objective_label_constraints(obj, x)
+    _xgb_validate_common_regressor_params(params)
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    out = np.empty((int(horizon),), dtype=float)
+    for j in range(int(horizon)):
+        model = xgb.XGBRegressor(**params)
+        model.fit(X, Y[:, j])
+        out[j] = float(model.predict(feat)[0])
+    return np.asarray(out, dtype=float)
+
+
+def _xgb_lag_recursive_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if x.size <= lags:
+        raise ValueError(
+            f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
+        )
+
+    params = dict(xgb_params)
+    params.setdefault("verbosity", 0)
+    obj = str(params.get("objective", "")).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    _xgb_validate_objective_label_constraints(obj, x)
+    _xgb_validate_common_regressor_params(params)
+
+    X, y = make_lagged_xy(x, lags=lags)
+    model = xgb.XGBRegressor(**params)
+    model.fit(X, y)
+
+    history = x.astype(float, copy=True).tolist()
+    out: list[float] = []
+    for _h in range(int(horizon)):
+        feat = np.asarray(history[-lags:], dtype=float).reshape(1, -1)
+        yhat = float(model.predict(feat)[0])
+        out.append(float(yhat))
+        history.append(float(yhat))
+    return np.asarray(out, dtype=float)
+
+
+def xgb_custom_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable direct multi-horizon XGBoost (XGBRegressor) on lag features.
+
+    All XGBoost parameters are provided through `xgb_params` and passed to `XGBRegressor`.
+    """
+    return _xgb_lag_direct_forecast_kwargs(train, horizon, lags=lags, xgb_params=xgb_params)
+
+
+def xgb_custom_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    Customizable recursive one-step XGBoost (XGBRegressor) on lag features.
+
+    All XGBoost parameters are provided through `xgb_params` and passed to `XGBRegressor`.
+    """
+    return _xgb_lag_recursive_forecast_kwargs(train, horizon, lags=lags, xgb_params=xgb_params)

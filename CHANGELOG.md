@@ -6,6 +6,12 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.6
+
+- Add optional `xgboost` (`.[xgb]`) customizable models:
+  - `xgb-custom-lag` (direct multi-horizon).
+  - `xgb-custom-lag-recursive` (one-step trained, recursive forecast).
+
 ## 0.2.5
 
 - Add more optional `xgboost` (`.[xgb]`) recursive lag-feature models:
