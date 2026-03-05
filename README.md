@@ -200,6 +200,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
 - `xgb-custom-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon；任意 XGBRegressor 参数可用 `--model-param` 透传）
 - `xgb-custom-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step；任意 XGBRegressor 参数可用 `--model-param` 透传）
+- `xgb-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；额外加入 step index 特征，支持 `step_scale`）
+- `xgb-dirrec-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
+- `xgb-mimo-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（MIMO multi-output：单模型直接输出整个 horizon，`multi_strategy` 可配）
 - `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-msle-lag`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（direct multi-horizon, `lags`…；y>=0）
