@@ -6,6 +6,12 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.4
+
+- Add more optional `xgboost` (`.[xgb]`) models:
+  - Recursive variants: `xgb-lag-recursive`, `xgb-dart-lag-recursive`, `xgb-linear-lag-recursive`.
+  - New objectives: `xgb-msle-lag` (squared log error, y>=0), `xgb-logistic-lag` (logistic, y in [0,1]).
+
 ## 0.2.3
 
 - Add more optional `xgboost` (`.[xgb]`) objectives/boosters: `xgb-linear-lag`, `xgb-mae-lag`,

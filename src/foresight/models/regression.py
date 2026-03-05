@@ -939,9 +939,15 @@ def _xgb_lag_direct_forecast(
     if obj in {"count:poisson", "reg:tweedie"}:
         if np.any(x < 0.0):
             raise ValueError(f"{obj} requires non-negative series values")
+    if obj == "reg:squaredlogerror":
+        if np.any(x < 0.0):
+            raise ValueError("reg:squaredlogerror requires non-negative series values")
     if obj == "reg:gamma":
         if np.any(x <= 0.0):
             raise ValueError("reg:gamma requires strictly positive series values")
+    if obj == "reg:logistic":
+        if np.any((x < 0.0) | (x > 1.0)):
+            raise ValueError("reg:logistic requires series values in [0,1]")
 
     X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
     feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
@@ -970,6 +976,115 @@ def _xgb_lag_direct_forecast(
         )
         model.fit(X, Y[:, j])
         out[j] = float(model.predict(feat)[0])
+
+    return np.asarray(out, dtype=float)
+
+
+def _xgb_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    booster: str,
+    objective: str,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    objective_params: dict[str, Any] | None = None,
+) -> np.ndarray:
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if x.size <= lags:
+        raise ValueError(
+            f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
+        )
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if max_depth <= 0:
+        raise ValueError("max_depth must be >= 1")
+    if float(learning_rate) <= 0:
+        raise ValueError("learning_rate must be > 0")
+    if not (0.0 < float(subsample) <= 1.0):
+        raise ValueError("subsample must be in (0,1]")
+    if not (0.0 < float(colsample_bytree) <= 1.0):
+        raise ValueError("colsample_bytree must be in (0,1]")
+    if float(reg_alpha) < 0:
+        raise ValueError("reg_alpha must be >= 0")
+    if float(reg_lambda) < 0:
+        raise ValueError("reg_lambda must be >= 0")
+    if float(min_child_weight) < 0:
+        raise ValueError("min_child_weight must be >= 0")
+    if float(gamma) < 0:
+        raise ValueError("gamma must be >= 0")
+    if n_jobs == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+    obj = str(objective).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    # Objective-specific label constraints (defensive ergonomics).
+    if obj in {"count:poisson", "reg:tweedie"}:
+        if np.any(x < 0.0):
+            raise ValueError(f"{obj} requires non-negative series values")
+    if obj == "reg:squaredlogerror":
+        if np.any(x < 0.0):
+            raise ValueError("reg:squaredlogerror requires non-negative series values")
+    if obj == "reg:gamma":
+        if np.any(x <= 0.0):
+            raise ValueError("reg:gamma requires strictly positive series values")
+    if obj == "reg:logistic":
+        if np.any((x < 0.0) | (x > 1.0)):
+            raise ValueError("reg:logistic requires series values in [0,1]")
+
+    X, y = make_lagged_xy(x, lags=lags)
+    extra = dict(objective_params or {})
+    model = xgb.XGBRegressor(
+        booster=str(booster),
+        objective=obj,
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        max_depth=int(max_depth),
+        subsample=float(subsample),
+        colsample_bytree=float(colsample_bytree),
+        reg_alpha=float(reg_alpha),
+        reg_lambda=float(reg_lambda),
+        min_child_weight=float(min_child_weight),
+        gamma=float(gamma),
+        random_state=int(random_state),
+        n_jobs=int(n_jobs),
+        tree_method=str(tree_method),
+        verbosity=0,
+        **extra,
+    )
+    model.fit(X, y)
+
+    history = x.astype(float, copy=True).tolist()
+    out: list[float] = []
+    for _h in range(int(horizon)):
+        feat = np.asarray(history[-lags:], dtype=float).reshape(1, -1)
+        yhat = float(model.predict(feat)[0])
+        out.append(float(yhat))
+        history.append(float(yhat))
 
     return np.asarray(out, dtype=float)
 
@@ -1016,6 +1131,48 @@ def xgb_lag_direct_forecast(
     )
 
 
+def xgb_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost (XGBRegressor) on lag features (requires xgboost).
+    """
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:squarederror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
 def xgb_dart_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1038,6 +1195,48 @@ def xgb_dart_lag_direct_forecast(
     Direct multi-horizon XGBoost DART booster on lag features (requires xgboost).
     """
     return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="dart",
+        objective="reg:squarederror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_dart_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost DART booster on lag features (requires xgboost).
+    """
+    return _xgb_lag_recursive_forecast(
         train,
         horizon,
         lags=lags,
@@ -1165,6 +1364,130 @@ def xgb_linear_lag_direct_forecast(
         reg_lambda=reg_lambda,
         min_child_weight=1.0,
         gamma=0.0,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_linear_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost linear booster (gblinear) on lag features (requires xgboost).
+    """
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gblinear",
+        objective="reg:squarederror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        # gblinear ignores tree-specific params like max_depth, but they are accepted by the API.
+        max_depth=1,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=1.0,
+        gamma=0.0,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_msle_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Direct multi-horizon XGBoost with squared log error objective on lag features (requires xgboost, y>=0).
+    """
+    return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:squaredlogerror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_logistic_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Direct multi-horizon XGBoost with logistic regression objective on lag features (requires xgboost, y in [0,1]).
+    """
+    return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:logistic",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
         random_state=random_state,
         n_jobs=n_jobs,
         tree_method=tree_method,

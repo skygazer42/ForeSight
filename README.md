@@ -199,8 +199,13 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `quantile-lag`（requires `.[ml]`）：lag 特征 + QuantileRegressor（direct multi-horizon, `lags`, `quantile`…）
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
 - `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step, `lags`, `n_estimators`…）
+- `xgb-msle-lag`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（direct multi-horizon, `lags`…；y>=0）
+- `xgb-logistic-lag`（requires `.[xgb]`）：lag 特征 + logistic objective（direct multi-horizon, `lags`…；y∈[0,1]）
 - `xgb-dart-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-dart-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-linear-lag`（requires `.[xgb]`）：lag 特征 + gblinear（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-linear-lag-recursive`（requires `.[xgb]`）：lag 特征 + gblinear（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-mae-lag`（requires `.[xgb]`）：lag 特征 + MAE objective（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-huber-lag`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（direct multi-horizon, `lags`, `huber_slope`…）
 - `xgb-quantile-lag`（requires `.[xgb]`）：lag 特征 + quantile objective（direct multi-horizon, `lags`, `quantile_alpha`…）
