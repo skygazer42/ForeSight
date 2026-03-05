@@ -9,18 +9,27 @@ XGB_MODELS = [
     "xgb-dart-lag",
     "xgb-dart-lag-recursive",
     "xgb-gamma-lag",
+    "xgb-gamma-lag-recursive",
     "xgb-huber-lag",
+    "xgb-huber-lag-recursive",
     "xgb-lag",
     "xgb-lag-recursive",
     "xgb-linear-lag",
     "xgb-linear-lag-recursive",
     "xgb-logistic-lag",
+    "xgb-logistic-lag-recursive",
     "xgb-mae-lag",
+    "xgb-mae-lag-recursive",
     "xgb-msle-lag",
+    "xgb-msle-lag-recursive",
     "xgb-poisson-lag",
+    "xgb-poisson-lag-recursive",
     "xgb-quantile-lag",
+    "xgb-quantile-lag-recursive",
     "xgb-tweedie-lag",
+    "xgb-tweedie-lag-recursive",
     "xgbrf-lag",
+    "xgbrf-lag-recursive",
 ]
 
 
@@ -62,7 +71,17 @@ def test_xgb_models_smoke_when_installed() -> None:
             y_pos,
         ),
         (
+            "xgb-msle-lag-recursive",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_pos,
+        ),
+        (
             "xgb-logistic-lag",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_01,
+        ),
+        (
+            "xgb-logistic-lag-recursive",
             {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
             y_01,
         ),
@@ -77,6 +96,7 @@ def test_xgb_models_smoke_when_installed() -> None:
             y_pos,
         ),
         ("xgbrf-lag", {"lags": 12, "n_estimators": 10, "max_depth": 3}, y_pos),
+        ("xgbrf-lag-recursive", {"lags": 12, "n_estimators": 10, "max_depth": 3}, y_pos),
         ("xgb-linear-lag", {"lags": 12, "n_estimators": 50, "learning_rate": 0.1}, y_pos),
         ("xgb-linear-lag-recursive", {"lags": 12, "n_estimators": 50, "learning_rate": 0.1}, y_pos),
         (
@@ -85,7 +105,23 @@ def test_xgb_models_smoke_when_installed() -> None:
             y_pos,
         ),
         (
+            "xgb-mae-lag-recursive",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_pos,
+        ),
+        (
             "xgb-huber-lag",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "huber_slope": 1.0,
+            },
+            y_pos,
+        ),
+        (
+            "xgb-huber-lag-recursive",
             {
                 "lags": 12,
                 "n_estimators": 10,
@@ -107,7 +143,23 @@ def test_xgb_models_smoke_when_installed() -> None:
             y_pos,
         ),
         (
+            "xgb-quantile-lag-recursive",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "quantile_alpha": 0.5,
+            },
+            y_pos,
+        ),
+        (
             "xgb-poisson-lag",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_pos,
+        ),
+        (
+            "xgb-poisson-lag-recursive",
             {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
             y_pos,
         ),
@@ -117,7 +169,23 @@ def test_xgb_models_smoke_when_installed() -> None:
             y_pos,
         ),
         (
+            "xgb-gamma-lag-recursive",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_pos,
+        ),
+        (
             "xgb-tweedie-lag",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "tweedie_variance_power": 1.5,
+            },
+            y_pos,
+        ),
+        (
+            "xgb-tweedie-lag-recursive",
             {
                 "lags": 12,
                 "n_estimators": 10,

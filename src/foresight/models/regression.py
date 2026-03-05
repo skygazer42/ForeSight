@@ -1330,6 +1330,86 @@ def xgbrf_lag_direct_forecast(
     return np.asarray(out, dtype=float)
 
 
+def xgbrf_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost Random Forest (XGBRFRegressor) on lag features (requires xgboost).
+    """
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if x.size <= lags:
+        raise ValueError(
+            f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
+        )
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if max_depth <= 0:
+        raise ValueError("max_depth must be >= 1")
+    if not (0.0 < float(subsample) <= 1.0):
+        raise ValueError("subsample must be in (0,1]")
+    if not (0.0 < float(colsample_bytree) <= 1.0):
+        raise ValueError("colsample_bytree must be in (0,1]")
+    if float(reg_lambda) < 0:
+        raise ValueError("reg_lambda must be >= 0")
+    if float(min_child_weight) < 0:
+        raise ValueError("min_child_weight must be >= 0")
+    if float(gamma) < 0:
+        raise ValueError("gamma must be >= 0")
+    if n_jobs == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+    X, y = make_lagged_xy(x, lags=lags)
+    model = xgb.XGBRFRegressor(
+        objective="reg:squarederror",
+        n_estimators=int(n_estimators),
+        max_depth=int(max_depth),
+        subsample=float(subsample),
+        colsample_bytree=float(colsample_bytree),
+        reg_lambda=float(reg_lambda),
+        min_child_weight=float(min_child_weight),
+        gamma=float(gamma),
+        random_state=int(random_state),
+        n_jobs=int(n_jobs),
+        tree_method=str(tree_method),
+        verbosity=0,
+    )
+    model.fit(X, y)
+
+    history = x.astype(float, copy=True).tolist()
+    out: list[float] = []
+    for _h in range(int(horizon)):
+        feat = np.asarray(history[-lags:], dtype=float).reshape(1, -1)
+        yhat = float(model.predict(feat)[0])
+        out.append(float(yhat))
+        history.append(float(yhat))
+
+    return np.asarray(out, dtype=float)
+
+
 def xgb_linear_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1452,6 +1532,48 @@ def xgb_msle_lag_direct_forecast(
     )
 
 
+def xgb_msle_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost with squared log error objective on lag features (requires xgboost, y>=0).
+    """
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:squaredlogerror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
 def xgb_logistic_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1474,6 +1596,48 @@ def xgb_logistic_lag_direct_forecast(
     Direct multi-horizon XGBoost with logistic regression objective on lag features (requires xgboost, y in [0,1]).
     """
     return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:logistic",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_logistic_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost with logistic regression objective on lag features (requires xgboost, y in [0,1]).
+    """
+    return _xgb_lag_recursive_forecast(
         train,
         horizon,
         lags=lags,
@@ -1536,6 +1700,48 @@ def xgb_mae_lag_direct_forecast(
     )
 
 
+def xgb_mae_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost with MAE objective on lag features (requires xgboost).
+    """
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:absoluteerror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
 def xgb_huber_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1561,6 +1767,52 @@ def xgb_huber_lag_direct_forecast(
     if float(huber_slope) <= 0:
         raise ValueError("huber_slope must be > 0")
     return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:pseudohubererror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+        objective_params={"huber_slope": float(huber_slope)},
+    )
+
+
+def xgb_huber_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    huber_slope: float = 1.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost pseudo-Huber objective on lag features (requires xgboost).
+    """
+    if float(huber_slope) <= 0:
+        raise ValueError("huber_slope must be > 0")
+    return _xgb_lag_recursive_forecast(
         train,
         horizon,
         lags=lags,
@@ -1629,6 +1881,53 @@ def xgb_quantile_lag_direct_forecast(
     )
 
 
+def xgb_quantile_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    quantile_alpha: float = 0.5,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost quantile objective on lag features (requires xgboost).
+    """
+    qa = float(quantile_alpha)
+    if not (0.0 < qa < 1.0):
+        raise ValueError("quantile_alpha must be in (0,1)")
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:quantileerror",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+        objective_params={"quantile_alpha": qa},
+    )
+
+
 def xgb_poisson_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1651,6 +1950,48 @@ def xgb_poisson_lag_direct_forecast(
     Direct multi-horizon XGBoost Poisson objective on lag features (requires xgboost; y>=0).
     """
     return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="count:poisson",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_poisson_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost Poisson objective on lag features (requires xgboost; y>=0).
+    """
+    return _xgb_lag_recursive_forecast(
         train,
         horizon,
         lags=lags,
@@ -1713,6 +2054,48 @@ def xgb_gamma_lag_direct_forecast(
     )
 
 
+def xgb_gamma_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost Gamma objective on lag features (requires xgboost; y>0).
+    """
+    return _xgb_lag_recursive_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:gamma",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
 def xgb_tweedie_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -1739,6 +2122,53 @@ def xgb_tweedie_lag_direct_forecast(
     if not (1.0 <= tvp < 2.0):
         raise ValueError("tweedie_variance_power must be in [1,2)")
     return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        objective="reg:tweedie",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_alpha=reg_alpha,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+        objective_params={"tweedie_variance_power": tvp},
+    )
+
+
+def xgb_tweedie_lag_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    tweedie_variance_power: float = 1.5,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Recursive one-step XGBoost Tweedie objective on lag features (requires xgboost; y>=0).
+    """
+    tvp = float(tweedie_variance_power)
+    if not (1.0 <= tvp < 2.0):
+        raise ValueError("tweedie_variance_power must be in [1,2)")
+    return _xgb_lag_recursive_forecast(
         train,
         horizon,
         lags=lags,

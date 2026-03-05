@@ -6,6 +6,14 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.5
+
+- Add more optional `xgboost` (`.[xgb]`) recursive lag-feature models:
+  - Objectives: `xgb-msle-lag-recursive`, `xgb-logistic-lag-recursive`, `xgb-mae-lag-recursive`,
+    `xgb-huber-lag-recursive`, `xgb-quantile-lag-recursive`, `xgb-poisson-lag-recursive`,
+    `xgb-gamma-lag-recursive`, `xgb-tweedie-lag-recursive`.
+  - Random forest: `xgbrf-lag-recursive`.
+
 ## 0.2.4
 
 - Add more optional `xgboost` (`.[xgb]`) models:

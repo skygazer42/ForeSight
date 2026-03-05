@@ -201,18 +201,27 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-msle-lag`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（direct multi-horizon, `lags`…；y>=0）
+- `xgb-msle-lag-recursive`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（recursive one-step, `lags`…；y>=0）
 - `xgb-logistic-lag`（requires `.[xgb]`）：lag 特征 + logistic objective（direct multi-horizon, `lags`…；y∈[0,1]）
+- `xgb-logistic-lag-recursive`（requires `.[xgb]`）：lag 特征 + logistic objective（recursive one-step, `lags`…；y∈[0,1]）
 - `xgb-dart-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-dart-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-linear-lag`（requires `.[xgb]`）：lag 特征 + gblinear（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-linear-lag-recursive`（requires `.[xgb]`）：lag 特征 + gblinear（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-mae-lag`（requires `.[xgb]`）：lag 特征 + MAE objective（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-mae-lag-recursive`（requires `.[xgb]`）：lag 特征 + MAE objective（recursive one-step, `lags`, `n_estimators`…）
 - `xgb-huber-lag`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（direct multi-horizon, `lags`, `huber_slope`…）
+- `xgb-huber-lag-recursive`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（recursive one-step, `lags`, `huber_slope`…）
 - `xgb-quantile-lag`（requires `.[xgb]`）：lag 特征 + quantile objective（direct multi-horizon, `lags`, `quantile_alpha`…）
-- `xgb-poisson-lag`（requires `.[xgb]`）：lag 特征 + Poisson objective（direct multi-horizon, `lags`…）
-- `xgb-gamma-lag`（requires `.[xgb]`）：lag 特征 + Gamma objective（direct multi-horizon, `lags`…）
-- `xgb-tweedie-lag`（requires `.[xgb]`）：lag 特征 + Tweedie objective（direct multi-horizon, `lags`, `tweedie_variance_power`…）
+- `xgb-quantile-lag-recursive`（requires `.[xgb]`）：lag 特征 + quantile objective（recursive one-step, `lags`, `quantile_alpha`…）
+- `xgb-poisson-lag`（requires `.[xgb]`）：lag 特征 + Poisson objective（direct multi-horizon, `lags`…；y>=0）
+- `xgb-poisson-lag-recursive`（requires `.[xgb]`）：lag 特征 + Poisson objective（recursive one-step, `lags`…；y>=0）
+- `xgb-gamma-lag`（requires `.[xgb]`）：lag 特征 + Gamma objective（direct multi-horizon, `lags`…；y>0）
+- `xgb-gamma-lag-recursive`（requires `.[xgb]`）：lag 特征 + Gamma objective（recursive one-step, `lags`…；y>0）
+- `xgb-tweedie-lag`（requires `.[xgb]`）：lag 特征 + Tweedie objective（direct multi-horizon, `lags`, `tweedie_variance_power`…；y>=0）
+- `xgb-tweedie-lag-recursive`（requires `.[xgb]`）：lag 特征 + Tweedie objective（recursive one-step, `lags`, `tweedie_variance_power`…；y>=0）
 - `xgbrf-lag`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgbrf-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（recursive one-step, `lags`, `n_estimators`…）
 - `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
 - `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
 - `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
