@@ -6,6 +6,11 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.3
+
+- Add more optional `xgboost` (`.[xgb]`) objectives/boosters: `xgb-linear-lag`, `xgb-mae-lag`,
+  `xgb-huber-lag`, `xgb-quantile-lag`, `xgb-poisson-lag`, `xgb-gamma-lag`, `xgb-tweedie-lag`.
+
 ## 0.2.2
 
 - Add optional `xgboost` (`.[xgb]`) models: `xgb-lag`, `xgb-dart-lag`, `xgbrf-lag`.

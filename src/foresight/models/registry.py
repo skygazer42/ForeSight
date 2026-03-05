@@ -52,7 +52,14 @@ from .regression import (
     sgd_lag_direct_forecast,
     svr_lag_direct_forecast,
     xgb_dart_lag_direct_forecast,
+    xgb_gamma_lag_direct_forecast,
+    xgb_huber_lag_direct_forecast,
     xgb_lag_direct_forecast,
+    xgb_linear_lag_direct_forecast,
+    xgb_mae_lag_direct_forecast,
+    xgb_poisson_lag_direct_forecast,
+    xgb_quantile_lag_direct_forecast,
+    xgb_tweedie_lag_direct_forecast,
     xgbrf_lag_direct_forecast,
 )
 from .smoothing import (
@@ -872,6 +879,7 @@ def _factory_xgb_lag(
     max_depth: int = 6,
     subsample: float = 0.8,
     colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
     reg_lambda: float = 1.0,
     min_child_weight: float = 1.0,
     gamma: float = 0.0,
@@ -886,6 +894,7 @@ def _factory_xgb_lag(
     max_depth_int = int(max_depth)
     subsample_f = float(subsample)
     colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
     reg_lambda_f = float(reg_lambda)
     min_child_weight_f = float(min_child_weight)
     gamma_f = float(gamma)
@@ -903,6 +912,7 @@ def _factory_xgb_lag(
             max_depth=max_depth_int,
             subsample=subsample_f,
             colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
             reg_lambda=reg_lambda_f,
             min_child_weight=min_child_weight_f,
             gamma=gamma_f,
@@ -922,6 +932,7 @@ def _factory_xgb_dart_lag(
     max_depth: int = 6,
     subsample: float = 0.8,
     colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
     reg_lambda: float = 1.0,
     min_child_weight: float = 1.0,
     gamma: float = 0.0,
@@ -936,6 +947,7 @@ def _factory_xgb_dart_lag(
     max_depth_int = int(max_depth)
     subsample_f = float(subsample)
     colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
     reg_lambda_f = float(reg_lambda)
     min_child_weight_f = float(min_child_weight)
     gamma_f = float(gamma)
@@ -953,6 +965,7 @@ def _factory_xgb_dart_lag(
             max_depth=max_depth_int,
             subsample=subsample_f,
             colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
             reg_lambda=reg_lambda_f,
             min_child_weight=min_child_weight_f,
             gamma=gamma_f,
@@ -1003,6 +1016,377 @@ def _factory_xgbrf_lag(
             reg_lambda=reg_lambda_f,
             min_child_weight=min_child_weight_f,
             gamma=gamma_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_linear_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_linear_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_mae_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_mae_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_huber_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    huber_slope: float = 1.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    huber_slope_f = float(huber_slope)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_huber_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            huber_slope=huber_slope_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_quantile_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    quantile_alpha: float = 0.5,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    quantile_alpha_f = float(quantile_alpha)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_quantile_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            quantile_alpha=quantile_alpha_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_poisson_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_poisson_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_gamma_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_gamma_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            random_state=random_state_int,
+            n_jobs=n_jobs_int,
+            tree_method=tree_method_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_tweedie_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    tweedie_variance_power: float = 1.5,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    tweedie_variance_power_f = float(tweedie_variance_power)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_tweedie_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_estimators=n_estimators_int,
+            learning_rate=learning_rate_f,
+            max_depth=max_depth_int,
+            subsample=subsample_f,
+            colsample_bytree=colsample_bytree_f,
+            reg_alpha=reg_alpha_f,
+            reg_lambda=reg_lambda_f,
+            min_child_weight=min_child_weight_f,
+            gamma=gamma_f,
+            tweedie_variance_power=tweedie_variance_power_f,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
@@ -5246,6 +5630,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_depth": 6,
             "subsample": 0.8,
             "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
             "reg_lambda": 1.0,
             "min_child_weight": 1.0,
             "gamma": 0.0,
@@ -5260,6 +5645,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_depth": "Tree max_depth (>=1)",
             "subsample": "Row subsample ratio in (0,1]",
             "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
             "reg_lambda": "L2 regularization strength (>=0)",
             "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
             "gamma": "Min loss reduction to make a split (>=0)",
@@ -5280,6 +5666,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_depth": 6,
             "subsample": 0.8,
             "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
             "reg_lambda": 1.0,
             "min_child_weight": 1.0,
             "gamma": 0.0,
@@ -5294,6 +5681,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_depth": "Tree max_depth (>=1)",
             "subsample": "Row subsample ratio in (0,1]",
             "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
             "reg_lambda": "L2 regularization strength (>=0)",
             "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
             "gamma": "Min loss reduction to make a split (>=0)",
@@ -5329,6 +5717,258 @@ _REGISTRY: dict[str, ModelSpec] = {
             "reg_lambda": "L2 regularization strength (>=0)",
             "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
             "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-linear-lag": ModelSpec(
+        key="xgb-linear-lag",
+        description="XGBoost linear booster (gblinear) on lag features (direct multi-horizon). Requires xgboost.",
+        factory=_factory_xgb_linear_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Learning rate (>0)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-mae-lag": ModelSpec(
+        key="xgb-mae-lag",
+        description="XGBoost MAE objective on lag features (direct multi-horizon). Requires xgboost.",
+        factory=_factory_xgb_mae_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-huber-lag": ModelSpec(
+        key="xgb-huber-lag",
+        description="XGBoost pseudo-Huber objective on lag features (direct multi-horizon). Requires xgboost.",
+        factory=_factory_xgb_huber_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "huber_slope": 1.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "huber_slope": "Pseudo-Huber slope (>0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-quantile-lag": ModelSpec(
+        key="xgb-quantile-lag",
+        description="XGBoost quantile objective on lag features (direct multi-horizon). Requires xgboost.",
+        factory=_factory_xgb_quantile_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "quantile_alpha": 0.5,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "quantile_alpha": "Target quantile in (0,1) (e.g. 0.5 for median)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-poisson-lag": ModelSpec(
+        key="xgb-poisson-lag",
+        description="XGBoost Poisson objective on lag features (direct multi-horizon). Requires xgboost (y>=0).",
+        factory=_factory_xgb_poisson_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-gamma-lag": ModelSpec(
+        key="xgb-gamma-lag",
+        description="XGBoost Gamma objective on lag features (direct multi-horizon). Requires xgboost (y>0).",
+        factory=_factory_xgb_gamma_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-tweedie-lag": ModelSpec(
+        key="xgb-tweedie-lag",
+        description="XGBoost Tweedie objective on lag features (direct multi-horizon). Requires xgboost (y>=0).",
+        factory=_factory_xgb_tweedie_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "tweedie_variance_power": 1.5,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "tweedie_variance_power": "Tweedie variance power in [1,2)",
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",

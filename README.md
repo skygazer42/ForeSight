@@ -200,6 +200,13 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
 - `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `xgb-dart-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-linear-lag`（requires `.[xgb]`）：lag 特征 + gblinear（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-mae-lag`（requires `.[xgb]`）：lag 特征 + MAE objective（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-huber-lag`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（direct multi-horizon, `lags`, `huber_slope`…）
+- `xgb-quantile-lag`（requires `.[xgb]`）：lag 特征 + quantile objective（direct multi-horizon, `lags`, `quantile_alpha`…）
+- `xgb-poisson-lag`（requires `.[xgb]`）：lag 特征 + Poisson objective（direct multi-horizon, `lags`…）
+- `xgb-gamma-lag`（requires `.[xgb]`）：lag 特征 + Gamma objective（direct multi-horizon, `lags`…）
+- `xgb-tweedie-lag`（requires `.[xgb]`）：lag 特征 + Tweedie objective（direct multi-horizon, `lags`, `tweedie_variance_power`…）
 - `xgbrf-lag`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
 - `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
