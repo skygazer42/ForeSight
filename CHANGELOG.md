@@ -6,6 +6,10 @@ This project follows a lightweight changelog format.
 
 - (Nothing yet.)
 
+## 0.2.2
+
+- Add optional `xgboost` (`.[xgb]`) models: `xgb-lag`, `xgb-dart-lag`, `xgbrf-lag`.
+
 ## 0.2.1
 
 - Add more `scikit-learn` lag-feature models (`.[ml]`), including trees/ensembles/SVR/MLP/robust/quantile

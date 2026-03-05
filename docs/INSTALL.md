@@ -21,6 +21,9 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 # ML models (scikit-learn)
 pip install "foresight-ts[ml]"
 
+# XGBoost models
+pip install "foresight-ts[xgb]"
+
 # Statsmodels wrappers
 pip install "foresight-ts[stats]"
 

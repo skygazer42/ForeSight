@@ -875,3 +875,230 @@ def sgd_lag_direct_forecast(
     feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
     yhat = model.predict(feat)[0]
     return np.asarray(yhat, dtype=float)
+
+
+def _xgb_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    booster: str,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if max_depth <= 0:
+        raise ValueError("max_depth must be >= 1")
+    if float(learning_rate) <= 0:
+        raise ValueError("learning_rate must be > 0")
+    if not (0.0 < float(subsample) <= 1.0):
+        raise ValueError("subsample must be in (0,1]")
+    if not (0.0 < float(colsample_bytree) <= 1.0):
+        raise ValueError("colsample_bytree must be in (0,1]")
+    if float(reg_lambda) < 0:
+        raise ValueError("reg_lambda must be >= 0")
+    if float(min_child_weight) < 0:
+        raise ValueError("min_child_weight must be >= 0")
+    if float(gamma) < 0:
+        raise ValueError("gamma must be >= 0")
+    if n_jobs == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    out = np.empty((int(horizon),), dtype=float)
+    for j in range(int(horizon)):
+        model = xgb.XGBRegressor(
+            booster=str(booster),
+            objective="reg:squarederror",
+            n_estimators=int(n_estimators),
+            learning_rate=float(learning_rate),
+            max_depth=int(max_depth),
+            subsample=float(subsample),
+            colsample_bytree=float(colsample_bytree),
+            reg_lambda=float(reg_lambda),
+            min_child_weight=float(min_child_weight),
+            gamma=float(gamma),
+            random_state=int(random_state),
+            n_jobs=int(n_jobs),
+            tree_method=str(tree_method),
+            verbosity=0,
+        )
+        model.fit(X, Y[:, j])
+        out[j] = float(model.predict(feat)[0])
+
+    return np.asarray(out, dtype=float)
+
+
+def xgb_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Direct multi-horizon XGBoost (XGBRegressor) on lag features (requires xgboost).
+    """
+    return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="gbtree",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgb_dart_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Direct multi-horizon XGBoost DART booster on lag features (requires xgboost).
+    """
+    return _xgb_lag_direct_forecast(
+        train,
+        horizon,
+        lags=lags,
+        booster="dart",
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
+    )
+
+
+def xgbrf_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    n_estimators: int = 500,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+) -> np.ndarray:
+    """
+    Direct multi-horizon XGBoost Random Forest (XGBRFRegressor) on lag features (requires xgboost).
+    """
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if n_estimators <= 0:
+        raise ValueError("n_estimators must be >= 1")
+    if max_depth <= 0:
+        raise ValueError("max_depth must be >= 1")
+    if not (0.0 < float(subsample) <= 1.0):
+        raise ValueError("subsample must be in (0,1]")
+    if not (0.0 < float(colsample_bytree) <= 1.0):
+        raise ValueError("colsample_bytree must be in (0,1]")
+    if float(reg_lambda) < 0:
+        raise ValueError("reg_lambda must be >= 0")
+    if float(min_child_weight) < 0:
+        raise ValueError("min_child_weight must be >= 0")
+    if float(gamma) < 0:
+        raise ValueError("gamma must be >= 0")
+    if n_jobs == 0:
+        raise ValueError("n_jobs must be non-zero")
+
+    X, Y = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon))
+    feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+
+    out = np.empty((int(horizon),), dtype=float)
+    for j in range(int(horizon)):
+        model = xgb.XGBRFRegressor(
+            objective="reg:squarederror",
+            n_estimators=int(n_estimators),
+            max_depth=int(max_depth),
+            subsample=float(subsample),
+            colsample_bytree=float(colsample_bytree),
+            reg_lambda=float(reg_lambda),
+            min_child_weight=float(min_child_weight),
+            gamma=float(gamma),
+            random_state=int(random_state),
+            n_jobs=int(n_jobs),
+            tree_method=str(tree_method),
+            verbosity=0,
+        )
+        model.fit(X, Y[:, j])
+        out[j] = float(model.predict(feat)[0])
+
+    return np.asarray(out, dtype=float)

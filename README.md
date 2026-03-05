@@ -176,8 +176,8 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 > Tip：可以用 `foresight models list --prefix torch-rnnpaper` / `foresight models list --prefix torch-rnnzoo` 快速筛选。
 > Paper Zoo 结构索引见：`docs/rnn_paper_zoo.md`；RNN Zoo 结构索引见：`docs/rnn_zoo.md`。
 
-- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[all]"`
-- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[all]"`
+- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[xgb]"` / `pip install "foresight-ts[all]"`
+- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[xgb]"` / `pip install -e ".[all]"`
 
 - `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
 - `ridge-lag-direct`（requires `.[ml]`）：lag 特征 + Ridge（direct multi-horizon, `lags`, `alpha`）
@@ -198,6 +198,9 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `huber-lag`（requires `.[ml]`）：lag 特征 + HuberRegressor（direct multi-horizon, `lags`, `epsilon`…）
 - `quantile-lag`（requires `.[ml]`）：lag 特征 + QuantileRegressor（direct multi-horizon, `lags`, `quantile`…）
 - `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
+- `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgb-dart-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（direct multi-horizon, `lags`, `n_estimators`…）
+- `xgbrf-lag`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（direct multi-horizon, `lags`, `n_estimators`…）
 - `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
 - `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
 - `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）

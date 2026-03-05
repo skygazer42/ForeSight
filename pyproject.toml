@@ -42,6 +42,9 @@ dev = [
 ml = [
   "scikit-learn>=1.0",
 ]
+xgb = [
+  "xgboost>=2.0",
+]
 stats = [
   "statsmodels>=0.14",
 ]
@@ -50,6 +53,7 @@ torch = [
 ]
 all = [
   "scikit-learn>=1.0",
+  "xgboost>=2.0",
   "statsmodels>=0.14",
   "torch>=2.0",
 ]
