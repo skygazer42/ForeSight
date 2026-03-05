@@ -4,6 +4,10 @@ This project follows a lightweight changelog format.
 
 ## Unreleased
 
+- (Nothing yet.)
+
+## 0.2.9
+
 - Add optional `xgboost` (`.[xgb]`) customizable multi-horizon strategy models:
   - `xgb-custom-step-lag`: step-index single-model direct multi-horizon.
   - `xgb-custom-dirrec-lag`: DirRec strategy (per-step models with previous-step features).
