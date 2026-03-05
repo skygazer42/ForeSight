@@ -2319,6 +2319,166 @@ def _xgb_lag_recursive_forecast_kwargs(
     return np.asarray(out, dtype=float)
 
 
+def _xgb_lag_step_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    Single-model multi-horizon forecasting by adding a "step index" feature.
+
+    This trains one regressor on the expanded dataset:
+      (lag_window, step) -> y_{t+step}
+    """
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(xgb_params)
+    params.setdefault("verbosity", 0)
+    obj = str(params.get("objective", "")).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    _xgb_validate_objective_label_constraints(obj, x)
+    _xgb_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+    rows = int(X_base.shape[0])
+
+    if step_scale not in {"one_based", "zero_based", "unit"}:
+        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+
+    if step_scale == "zero_based":
+        step = np.arange(h, dtype=float)
+    elif step_scale == "unit":
+        step = np.arange(1, h + 1, dtype=float) / float(h)
+    else:
+        step = np.arange(1, h + 1, dtype=float)
+
+    step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
+    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    X_long = np.concatenate([X_rep, step_idx], axis=1)
+    y_long = Y.reshape(-1).astype(float, copy=False)
+
+    model = xgb.XGBRegressor(**params)
+    model.fit(X_long, y_long)
+
+    base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    base_rep = np.repeat(base_feat, repeats=h, axis=0)  # (h, lags)
+    feat = np.concatenate([base_rep, step.reshape(-1, 1)], axis=1)
+    out = model.predict(feat)
+    return np.asarray(out, dtype=float)
+
+
+def _xgb_lag_dirrec_forecast_kwargs(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    DirRec (Direct-Recursive) strategy with per-step models.
+
+    Each step model uses lag features plus the previous steps as additional regressors.
+    During training we use the true previous-step values; during prediction we use the
+    model predictions from earlier steps.
+    """
+    try:
+        import xgboost as xgb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+        ) from e
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+
+    params = dict(xgb_params)
+    params.setdefault("verbosity", 0)
+    obj = str(params.get("objective", "")).strip()
+    if not obj:
+        raise ValueError("objective must be non-empty")
+
+    _xgb_validate_objective_label_constraints(obj, x)
+    _xgb_validate_common_regressor_params(params)
+
+    X_base, Y = _make_lagged_xy_multi(x, lags=lags, horizon=h)
+
+    models: list[Any] = []
+    for j in range(h):
+        if j == 0:
+            Xj = X_base
+        else:
+            Xj = np.concatenate([X_base, Y[:, :j]], axis=1)
+        yj = Y[:, j]
+        model = xgb.XGBRegressor(**params)
+        model.fit(Xj, yj)
+        models.append(model)
+
+    base_feat = x[-lags:].astype(float, copy=False)
+    out: list[float] = []
+    for j in range(h):
+        if j == 0:
+            feat = base_feat
+        else:
+            feat = np.concatenate([base_feat, np.asarray(out, dtype=float)], axis=0)
+        yhat = float(models[j].predict(feat.reshape(1, -1))[0])
+        out.append(yhat)
+    return np.asarray(out, dtype=float)
+
+
+def xgb_step_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+    step_scale: str = "one_based",
+) -> np.ndarray:
+    """
+    XGBoost multi-horizon forecast using a single model with an extra "step" feature.
+    """
+    return _xgb_lag_step_forecast_kwargs(
+        train,
+        horizon,
+        lags=lags,
+        xgb_params=xgb_params,
+        step_scale=step_scale,
+    )
+
+
+def xgb_dirrec_lag_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    xgb_params: dict[str, Any],
+) -> np.ndarray:
+    """
+    XGBoost DirRec (direct-recursive) multi-horizon forecast on lag features.
+    """
+    return _xgb_lag_dirrec_forecast_kwargs(train, horizon, lags=lags, xgb_params=xgb_params)
+
+
 def xgb_custom_lag_direct_forecast(
     train: Any,
     horizon: int,

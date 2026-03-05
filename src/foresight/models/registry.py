@@ -55,6 +55,7 @@ from .regression import (
     xgb_custom_lag_recursive_forecast,
     xgb_dart_lag_direct_forecast,
     xgb_dart_lag_recursive_forecast,
+    xgb_dirrec_lag_forecast,
     xgb_gamma_lag_direct_forecast,
     xgb_gamma_lag_recursive_forecast,
     xgb_huber_lag_direct_forecast,
@@ -73,6 +74,7 @@ from .regression import (
     xgb_poisson_lag_recursive_forecast,
     xgb_quantile_lag_direct_forecast,
     xgb_quantile_lag_recursive_forecast,
+    xgb_step_lag_direct_forecast,
     xgb_tweedie_lag_direct_forecast,
     xgb_tweedie_lag_recursive_forecast,
     xgbrf_lag_direct_forecast,
@@ -924,6 +926,127 @@ def _factory_xgb_custom_lag_recursive(
             horizon,
             lags=lags_int,
             xgb_params=dict(params),
+        )
+
+    return _f
+
+
+def _factory_xgb_step_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    step_scale: str = "one_based",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+    step_scale_s = str(step_scale)
+
+    xgb_params = {
+        "booster": "gbtree",
+        "objective": "reg:squarederror",
+        "n_estimators": n_estimators_int,
+        "learning_rate": learning_rate_f,
+        "max_depth": max_depth_int,
+        "subsample": subsample_f,
+        "colsample_bytree": colsample_bytree_f,
+        "reg_alpha": reg_alpha_f,
+        "reg_lambda": reg_lambda_f,
+        "min_child_weight": min_child_weight_f,
+        "gamma": gamma_f,
+        "random_state": random_state_int,
+        "n_jobs": n_jobs_int,
+        "tree_method": tree_method_s,
+    }
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_step_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(xgb_params),
+            step_scale=step_scale_s,
+        )
+
+    return _f
+
+
+def _factory_xgb_dirrec_lag(
+    *,
+    lags: int = 24,
+    n_estimators: int = 500,
+    learning_rate: float = 0.05,
+    max_depth: int = 6,
+    subsample: float = 0.8,
+    colsample_bytree: float = 0.8,
+    reg_alpha: float = 0.0,
+    reg_lambda: float = 1.0,
+    min_child_weight: float = 1.0,
+    gamma: float = 0.0,
+    random_state: int = 0,
+    n_jobs: int = 1,
+    tree_method: str = "hist",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_estimators_int = int(n_estimators)
+    learning_rate_f = float(learning_rate)
+    max_depth_int = int(max_depth)
+    subsample_f = float(subsample)
+    colsample_bytree_f = float(colsample_bytree)
+    reg_alpha_f = float(reg_alpha)
+    reg_lambda_f = float(reg_lambda)
+    min_child_weight_f = float(min_child_weight)
+    gamma_f = float(gamma)
+    random_state_int = int(random_state)
+    n_jobs_int = int(n_jobs)
+    tree_method_s = str(tree_method)
+
+    xgb_params = {
+        "booster": "gbtree",
+        "objective": "reg:squarederror",
+        "n_estimators": n_estimators_int,
+        "learning_rate": learning_rate_f,
+        "max_depth": max_depth_int,
+        "subsample": subsample_f,
+        "colsample_bytree": colsample_bytree_f,
+        "reg_alpha": reg_alpha_f,
+        "reg_lambda": reg_lambda_f,
+        "min_child_weight": min_child_weight_f,
+        "gamma": gamma_f,
+        "random_state": random_state_int,
+        "n_jobs": n_jobs_int,
+        "tree_method": tree_method_s,
+    }
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return xgb_dirrec_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            xgb_params=dict(xgb_params),
         )
 
     return _f
@@ -6484,6 +6607,86 @@ _REGISTRY: dict[str, ModelSpec] = {
             "lags": "Number of lag features",
             "booster": "Booster type (gbtree, dart, gblinear, ...)",
             "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-step-lag": ModelSpec(
+        key="xgb-step-lag",
+        description=(
+            "XGBoost (XGBRegressor) on lag features with a learned multi-horizon 'step index' feature "
+            "(single-model direct multi-horizon). Requires xgboost."
+        ),
+        factory=_factory_xgb_step_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "step_scale": "one_based",
+        },
+        param_help={
+            "lags": "Number of lag features",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+        },
+        requires=("xgb",),
+    ),
+    "xgb-dirrec-lag": ModelSpec(
+        key="xgb-dirrec-lag",
+        description=(
+            "XGBoost (XGBRegressor) DirRec strategy on lag features (per-step models using previous-step "
+            "targets as additional regressors). Requires xgboost."
+        ),
+        factory=_factory_xgb_dirrec_lag,
+        default_params={
+            "lags": 24,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+        },
+        param_help={
+            "lags": "Number of lag features",
             "n_estimators": "Number of boosting rounds",
             "learning_rate": "Boosting learning rate (>0)",
             "max_depth": "Tree max_depth (>=1)",

@@ -8,6 +8,7 @@ from foresight.models.registry import get_model_spec, make_forecaster
 XGB_MODELS = [
     "xgb-custom-lag",
     "xgb-custom-lag-recursive",
+    "xgb-dirrec-lag",
     "xgb-dart-lag",
     "xgb-dart-lag-recursive",
     "xgb-gamma-lag",
@@ -28,6 +29,7 @@ XGB_MODELS = [
     "xgb-poisson-lag-recursive",
     "xgb-quantile-lag",
     "xgb-quantile-lag-recursive",
+    "xgb-step-lag",
     "xgb-tweedie-lag",
     "xgb-tweedie-lag-recursive",
     "xgbrf-lag",
@@ -83,6 +85,12 @@ def test_xgb_models_smoke_when_installed() -> None:
                 "booster": "gbtree",
                 "objective": "reg:squarederror",
             },
+            y_pos,
+        ),
+        ("xgb-step-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
+        (
+            "xgb-dirrec-lag",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
             y_pos,
         ),
         ("xgb-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
