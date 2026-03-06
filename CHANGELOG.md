@@ -4,7 +4,35 @@ This project follows a lightweight changelog format.
 
 ## Unreleased
 
-- (Nothing yet.)
+- Add optional `scikit-learn` (`.[ml]`) global/panel step-lag regressors:
+  - `adaboost-step-lag-global`
+  - `mlp-step-lag-global`
+  - `huber-step-lag-global`
+  - `quantile-step-lag-global`
+  - `sgd-step-lag-global`
+  - `kernel-ridge-step-lag-global`
+  - `svr-step-lag-global`
+  - `linear-svr-step-lag-global`
+  - `lasso-step-lag-global`
+  - `elasticnet-step-lag-global`
+  - `knn-step-lag-global`
+  - `decision-tree-step-lag-global`
+  - `bagging-step-lag-global`
+  - `gbrt-step-lag-global`
+  - `ridge-step-lag-global`
+  - `rf-step-lag-global`
+  - `extra-trees-step-lag-global`
+- Add optional `xgboost` (`.[xgb]`) global/panel step-lag regressors:
+  - `xgb-gamma-step-lag-global`
+  - `xgb-logistic-step-lag-global`
+  - `xgb-msle-step-lag-global`
+  - `xgb-mae-step-lag-global`
+  - `xgb-huber-step-lag-global`
+  - `xgb-poisson-step-lag-global`
+  - `xgb-tweedie-step-lag-global`
+  - `xgb-dart-step-lag-global`
+  - `xgb-linear-step-lag-global`
+  - `xgbrf-step-lag-global`
 
 ## 0.2.9
 

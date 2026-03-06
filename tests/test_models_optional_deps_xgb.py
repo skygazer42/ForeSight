@@ -1,9 +1,10 @@
 import importlib.util
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from foresight.models.registry import get_model_spec, make_forecaster
+from foresight.models.registry import get_model_spec, make_forecaster, make_global_forecaster
 
 XGB_MODELS = [
     "xgb-custom-lag",
@@ -40,11 +41,30 @@ XGB_MODELS = [
     "xgbrf-lag-recursive",
 ]
 
+GLOBAL_XGB_MODELS = [
+    "xgb-step-lag-global",
+    "xgb-gamma-step-lag-global",
+    "xgb-logistic-step-lag-global",
+    "xgb-msle-step-lag-global",
+    "xgb-mae-step-lag-global",
+    "xgb-huber-step-lag-global",
+    "xgb-poisson-step-lag-global",
+    "xgb-tweedie-step-lag-global",
+    "xgb-dart-step-lag-global",
+    "xgb-linear-step-lag-global",
+    "xgbrf-step-lag-global",
+]
+
 
 def test_xgb_models_are_registered_as_optional() -> None:
     for key in XGB_MODELS:
         spec = get_model_spec(key)
         assert "xgb" in spec.requires
+
+    for key in GLOBAL_XGB_MODELS:
+        spec = get_model_spec(key)
+        assert "xgb" in spec.requires
+        assert spec.interface == "global"
 
 
 def test_xgb_models_raise_importerror_when_xgboost_missing() -> None:
@@ -56,6 +76,25 @@ def test_xgb_models_raise_importerror_when_xgboost_missing() -> None:
         f = make_forecaster(key)
         with pytest.raises(ImportError):
             f(y, 2)
+
+
+def test_global_xgb_models_raise_importerror_when_xgboost_missing() -> None:
+    if importlib.util.find_spec("xgboost") is not None:
+        pytest.skip("xgboost installed; this test targets the missing-dep path")
+
+    ds = pd.date_range("2020-01-01", periods=12, freq="D")
+    df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * len(ds),
+            "ds": ds,
+            "y": [float(i) for i in range(len(ds))],
+        }
+    )
+
+    for key in GLOBAL_XGB_MODELS:
+        f = make_global_forecaster(key)
+        with pytest.raises(ImportError):
+            f(df, ds[8], 2)
 
 
 def test_xgb_models_smoke_when_installed() -> None:
@@ -101,6 +140,9 @@ def test_xgb_models_smoke_when_installed() -> None:
                 "booster": "gbtree",
                 "objective": "reg:squarederror",
                 "step_scale": "one_based",
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
             },
             y_pos,
         ),
@@ -129,7 +171,19 @@ def test_xgb_models_smoke_when_installed() -> None:
             },
             y_pos,
         ),
-        ("xgb-step-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
+        (
+            "xgb-step-lag",
+            {
+                "lags": 12,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
+            },
+            y_pos,
+        ),
         (
             "xgb-dirrec-lag",
             {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
@@ -279,3 +333,39 @@ def test_xgb_models_smoke_when_installed() -> None:
         yhat = f(y, horizon)
         assert yhat.shape == (horizon,)
         assert np.all(np.isfinite(yhat))
+
+
+def test_xgb_lag_models_validate_derived_feature_params_when_installed() -> None:
+    if importlib.util.find_spec("xgboost") is None:
+        pytest.skip("xgboost not installed; test targets derived-feature validation path")
+
+    y = 1.0 + np.sin(np.arange(120, dtype=float) / 3.0) + 0.01 * np.arange(120, dtype=float)
+    horizon = 2
+
+    # Use tiny models because pre-feature-support this will not raise and would otherwise train.
+    base_params = {
+        "lags": 8,
+        "n_estimators": 2,
+        "learning_rate": 0.2,
+        "max_depth": 2,
+        "subsample": 0.9,
+        "colsample_bytree": 0.9,
+        "random_state": 0,
+        "n_jobs": 1,
+        "tree_method": "hist",
+        "roll_windows": (9,),  # invalid: roll_window > lags
+        "roll_stats": ("mean",),
+    }
+
+    keys = [
+        "xgb-lag",
+        "xgb-lag-recursive",
+        "xgb-custom-lag",
+        "xgb-custom-lag-recursive",
+        "xgb-dirrec-lag",
+        "xgb-mimo-lag",
+    ]
+    for key in keys:
+        f = make_forecaster(key, **base_params)
+        with pytest.raises(ValueError, match="exceeds lags"):
+            _ = f(y, horizon)

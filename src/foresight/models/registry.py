@@ -18,6 +18,39 @@ from .baselines import (
     seasonal_mean_forecast,
 )
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
+from .global_regression import (
+    adaboost_step_lag_global_forecaster,
+    bagging_step_lag_global_forecaster,
+    catboost_step_lag_global_forecaster,
+    decision_tree_step_lag_global_forecaster,
+    elasticnet_step_lag_global_forecaster,
+    extra_trees_step_lag_global_forecaster,
+    gbrt_step_lag_global_forecaster,
+    hgb_step_lag_global_forecaster,
+    huber_step_lag_global_forecaster,
+    kernel_ridge_step_lag_global_forecaster,
+    knn_step_lag_global_forecaster,
+    lasso_step_lag_global_forecaster,
+    lgbm_step_lag_global_forecaster,
+    linear_svr_step_lag_global_forecaster,
+    mlp_step_lag_global_forecaster,
+    quantile_step_lag_global_forecaster,
+    rf_step_lag_global_forecaster,
+    ridge_step_lag_global_forecaster,
+    sgd_step_lag_global_forecaster,
+    svr_step_lag_global_forecaster,
+    xgb_dart_step_lag_global_forecaster,
+    xgb_gamma_step_lag_global_forecaster,
+    xgb_huber_step_lag_global_forecaster,
+    xgb_linear_step_lag_global_forecaster,
+    xgb_logistic_step_lag_global_forecaster,
+    xgb_mae_step_lag_global_forecaster,
+    xgb_msle_step_lag_global_forecaster,
+    xgb_poisson_step_lag_global_forecaster,
+    xgb_step_lag_global_forecaster,
+    xgb_tweedie_step_lag_global_forecaster,
+    xgbrf_step_lag_global_forecaster,
+)
 from .intermittent import (
     adida_forecast,
     croston_classic_forecast,
@@ -260,6 +293,28 @@ _TORCH_COMMON_PARAM_HELP: dict[str, str] = {
     "restore_best": "Restore best checkpoint at end (true/false)",
 }
 
+_LAG_DERIVED_DEFAULTS: dict[str, Any] = {"roll_windows": (), "roll_stats": (), "diff_lags": ()}
+
+_LAG_DERIVED_PARAM_HELP: dict[str, str] = {
+    "roll_windows": "Optional rolling windows (<=lags) for derived lag stats, e.g. 3,7,14",
+    "roll_stats": "Derived stats per window: mean,std,min,max,median,slope,iqr,mad,skew,kurt",
+    "diff_lags": "Optional diffs: diff_k = last - lag(k+1); each k must be < lags",
+}
+
+_SEASONAL_FOURIER_DEFAULTS: dict[str, Any] = {
+    "seasonal_lags": (),
+    "seasonal_diff_lags": (),
+    "fourier_periods": (),
+    "fourier_orders": 2,
+}
+
+_SEASONAL_FOURIER_PARAM_HELP: dict[str, str] = {
+    "seasonal_lags": "Optional seasonal lags (in steps): y[t-p], e.g. 7,14",
+    "seasonal_diff_lags": "Optional seasonal diffs: y[t-1]-y[t-1-p], e.g. 7",
+    "fourier_periods": "Optional Fourier periods (in steps), e.g. 7,365",
+    "fourier_orders": "Fourier harmonic order(s): int or list matching periods (default 2)",
+}
+
 
 def _factory_naive_last(**_params: Any) -> ForecasterFn:
     return naive_last
@@ -432,36 +487,115 @@ def _factory_ar_ols_auto(*, max_p: int = 10, **_params: Any) -> ForecasterFn:
     return _f
 
 
-def _factory_lr_lag(*, lags: int = 5, **_params: Any) -> ForecasterFn:
+def _factory_lr_lag(
+    *,
+    lags: int = 5,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
     lags_int = int(lags)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return lr_lag_forecast(train, horizon, lags=lags_int)
+        return lr_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
 
     return _f
 
 
-def _factory_lr_lag_direct(*, lags: int = 5, **_params: Any) -> ForecasterFn:
+def _factory_lr_lag_direct(
+    *,
+    lags: int = 5,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
     lags_int = int(lags)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return lr_lag_direct_forecast(train, horizon, lags=lags_int)
+        return lr_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
 
     return _f
 
 
-def _factory_ridge_lag(*, lags: int = 5, alpha: float = 1.0, **_params: Any) -> ForecasterFn:
+def _factory_ridge_lag(
+    *,
+    lags: int = 5,
+    alpha: float = 1.0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
     lags_int = int(lags)
     alpha_f = float(alpha)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return ridge_lag_forecast(train, horizon, lags=lags_int, alpha=alpha_f)
+        return ridge_lag_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
 
     return _f
 
 
 def _factory_rf_lag(
-    *, lags: int = 5, n_estimators: int = 200, random_state: int = 0, **_params: Any
+    *,
+    lags: int = 5,
+    n_estimators: int = 200,
+    random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -474,13 +608,31 @@ def _factory_rf_lag(
             lags=lags_int,
             n_estimators=n_estimators_int,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
 
 
 def _factory_lasso_lag(
-    *, lags: int = 10, alpha: float = 0.001, max_iter: int = 5000, **_params: Any
+    *,
+    lags: int = 10,
+    alpha: float = 0.001,
+    max_iter: int = 5000,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -493,6 +645,13 @@ def _factory_lasso_lag(
             lags=lags_int,
             alpha=alpha_f,
             max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -504,6 +663,13 @@ def _factory_elasticnet_lag(
     alpha: float = 0.001,
     l1_ratio: float = 0.5,
     max_iter: int = 5000,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -519,13 +685,31 @@ def _factory_elasticnet_lag(
             alpha=alpha_f,
             l1_ratio=l1_ratio_f,
             max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
 
 
 def _factory_knn_lag(
-    *, lags: int = 12, n_neighbors: int = 10, weights: str = "distance", **_params: Any
+    *,
+    lags: int = 12,
+    n_neighbors: int = 10,
+    weights: str = "distance",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
     n_neighbors_int = int(n_neighbors)
@@ -538,6 +722,13 @@ def _factory_knn_lag(
             lags=lags_int,
             n_neighbors=n_neighbors_int,
             weights=weights_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -550,6 +741,13 @@ def _factory_gbrt_lag(
     learning_rate: float = 0.05,
     max_depth: int = 3,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -567,25 +765,65 @@ def _factory_gbrt_lag(
             learning_rate=learning_rate_f,
             max_depth=max_depth_int,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
 
 
 def _factory_ridge_lag_direct(
-    *, lags: int = 12, alpha: float = 1.0, **_params: Any
+    *,
+    lags: int = 12,
+    alpha: float = 1.0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
     alpha_f = float(alpha)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return ridge_lag_direct_forecast(train, horizon, lags=lags_int, alpha=alpha_f)
+        return ridge_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
 
     return _f
 
 
 def _factory_decision_tree_lag(
-    *, lags: int = 12, max_depth: int | None = 5, random_state: int = 0, **_params: Any
+    *,
+    lags: int = 12,
+    max_depth: int | None = 5,
+    random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
     max_depth_opt = None if max_depth is None else int(max_depth)
@@ -598,6 +836,13 @@ def _factory_decision_tree_lag(
             lags=lags_int,
             max_depth=max_depth_opt,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -609,6 +854,13 @@ def _factory_extra_trees_lag(
     n_estimators: int = 300,
     max_depth: int | None = None,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -624,6 +876,13 @@ def _factory_extra_trees_lag(
             n_estimators=n_estimators_int,
             max_depth=max_depth_opt,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -635,6 +894,13 @@ def _factory_adaboost_lag(
     n_estimators: int = 300,
     learning_rate: float = 0.05,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -650,6 +916,13 @@ def _factory_adaboost_lag(
             n_estimators=n_estimators_int,
             learning_rate=learning_rate_f,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -661,6 +934,13 @@ def _factory_bagging_lag(
     n_estimators: int = 200,
     max_samples: float = 0.8,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -676,6 +956,13 @@ def _factory_bagging_lag(
             n_estimators=n_estimators_int,
             max_samples=max_samples_f,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -688,6 +975,13 @@ def _factory_hgb_lag(
     learning_rate: float = 0.05,
     max_depth: int | None = 3,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -705,6 +999,13 @@ def _factory_hgb_lag(
             learning_rate=learning_rate_f,
             max_depth=max_depth_opt,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -716,6 +1017,13 @@ def _factory_svr_lag(
     C: float = 1.0,
     gamma: Any = "scale",
     epsilon: float = 0.1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -731,6 +1039,13 @@ def _factory_svr_lag(
             C=C_f,
             gamma=gamma_v,
             epsilon=epsilon_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -743,6 +1058,13 @@ def _factory_linear_svr_lag(
     epsilon: float = 0.0,
     max_iter: int = 5000,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -760,6 +1082,13 @@ def _factory_linear_svr_lag(
             epsilon=epsilon_f,
             max_iter=max_iter_int,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -771,6 +1100,13 @@ def _factory_kernel_ridge_lag(
     alpha: float = 1.0,
     kernel: str = "rbf",
     gamma: float | None = None,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -786,6 +1122,13 @@ def _factory_kernel_ridge_lag(
             alpha=alpha_f,
             kernel=kernel_s,
             gamma=gamma_opt,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -799,6 +1142,13 @@ def _factory_mlp_lag(
     max_iter: int = 300,
     random_state: int = 0,
     learning_rate_init: float = 0.001,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -823,6 +1173,13 @@ def _factory_mlp_lag(
             max_iter=max_iter_int,
             random_state=random_state_int,
             learning_rate_init=learning_rate_init_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -834,6 +1191,13 @@ def _factory_huber_lag(
     epsilon: float = 1.35,
     alpha: float = 0.0001,
     max_iter: int = 200,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -849,6 +1213,13 @@ def _factory_huber_lag(
             epsilon=epsilon_f,
             alpha=alpha_f,
             max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -859,6 +1230,13 @@ def _factory_quantile_lag(
     lags: int = 12,
     quantile: float = 0.5,
     alpha: float = 0.0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -872,6 +1250,13 @@ def _factory_quantile_lag(
             lags=lags_int,
             quantile=quantile_f,
             alpha=alpha_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -884,6 +1269,13 @@ def _factory_sgd_lag(
     penalty: str = "l2",
     max_iter: int = 2000,
     random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -901,6 +1293,13 @@ def _factory_sgd_lag(
             penalty=penalty_s,
             max_iter=max_iter_int,
             random_state=random_state_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -909,6 +1308,13 @@ def _factory_sgd_lag(
 def _factory_lgbm_custom_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **lgbm_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -923,6 +1329,13 @@ def _factory_lgbm_custom_lag(
             horizon,
             lags=lags_int,
             lgbm_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -931,6 +1344,13 @@ def _factory_lgbm_custom_lag(
 def _factory_lgbm_custom_lag_recursive(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **lgbm_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -945,6 +1365,13 @@ def _factory_lgbm_custom_lag_recursive(
             horizon,
             lags=lags_int,
             lgbm_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -954,6 +1381,13 @@ def _factory_lgbm_custom_step_lag(
     *,
     lags: int = 24,
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **lgbm_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -970,6 +1404,13 @@ def _factory_lgbm_custom_step_lag(
             lags=lags_int,
             lgbm_params=dict(params),
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -978,6 +1419,13 @@ def _factory_lgbm_custom_step_lag(
 def _factory_lgbm_custom_dirrec_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **lgbm_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -992,6 +1440,13 @@ def _factory_lgbm_custom_dirrec_lag(
             horizon,
             lags=lags_int,
             lgbm_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1011,6 +1466,13 @@ def _factory_lgbm_lag(
     min_child_weight: float = 0.001,
     random_state: int = 0,
     n_jobs: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1042,6 +1504,13 @@ def _factory_lgbm_lag(
             min_child_weight=min_child_weight_f,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1061,6 +1530,13 @@ def _factory_lgbm_lag_recursive(
     min_child_weight: float = 0.001,
     random_state: int = 0,
     n_jobs: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1092,6 +1568,13 @@ def _factory_lgbm_lag_recursive(
             min_child_weight=min_child_weight_f,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1112,6 +1595,13 @@ def _factory_lgbm_step_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1145,6 +1635,13 @@ def _factory_lgbm_step_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1164,6 +1661,13 @@ def _factory_lgbm_dirrec_lag(
     min_child_weight: float = 0.001,
     random_state: int = 0,
     n_jobs: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1195,6 +1699,13 @@ def _factory_lgbm_dirrec_lag(
             min_child_weight=min_child_weight_f,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1203,6 +1714,13 @@ def _factory_lgbm_dirrec_lag(
 def _factory_catboost_custom_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **cb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1217,6 +1735,13 @@ def _factory_catboost_custom_lag(
             horizon,
             lags=lags_int,
             cb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1225,6 +1750,13 @@ def _factory_catboost_custom_lag(
 def _factory_catboost_custom_lag_recursive(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **cb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1239,6 +1771,13 @@ def _factory_catboost_custom_lag_recursive(
             horizon,
             lags=lags_int,
             cb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1248,6 +1787,13 @@ def _factory_catboost_custom_step_lag(
     *,
     lags: int = 24,
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **cb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1264,6 +1810,13 @@ def _factory_catboost_custom_step_lag(
             lags=lags_int,
             cb_params=dict(params),
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1272,6 +1825,13 @@ def _factory_catboost_custom_step_lag(
 def _factory_catboost_custom_dirrec_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **cb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1286,6 +1846,13 @@ def _factory_catboost_custom_dirrec_lag(
             horizon,
             lags=lags_int,
             cb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1300,6 +1867,13 @@ def _factory_catboost_lag(
     l2_leaf_reg: float = 3.0,
     random_seed: int = 0,
     thread_count: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1321,6 +1895,13 @@ def _factory_catboost_lag(
             l2_leaf_reg=l2_leaf_reg_f,
             random_seed=random_seed_int,
             thread_count=thread_count_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1335,6 +1916,13 @@ def _factory_catboost_lag_recursive(
     l2_leaf_reg: float = 3.0,
     random_seed: int = 0,
     thread_count: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1356,6 +1944,13 @@ def _factory_catboost_lag_recursive(
             l2_leaf_reg=l2_leaf_reg_f,
             random_seed=random_seed_int,
             thread_count=thread_count_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1371,6 +1966,13 @@ def _factory_catboost_step_lag(
     random_seed: int = 0,
     thread_count: int = 1,
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1394,6 +1996,13 @@ def _factory_catboost_step_lag(
             random_seed=random_seed_int,
             thread_count=thread_count_int,
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1408,6 +2017,13 @@ def _factory_catboost_dirrec_lag(
     l2_leaf_reg: float = 3.0,
     random_seed: int = 0,
     thread_count: int = 1,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1429,6 +2045,13 @@ def _factory_catboost_dirrec_lag(
             l2_leaf_reg=l2_leaf_reg_f,
             random_seed=random_seed_int,
             thread_count=thread_count_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1437,6 +2060,13 @@ def _factory_catboost_dirrec_lag(
 def _factory_xgb_custom_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **xgb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1450,6 +2080,13 @@ def _factory_xgb_custom_lag(
             horizon,
             lags=lags_int,
             xgb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1458,6 +2095,13 @@ def _factory_xgb_custom_lag(
 def _factory_xgb_custom_lag_recursive(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **xgb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1471,6 +2115,13 @@ def _factory_xgb_custom_lag_recursive(
             horizon,
             lags=lags_int,
             xgb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1480,6 +2131,13 @@ def _factory_xgb_custom_step_lag(
     *,
     lags: int = 24,
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **xgb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1496,6 +2154,13 @@ def _factory_xgb_custom_step_lag(
             lags=lags_int,
             xgb_params=dict(params),
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1504,6 +2169,13 @@ def _factory_xgb_custom_step_lag(
 def _factory_xgb_custom_dirrec_lag(
     *,
     lags: int = 24,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **xgb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1518,6 +2190,13 @@ def _factory_xgb_custom_dirrec_lag(
             horizon,
             lags=lags_int,
             xgb_params=dict(params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1527,6 +2206,13 @@ def _factory_xgb_custom_mimo_lag(
     *,
     lags: int = 24,
     multi_strategy: str = "multi_output_tree",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **xgb_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1543,6 +2229,13 @@ def _factory_xgb_custom_mimo_lag(
             lags=lags_int,
             xgb_params=dict(params),
             multi_strategy=multi_strategy_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1564,6 +2257,13 @@ def _factory_xgb_step_lag(
     n_jobs: int = 1,
     tree_method: str = "hist",
     step_scale: str = "one_based",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1605,6 +2305,13 @@ def _factory_xgb_step_lag(
             lags=lags_int,
             xgb_params=dict(xgb_params),
             step_scale=step_scale_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1625,6 +2332,13 @@ def _factory_xgb_dirrec_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1664,6 +2378,13 @@ def _factory_xgb_dirrec_lag(
             horizon,
             lags=lags_int,
             xgb_params=dict(xgb_params),
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1685,6 +2406,13 @@ def _factory_xgb_mimo_lag(
     n_jobs: int = 1,
     tree_method: str = "hist",
     multi_strategy: str = "multi_output_tree",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1726,6 +2454,13 @@ def _factory_xgb_mimo_lag(
             lags=lags_int,
             xgb_params=dict(xgb_params),
             multi_strategy=multi_strategy_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1746,6 +2481,13 @@ def _factory_xgb_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1779,6 +2521,13 @@ def _factory_xgb_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1799,6 +2548,13 @@ def _factory_xgb_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1832,6 +2588,13 @@ def _factory_xgb_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1852,6 +2615,13 @@ def _factory_xgb_msle_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1885,6 +2655,13 @@ def _factory_xgb_msle_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1905,6 +2682,13 @@ def _factory_xgb_msle_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1938,6 +2722,13 @@ def _factory_xgb_msle_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -1958,6 +2749,13 @@ def _factory_xgb_logistic_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -1991,6 +2789,13 @@ def _factory_xgb_logistic_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2011,6 +2816,13 @@ def _factory_xgb_logistic_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2044,6 +2856,13 @@ def _factory_xgb_logistic_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2064,6 +2883,13 @@ def _factory_xgb_dart_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2097,6 +2923,13 @@ def _factory_xgb_dart_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2117,6 +2950,13 @@ def _factory_xgb_dart_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2150,6 +2990,13 @@ def _factory_xgb_dart_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2168,6 +3015,13 @@ def _factory_xgbrf_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2197,6 +3051,13 @@ def _factory_xgbrf_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2215,6 +3076,13 @@ def _factory_xgbrf_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2244,6 +3112,13 @@ def _factory_xgbrf_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2261,6 +3136,13 @@ def _factory_xgb_linear_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2288,6 +3170,13 @@ def _factory_xgb_linear_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2305,6 +3194,13 @@ def _factory_xgb_linear_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2332,6 +3228,13 @@ def _factory_xgb_linear_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2352,6 +3255,13 @@ def _factory_xgb_mae_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2385,6 +3295,13 @@ def _factory_xgb_mae_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2405,6 +3322,13 @@ def _factory_xgb_mae_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2438,6 +3362,13 @@ def _factory_xgb_mae_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
         )
 
     return _f
@@ -2459,6 +3390,9 @@ def _factory_xgb_huber_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2494,6 +3428,9 @@ def _factory_xgb_huber_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2515,6 +3452,9 @@ def _factory_xgb_huber_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2550,6 +3490,9 @@ def _factory_xgb_huber_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2571,6 +3514,9 @@ def _factory_xgb_quantile_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2606,6 +3552,9 @@ def _factory_xgb_quantile_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2627,6 +3576,9 @@ def _factory_xgb_quantile_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2662,6 +3614,9 @@ def _factory_xgb_quantile_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2682,6 +3637,9 @@ def _factory_xgb_poisson_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2715,6 +3673,9 @@ def _factory_xgb_poisson_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2735,6 +3696,9 @@ def _factory_xgb_poisson_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2768,6 +3732,9 @@ def _factory_xgb_poisson_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2788,6 +3755,9 @@ def _factory_xgb_gamma_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2821,6 +3791,9 @@ def _factory_xgb_gamma_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2841,6 +3814,9 @@ def _factory_xgb_gamma_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2874,6 +3850,9 @@ def _factory_xgb_gamma_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2895,6 +3874,9 @@ def _factory_xgb_tweedie_lag(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2930,6 +3912,9 @@ def _factory_xgb_tweedie_lag(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -2951,6 +3936,9 @@ def _factory_xgb_tweedie_lag_recursive(
     random_state: int = 0,
     n_jobs: int = 1,
     tree_method: str = "hist",
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
     **_params: Any,
 ) -> ForecasterFn:
     lags_int = int(lags)
@@ -2986,6 +3974,9 @@ def _factory_xgb_tweedie_lag_recursive(
             random_state=random_state_int,
             n_jobs=n_jobs_int,
             tree_method=tree_method_s,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
         )
 
     return _f
@@ -6942,33 +7933,48 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="lr-lag",
         description="Linear regression on lag features (OLS, recursive forecast).",
         factory=_factory_lr_lag,
-        default_params={"lags": 5},
-        param_help={"lags": "Number of lag features"},
+        default_params={"lags": 5, "roll_windows": (), "roll_stats": (), "diff_lags": ()},
+        param_help={
+            "lags": "Number of lag features",
+            "roll_windows": "Optional rolling windows (<=lags) for derived lag stats, e.g. 3,7,14",
+            "roll_stats": "Derived stats per window: mean,std,min,max,median,slope",
+            "diff_lags": "Optional diffs: diff_k = last - lag(k+1); each k must be < lags",
+        },
     ),
     "lr-lag-direct": ModelSpec(
         key="lr-lag-direct",
         description="Linear regression on lag features (OLS, direct multi-horizon).",
         factory=_factory_lr_lag_direct,
-        default_params={"lags": 5},
-        param_help={"lags": "Number of lag features"},
+        default_params={"lags": 5, "roll_windows": (), "roll_stats": (), "diff_lags": ()},
+        param_help={
+            "lags": "Number of lag features",
+            "roll_windows": "Optional rolling windows (<=lags) for derived lag stats, e.g. 3,7,14",
+            "roll_stats": "Derived stats per window: mean,std,min,max,median,slope",
+            "diff_lags": "Optional diffs: diff_k = last - lag(k+1); each k must be < lags",
+        },
     ),
     "ridge-lag": ModelSpec(
         key="ridge-lag",
         description="Ridge regression on lag features (recursive forecast). Requires scikit-learn.",
         factory=_factory_ridge_lag,
-        default_params={"lags": 5, "alpha": 1.0},
-        param_help={"lags": "Number of lag features", "alpha": "Ridge regularization strength"},
+        default_params={"lags": 5, "alpha": 1.0, **_LAG_DERIVED_DEFAULTS},
+        param_help={
+            "lags": "Number of lag features",
+            "alpha": "Ridge regularization strength",
+            **_LAG_DERIVED_PARAM_HELP,
+        },
         requires=("ml",),
     ),
     "rf-lag": ModelSpec(
         key="rf-lag",
         description="RandomForest on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_rf_lag,
-        default_params={"lags": 10, "n_estimators": 200, "random_state": 0},
+        default_params={"lags": 10, "n_estimators": 200, "random_state": 0, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "n_estimators": "RandomForest n_estimators",
             "random_state": "RandomForest random_state",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -6976,11 +7982,12 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="lasso-lag",
         description="Lasso on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_lasso_lag,
-        default_params={"lags": 12, "alpha": 0.001, "max_iter": 5000},
+        default_params={"lags": 12, "alpha": 0.001, "max_iter": 5000, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "alpha": "L1 regularization strength",
             "max_iter": "Max solver iterations",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -6988,12 +7995,19 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="elasticnet-lag",
         description="ElasticNet on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_elasticnet_lag,
-        default_params={"lags": 12, "alpha": 0.001, "l1_ratio": 0.5, "max_iter": 5000},
+        default_params={
+            "lags": 12,
+            "alpha": 0.001,
+            "l1_ratio": 0.5,
+            "max_iter": 5000,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "alpha": "Regularization strength",
             "l1_ratio": "ElasticNet l1_ratio in [0,1]",
             "max_iter": "Max solver iterations",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7001,11 +8015,12 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="knn-lag",
         description="KNN regression on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_knn_lag,
-        default_params={"lags": 12, "n_neighbors": 10, "weights": "distance"},
+        default_params={"lags": 12, "n_neighbors": 10, "weights": "distance", **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "n_neighbors": "KNN n_neighbors",
             "weights": "KNN weights: uniform or distance",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7019,6 +8034,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "learning_rate": 0.05,
             "max_depth": 3,
             "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7026,6 +8042,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "learning_rate": "Boosting learning rate",
             "max_depth": "Tree max_depth",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7033,19 +8050,24 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="ridge-lag-direct",
         description="Ridge regression on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_ridge_lag_direct,
-        default_params={"lags": 12, "alpha": 1.0},
-        param_help={"lags": "Number of lag features", "alpha": "Ridge regularization strength"},
+        default_params={"lags": 12, "alpha": 1.0, **_LAG_DERIVED_DEFAULTS},
+        param_help={
+            "lags": "Number of lag features",
+            "alpha": "Ridge regularization strength",
+            **_LAG_DERIVED_PARAM_HELP,
+        },
         requires=("ml",),
     ),
     "decision-tree-lag": ModelSpec(
         key="decision-tree-lag",
         description="DecisionTreeRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_decision_tree_lag,
-        default_params={"lags": 12, "max_depth": 5, "random_state": 0},
+        default_params={"lags": 12, "max_depth": 5, "random_state": 0, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "max_depth": "Tree max_depth (None for unlimited)",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7053,12 +8075,19 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="extra-trees-lag",
         description="ExtraTreesRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_extra_trees_lag,
-        default_params={"lags": 12, "n_estimators": 300, "max_depth": None, "random_state": 0},
+        default_params={
+            "lags": 12,
+            "n_estimators": 300,
+            "max_depth": None,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "n_estimators": "Number of trees",
             "max_depth": "Tree max_depth (None for unlimited)",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7066,12 +8095,19 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="adaboost-lag",
         description="AdaBoostRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_adaboost_lag,
-        default_params={"lags": 12, "n_estimators": 300, "learning_rate": 0.05, "random_state": 0},
+        default_params={
+            "lags": 12,
+            "n_estimators": 300,
+            "learning_rate": 0.05,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "n_estimators": "Number of boosting stages",
             "learning_rate": "Boosting learning rate",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7079,12 +8115,19 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="bagging-lag",
         description="BaggingRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_bagging_lag,
-        default_params={"lags": 12, "n_estimators": 200, "max_samples": 0.8, "random_state": 0},
+        default_params={
+            "lags": 12,
+            "n_estimators": 200,
+            "max_samples": 0.8,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "n_estimators": "Number of estimators",
             "max_samples": "Fraction of samples per estimator in (0,1]",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7098,6 +8141,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "learning_rate": 0.05,
             "max_depth": 3,
             "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7105,6 +8149,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "learning_rate": "Boosting learning rate",
             "max_depth": "Tree max_depth (None for unlimited)",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7112,12 +8157,13 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="svr-lag",
         description="SVR (RBF) on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_svr_lag,
-        default_params={"lags": 12, "C": 1.0, "gamma": "scale", "epsilon": 0.1},
+        default_params={"lags": 12, "C": 1.0, "gamma": "scale", "epsilon": 0.1, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "C": "SVR regularization (must be > 0)",
             "gamma": "Kernel gamma: scale, auto, or a float",
             "epsilon": "Epsilon-insensitive tube width (>=0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7125,13 +8171,21 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="linear-svr-lag",
         description="LinearSVR on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_linear_svr_lag,
-        default_params={"lags": 12, "C": 1.0, "epsilon": 0.0, "max_iter": 5000, "random_state": 0},
+        default_params={
+            "lags": 12,
+            "C": 1.0,
+            "epsilon": 0.0,
+            "max_iter": 5000,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "C": "LinearSVR regularization (must be > 0)",
             "epsilon": "Epsilon-insensitive tube width (>=0)",
             "max_iter": "Max solver iterations",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7139,12 +8193,13 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="kernel-ridge-lag",
         description="KernelRidge on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_kernel_ridge_lag,
-        default_params={"lags": 12, "alpha": 1.0, "kernel": "rbf", "gamma": None},
+        default_params={"lags": 12, "alpha": 1.0, "kernel": "rbf", "gamma": None, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "alpha": "Ridge regularization strength (>=0)",
             "kernel": "Kernel name (e.g., rbf, linear, poly)",
             "gamma": "Kernel gamma (None for default)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7159,6 +8214,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_iter": 300,
             "random_state": 0,
             "learning_rate_init": 0.001,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7167,6 +8223,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_iter": "Max training iterations",
             "random_state": "Random seed",
             "learning_rate_init": "Initial learning rate (>0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7174,12 +8231,19 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="huber-lag",
         description="HuberRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_huber_lag,
-        default_params={"lags": 12, "epsilon": 1.35, "alpha": 0.0001, "max_iter": 200},
+        default_params={
+            "lags": 12,
+            "epsilon": 1.35,
+            "alpha": 0.0001,
+            "max_iter": 200,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "epsilon": "Huber epsilon (>1.0)",
             "alpha": "L2 regularization strength (>=0)",
             "max_iter": "Max solver iterations",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7187,11 +8251,12 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="quantile-lag",
         description="QuantileRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_quantile_lag,
-        default_params={"lags": 12, "quantile": 0.5, "alpha": 0.0},
+        default_params={"lags": 12, "quantile": 0.5, "alpha": 0.0, **_LAG_DERIVED_DEFAULTS},
         param_help={
             "lags": "Number of lag features",
             "quantile": "Target quantile in (0,1) (e.g. 0.5 for median)",
             "alpha": "L2 regularization strength (>=0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7205,6 +8270,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "penalty": "l2",
             "max_iter": 2000,
             "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7212,6 +8278,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "penalty": "Penalty: l2, l1, elasticnet",
             "max_iter": "Max training iterations",
             "random_state": "Random seed",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("ml",),
     ),
@@ -7238,6 +8305,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "verbosity": -1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7255,6 +8323,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
             "verbosity": "Verbosity (-1 to silence)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7281,6 +8350,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "verbosity": -1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7298,6 +8368,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
             "verbosity": "Verbosity (-1 to silence)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7312,6 +8383,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         default_params={
             "lags": 24,
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
             "boosting_type": "gbdt",
             "objective": "regression",
             "n_estimators": 500,
@@ -7330,6 +8404,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={
             "lags": "Number of lag features",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
             "boosting_type": "Boosting type (gbdt, dart, rf, ...)",
             "objective": "Objective (regression, quantile, poisson, ...)",
             "n_estimators": "Number of boosting rounds",
@@ -7370,6 +8447,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "verbosity": -1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7387,6 +8465,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
             "verbosity": "Verbosity (-1 to silence)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7407,6 +8486,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": 0.001,
             "random_state": 0,
             "n_jobs": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7421,6 +8501,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": "Min child weight (>=0)",
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7443,6 +8524,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": 0.001,
             "random_state": 0,
             "n_jobs": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7457,6 +8539,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": "Min child weight (>=0)",
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7481,6 +8564,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
         },
         param_help={
             "lags": "Number of lag features",
@@ -7496,6 +8582,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
         },
         requires=("lgbm",),
     ),
@@ -7519,6 +8608,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": 0.001,
             "random_state": 0,
             "n_jobs": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7533,6 +8623,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "min_child_weight": "Min child weight (>=0)",
             "random_state": "Random seed",
             "n_jobs": "LightGBM threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("lgbm",),
     ),
@@ -7554,6 +8645,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": 1,
             "verbose": False,
             "allow_writing_files": False,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7566,6 +8658,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": "Threads (avoid 0)",
             "verbose": "Verbosity (false to silence)",
             "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7587,6 +8680,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": 1,
             "verbose": False,
             "allow_writing_files": False,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7599,6 +8693,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": "Threads (avoid 0)",
             "verbose": "Verbosity (false to silence)",
             "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7613,6 +8708,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         default_params={
             "lags": 24,
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
             "loss_function": "RMSE",
             "iterations": 500,
             "learning_rate": 0.05,
@@ -7626,6 +8724,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={
             "lags": "Number of lag features",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
             "loss_function": "Loss function (e.g. RMSE, MAE, Quantile:alpha=0.5, Poisson, ...)",
             "iterations": "Number of boosting iterations",
             "learning_rate": "Boosting learning rate (>0)",
@@ -7656,6 +8757,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": 1,
             "verbose": False,
             "allow_writing_files": False,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7668,6 +8770,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "thread_count": "Threads (avoid 0)",
             "verbose": "Verbosity (false to silence)",
             "allow_writing_files": "Allow writing files (false to avoid catboost_info output)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7683,6 +8786,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": 3.0,
             "random_seed": 0,
             "thread_count": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7692,6 +8796,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": "L2 regularization strength (>=0)",
             "random_seed": "Random seed",
             "thread_count": "Threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7709,6 +8814,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": 3.0,
             "random_seed": 0,
             "thread_count": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7718,6 +8824,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": "L2 regularization strength (>=0)",
             "random_seed": "Random seed",
             "thread_count": "Threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7737,6 +8844,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_seed": 0,
             "thread_count": 1,
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
         },
         param_help={
             "lags": "Number of lag features",
@@ -7747,6 +8857,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_seed": "Random seed",
             "thread_count": "Threads (avoid 0)",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
         },
         requires=("catboost",),
     ),
@@ -7765,6 +8878,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": 3.0,
             "random_seed": 0,
             "thread_count": 1,
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7774,6 +8888,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "l2_leaf_reg": "L2 regularization strength (>=0)",
             "random_seed": "Random seed",
             "thread_count": "Threads (avoid 0)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("catboost",),
     ),
@@ -7800,6 +8915,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7817,6 +8933,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -7843,6 +8960,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7860,6 +8978,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -7874,6 +8993,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         default_params={
             "lags": 24,
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
             "booster": "gbtree",
             "objective": "reg:squarederror",
             "n_estimators": 500,
@@ -7892,6 +9014,9 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={
             "lags": "Number of lag features",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
             "booster": "Booster type (gbtree, dart, gblinear, ...)",
             "objective": "Objective string (e.g. reg:squarederror, reg:gamma, count:poisson, ...)",
             "n_estimators": "Number of boosting rounds",
@@ -7933,6 +9058,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7950,6 +9076,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -7978,6 +9105,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -7996,6 +9124,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8021,6 +9150,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_jobs": 1,
             "tree_method": "hist",
             "step_scale": "one_based",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
         },
         param_help={
             "lags": "Number of lag features",
@@ -8037,6 +9169,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
             "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
         },
         requires=("xgb",),
     ),
@@ -8061,6 +9196,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8076,6 +9212,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8101,6 +9238,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_jobs": 1,
             "tree_method": "hist",
             "multi_strategy": "multi_output_tree",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8117,6 +9255,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
             "multi_strategy": "XGBoost multi-target strategy (multi_output_tree, one_output_per_tree)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8138,6 +9277,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8153,6 +9293,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8174,6 +9315,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8189,6 +9331,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8210,6 +9353,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8225,6 +9369,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8246,6 +9391,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8261,6 +9407,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8282,6 +9429,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8297,6 +9445,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8318,6 +9467,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8333,6 +9483,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8354,6 +9505,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8369,6 +9521,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8390,6 +9543,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8405,6 +9559,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8424,6 +9579,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8437,6 +9593,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8456,6 +9613,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8469,6 +9627,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8487,6 +9646,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8499,6 +9659,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8517,6 +9678,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8529,6 +9691,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8550,6 +9713,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8565,6 +9729,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8586,6 +9751,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8601,6 +9767,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8623,6 +9790,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8639,6 +9807,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8661,6 +9830,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8677,6 +9847,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8699,6 +9870,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8715,6 +9887,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8737,6 +9910,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8753,6 +9927,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8774,6 +9949,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8789,6 +9965,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8810,6 +9987,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8825,6 +10003,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8846,6 +10025,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8861,6 +10041,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8882,6 +10063,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8897,6 +10079,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8919,6 +10102,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8935,6 +10119,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -8957,6 +10142,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": 0,
             "n_jobs": 1,
             "tree_method": "hist",
+            **_LAG_DERIVED_DEFAULTS,
         },
         param_help={
             "lags": "Number of lag features",
@@ -8973,6 +10159,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "random_state": "Random seed",
             "n_jobs": "XGBoost threads (avoid 0)",
             "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            **_LAG_DERIVED_PARAM_HELP,
         },
         requires=("xgb",),
     ),
@@ -9745,6 +10932,1470 @@ _REGISTRY: dict[str, ModelSpec] = {
             "loss": "Ignored (QRNN uses pinball loss at quantile q)",
         },
         requires=("torch",),
+    ),
+    "lasso-step-lag-global": ModelSpec(
+        key="lasso-step-lag-global",
+        description=(
+            "Global (panel) Lasso regression using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=lasso_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 0.001,
+            "max_iter": 5000,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "L1 regularization strength (>=0)",
+            "max_iter": "Max solver iterations (>=1)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "elasticnet-step-lag-global": ModelSpec(
+        key="elasticnet-step-lag-global",
+        description=(
+            "Global (panel) ElasticNet regression using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=elasticnet_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 0.001,
+            "l1_ratio": 0.5,
+            "max_iter": 5000,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "Regularization strength (>=0)",
+            "l1_ratio": "ElasticNet l1_ratio in [0,1]",
+            "max_iter": "Max solver iterations (>=1)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "knn-step-lag-global": ModelSpec(
+        key="knn-step-lag-global",
+        description=(
+            "Global (panel) KNeighborsRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=knn_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_neighbors": 10,
+            "weights": "distance",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_neighbors": "KNN n_neighbors (>=1)",
+            "weights": "KNN weights: uniform or distance",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "kernel-ridge-step-lag-global": ModelSpec(
+        key="kernel-ridge-step-lag-global",
+        description=(
+            "Global (panel) KernelRidge using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=kernel_ridge_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 1.0,
+            "kernel": "rbf",
+            "gamma": None,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "Ridge regularization strength (>=0)",
+            "kernel": "Kernel name (e.g., rbf, linear, poly)",
+            "gamma": "Kernel gamma (None for default)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "svr-step-lag-global": ModelSpec(
+        key="svr-step-lag-global",
+        description=(
+            "Global (panel) SVR using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=svr_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "C": 1.0,
+            "gamma": "scale",
+            "epsilon": 0.1,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "C": "SVR regularization (must be > 0)",
+            "gamma": "Kernel gamma: scale, auto, or a float",
+            "epsilon": "Epsilon-insensitive tube width (>=0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "linear-svr-step-lag-global": ModelSpec(
+        key="linear-svr-step-lag-global",
+        description=(
+            "Global (panel) LinearSVR using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=linear_svr_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "C": 1.0,
+            "epsilon": 0.0,
+            "max_iter": 5000,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "C": "LinearSVR regularization (must be > 0)",
+            "epsilon": "Epsilon-insensitive tube width (>=0)",
+            "max_iter": "Max solver iterations",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "huber-step-lag-global": ModelSpec(
+        key="huber-step-lag-global",
+        description=(
+            "Global (panel) HuberRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=huber_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "epsilon": 1.35,
+            "alpha": 0.0001,
+            "max_iter": 200,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "epsilon": "Huber epsilon (>1.0)",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max solver iterations",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "quantile-step-lag-global": ModelSpec(
+        key="quantile-step-lag-global",
+        description=(
+            "Global (panel) QuantileRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=quantile_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "quantile": 0.5,
+            "alpha": 0.0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "quantile": "Target quantile in (0,1) (e.g. 0.5 for median)",
+            "alpha": "L2 regularization strength (>=0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "sgd-step-lag-global": ModelSpec(
+        key="sgd-step-lag-global",
+        description=(
+            "Global (panel) SGDRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=sgd_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 0.0001,
+            "penalty": "l2",
+            "max_iter": 2000,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "Regularization strength (>=0)",
+            "penalty": "Penalty: l2, l1, elasticnet",
+            "max_iter": "Max training iterations",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "adaboost-step-lag-global": ModelSpec(
+        key="adaboost-step-lag-global",
+        description=(
+            "Global (panel) AdaBoostRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=adaboost_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 300,
+            "learning_rate": 0.05,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting stages",
+            "learning_rate": "Boosting learning rate",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "mlp-step-lag-global": ModelSpec(
+        key="mlp-step-lag-global",
+        description=(
+            "Global (panel) MLPRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=mlp_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "hidden_layer_sizes": (64, 64),
+            "alpha": 0.0001,
+            "max_iter": 300,
+            "random_state": 0,
+            "learning_rate_init": 0.001,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_layer_sizes": "Hidden sizes as comma list (e.g. 64,64)",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max training iterations",
+            "random_state": "Random seed",
+            "learning_rate_init": "Initial learning rate (>0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "decision-tree-step-lag-global": ModelSpec(
+        key="decision-tree-step-lag-global",
+        description=(
+            "Global (panel) DecisionTreeRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=decision_tree_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "max_depth": 5,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "max_depth": "Tree max_depth (>=1) or None",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "bagging-step-lag-global": ModelSpec(
+        key="bagging-step-lag-global",
+        description=(
+            "Global (panel) BaggingRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=bagging_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 200,
+            "max_samples": 0.8,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of estimators",
+            "max_samples": "Fraction of samples per estimator in (0,1]",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "gbrt-step-lag-global": ModelSpec(
+        key="gbrt-step-lag-global",
+        description=(
+            "Global (panel) GradientBoostingRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=gbrt_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 200,
+            "learning_rate": 0.05,
+            "max_depth": 3,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting stages",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "ridge-step-lag-global": ModelSpec(
+        key="ridge-step-lag-global",
+        description=(
+            "Global (panel) Ridge regression using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=ridge_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 1.0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "Ridge regularization strength (>=0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "rf-step-lag-global": ModelSpec(
+        key="rf-step-lag-global",
+        description=(
+            "Global (panel) RandomForestRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=rf_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 200,
+            "max_depth": None,
+            "random_state": 0,
+            "n_jobs": 1,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of trees",
+            "max_depth": "Tree max_depth (>=1) or None",
+            "random_state": "Random seed",
+            "n_jobs": "scikit-learn parallel jobs",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "extra-trees-step-lag-global": ModelSpec(
+        key="extra-trees-step-lag-global",
+        description=(
+            "Global (panel) ExtraTreesRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=extra_trees_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 300,
+            "max_depth": None,
+            "random_state": 0,
+            "n_jobs": 1,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of trees",
+            "max_depth": "Tree max_depth (>=1) or None",
+            "random_state": "Random seed",
+            "n_jobs": "scikit-learn parallel jobs",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "hgb-step-lag-global": ModelSpec(
+        key="hgb-step-lag-global",
+        description=(
+            "Global (panel) HistGradientBoostingRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=hgb_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "max_iter": 300,
+            "learning_rate": 0.05,
+            "max_depth": 3,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "max_iter": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1) or None",
+            "random_state": "Random seed",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "xgb-step-lag-global": ModelSpec(
+        key="xgb-step-lag-global",
+        description=(
+            "Global (panel) XGBoost step-lag regressor (single model with step-index feature). "
+            "Supports optional quantiles via --model-param quantiles=0.1,0.5,0.9. Requires xgboost."
+        ),
+        factory=xgb_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+            "quantiles": (),
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-msle-step-lag-global": ModelSpec(
+        key="xgb-msle-step-lag-global",
+        description=(
+            "Global (panel) XGBoost squared-log-error step-lag regressor "
+            "(single model with step-index feature). Requires xgboost (y>=0)."
+        ),
+        factory=xgb_msle_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-logistic-step-lag-global": ModelSpec(
+        key="xgb-logistic-step-lag-global",
+        description=(
+            "Global (panel) XGBoost logistic step-lag regressor "
+            "(single model with step-index feature). Requires xgboost (y in [0,1])."
+        ),
+        factory=xgb_logistic_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-mae-step-lag-global": ModelSpec(
+        key="xgb-mae-step-lag-global",
+        description=(
+            "Global (panel) XGBoost MAE step-lag regressor "
+            "(single model with step-index feature). Requires xgboost."
+        ),
+        factory=xgb_mae_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-gamma-step-lag-global": ModelSpec(
+        key="xgb-gamma-step-lag-global",
+        description=(
+            "Global (panel) XGBoost Gamma step-lag regressor "
+            "(single model with step-index feature). Requires xgboost (y>0)."
+        ),
+        factory=xgb_gamma_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-huber-step-lag-global": ModelSpec(
+        key="xgb-huber-step-lag-global",
+        description=(
+            "Global (panel) XGBoost pseudo-Huber step-lag regressor "
+            "(single model with step-index feature). Requires xgboost."
+        ),
+        factory=xgb_huber_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "huber_slope": 1.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "huber_slope": "Pseudo-Huber slope (>0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-poisson-step-lag-global": ModelSpec(
+        key="xgb-poisson-step-lag-global",
+        description=(
+            "Global (panel) XGBoost Poisson step-lag regressor "
+            "(single model with step-index feature). Requires xgboost (y>=0)."
+        ),
+        factory=xgb_poisson_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-tweedie-step-lag-global": ModelSpec(
+        key="xgb-tweedie-step-lag-global",
+        description=(
+            "Global (panel) XGBoost Tweedie step-lag regressor "
+            "(single model with step-index feature). Requires xgboost (y>=0)."
+        ),
+        factory=xgb_tweedie_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "tweedie_variance_power": 1.5,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "tweedie_variance_power": "Tweedie variance power in [1,2)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-dart-step-lag-global": ModelSpec(
+        key="xgb-dart-step-lag-global",
+        description=(
+            "Global (panel) XGBoost DART step-lag regressor "
+            "(single model with step-index feature). Requires xgboost."
+        ),
+        factory=xgb_dart_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgb-linear-step-lag-global": ModelSpec(
+        key="xgb-linear-step-lag-global",
+        description=(
+            "Global (panel) XGBoost linear booster (gblinear) step-lag regressor "
+            "(single model with step-index feature). Requires xgboost."
+        ),
+        factory=xgb_linear_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Learning rate (>0)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "xgbrf-step-lag-global": ModelSpec(
+        key="xgbrf-step-lag-global",
+        description=(
+            "Global (panel) XGBoost random forest (XGBRFRegressor) step-lag regressor "
+            "(single model with step-index feature). Requires xgboost."
+        ),
+        factory=xgbrf_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 1.0,
+            "min_child_weight": 1.0,
+            "gamma": 0.0,
+            "random_state": 0,
+            "n_jobs": 1,
+            "tree_method": "hist",
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of trees",
+            "max_depth": "Tree max_depth (>=1)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Minimum sum of instance weight needed in a child (>=0)",
+            "gamma": "Min loss reduction to make a split (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "XGBoost threads (avoid 0)",
+            "tree_method": "Tree method (hist, approx, exact, auto, ...)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("xgb",),
+        interface="global",
+    ),
+    "lgbm-step-lag-global": ModelSpec(
+        key="lgbm-step-lag-global",
+        description=(
+            "Global (panel) LightGBM step-lag regressor (single model with step-index feature). "
+            "Supports optional quantiles via --model-param quantiles=0.1,0.5,0.9. Requires lightgbm."
+        ),
+        factory=lgbm_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_estimators": 500,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 0.0,
+            "min_child_weight": 0.001,
+            "random_state": 0,
+            "n_jobs": 1,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+            "quantiles": (),
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_estimators": "Number of boosting rounds",
+            "learning_rate": "Boosting learning rate (>0)",
+            "max_depth": "Tree max_depth (-1 for unlimited)",
+            "num_leaves": "Number of leaves (>=2)",
+            "subsample": "Row subsample ratio in (0,1]",
+            "colsample_bytree": "Column subsample ratio in (0,1]",
+            "reg_alpha": "L1 regularization strength (>=0)",
+            "reg_lambda": "L2 regularization strength (>=0)",
+            "min_child_weight": "Min child weight (>=0)",
+            "random_state": "Random seed",
+            "n_jobs": "LightGBM threads (avoid 0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+        },
+        requires=("lgbm",),
+        interface="global",
+    ),
+    "catboost-step-lag-global": ModelSpec(
+        key="catboost-step-lag-global",
+        description=(
+            "Global (panel) CatBoost step-lag regressor (single model with step-index feature). "
+            "Supports optional quantiles via --model-param quantiles=0.1,0.5,0.9. Requires catboost."
+        ),
+        factory=catboost_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "random_seed": 0,
+            "thread_count": 1,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+            "quantiles": (),
+        },
+        param_help={
+            "lags": "Lag window length",
+            "iterations": "Number of boosting iterations",
+            "learning_rate": "Boosting learning rate (>0)",
+            "depth": "Tree depth (>=1)",
+            "l2_leaf_reg": "L2 regularization strength (>=0)",
+            "random_seed": "Random seed",
+            "thread_count": "Threads (avoid 0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+        },
+        requires=("catboost",),
+        interface="global",
     ),
     "torch-tft-global": ModelSpec(
         key="torch-tft-global",

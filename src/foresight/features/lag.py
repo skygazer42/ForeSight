@@ -4,8 +4,10 @@ from typing import Any
 
 import numpy as np
 
+from .tabular import normalize_int_tuple
 
-def make_lagged_xy(y: Any, *, lags: int) -> tuple[np.ndarray, np.ndarray]:
+
+def make_lagged_xy(y: Any, *, lags: int, start_t: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert a 1D series into a supervised learning dataset for 1-step forecasting.
 
@@ -18,15 +20,89 @@ def make_lagged_xy(y: Any, *, lags: int) -> tuple[np.ndarray, np.ndarray]:
         raise ValueError(f"make_lagged_xy expects 1D input, got shape {arr.shape}")
     if lags <= 0:
         raise ValueError("lags must be >= 1")
-    if arr.size <= lags:
-        raise ValueError(f"Need > lags points (lags={lags}), got {arr.size}")
+
+    t0 = int(lags) if start_t is None else max(int(lags), int(start_t))
+    if arr.size <= t0:
+        raise ValueError(f"Need > start_t points (start_t={t0}), got {arr.size}")
 
     n = int(arr.size)
-    rows = n - lags
+    rows = n - t0
     X = np.empty((rows, lags), dtype=float)
     yt = np.empty((rows,), dtype=float)
     for i in range(rows):
-        t = i + lags
+        t = i + t0
         X[i, :] = arr[t - lags : t]
         yt[i] = arr[t]
     return X, yt
+
+
+def build_seasonal_lag_features(
+    y: Any,
+    *,
+    t: Any,
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+) -> tuple[np.ndarray, list[str]]:
+    """
+    Build seasonal lag/diff features from a 1D series for given target indices `t`.
+
+    Definitions (for each target index t_i):
+      - seasonal_lags: include y[t_i - p] for each p
+      - seasonal_diff_lags: include y[t_i - 1] - y[t_i - 1 - p] for each p
+
+    Notes:
+      - `t` may include the value n (one-step-ahead) as long as y has length n.
+      - All features depend only on past values (no target leakage).
+    """
+    arr = np.asarray(y, dtype=float)
+    if arr.ndim != 1:
+        raise ValueError(f"Expected 1D series, got shape {arr.shape}")
+    if arr.size == 0:
+        return np.empty((0, 0), dtype=float), []
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("Non-finite values in series")
+
+    tt = np.asarray(t, dtype=int).reshape(-1)
+    if tt.size == 0:
+        return np.empty((0, 0), dtype=float), []
+    if np.any(tt < 0):
+        raise ValueError("t indices must be >= 0")
+    if int(np.max(tt)) > int(arr.size):
+        raise ValueError("t indices must be <= len(series)")
+
+    lags_tup = tuple(sorted(set(normalize_int_tuple(seasonal_lags))))
+    diffs_tup = tuple(sorted(set(normalize_int_tuple(seasonal_diff_lags))))
+    if not lags_tup and not diffs_tup:
+        return np.empty((int(tt.size), 0), dtype=float), []
+    if any(int(p) <= 0 for p in lags_tup):
+        raise ValueError("seasonal_lags must be >= 1")
+    if any(int(p) <= 0 for p in diffs_tup):
+        raise ValueError("seasonal_diff_lags must be >= 1")
+
+    feats: list[np.ndarray] = []
+    names: list[str] = []
+
+    for p in lags_tup:
+        idx = tt - int(p)
+        if np.any(idx < 0):
+            raise ValueError("seasonal_lags require t >= lag")
+        feats.append(arr[idx].reshape(-1, 1))
+        names.append(f"season_lag_{int(p)}")
+
+    if diffs_tup:
+        idx1 = tt - 1
+        if np.any(idx1 < 0):
+            raise ValueError("seasonal_diff_lags require t >= 1")
+        last = arr[idx1]
+        for p in diffs_tup:
+            idx0 = tt - 1 - int(p)
+            if np.any(idx0 < 0):
+                raise ValueError("seasonal_diff_lags require t >= lag+1")
+            feats.append((last - arr[idx0]).reshape(-1, 1))
+            names.append(f"season_diff_{int(p)}")
+
+    X = np.concatenate(feats, axis=1) if feats else np.empty((int(tt.size), 0), dtype=float)
+    X = X.astype(float, copy=False)
+    if not np.all(np.isfinite(X)):
+        raise ValueError("Non-finite values in seasonal lag features")
+    return X, names

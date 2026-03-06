@@ -53,11 +53,31 @@ def test_catboost_models_smoke_when_installed() -> None:
     cases = [
         ("catboost-custom-lag", dict(base_params), y),
         ("catboost-custom-lag-recursive", dict(base_params), y),
-        ("catboost-custom-step-lag", {**base_params, "step_scale": "one_based"}, y),
+        (
+            "catboost-custom-step-lag",
+            {
+                **base_params,
+                "step_scale": "one_based",
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
+            },
+            y,
+        ),
         ("catboost-custom-dirrec-lag", dict(base_params), y),
         ("catboost-lag", dict(base_params), y),
         ("catboost-lag-recursive", dict(base_params), y),
-        ("catboost-step-lag", {**base_params, "step_scale": "one_based"}, y),
+        (
+            "catboost-step-lag",
+            {
+                **base_params,
+                "step_scale": "one_based",
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
+            },
+            y,
+        ),
         ("catboost-dirrec-lag", dict(base_params), y),
     ]
 
@@ -66,4 +86,3 @@ def test_catboost_models_smoke_when_installed() -> None:
         yhat = f(series, horizon)
         assert yhat.shape == (horizon,)
         assert np.all(np.isfinite(yhat))
-

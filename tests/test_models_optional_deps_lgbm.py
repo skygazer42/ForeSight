@@ -56,11 +56,31 @@ def test_lgbm_models_smoke_when_installed() -> None:
     cases = [
         ("lgbm-custom-lag", dict(base_params), y),
         ("lgbm-custom-lag-recursive", dict(base_params), y),
-        ("lgbm-custom-step-lag", {**base_params, "step_scale": "one_based"}, y),
+        (
+            "lgbm-custom-step-lag",
+            {
+                **base_params,
+                "step_scale": "one_based",
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
+            },
+            y,
+        ),
         ("lgbm-custom-dirrec-lag", dict(base_params), y),
         ("lgbm-lag", dict(base_params), y),
         ("lgbm-lag-recursive", dict(base_params), y),
-        ("lgbm-step-lag", {**base_params, "step_scale": "one_based"}, y),
+        (
+            "lgbm-step-lag",
+            {
+                **base_params,
+                "step_scale": "one_based",
+                "roll_windows": (3, 12),
+                "roll_stats": ("mean", "std", "slope"),
+                "diff_lags": (1, 6, 11),
+            },
+            y,
+        ),
         ("lgbm-dirrec-lag", dict(base_params), y),
     ]
 
@@ -70,3 +90,37 @@ def test_lgbm_models_smoke_when_installed() -> None:
         assert yhat.shape == (horizon,)
         assert np.all(np.isfinite(yhat))
 
+
+def test_lgbm_lag_models_validate_derived_feature_params_when_installed() -> None:
+    if importlib.util.find_spec("lightgbm") is None:
+        pytest.skip("lightgbm not installed; test targets derived-feature validation path")
+
+    y = 1.0 + np.sin(np.arange(120, dtype=float) / 3.0) + 0.01 * np.arange(120, dtype=float)
+    horizon = 2
+
+    base_params = {
+        "lags": 8,
+        "n_estimators": 5,
+        "learning_rate": 0.2,
+        "max_depth": 2,
+        "num_leaves": 15,
+        "subsample": 0.9,
+        "colsample_bytree": 0.9,
+        "random_state": 0,
+        "n_jobs": 1,
+        "roll_windows": (9,),  # invalid: roll_window > lags
+        "roll_stats": ("mean",),
+    }
+
+    keys = [
+        "lgbm-lag",
+        "lgbm-lag-recursive",
+        "lgbm-custom-lag",
+        "lgbm-custom-lag-recursive",
+        "lgbm-dirrec-lag",
+        "lgbm-custom-dirrec-lag",
+    ]
+    for key in keys:
+        f = make_forecaster(key, **base_params)
+        with pytest.raises(ValueError, match="exceeds lags"):
+            _ = f(y, horizon)

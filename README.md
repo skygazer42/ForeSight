@@ -95,8 +95,8 @@ metrics = eval_model(
 f = make_forecaster("moving-average", window=3)
 intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min_train_size=4)
 
-# Global / panel model (requires torch; trains across all series in a long-format DataFrame)
-# g = make_global_forecaster("torch-informer-global", context_length=96, epochs=10, x_cols=("promo",))
+# Global / panel model (requires torch or ml extras; trains across all series in a long-format DataFrame)
+# g = make_global_forecaster("ridge-step-lag-global", lags=48, alpha=1.0, x_cols=("promo",))
 # cutoff = sorted(long_df["ds"].unique())[-(14 + 1)]  # leave 14 steps for the horizon
 # pred_df = g(long_df, cutoff=cutoff, horizon=14)  # returns: unique_id, ds, yhat
 ```
@@ -191,6 +191,34 @@ intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min
 - `knn-lag`（requires `.[ml]`）：lag 特征 + KNN（direct multi-horizon, `lags`, `n_neighbors`…）
 - `gbrt-lag`（requires `.[ml]`）：lag 特征 + GradientBoosting（direct multi-horizon, `lags`, `n_estimators`…）
 - `hgb-lag`（requires `.[ml]`）：lag 特征 + HistGradientBoostingRegressor（direct multi-horizon, `lags`, `max_iter`…）
+- `ridge-step-lag-global`（requires `.[ml]`）：全局/面板 Ridge 回归（单模型 step-lag；共享所有序列训练样本，支持 `x_cols` / `add_time_features` / lag-derived features）
+- `decision-tree-step-lag-global`（requires `.[ml]`）：全局/面板 DecisionTreeRegressor（单模型 step-lag；支持 `max_depth`, `step_scale` 和 lag-derived features）
+- `bagging-step-lag-global`（requires `.[ml]`）：全局/面板 BaggingRegressor（单模型 step-lag；支持 `n_estimators`, `max_samples` 和全局 covariates）
+- `gbrt-step-lag-global`（requires `.[ml]`）：全局/面板 GradientBoostingRegressor（单模型 step-lag；支持 `n_estimators`, `learning_rate`, `max_depth`）
+- `lasso-step-lag-global`（requires `.[ml]`）：全局/面板 Lasso 回归（单模型 step-lag；支持 `alpha`, `max_iter` 和 lag-derived features）
+- `elasticnet-step-lag-global`（requires `.[ml]`）：全局/面板 ElasticNet 回归（单模型 step-lag；支持 `alpha`, `l1_ratio`, `max_iter`）
+- `knn-step-lag-global`（requires `.[ml]`）：全局/面板 KNeighborsRegressor（单模型 step-lag；支持 `n_neighbors`, `weights` 和全局 covariates）
+- `kernel-ridge-step-lag-global`（requires `.[ml]`）：全局/面板 KernelRidge（单模型 step-lag；支持 `alpha`, `kernel`, `gamma`）
+- `svr-step-lag-global`（requires `.[ml]`）：全局/面板 SVR（单模型 step-lag；支持 `C`, `gamma`, `epsilon` 和 lag-derived features）
+- `linear-svr-step-lag-global`（requires `.[ml]`）：全局/面板 LinearSVR（单模型 step-lag；支持 `C`, `epsilon`, `max_iter`）
+- `huber-step-lag-global`（requires `.[ml]`）：全局/面板 HuberRegressor（单模型 step-lag；支持 `epsilon`, `alpha`, `max_iter`）
+- `quantile-step-lag-global`（requires `.[ml]`）：全局/面板 QuantileRegressor（单模型 step-lag；支持 `quantile`, `alpha`）
+- `sgd-step-lag-global`（requires `.[ml]`）：全局/面板 SGDRegressor（单模型 step-lag；支持 `penalty`, `alpha`, `max_iter`）
+- `adaboost-step-lag-global`（requires `.[ml]`）：全局/面板 AdaBoostRegressor（单模型 step-lag；支持 `n_estimators`, `learning_rate`）
+- `mlp-step-lag-global`（requires `.[ml]`）：全局/面板 MLPRegressor（单模型 step-lag；支持 `hidden_layer_sizes`, `max_iter`, `learning_rate_init`）
+- `rf-step-lag-global`（requires `.[ml]`）：全局/面板 RandomForestRegressor（单模型 step-lag；支持 `n_estimators`, `max_depth`, `step_scale` 等）
+- `extra-trees-step-lag-global`（requires `.[ml]`）：全局/面板 ExtraTreesRegressor（单模型 step-lag；支持 `n_estimators`, `max_depth`, `step_scale` 等）
+- `xgb-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost step-lag（单模型；支持 `quantiles=0.1,0.5,0.9` 输出 `yhat_pXX` 分位数列）
+- `xgb-gamma-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Gamma step-lag（单模型；适合 `y>0` 的正值目标）
+- `xgb-logistic-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost logistic step-lag（单模型；适合 `y∈[0,1]` 的比例型目标）
+- `xgb-msle-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost squared-log-error step-lag（单模型；适合 `y>=0` 的目标）
+- `xgb-mae-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost MAE step-lag（单模型；使用 `reg:absoluteerror` 目标）
+- `xgb-huber-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost pseudo-Huber step-lag（单模型；支持 `huber_slope`）
+- `xgb-poisson-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Poisson step-lag（单模型；适合 `y>=0` 的计数型目标）
+- `xgb-tweedie-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Tweedie step-lag（单模型；支持 `tweedie_variance_power`）
+- `xgb-dart-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost DART step-lag（单模型；支持 `n_estimators`, `learning_rate`, `max_depth` 和 lag-derived features）
+- `xgb-linear-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost `gblinear` step-lag（单模型；支持 `reg_alpha`, `reg_lambda` 和全局 covariates）
+- `xgbrf-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost random forest / `XGBRFRegressor` step-lag（单模型；支持 `n_estimators`, `max_depth`, `subsample`）
 - `svr-lag`（requires `.[ml]`）：lag 特征 + SVR(RBF)（direct multi-horizon, `lags`, `C`, `gamma`…）
 - `linear-svr-lag`（requires `.[ml]`）：lag 特征 + LinearSVR（direct multi-horizon, `lags`, `C`, `max_iter`…）
 - `kernel-ridge-lag`（requires `.[ml]`）：lag 特征 + KernelRidge（direct multi-horizon, `lags`, `kernel`, `gamma`…）
