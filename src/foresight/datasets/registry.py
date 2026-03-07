@@ -84,6 +84,10 @@ def list_datasets() -> list[str]:
     return sorted(_SPECS.keys())
 
 
+def list_packaged_datasets() -> list[str]:
+    return sorted(key for key, spec in _SPECS.items() if spec.package_rel_path is not None)
+
+
 def get_dataset_spec(key: str) -> DatasetSpec:
     try:
         return _SPECS[key]

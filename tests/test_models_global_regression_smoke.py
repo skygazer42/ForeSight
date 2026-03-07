@@ -207,6 +207,111 @@ def test_huber_step_lag_global_smoke() -> None:
     )
 
 
+def test_bayesian_ridge_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "bayesian-ridge-step-lag-global",
+        model_params={
+            "lags": 5,
+            "max_iter": 200,
+            "alpha_1": 1e-6,
+            "alpha_2": 1e-6,
+            "lambda_1": 1e-6,
+            "lambda_2": 1e-6,
+            "roll_windows": (3,),
+            "roll_stats": ("mean", "std"),
+            "x_cols": ("promo",),
+        },
+    )
+
+
+def test_ard_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "ard-step-lag-global",
+        model_params={
+            "lags": 5,
+            "max_iter": 200,
+            "threshold_lambda": 10000.0,
+            "roll_windows": (3,),
+            "roll_stats": ("mean",),
+            "x_cols": ("promo",),
+        },
+    )
+
+
+def test_omp_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "omp-step-lag-global",
+        model_params={
+            "lags": 5,
+            "n_nonzero_coefs": 3,
+            "diff_lags": (1, 2),
+            "x_cols": ("promo",),
+        },
+    )
+
+
+def test_passive_aggressive_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "passive-aggressive-step-lag-global",
+        model_params={
+            "lags": 5,
+            "C": 0.5,
+            "max_iter": 1000,
+            "epsilon": 0.05,
+            "random_state": 0,
+            "roll_windows": (3,),
+            "roll_stats": ("mean",),
+            "x_cols": ("promo",),
+        },
+    )
+
+
+def test_poisson_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "poisson-step-lag-global",
+        model_params={
+            "lags": 5,
+            "alpha": 0.1,
+            "max_iter": 200,
+            "roll_windows": (3,),
+            "roll_stats": ("mean",),
+            "x_cols": ("promo",),
+        },
+        long_df=_small_panel_positive_long_df(),
+    )
+
+
+def test_gamma_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "gamma-step-lag-global",
+        model_params={
+            "lags": 5,
+            "alpha": 0.1,
+            "max_iter": 200,
+            "roll_windows": (3,),
+            "roll_stats": ("mean",),
+            "x_cols": ("promo",),
+        },
+        long_df=_small_panel_positive_long_df(),
+    )
+
+
+def test_tweedie_step_lag_global_smoke() -> None:
+    _assert_global_point_smoke(
+        "tweedie-step-lag-global",
+        model_params={
+            "lags": 5,
+            "power": 1.5,
+            "alpha": 0.1,
+            "max_iter": 200,
+            "roll_windows": (3,),
+            "roll_stats": ("mean",),
+            "x_cols": ("promo",),
+        },
+        long_df=_small_panel_positive_long_df(),
+    )
+
+
 def test_quantile_step_lag_global_smoke() -> None:
     _assert_global_point_smoke(
         "quantile-step-lag-global",

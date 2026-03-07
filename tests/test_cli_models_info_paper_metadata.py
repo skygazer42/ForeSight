@@ -129,3 +129,12 @@ def test_cli_models_list_json_includes_paper_metadata_rows() -> None:
     row = rows[0]
     assert row["key"] == "torch-rnnpaper-elman-srn-direct"
     assert isinstance(row.get("paper"), dict)
+
+
+def test_project_metadata_points_to_published_docs_site() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    assert 'Documentation = "https://skygazer42.github.io/ForeSight/"' in pyproject
+    assert "https://skygazer42.github.io/ForeSight/" in readme

@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+QUALITY_FORMAT_FILES = [
+    "benchmarks/run_benchmarks.py",
+    "src/foresight/__init__.py",
+    "src/foresight/base.py",
+    "src/foresight/datasets/__init__.py",
+    "src/foresight/datasets/registry.py",
+    "src/foresight/serialization.py",
+    "tests/test_packaged_datasets_smoke.py",
+    "tests/test_release_tooling.py",
+    "tests/test_root_import.py",
+    "tests/test_models_registry.py",
+    "tools/check_capability_docs.py",
+    "tools/generate_model_capability_docs.py",
+    "tools/release_check.py",
+]
 
 
 def _repo_root() -> Path:
@@ -20,16 +37,50 @@ def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> Non
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
 
 
-def main() -> int:
+def _quality_commands() -> list[list[str]]:
+    return [
+        [sys.executable, "tools/check_capability_docs.py"],
+        [sys.executable, "tools/generate_model_capability_docs.py", "--check"],
+        ["ruff", "check", "src", "tests", "tools", "benchmarks"],
+        ["ruff", "format", "--check", *QUALITY_FORMAT_FILES],
+        [sys.executable, "-m", "mypy", "--no-incremental", "--cache-dir=/dev/null"],
+        [sys.executable, "-m", "pytest", "-q"],
+        [sys.executable, "benchmarks/run_benchmarks.py", "--smoke"],
+        ["mkdocs", "build", "--strict"],
+    ]
+
+
+def _print_plan(cmds: list[list[str]]) -> None:
+    for cmd in cmds:
+        print(" ".join(cmd), flush=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run release-quality checks and build package artifacts in a clean temp dir."
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Print the release-check command plan without executing it.",
+    )
+    args = parser.parse_args(argv)
+
     root = _repo_root()
 
     env = dict(os.environ)
     env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
 
-    # Code quality + tests.
-    _run(["ruff", "check", "src", "tests", "tools"], cwd=root, env=env)
-    _run(["ruff", "format", "--check", "src", "tests", "tools"], cwd=root, env=env)
-    _run([sys.executable, "-m", "pytest", "-q"], cwd=root, env=env)
+    quality_cmds = _quality_commands()
+    if args.plan:
+        _print_plan(quality_cmds)
+        print(f"{sys.executable} -m build --outdir <temp-dist-dir>", flush=True)
+        if importlib.util.find_spec("twine") is not None:
+            print(f"{sys.executable} -m twine check <temp-dist-dir>/*", flush=True)
+        return 0
+
+    for cmd in quality_cmds:
+        _run(cmd, cwd=root, env=env)
 
     # Build in a clean temp dir (avoids `rm -rf dist/` patterns).
     with tempfile.TemporaryDirectory(prefix="foresight_release_build_") as tmp:

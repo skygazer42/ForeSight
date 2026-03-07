@@ -73,3 +73,14 @@ def test_models_list_filter_interface_global() -> None:
     assert isinstance(rows, list)
     assert rows
     assert all(r.get("interface") == "global" for r in rows if isinstance(r, dict))
+
+
+def test_models_list_json_includes_capabilities() -> None:
+    proc = _run_cli("models", "list", "--format", "json", "--prefix", "xgb-step-lag-global", "--limit", "1")
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows[0]["key"] == "xgb-step-lag-global"
+    assert rows[0]["capabilities"]["supports_x_cols"] is True
+    assert rows[0]["capabilities"]["supports_quantiles"] is True
+    assert rows[0]["capabilities"]["supports_interval_forecast"] is True
+    assert rows[0]["capabilities"]["supports_interval_forecast_with_x_cols"] is True

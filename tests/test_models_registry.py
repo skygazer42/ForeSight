@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from foresight.models.registry import get_model_spec, list_models
 
 
@@ -11,6 +13,60 @@ def test_model_spec_has_description():
     spec = get_model_spec("naive-last")
     assert isinstance(spec.description, str)
     assert spec.description
+
+
+def test_model_spec_exposes_normalized_capabilities():
+    spec = get_model_spec("naive-last")
+
+    assert isinstance(spec.capabilities, dict)
+    assert spec.capabilities["supports_x_cols"] is False
+    assert spec.capabilities["supports_quantiles"] is False
+    assert spec.capabilities["supports_interval_forecast"] is True
+    assert spec.capabilities["supports_interval_forecast_with_x_cols"] is False
+    assert spec.capabilities["supports_artifact_save"] is True
+    assert spec.capabilities["requires_future_covariates"] is False
+
+
+def test_model_spec_capabilities_reflect_model_family_support():
+    sarimax = get_model_spec("sarimax")
+    assert sarimax.capabilities["supports_x_cols"] is True
+    assert sarimax.capabilities["supports_interval_forecast"] is True
+    assert sarimax.capabilities["supports_interval_forecast_with_x_cols"] is True
+
+    auto_arima = get_model_spec("auto-arima")
+    assert auto_arima.capabilities["supports_x_cols"] is True
+    assert auto_arima.capabilities["supports_interval_forecast"] is True
+    assert auto_arima.capabilities["supports_interval_forecast_with_x_cols"] is True
+
+    global_xgb = get_model_spec("xgb-step-lag-global")
+    assert global_xgb.capabilities["supports_x_cols"] is True
+    assert global_xgb.capabilities["supports_quantiles"] is True
+    assert global_xgb.capabilities["supports_interval_forecast"] is True
+    assert global_xgb.capabilities["supports_interval_forecast_with_x_cols"] is True
+    assert global_xgb.capabilities["supports_artifact_save"] is True
+
+    var = get_model_spec("var")
+    assert var.interface == "multivariate"
+    assert var.capabilities["supports_artifact_save"] is False
+
+
+def test_readme_documents_all_model_capability_flags() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    documented = sorted(
+        {key for model_key in list_models() for key in get_model_spec(model_key).capabilities}
+    )
+    assert documented == [
+        "requires_future_covariates",
+        "supports_artifact_save",
+        "supports_interval_forecast",
+        "supports_interval_forecast_with_x_cols",
+        "supports_quantiles",
+        "supports_x_cols",
+    ]
+    for key in documented:
+        assert f"`{key}`" in readme
 
 
 def test_new_torch_global_models_are_registered():

@@ -20,6 +20,50 @@ def _build_unique_id(df: pd.DataFrame, *, id_cols: tuple[str, ...]) -> pd.Series
     return out
 
 
+def build_hierarchy_spec(
+    df: pd.DataFrame,
+    *,
+    id_cols: Iterable[str],
+    root: str = "total",
+) -> dict[str, tuple[str, ...]]:
+    """
+    Build a simple parent->children hierarchy spec from ordered ID columns.
+
+    Example:
+      id_cols=("region", "store")
+      total -> region=north, region=south
+      region=north -> region=north|store=a, region=north|store=b
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame")
+
+    id_cols_tup = tuple(id_cols)
+    if not id_cols_tup:
+        raise ValueError("id_cols must be non-empty")
+
+    for col in id_cols_tup:
+        if col not in df.columns:
+            raise KeyError(f"id col not found: {col!r}")
+
+    out: dict[str, tuple[str, ...]] = {}
+    root_s = str(root).strip()
+    if not root_s:
+        raise ValueError("root must be non-empty")
+
+    first_level = sorted(pd.unique(_build_unique_id(df, id_cols=(id_cols_tup[0],))).tolist())
+    out[root_s] = tuple(str(v) for v in first_level)
+
+    for depth in range(1, len(id_cols_tup)):
+        parent_ids = _build_unique_id(df, id_cols=id_cols_tup[:depth])
+        child_ids = _build_unique_id(df, id_cols=id_cols_tup[: depth + 1])
+        pairs = pd.DataFrame({"parent": parent_ids, "child": child_ids}).drop_duplicates()
+        for parent, g in pairs.groupby("parent", sort=True):
+            children = tuple(sorted(str(v) for v in g["child"].tolist()))
+            out[str(parent)] = children
+
+    return out
+
+
 def to_long(
     df: pd.DataFrame,
     *,
@@ -28,6 +72,11 @@ def to_long(
     id_cols: Iterable[str] = (),
     x_cols: Iterable[str] = (),
     dropna: bool = True,
+    prepare: bool = False,
+    freq: str | None = None,
+    strict_freq: bool = False,
+    y_missing: str = "error",
+    x_missing: str = "error",
 ) -> pd.DataFrame:
     """
     Convert an arbitrary DataFrame into a canonical long format:
@@ -57,6 +106,17 @@ def to_long(
 
     if dropna:
         out = out.dropna(subset=["ds", "y", *x_cols_tup])
+
+    if prepare:
+        from .prep import prepare_long_df
+
+        out = prepare_long_df(
+            out,
+            freq=freq,
+            strict_freq=bool(strict_freq),
+            y_missing=str(y_missing),
+            x_missing=str(x_missing),
+        )
 
     return out.reset_index(drop=True)
 

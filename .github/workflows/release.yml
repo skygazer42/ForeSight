@@ -32,6 +32,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
 
+      - name: Capability docs sync
+        run: |
+          python tools/check_capability_docs.py
+
+      - name: Type check
+        run: |
+          python -m mypy --no-incremental --cache-dir=/dev/null
+
       - name: Release checks
         run: |
           python tools/release_check.py

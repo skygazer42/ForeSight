@@ -1,0 +1,84 @@
+{
+  "smoke": {
+    "description": "Tiny deterministic benchmark sweep for CI and local packaging checks.",
+    "conformal_levels": [80],
+    "conformal_per_step": false,
+    "datasets": [
+      {
+        "key": "catfish",
+        "y_col": "Total",
+        "horizon": 3,
+        "step": 3,
+        "min_train_size": 12,
+        "max_windows": 3
+      },
+      {
+        "key": "ice_cream_interest",
+        "y_col": "interest",
+        "horizon": 3,
+        "step": 3,
+        "min_train_size": 12,
+        "max_windows": 3
+      }
+    ],
+    "models": [
+      {
+        "key": "naive-last",
+        "params": {}
+      },
+      {
+        "key": "mean",
+        "params": {}
+      },
+      {
+        "key": "moving-average",
+        "params": {
+          "window": 3
+        }
+      }
+    ]
+  },
+  "baseline": {
+    "description": "Slightly broader manual benchmark sweep for local regression tracking.",
+    "conformal_levels": [80],
+    "conformal_per_step": false,
+    "datasets": [
+      {
+        "key": "catfish",
+        "y_col": "Total",
+        "horizon": 3,
+        "step": 3,
+        "min_train_size": 12,
+        "max_windows": 8
+      },
+      {
+        "key": "ice_cream_interest",
+        "y_col": "interest",
+        "horizon": 3,
+        "step": 3,
+        "min_train_size": 12,
+        "max_windows": 8
+      }
+    ],
+    "models": [
+      {
+        "key": "naive-last",
+        "params": {}
+      },
+      {
+        "key": "mean",
+        "params": {}
+      },
+      {
+        "key": "moving-average",
+        "params": {
+          "window": 3
+        }
+      },
+      {
+        "key": "drift",
+        "params": {}
+      }
+    ]
+  }
+}

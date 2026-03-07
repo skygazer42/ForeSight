@@ -1,0 +1,20 @@
+site_name: ForeSight
+site_description: Stable public docs for the ForeSight time-series forecasting package.
+site_url: https://skygazer42.github.io/ForeSight/
+repo_url: https://github.com/skygazer42/ForeSight
+repo_name: skygazer42/ForeSight
+theme:
+  name: mkdocs
+nav:
+  - Home: index.md
+  - Models: models.md
+  - API: api.md
+  - Install: INSTALL.md
+  - Development: DEVELOPMENT.md
+  - Release: RELEASE.md
+  - RNN Paper Zoo: rnn_paper_zoo.md
+  - RNN Zoo: rnn_zoo.md
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true

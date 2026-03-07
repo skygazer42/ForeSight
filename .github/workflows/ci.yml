@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,17 +23,99 @@ jobs:
       - name: No notebooks
         run: python tools/check_no_ipynb.py
 
+      - name: Capability docs sync
+        run: python tools/check_capability_docs.py
+
+      - name: Generated docs sync
+        run: python tools/generate_model_capability_docs.py --check
+
       - name: Lint
-        run: ruff check src tests tools
+        run: ruff check src tests tools benchmarks
 
       - name: Format
-        run: ruff format --check src tests tools
+        run: |
+          ruff format --check \
+            benchmarks/run_benchmarks.py \
+            src/foresight/__init__.py \
+            src/foresight/datasets/__init__.py \
+            src/foresight/datasets/registry.py \
+            tests/test_packaged_datasets_smoke.py \
+            tests/test_release_tooling.py \
+            src/foresight/base.py \
+            src/foresight/serialization.py \
+            tests/test_root_import.py \
+            tests/test_models_registry.py \
+            tools/check_capability_docs.py \
+            tools/generate_model_capability_docs.py \
+            tools/release_check.py
+
+      - name: Type check
+        run: python -m mypy --no-incremental --cache-dir=/dev/null
 
       - name: Compile
-        run: python -m compileall -q src tools
+        run: python -m compileall -q src tools benchmarks
+
+      - name: Docs build
+        run: mkdocs build --strict
+
+  test-core:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
 
       - name: Tests
-        run: pytest -q
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.10" ]; then
+            pytest -q --cov=foresight --cov-report=term-missing
+          else
+            pytest -q
+          fi
+
+      - name: Benchmark smoke
+        if: matrix.python-version == '3.10'
+        run: python benchmarks/run_benchmarks.py --smoke
+
+  test-optional:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.10"
+            extra: "stats"
+            tests: "tests/test_models_optional_deps_more.py tests/test_eval_local_xreg.py"
+          - python-version: "3.10"
+            extra: "ml"
+            tests: "tests/test_models_optional_deps_ml.py tests/test_models_global_regression_smoke.py"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,${{ matrix.extra }}]"
+
+      - name: Optional dependency smoke tests
+        run: pytest -q ${{ matrix.tests }}
 
   package:
     runs-on: ubuntu-latest

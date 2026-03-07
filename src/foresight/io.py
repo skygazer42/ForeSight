@@ -24,7 +24,7 @@ def ensure_datetime(df: pd.DataFrame, col: str) -> None:
     df[col] = pd.to_datetime(df[col], errors="coerce")
 
 
-def parse_id_cols(raw: Any) -> tuple[str, ...]:
+def parse_cols(raw: Any) -> tuple[str, ...]:
     if raw is None:
         return ()
     if isinstance(raw, str):
@@ -40,3 +40,7 @@ def parse_id_cols(raw: Any) -> tuple[str, ...]:
                 out.append(s)
         return tuple(out)
     return (str(raw).strip(),)
+
+
+def parse_id_cols(raw: Any) -> tuple[str, ...]:
+    return parse_cols(raw)

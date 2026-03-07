@@ -27,7 +27,7 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/skygazer42/ForeSight"
 Issues = "https://github.com/skygazer42/ForeSight/issues"
-Documentation = "https://github.com/skygazer42/ForeSight#readme"
+Documentation = "https://skygazer42.github.io/ForeSight/"
 
 [project.scripts]
 foresight = "foresight.cli:main"
@@ -35,7 +35,10 @@ foresight = "foresight.cli:main"
 [project.optional-dependencies]
 dev = [
   "pytest>=7.0",
+  "pytest-cov>=5.0",
   "ruff>=0.5",
+  "mypy>=1.10",
+  "mkdocs>=1.6",
   "build>=1.0",
   "twine>=5.0",
 ]
@@ -85,3 +88,32 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+incremental = false
+files = [
+  "benchmarks/run_benchmarks.py",
+  "src/foresight/__init__.py",
+  "src/foresight/base.py",
+  "src/foresight/datasets/__init__.py",
+  "src/foresight/datasets/registry.py",
+  "src/foresight/serialization.py",
+  "tools/check_capability_docs.py",
+  "tools/generate_model_capability_docs.py",
+  "tools/release_check.py",
+]
+check_untyped_defs = true
+follow_imports = "skip"
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+source = ["foresight"]
+
+[tool.coverage.report]
+fail_under = 4
+show_missing = true
+skip_covered = true

@@ -29,3 +29,27 @@ def test_models_info_outputs_json():
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
     assert payload["key"] == "naive-last"
+    assert payload["capabilities"]["supports_x_cols"] is False
+    assert payload["capabilities"]["supports_interval_forecast"] is True
+    assert payload["capabilities"]["supports_artifact_save"] is True
+
+
+def test_root_help_mentions_forecast_and_tuning_commands():
+    proc = _run_cli("--help")
+    assert proc.returncode == 0
+    assert "forecast" in proc.stdout
+    assert "tuning" in proc.stdout
+
+
+def test_docs_development_examples_use_current_cli_workflows():
+    repo_root = Path(__file__).resolve().parents[1]
+    doc = (repo_root / "docs" / "DEVELOPMENT.md").read_text(encoding="utf-8")
+
+    assert "foresight eval run --model naive-last" in doc
+    assert "foresight leaderboard models" in doc
+    assert "foresight forecast csv --model naive-last" in doc
+    assert "foresight tuning run --model moving-average" in doc
+    assert "    make_forecaster," in doc
+    assert "    eval_model," in doc
+    assert "foresight eval naive-last" not in doc
+    assert "foresight leaderboard naive" not in doc

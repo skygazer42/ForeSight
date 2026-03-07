@@ -9,6 +9,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import pandas as pd
+
 _RNN_PAPER_METADATA_CACHE: dict[str, dict[str, Any]] | None = None
 
 
@@ -507,6 +510,195 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format for predictions (default: csv)",
     )
     cv_run.set_defaults(_handler=_cmd_cv_run)
+
+    forecast_p = sub.add_parser("forecast", help="Forecast utilities")
+    forecast_sub = forecast_p.add_subparsers(dest="forecast_command", required=True)
+
+    forecast_csv = forecast_sub.add_parser("csv", help="Forecast a model on an arbitrary CSV file")
+    forecast_csv.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    forecast_csv.add_argument("--path", required=True, help="Path to a CSV file")
+    forecast_csv.add_argument("--time-col", required=True, help="Time column name")
+    forecast_csv.add_argument("--y-col", required=True, help="Target column name")
+    forecast_csv.add_argument(
+        "--id-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated id columns for panel data",
+    )
+    forecast_csv.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse time_col with pandas.to_datetime before forecasting",
+    )
+    forecast_csv.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    forecast_csv.add_argument(
+        "--interval-levels",
+        type=str,
+        default="",
+        help="Optional central interval levels as percentages/floats, e.g. 80,90 or 0.8,0.9",
+    )
+    forecast_csv.add_argument(
+        "--interval-min-train-size",
+        type=int,
+        default=None,
+        help="Optional min_train_size used for local bootstrap forecast intervals",
+    )
+    forecast_csv.add_argument(
+        "--interval-samples",
+        type=int,
+        default=1000,
+        help="Bootstrap sample count for local forecast intervals (default: 1000)",
+    )
+    forecast_csv.add_argument(
+        "--interval-seed",
+        type=int,
+        default=None,
+        help="Optional random seed for local bootstrap forecast intervals",
+    )
+    forecast_csv.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help="Model parameter as key=value (repeatable). Example: --model-param season_length=12",
+    )
+    forecast_csv.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    forecast_csv.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help="Output format for forecasts (default: csv)",
+    )
+    forecast_csv.add_argument(
+        "--save-artifact",
+        type=str,
+        default="",
+        help="Optional path to save a fitted forecasting artifact for reuse",
+    )
+    forecast_csv.set_defaults(_handler=_cmd_forecast_csv)
+
+    forecast_artifact = forecast_sub.add_parser(
+        "artifact", help="Forecast from a previously saved artifact"
+    )
+    forecast_artifact.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    forecast_artifact.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    forecast_artifact.add_argument(
+        "--interval-levels",
+        type=str,
+        default="",
+        help="Optional central interval levels for local artifacts, e.g. 80,90 or 0.8,0.9",
+    )
+    forecast_artifact.add_argument(
+        "--interval-min-train-size",
+        type=int,
+        default=None,
+        help="Optional min_train_size used for local bootstrap forecast intervals",
+    )
+    forecast_artifact.add_argument(
+        "--interval-samples",
+        type=int,
+        default=1000,
+        help="Bootstrap sample count for local forecast intervals (default: 1000)",
+    )
+    forecast_artifact.add_argument(
+        "--interval-seed",
+        type=int,
+        default=None,
+        help="Optional random seed for local bootstrap forecast intervals",
+    )
+    forecast_artifact.add_argument(
+        "--cutoff",
+        type=str,
+        default="",
+        help="Optional cutoff override for global artifacts",
+    )
+    forecast_artifact.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    forecast_artifact.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help="Output format for forecasts (default: csv)",
+    )
+    forecast_artifact.set_defaults(_handler=_cmd_forecast_artifact)
+
+    tuning = sub.add_parser("tuning", help="Hyperparameter tuning utilities")
+    tuning_sub = tuning.add_subparsers(dest="tuning_command", required=True)
+
+    tuning_run = tuning_sub.add_parser("run", help="Run deterministic grid search on a dataset")
+    tuning_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    tuning_run.add_argument("--dataset", required=True, help="Dataset key")
+    tuning_run.add_argument(
+        "--y-col",
+        type=str,
+        default="",
+        help="Optional target column name (default: use dataset spec default_y).",
+    )
+    tuning_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    tuning_run.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    tuning_run.add_argument(
+        "--min-train-size",
+        type=int,
+        required=True,
+        help="Minimum train size before the first evaluation window",
+    )
+    tuning_run.add_argument(
+        "--max-windows",
+        type=int,
+        default=None,
+        help="Optional limit to the last N backtest windows.",
+    )
+    tuning_run.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help="Optional rolling train window size (default: expanding window).",
+    )
+    tuning_run.add_argument(
+        "--metric",
+        choices=["mae", "rmse", "mape", "smape"],
+        default="mae",
+        help="Optimization metric (default: mae)",
+    )
+    tuning_run.add_argument(
+        "--mode",
+        choices=["min", "max"],
+        default="min",
+        help="Optimization direction (default: min)",
+    )
+    tuning_run.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help="Fixed model parameter as key=value (repeatable).",
+    )
+    tuning_run.add_argument(
+        "--grid-param",
+        action="append",
+        default=[],
+        help="Grid-search parameter as key=v1,v2,... (repeatable).",
+    )
+    tuning_run.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    tuning_run.add_argument(
+        "--format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Output format for the tuning summary (default: json)",
+    )
+    tuning_run.set_defaults(_handler=_cmd_tuning_run)
 
     datasets = sub.add_parser("datasets", help="Dataset utilities")
     datasets_sub = datasets.add_subparsers(dest="datasets_command", required=True)
@@ -1140,6 +1332,26 @@ def _parse_model_params(items: list[str]) -> dict[str, Any]:
     return params
 
 
+def _parse_grid_params(items: list[str]) -> dict[str, tuple[Any, ...]]:
+    params: dict[str, tuple[Any, ...]] = {}
+    for item in items:
+        if "=" not in str(item):
+            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
+        key, value = str(item).split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
+        parsed = _coerce_model_param_value(value)
+        if isinstance(parsed, tuple):
+            values = parsed
+        else:
+            values = (parsed,)
+        if not values:
+            raise ValueError(f"--grid-param must include at least one value, got: {item!r}")
+        params[key] = tuple(values)
+    return params
+
+
 def _emit_text(text: str, *, output: str) -> None:
     print(text)
     if output:
@@ -1202,6 +1414,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
             "requires": ",".join(spec.requires),
             "description": spec.description,
             "default_params": dict(spec.default_params),
+            "capabilities": dict(spec.capabilities),
         }
         paper = _paper_payload_for_model_key(spec.key)
         if paper:
@@ -1324,6 +1537,7 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
         "requires": list(spec.requires),
         "default_params": dict(spec.default_params),
         "param_help": dict(spec.param_help),
+        "capabilities": dict(spec.capabilities),
     }
     paper = _paper_payload_for_model_key(spec.key)
     if paper:
@@ -1721,6 +1935,256 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_forecast_csv(args: argparse.Namespace) -> int:
+    from .data.format import to_long
+    from .forecast import _prepare_global_forecast_input, forecast_model_long_df
+    from .io import ensure_datetime, load_csv, parse_id_cols
+    from .models.registry import (
+        get_model_spec,
+        make_forecaster_object,
+        make_global_forecaster_object,
+    )
+    from .serialization import save_forecaster
+
+    model_params = _parse_model_params(list(args.model_param))
+    id_cols = parse_id_cols(str(args.id_cols))
+
+    df = load_csv(str(args.path))
+    if bool(args.parse_dates):
+        ensure_datetime(df, str(args.time_col))
+
+    model_spec = get_model_spec(str(args.model))
+    x_cols: tuple[str, ...] = ()
+    if "x_cols" in model_params:
+        raw = model_params.get("x_cols")
+        if raw is not None:
+            if isinstance(raw, str):
+                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
+            elif isinstance(raw, list | tuple):
+                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
+            else:
+                s = str(raw).strip()
+                x_cols = (s,) if s else ()
+
+    long_df = to_long(
+        df,
+        time_col=str(args.time_col),
+        y_col=str(args.y_col),
+        id_cols=id_cols,
+        x_cols=x_cols,
+        dropna=not (model_spec.interface == "global" or (model_spec.interface == "local" and x_cols)),
+    )
+    pred = forecast_model_long_df(
+        model=str(args.model),
+        long_df=long_df,
+        horizon=int(args.horizon),
+        model_params=model_params,
+        interval_levels=str(getattr(args, "interval_levels", "")).strip(),
+        interval_min_train_size=getattr(args, "interval_min_train_size", None),
+        interval_samples=int(getattr(args, "interval_samples", 1000)),
+        interval_seed=getattr(args, "interval_seed", None),
+    )
+
+    save_artifact = str(getattr(args, "save_artifact", "")).strip()
+    if save_artifact:
+        if model_spec.interface == "local":
+            if x_cols:
+                raise ValueError(
+                    "Saving local forecast artifacts is not yet supported when x_cols are used"
+                )
+            if int(long_df["unique_id"].nunique()) != 1:
+                raise ValueError("Saving local forecast artifacts currently requires a single series")
+            g = next(iter(long_df.groupby("unique_id", sort=False)))[1]
+            forecaster = make_forecaster_object(str(args.model), **model_params).fit(
+                g["y"].to_numpy(dtype=float, copy=False)
+            )
+            save_forecaster(
+                forecaster,
+                save_artifact,
+                extra={
+                    "artifact_type": "forecast-local",
+                    "ds": pd.Index(g["ds"]),
+                    "unique_id": str(g["unique_id"].iloc[0]),
+                },
+            )
+        else:
+            augmented, cutoff = _prepare_global_forecast_input(
+                long_df,
+                horizon=int(args.horizon),
+                x_cols=x_cols,
+            )
+            forecaster = make_global_forecaster_object(str(args.model), **model_params).fit(augmented)
+            save_forecaster(
+                forecaster,
+                save_artifact,
+                extra={
+                    "artifact_type": "forecast-global",
+                    "cutoff": cutoff,
+                    "max_horizon": int(args.horizon),
+                    "model_key": str(args.model),
+                },
+            )
+
+    _emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+    return 0
+
+
+def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
+    from .base import BaseForecaster, BaseGlobalForecaster
+    from .forecast import (
+        _finalize_forecast_frame,
+        _infer_future_ds,
+        _interval_column_names,
+        _local_interval_columns,
+        _parse_interval_levels,
+    )
+    from .models.registry import get_model_spec
+    from .serialization import load_forecaster_artifact
+
+    payload = load_forecaster_artifact(str(args.artifact))
+    forecaster = payload["forecaster"]
+    extra = dict(payload.get("extra", {}))
+    horizon = int(args.horizon)
+
+    if isinstance(forecaster, BaseForecaster):
+        ds = pd.Index(extra.get("ds", []))
+        artifact_type = str(extra.get("artifact_type", "")).strip()
+        train_y = getattr(forecaster, "_train_y", None)
+        if len(ds) == 0:
+            if artifact_type == "forecast-local":
+                raise ValueError("Local forecast artifact is missing required ds context")
+            if train_y is not None:
+                ds = pd.RangeIndex(start=0, stop=int(len(train_y)), step=1)
+        if len(ds) == 0:
+            raise ValueError("Artifact is missing local forecast ds context")
+
+        future_ds = _infer_future_ds(ds, horizon)
+        yhat = forecaster.predict(horizon).astype(float)
+        levels = _parse_interval_levels(str(getattr(args, "interval_levels", "")).strip())
+        interval_cols = _interval_column_names(levels)
+        pred = pd.DataFrame(
+            {
+                "unique_id": [str(extra.get("unique_id", "series=0"))] * horizon,
+                "ds": future_ds,
+                "cutoff": [pd.Index(ds)[-1]] * horizon,
+                "step": list(range(1, horizon + 1)),
+                "yhat": yhat,
+            }
+        )
+        if levels:
+            train_y = getattr(forecaster, "_train_y", None)
+            if train_y is None:
+                raise ValueError("Local artifact is missing training history required for intervals")
+            interval_data = _local_interval_columns(
+                train_y=np.asarray(train_y, dtype=float),
+                model=str(forecaster.model_key),
+                model_params=dict(forecaster.model_params),
+                horizon=int(horizon),
+                interval_levels=levels,
+                interval_min_train_size=getattr(args, "interval_min_train_size", None),
+                interval_samples=int(getattr(args, "interval_samples", 1000)),
+                interval_seed=getattr(args, "interval_seed", None),
+            )
+            for col in interval_cols:
+                pred[col] = interval_data[col].astype(float)
+        pred["model"] = [str(forecaster.model_key)] * horizon
+        pred = pred.loc[:, ["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"]]
+        _emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    if isinstance(forecaster, BaseGlobalForecaster):
+        levels = _parse_interval_levels(str(getattr(args, "interval_levels", "")).strip())
+        if levels:
+            spec = get_model_spec(str(forecaster.model_key))
+            raise ValueError(
+                f"Forecast intervals are not yet supported for artifact model {spec.key!r} "
+                "with interface='global'"
+            )
+        cutoff_raw = str(getattr(args, "cutoff", "")).strip()
+        cutoff = extra.get("cutoff")
+        if cutoff_raw:
+            cutoff = pd.to_datetime(cutoff_raw, errors="raise")
+        if cutoff is None:
+            raise ValueError("Global artifact prediction requires a cutoff")
+
+        max_horizon = extra.get("max_horizon")
+        if max_horizon is not None and horizon > int(max_horizon):
+            raise ValueError(
+                f"Requested horizon={horizon} exceeds artifact max_horizon={int(max_horizon)}"
+            )
+
+        pred = forecaster.predict(cutoff, horizon)
+        pred = _finalize_forecast_frame(pred, cutoff=cutoff, model=str(forecaster.model_key))
+        _emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    raise TypeError(f"Unsupported artifact forecaster type: {type(forecaster).__name__}")
+
+
+def _cmd_tuning_run(args: argparse.Namespace) -> int:
+    from .tuning import tune_model
+
+    model_params = _parse_model_params(list(args.model_param))
+    grid_params = _parse_grid_params(list(args.grid_param))
+    y_col = str(args.y_col).strip() or None
+
+    payload = tune_model(
+        model=str(args.model),
+        dataset=str(args.dataset),
+        y_col=y_col,
+        horizon=int(args.horizon),
+        step=int(args.step),
+        min_train_size=int(args.min_train_size),
+        search_space=grid_params,
+        metric=str(args.metric),
+        mode=str(args.mode),
+        model_params=model_params,
+        data_dir=str(args.data_dir),
+        max_windows=args.max_windows,
+        max_train_size=args.max_train_size,
+    )
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _emit(payload, output=str(args.output), fmt=fmt)
+        return 0
+
+    row = {
+        "model": payload["model"],
+        "dataset": payload["dataset"],
+        "metric": payload["metric"],
+        "mode": payload["mode"],
+        "horizon": payload["horizon"],
+        "step": payload["step"],
+        "min_train_size": payload["min_train_size"],
+        "max_windows": payload["max_windows"],
+        "max_train_size": payload["max_train_size"],
+        "n_trials": payload["n_trials"],
+        "best_score": payload["best_score"],
+        "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
+    }
+    _emit_table(
+        [row],
+        columns=[
+            "model",
+            "dataset",
+            "metric",
+            "mode",
+            "horizon",
+            "step",
+            "min_train_size",
+            "max_windows",
+            "max_train_size",
+            "n_trials",
+            "best_score",
+            "best_params",
+        ],
+        output=str(args.output),
+        fmt=fmt,
+    )
+    return 0
+
+
 def _cmd_datasets_list(args: argparse.Namespace) -> int:
     from .datasets.registry import (
         describe_dataset,
@@ -1869,7 +2333,6 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     from .data.format import to_long
     from .eval_forecast import eval_model_long_df
     from .io import ensure_datetime, load_csv, parse_id_cols
-    from .models.registry import get_model_spec
 
     model_params = _parse_model_params(list(args.model_param))
     id_cols = parse_id_cols(str(args.id_cols))
@@ -1878,9 +2341,8 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     if bool(args.parse_dates):
         ensure_datetime(df, str(args.time_col))
 
-    model_spec = get_model_spec(str(args.model))
     x_cols: tuple[str, ...] = ()
-    if model_spec.interface == "global" and "x_cols" in model_params:
+    if "x_cols" in model_params:
         raw = model_params.get("x_cols")
         if raw is not None:
             if isinstance(raw, str):

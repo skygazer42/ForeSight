@@ -1233,6 +1233,507 @@ def huber_step_lag_global_forecaster(
     return _f
 
 
+def bayesian_ridge_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    max_iter: int = 300,
+    tol: float = 1e-3,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn BayesianRidge."""
+    try:
+        from sklearn.linear_model import BayesianRidge  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'bayesian-ridge-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    max_iter_int = int(max_iter)
+    tol_f = float(tol)
+    alpha_1_f = float(alpha_1)
+    alpha_2_f = float(alpha_2)
+    lambda_1_f = float(lambda_1)
+    lambda_2_f = float(lambda_2)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+    if tol_f <= 0.0:
+        raise ValueError("tol must be > 0")
+    if alpha_1_f <= 0.0 or alpha_2_f <= 0.0 or lambda_1_f <= 0.0 or lambda_2_f <= 0.0:
+        raise ValueError("alpha_1, alpha_2, lambda_1, lambda_2 must be > 0")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        model = BayesianRidge(
+            max_iter=max_iter_int,
+            tol=tol_f,
+            alpha_1=alpha_1_f,
+            alpha_2=alpha_2_f,
+            lambda_1=lambda_1_f,
+            lambda_2=lambda_2_f,
+        )
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def ard_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    max_iter: int = 300,
+    tol: float = 1e-3,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    threshold_lambda: float = 10000.0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn ARDRegression."""
+    try:
+        from sklearn.linear_model import ARDRegression  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'ard-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    max_iter_int = int(max_iter)
+    tol_f = float(tol)
+    alpha_1_f = float(alpha_1)
+    alpha_2_f = float(alpha_2)
+    lambda_1_f = float(lambda_1)
+    lambda_2_f = float(lambda_2)
+    threshold_lambda_f = float(threshold_lambda)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+    if tol_f <= 0.0:
+        raise ValueError("tol must be > 0")
+    if alpha_1_f <= 0.0 or alpha_2_f <= 0.0 or lambda_1_f <= 0.0 or lambda_2_f <= 0.0:
+        raise ValueError("alpha_1, alpha_2, lambda_1, lambda_2 must be > 0")
+    if threshold_lambda_f <= 0.0:
+        raise ValueError("threshold_lambda must be > 0")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        model = ARDRegression(
+            max_iter=max_iter_int,
+            tol=tol_f,
+            alpha_1=alpha_1_f,
+            alpha_2=alpha_2_f,
+            lambda_1=lambda_1_f,
+            lambda_2=lambda_2_f,
+            threshold_lambda=threshold_lambda_f,
+        )
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def omp_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    n_nonzero_coefs: int | None = None,
+    tol: float | None = None,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn OrthogonalMatchingPursuit."""
+    try:
+        from sklearn.linear_model import OrthogonalMatchingPursuit  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'omp-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    nnz_int = None if n_nonzero_coefs is None else int(n_nonzero_coefs)
+    tol_f = None if tol is None else float(tol)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if nnz_int is not None and nnz_int <= 0:
+        raise ValueError("n_nonzero_coefs must be >= 1 or None")
+    if tol_f is not None and tol_f < 0.0:
+        raise ValueError("tol must be >= 0 or None")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        model = OrthogonalMatchingPursuit(n_nonzero_coefs=nnz_int, tol=tol_f)
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def passive_aggressive_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    C: float = 1.0,
+    loss: str = "epsilon_insensitive",
+    epsilon: float = 0.1,
+    max_iter: int = 1000,
+    random_state: int | None = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn PassiveAggressiveRegressor."""
+    try:
+        from sklearn.linear_model import PassiveAggressiveRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'passive-aggressive-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    C_f = float(C)
+    loss_s = str(loss).strip().lower()
+    epsilon_f = float(epsilon)
+    max_iter_int = int(max_iter)
+    random_state_int = None if random_state is None else int(random_state)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if C_f <= 0.0:
+        raise ValueError("C must be > 0")
+    if loss_s not in {"epsilon_insensitive", "squared_epsilon_insensitive"}:
+        raise ValueError("loss must be one of: epsilon_insensitive, squared_epsilon_insensitive")
+    if epsilon_f < 0.0:
+        raise ValueError("epsilon must be >= 0")
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        model = PassiveAggressiveRegressor(
+            C=C_f,
+            loss=loss_s,
+            epsilon=epsilon_f,
+            max_iter=max_iter_int,
+            random_state=random_state_int,
+        )
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def poisson_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn PoissonRegressor."""
+    try:
+        from sklearn.linear_model import PoissonRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'poisson-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if alpha_f < 0.0:
+        raise ValueError("alpha must be >= 0")
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        if np.any(y_train < 0.0):
+            raise ValueError("poisson-step-lag-global requires non-negative training targets")
+        model = PoissonRegressor(alpha=alpha_f, max_iter=max_iter_int)
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def gamma_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn GammaRegressor."""
+    try:
+        from sklearn.linear_model import GammaRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'gamma-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if alpha_f < 0.0:
+        raise ValueError("alpha must be >= 0")
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        if np.any(y_train <= 0.0):
+            raise ValueError("gamma-step-lag-global requires strictly positive training targets")
+        model = GammaRegressor(alpha=alpha_f, max_iter=max_iter_int)
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
+def tweedie_step_lag_global_forecaster(
+    *,
+    lags: int = 24,
+    power: float = 1.5,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    id_feature: str = "ordinal",
+    step_scale: str = "one_based",
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    **_params: Any,
+) -> Any:
+    """Global panel step-lag model with sklearn TweedieRegressor."""
+    try:
+        from sklearn.linear_model import TweedieRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'tweedie-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    lags_int = int(lags)
+    power_f = float(power)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    x_cols_tup = _normalize_x_cols(x_cols)
+    max_train_size_int = None if max_train_size is None else int(max_train_size)
+    sample_step_int = int(sample_step)
+
+    if 0.0 < power_f < 1.0:
+        raise ValueError("power must be <= 0 or >= 1")
+    if alpha_f < 0.0:
+        raise ValueError("alpha must be >= 0")
+    if max_iter_int <= 0:
+        raise ValueError("max_iter must be >= 1")
+
+    def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        if power_f == 1.0 and np.any(y_train < 0.0):
+            raise ValueError("tweedie-step-lag-global with power=1 requires non-negative training targets")
+        if power_f > 1.0 and np.any(y_train <= 0.0):
+            raise ValueError("tweedie-step-lag-global with power>1 requires strictly positive training targets")
+        model = TweedieRegressor(power=power_f, alpha=alpha_f, max_iter=max_iter_int)
+        model.fit(X_train, y_train)
+        return model
+
+    def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _run_point_global_model(
+            long_df,
+            cutoff,
+            int(horizon),
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            max_train_size=max_train_size_int,
+            sample_step=sample_step_int,
+            fit_model=_fit_model,
+        )
+
+    return _f
+
+
 def quantile_step_lag_global_forecaster(
     *,
     lags: int = 24,

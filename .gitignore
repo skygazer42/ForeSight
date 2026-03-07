@@ -14,3 +14,8 @@ venv/
 # OS / editor
 .DS_Store
 .vscode/
+
+# IDE / generated
+.idea/
+site/
+.coverage

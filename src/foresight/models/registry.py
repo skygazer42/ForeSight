@@ -7,6 +7,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..base import (
+    BaseForecaster,
+    BaseGlobalForecaster,
+    RegistryForecaster,
+    RegistryGlobalForecaster,
+)
 from ..transforms import fit_transform, inverse_forecast, normalize_transform_list
 from .analog import analog_knn_forecast
 from .ar import ar_ols_auto_forecast, ar_ols_forecast, ar_ols_lags_forecast, sar_ols_forecast
@@ -20,11 +26,14 @@ from .baselines import (
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
 from .global_regression import (
     adaboost_step_lag_global_forecaster,
+    ard_step_lag_global_forecaster,
     bagging_step_lag_global_forecaster,
+    bayesian_ridge_step_lag_global_forecaster,
     catboost_step_lag_global_forecaster,
     decision_tree_step_lag_global_forecaster,
     elasticnet_step_lag_global_forecaster,
     extra_trees_step_lag_global_forecaster,
+    gamma_step_lag_global_forecaster,
     gbrt_step_lag_global_forecaster,
     hgb_step_lag_global_forecaster,
     huber_step_lag_global_forecaster,
@@ -34,11 +43,15 @@ from .global_regression import (
     lgbm_step_lag_global_forecaster,
     linear_svr_step_lag_global_forecaster,
     mlp_step_lag_global_forecaster,
+    omp_step_lag_global_forecaster,
+    passive_aggressive_step_lag_global_forecaster,
+    poisson_step_lag_global_forecaster,
     quantile_step_lag_global_forecaster,
     rf_step_lag_global_forecaster,
     ridge_step_lag_global_forecaster,
     sgd_step_lag_global_forecaster,
     svr_step_lag_global_forecaster,
+    tweedie_step_lag_global_forecaster,
     xgb_dart_step_lag_global_forecaster,
     xgb_gamma_step_lag_global_forecaster,
     xgb_huber_step_lag_global_forecaster,
@@ -61,6 +74,7 @@ from .intermittent import (
     tsb_forecast,
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
+from .multivariate import var_forecast
 from .naive import naive_last, seasonal_naive
 from .regression import (
     adaboost_lag_direct_forecast,
@@ -145,11 +159,31 @@ from .statsmodels_wrap import (
     auto_arima_forecast,
     autoreg_forecast,
     ets_forecast,
+    fourier_arima_forecast,
+    fourier_auto_arima_forecast,
+    fourier_autoreg_forecast,
+    fourier_ets_forecast,
+    fourier_sarimax_forecast,
+    fourier_uc_forecast,
     mstl_arima_forecast,
     mstl_auto_arima_forecast,
+    mstl_autoreg_forecast,
+    mstl_ets_forecast,
+    mstl_sarimax_forecast,
+    mstl_uc_forecast,
     sarimax_forecast,
     stl_arima_forecast,
+    stl_auto_arima_forecast,
+    stl_autoreg_forecast,
+    stl_ets_forecast,
+    stl_sarimax_forecast,
+    stl_uc_forecast,
+    tbats_lite_auto_arima_forecast,
+    tbats_lite_autoreg_forecast,
+    tbats_lite_ets_forecast,
     tbats_lite_forecast,
+    tbats_lite_sarimax_forecast,
+    tbats_lite_uc_forecast,
     unobserved_components_forecast,
 )
 from .theta import theta_auto_forecast, theta_forecast
@@ -236,8 +270,19 @@ from .trend import poly_trend_forecast
 
 LocalForecasterFn = Callable[[Any, int], np.ndarray]
 GlobalForecasterFn = Callable[[pd.DataFrame, Any, int], pd.DataFrame]
+MultivariateForecasterFn = Callable[[Any, int], np.ndarray]
 ModelFactory = Callable[..., Any]
 ForecasterFn = LocalForecasterFn
+
+
+def _normalize_bool_like(value: Any) -> bool:
+    if isinstance(value, str):
+        lower = value.strip().lower()
+        if lower in {"true", "1", "yes", "y", "on"}:
+            return True
+        if lower in {"false", "0", "no", "n", "off"}:
+            return False
+    return bool(value)
 
 
 @dataclass(frozen=True)
@@ -249,8 +294,31 @@ class ModelSpec:
     param_help: dict[str, str] = field(default_factory=dict)
     requires: tuple[str, ...] = ()
     interface: str = (
-        "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df
+        "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df ; multivariate: (train_2d, horizon)->yhat_matrix
     )
+    capability_overrides: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def capabilities(self) -> dict[str, Any]:
+        supports_x_cols = "x_cols" in self.param_help
+        supports_quantiles = "quantiles" in self.param_help
+        supports_interval_forecast = str(self.interface) == "local" or supports_quantiles
+        supports_interval_forecast_with_x_cols = supports_x_cols and supports_quantiles
+        supports_artifact_save = str(self.interface) in {"local", "global"} and not (
+            str(self.interface) == "local" and supports_x_cols
+        )
+        requires_future_covariates = False
+
+        capabilities = {
+            "supports_x_cols": supports_x_cols,
+            "supports_quantiles": supports_quantiles,
+            "supports_interval_forecast": supports_interval_forecast,
+            "supports_interval_forecast_with_x_cols": supports_interval_forecast_with_x_cols,
+            "supports_artifact_save": supports_artifact_save,
+            "requires_future_covariates": requires_future_covariates,
+        }
+        capabilities.update(dict(self.capability_overrides))
+        return capabilities
 
 
 _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
@@ -7371,16 +7439,33 @@ def _factory_ensemble_median(
     return _f
 
 
-def _factory_arima(*, order: Any = (1, 0, 0), **_params: Any) -> ForecasterFn:
+def _factory_arima(
+    *,
+    order: Any = (1, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
         raise TypeError("order must be a 3-tuple like (p, d, q)") from e
 
     order_tup = (int(p), int(d), int(q))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return arima_forecast(train, horizon, order=order_tup)
+        return arima_forecast(
+            train,
+            horizon,
+            order=order_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+        )
 
     return _f
 
@@ -7390,12 +7475,30 @@ def _factory_auto_arima(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
+    max_P: int = 0,
+    max_D: int = 0,
+    max_Q: int = 0,
+    seasonal_period: int | None = None,
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
     information_criterion: str = "aic",
     **_params: Any,
 ) -> ForecasterFn:
     max_p_int = int(max_p)
     max_d_int = int(max_d)
     max_q_int = int(max_q)
+    max_P_int = int(max_P)
+    max_D_int = int(max_D)
+    max_Q_int = int(max_Q)
+    seasonal_period_int = (
+        None
+        if seasonal_period is None or str(seasonal_period).strip().lower() in {"none", "null", ""}
+        else int(seasonal_period)
+    )
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
     ic_s = str(information_criterion)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
@@ -7405,7 +7508,200 @@ def _factory_auto_arima(
             max_p=max_p_int,
             max_d=max_d_int,
             max_q=max_q_int,
+            max_P=max_P_int,
+            max_D=max_D_int,
+            max_Q=max_Q_int,
+            seasonal_period=seasonal_period_int,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
             information_criterion=ic_s,
+        )
+
+    return _f
+
+
+def _factory_fourier_auto_arima(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    max_p: int = 3,
+    max_d: int = 2,
+    max_q: int = 3,
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    information_criterion: str = "aic",
+    **_params: Any,
+) -> ForecasterFn:
+    max_p_int = int(max_p)
+    max_d_int = int(max_d)
+    max_q_int = int(max_q)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    ic_s = str(information_criterion)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_auto_arima_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            max_p=max_p_int,
+            max_d=max_d_int,
+            max_q=max_q_int,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            information_criterion=ic_s,
+        )
+
+    return _f
+
+
+def _factory_fourier_arima(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    order: Any = (1, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    try:
+        p, d, q = order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+
+    order_tup = (int(p), int(d), int(q))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_arima_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            order=order_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+        )
+
+    return _f
+
+
+def _factory_fourier_sarimax(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    order: Any = (1, 0, 0),
+    seasonal_order: Any = (0, 0, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    try:
+        p, d, q = order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+
+    try:
+        P, D, Q, s = seasonal_order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+
+    order_tup = (int(p), int(d), int(q))
+    seasonal_tup = (int(P), int(D), int(Q), int(s))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_sarimax_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            order=order_tup,
+            seasonal_order=seasonal_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+        )
+
+    return _f
+
+
+def _factory_fourier_autoreg(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    lags: int = 0,
+    trend: str = "c",
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    trend_s = str(trend)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_autoreg_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            lags=lags_int,
+            trend=trend_s,
+        )
+
+    return _f
+
+
+def _factory_fourier_ets(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    trend: str | None = None,
+    damped_trend: bool = False,
+    **_params: Any,
+) -> ForecasterFn:
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    damped_trend_bool = _normalize_bool_like(damped_trend)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_ets_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            trend=trend_s,
+            damped_trend=damped_trend_bool,
+        )
+
+    return _f
+
+
+def _factory_fourier_uc(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    level: str = "local level",
+    **_params: Any,
+) -> ForecasterFn:
+    level_s = str(level)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return fourier_uc_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            level=level_s,
         )
 
     return _f
@@ -7479,11 +7775,22 @@ def _factory_autoreg(
     return _f
 
 
-def _factory_unobserved_components(*, level: str = "local level", **_params: Any) -> ForecasterFn:
+def _factory_unobserved_components(
+    *,
+    level: str = "local level",
+    seasonal: int | None = None,
+    **_params: Any,
+) -> ForecasterFn:
     level_s = str(level)
+    seasonal_int = None if seasonal is None else int(seasonal)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return unobserved_components_forecast(train, horizon, level=level_s)
+        return unobserved_components_forecast(
+            train,
+            horizon,
+            level=level_s,
+            seasonal=seasonal_int,
+        )
 
     return _f
 
@@ -7519,6 +7826,179 @@ def _factory_stl_arima(
     return _f
 
 
+def _factory_stl_ets(
+    *,
+    period: int = 12,
+    trend: str | None = "add",
+    damped_trend: bool = False,
+    robust: bool = False,
+    **_params: Any,
+) -> ForecasterFn:
+    period_int = int(period)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    damped_trend_bool = _normalize_bool_like(damped_trend)
+    robust_bool = _normalize_bool_like(robust)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return stl_ets_forecast(
+            train,
+            horizon,
+            period=period_int,
+            trend=trend_s,
+            damped_trend=damped_trend_bool,
+            robust=robust_bool,
+        )
+
+    return _f
+
+
+def _factory_stl_autoreg(
+    *,
+    period: int = 12,
+    lags: int = 1,
+    trend: str = "c",
+    seasonal: int = 7,
+    robust: bool = False,
+    **_params: Any,
+) -> ForecasterFn:
+    period_int = int(period)
+    lags_int = int(lags)
+    trend_s = str(trend)
+    seasonal_int = int(seasonal)
+    robust_bool = _normalize_bool_like(robust)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return stl_autoreg_forecast(
+            train,
+            horizon,
+            period=period_int,
+            lags=lags_int,
+            trend=trend_s,
+            seasonal=seasonal_int,
+            robust=robust_bool,
+        )
+
+    return _f
+
+
+def _factory_stl_uc(
+    *,
+    period: int = 12,
+    level: str = "local level",
+    seasonal: int = 7,
+    robust: bool = False,
+    **_params: Any,
+) -> ForecasterFn:
+    period_int = int(period)
+    level_s = str(level)
+    seasonal_int = int(seasonal)
+    robust_bool = _normalize_bool_like(robust)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return stl_uc_forecast(
+            train,
+            horizon,
+            period=period_int,
+            level=level_s,
+            seasonal=seasonal_int,
+            robust=robust_bool,
+        )
+
+    return _f
+
+
+def _factory_stl_sarimax(
+    *,
+    period: int = 12,
+    order: Any = (1, 0, 0),
+    seasonal_order: Any = (0, 0, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    seasonal: int = 7,
+    robust: bool = False,
+    **_params: Any,
+) -> ForecasterFn:
+    try:
+        p, d, q = order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+
+    try:
+        P, D, Q, s = seasonal_order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+
+    period_int = int(period)
+    order_tup = (int(p), int(d), int(q))
+    seasonal_tup = (int(P), int(D), int(Q), int(s))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    seasonal_int = int(seasonal)
+    robust_bool = _normalize_bool_like(robust)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return stl_sarimax_forecast(
+            train,
+            horizon,
+            period=period_int,
+            order=order_tup,
+            seasonal_order=seasonal_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            seasonal=seasonal_int,
+            robust=robust_bool,
+        )
+
+    return _f
+
+
+def _factory_stl_auto_arima(
+    *,
+    period: int = 12,
+    seasonal: int = 7,
+    robust: bool = False,
+    max_p: int = 3,
+    max_d: int = 2,
+    max_q: int = 3,
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    information_criterion: str = "aic",
+    **_params: Any,
+) -> ForecasterFn:
+    period_int = int(period)
+    seasonal_int = int(seasonal)
+    robust_bool = _normalize_bool_like(robust)
+    max_p_int = int(max_p)
+    max_d_int = int(max_d)
+    max_q_int = int(max_q)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    ic_s = str(information_criterion)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return stl_auto_arima_forecast(
+            train,
+            horizon,
+            period=period_int,
+            seasonal=seasonal_int,
+            robust=robust_bool,
+            max_p=max_p_int,
+            max_d=max_d_int,
+            max_q=max_q_int,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            information_criterion=ic_s,
+        )
+
+    return _f
+
+
 def _factory_mstl_arima(
     *,
     periods: Any = (12,),
@@ -7548,6 +8028,103 @@ def _factory_mstl_arima(
     return _f
 
 
+def _factory_mstl_autoreg(
+    *,
+    periods: Any = (12,),
+    lags: int = 1,
+    trend: str = "c",
+    iterate: int = 2,
+    lmbda: float | str | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    trend_s = str(trend)
+    iterate_int = int(iterate)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return mstl_autoreg_forecast(
+            train,
+            horizon,
+            periods=periods,
+            lags=lags_int,
+            trend=trend_s,
+            iterate=iterate_int,
+            lmbda=lmbda,
+        )
+
+    return _f
+
+
+def _factory_mstl_uc(
+    *,
+    periods: Any = (12,),
+    level: str = "local level",
+    iterate: int = 2,
+    lmbda: float | str | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    level_s = str(level)
+    iterate_int = int(iterate)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return mstl_uc_forecast(
+            train,
+            horizon,
+            periods=periods,
+            level=level_s,
+            iterate=iterate_int,
+            lmbda=lmbda,
+        )
+
+    return _f
+
+
+def _factory_mstl_sarimax(
+    *,
+    periods: Any = (12,),
+    order: Any = (1, 0, 0),
+    seasonal_order: Any = (0, 0, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    iterate: int = 2,
+    lmbda: float | str | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    try:
+        p, d, q = order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+
+    try:
+        P, D, Q, s = seasonal_order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+
+    order_tup = (int(p), int(d), int(q))
+    seasonal_tup = (int(P), int(D), int(Q), int(s))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    iterate_int = int(iterate)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return mstl_sarimax_forecast(
+            train,
+            horizon,
+            periods=periods,
+            order=order_tup,
+            seasonal_order=seasonal_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            iterate=iterate_int,
+            lmbda=lmbda,
+        )
+
+    return _f
+
+
 def _factory_mstl_auto_arima(
     *,
     periods: Any = (12,),
@@ -7556,6 +8133,9 @@ def _factory_mstl_auto_arima(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
     information_criterion: str = "aic",
     **_params: Any,
 ) -> ForecasterFn:
@@ -7563,6 +8143,9 @@ def _factory_mstl_auto_arima(
     max_p_int = int(max_p)
     max_d_int = int(max_d)
     max_q_int = int(max_q)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
     ic_s = str(information_criterion)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
@@ -7575,7 +8158,37 @@ def _factory_mstl_auto_arima(
             max_p=max_p_int,
             max_d=max_d_int,
             max_q=max_q_int,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
             information_criterion=ic_s,
+        )
+
+    return _f
+
+
+def _factory_mstl_ets(
+    *,
+    periods: Any = (12,),
+    trend: str | None = "add",
+    damped_trend: bool = False,
+    iterate: int = 2,
+    lmbda: float | str | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    damped_trend_bool = _normalize_bool_like(damped_trend)
+    iterate_int = int(iterate)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return mstl_ets_forecast(
+            train,
+            horizon,
+            periods=periods,
+            trend=trend_s,
+            damped_trend=damped_trend_bool,
+            iterate=iterate_int,
+            lmbda=lmbda,
         )
 
     return _f
@@ -7614,6 +8227,185 @@ def _factory_tbats_lite(
     return _f
 
 
+def _factory_tbats_lite_autoreg(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    include_trend: bool = True,
+    lags: int = 1,
+    trend: str = "n",
+    boxcox_lambda: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    include_trend_bool = _normalize_bool_like(include_trend)
+    lags_int = int(lags)
+    trend_s = str(trend)
+    lam = None if boxcox_lambda is None else float(boxcox_lambda)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tbats_lite_autoreg_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            include_trend=include_trend_bool,
+            lags=lags_int,
+            trend=trend_s,
+            boxcox_lambda=lam,
+        )
+
+    return _f
+
+
+def _factory_tbats_lite_ets(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    include_trend: bool = True,
+    trend: str | None = None,
+    damped_trend: bool = False,
+    boxcox_lambda: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    include_trend_bool = _normalize_bool_like(include_trend)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    damped_trend_bool = _normalize_bool_like(damped_trend)
+    lam = None if boxcox_lambda is None else float(boxcox_lambda)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tbats_lite_ets_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            include_trend=include_trend_bool,
+            trend=trend_s,
+            damped_trend=damped_trend_bool,
+            boxcox_lambda=lam,
+        )
+
+    return _f
+
+
+def _factory_tbats_lite_sarimax(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    include_trend: bool = True,
+    order: Any = (1, 0, 0),
+    seasonal_order: Any = (0, 0, 0, 0),
+    trend: str | None = None,
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    boxcox_lambda: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    include_trend_bool = _normalize_bool_like(include_trend)
+    try:
+        p, d, q = order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+    try:
+        P, D, Q, s = seasonal_order
+    except Exception as e:  # noqa: BLE001
+        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+    order_tup = (int(p), int(d), int(q))
+    seasonal_tup = (int(P), int(D), int(Q), int(s))
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    lam = None if boxcox_lambda is None else float(boxcox_lambda)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tbats_lite_sarimax_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            include_trend=include_trend_bool,
+            order=order_tup,
+            seasonal_order=seasonal_tup,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            boxcox_lambda=lam,
+        )
+
+    return _f
+
+
+def _factory_tbats_lite_auto_arima(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    include_trend: bool = True,
+    max_p: int = 3,
+    max_d: int = 2,
+    max_q: int = 3,
+    trend: str | None = "c",
+    enforce_stationarity: bool = True,
+    enforce_invertibility: bool = True,
+    information_criterion: str = "aic",
+    boxcox_lambda: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    include_trend_bool = _normalize_bool_like(include_trend)
+    max_p_int = int(max_p)
+    max_d_int = int(max_d)
+    max_q_int = int(max_q)
+    trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
+    enforce_stationarity_bool = _normalize_bool_like(enforce_stationarity)
+    enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
+    ic_s = str(information_criterion)
+    lam = None if boxcox_lambda is None else float(boxcox_lambda)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tbats_lite_auto_arima_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            include_trend=include_trend_bool,
+            max_p=max_p_int,
+            max_d=max_d_int,
+            max_q=max_q_int,
+            trend=trend_s,
+            enforce_stationarity=enforce_stationarity_bool,
+            enforce_invertibility=enforce_invertibility_bool,
+            information_criterion=ic_s,
+            boxcox_lambda=lam,
+        )
+
+    return _f
+
+
+def _factory_tbats_lite_uc(
+    *,
+    periods: Any = (12,),
+    orders: Any = 2,
+    include_trend: bool = True,
+    level: str = "local level",
+    boxcox_lambda: float | None = None,
+    **_params: Any,
+) -> ForecasterFn:
+    include_trend_bool = _normalize_bool_like(include_trend)
+    level_s = str(level)
+    lam = None if boxcox_lambda is None else float(boxcox_lambda)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tbats_lite_uc_forecast(
+            train,
+            horizon,
+            periods=periods,
+            orders=orders,
+            include_trend=include_trend_bool,
+            level=level_s,
+            boxcox_lambda=lam,
+        )
+
+    return _f
+
+
 def _factory_ets(
     *,
     season_length: int = 12,
@@ -7642,6 +8434,23 @@ def _factory_ets(
             seasonal_periods=(season_length_int if seasonal_final is not None else None),
             damped_trend=damped_trend_bool,
         )
+
+    return _f
+
+
+def _factory_var(
+    *,
+    maxlags: int = 1,
+    trend: str = "c",
+    ic: str | None = None,
+    **_params: Any,
+) -> MultivariateForecasterFn:
+    maxlags_int = int(maxlags)
+    trend_s = str(trend)
+    ic_final = None if ic is None else str(ic)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return var_forecast(train, horizon, maxlags=maxlags_int, trend=trend_s, ic=ic_final)
 
     return _f
 
@@ -11211,6 +12020,298 @@ _REGISTRY: dict[str, ModelSpec] = {
         requires=("ml",),
         interface="global",
     ),
+    "bayesian-ridge-step-lag-global": ModelSpec(
+        key="bayesian-ridge-step-lag-global",
+        description=(
+            "Global (panel) BayesianRidge using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=bayesian_ridge_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "max_iter": 300,
+            "tol": 0.001,
+            "alpha_1": 1e-6,
+            "alpha_2": 1e-6,
+            "lambda_1": 1e-6,
+            "lambda_2": 1e-6,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "max_iter": "Max solver iterations",
+            "tol": "Convergence tolerance (>0)",
+            "alpha_1": "Gamma prior shape for noise precision (>0)",
+            "alpha_2": "Gamma prior inverse-scale for noise precision (>0)",
+            "lambda_1": "Gamma prior shape for weight precision (>0)",
+            "lambda_2": "Gamma prior inverse-scale for weight precision (>0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "ard-step-lag-global": ModelSpec(
+        key="ard-step-lag-global",
+        description=(
+            "Global (panel) ARDRegression using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=ard_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "max_iter": 300,
+            "tol": 0.001,
+            "alpha_1": 1e-6,
+            "alpha_2": 1e-6,
+            "lambda_1": 1e-6,
+            "lambda_2": 1e-6,
+            "threshold_lambda": 10000.0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "max_iter": "Max solver iterations",
+            "tol": "Convergence tolerance (>0)",
+            "alpha_1": "Gamma prior shape for noise precision (>0)",
+            "alpha_2": "Gamma prior inverse-scale for noise precision (>0)",
+            "lambda_1": "Gamma prior shape for weight precision (>0)",
+            "lambda_2": "Gamma prior inverse-scale for weight precision (>0)",
+            "threshold_lambda": "Pruning threshold for irrelevant weights (>0)",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "omp-step-lag-global": ModelSpec(
+        key="omp-step-lag-global",
+        description=(
+            "Global (panel) OrthogonalMatchingPursuit using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=omp_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "n_nonzero_coefs": None,
+            "tol": None,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "n_nonzero_coefs": "Maximum active coefficients (None for auto selection)",
+            "tol": "Residual tolerance (>=0) or None",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "passive-aggressive-step-lag-global": ModelSpec(
+        key="passive-aggressive-step-lag-global",
+        description=(
+            "Global (panel) PassiveAggressiveRegressor using lag features + step-index feature. "
+            "Trains on all series up to each cutoff and predicts all series jointly. Requires scikit-learn."
+        ),
+        factory=passive_aggressive_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "C": 1.0,
+            "loss": "epsilon_insensitive",
+            "epsilon": 0.1,
+            "max_iter": 1000,
+            "random_state": 0,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "C": "Regularization strength (>0)",
+            "loss": "Loss: epsilon_insensitive, squared_epsilon_insensitive",
+            "epsilon": "Epsilon-insensitive width (>=0)",
+            "max_iter": "Max training iterations",
+            "random_state": "Random seed or None",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "poisson-step-lag-global": ModelSpec(
+        key="poisson-step-lag-global",
+        description=(
+            "Global (panel) PoissonRegressor using lag features + step-index feature. "
+            "Requires non-negative targets and scikit-learn."
+        ),
+        factory=poisson_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 1.0,
+            "max_iter": 100,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max solver iterations",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "gamma-step-lag-global": ModelSpec(
+        key="gamma-step-lag-global",
+        description=(
+            "Global (panel) GammaRegressor using lag features + step-index feature. "
+            "Requires strictly positive targets and scikit-learn."
+        ),
+        factory=gamma_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "alpha": 1.0,
+            "max_iter": 100,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max solver iterations",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
+    "tweedie-step-lag-global": ModelSpec(
+        key="tweedie-step-lag-global",
+        description=(
+            "Global (panel) TweedieRegressor using lag features + step-index feature. "
+            "Useful for non-negative or strictly positive targets depending on power. Requires scikit-learn."
+        ),
+        factory=tweedie_step_lag_global_forecaster,
+        default_params={
+            "lags": 48,
+            "power": 1.5,
+            "alpha": 1.0,
+            "max_iter": 100,
+            "roll_windows": (),
+            "roll_stats": (),
+            "diff_lags": (),
+            "x_cols": (),
+            "add_time_features": True,
+            "id_feature": "ordinal",
+            "step_scale": "one_based",
+            "max_train_size": None,
+            "sample_step": 1,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "power": "Tweedie power (<=0 or >=1); power=1 is Poisson-like, power>1 needs positive targets",
+            "alpha": "L2 regularization strength (>=0)",
+            "max_iter": "Max solver iterations",
+            "roll_windows": "Optional rolling windows for lag-derived stats (comma-separated, each <= lags)",
+            "roll_stats": "Lag-derived stats per roll window: mean,std,min,max,median,slope (comma-separated)",
+            "diff_lags": "Optional last-minus-previous diffs: diff_k = lag1 - lag(k+1) (comma-separated, each < lags)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "id_feature": "Series-id feature: none, ordinal",
+            "step_scale": "Step feature scaling: one_based, zero_based, unit",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            "sample_step": "Stride when generating training windows (>=1)",
+        },
+        requires=("ml",),
+        interface="global",
+    ),
     "quantile-step-lag-global": ModelSpec(
         key="quantile-step-lag-global",
         description=(
@@ -13959,25 +15060,198 @@ _REGISTRY: dict[str, ModelSpec] = {
             "damped_trend": "Whether to use a damped trend (true/false)",
         },
         requires=("stats",),
+        capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
     "arima": ModelSpec(
         key="arima",
         description="ARIMA(p,d,q) via statsmodels. Optional dependency.",
         factory=_factory_arima,
-        default_params={"order": (1, 0, 0)},
-        param_help={"order": "ARIMA order tuple (p,d,q)"},
+        default_params={
+            "order": (1, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+        },
+        param_help={
+            "order": "ARIMA order tuple (p,d,q)",
+            "trend": "Trend term (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity (true/false)",
+            "enforce_invertibility": "Enforce invertibility (true/false)",
+        },
         requires=("stats",),
+        capability_overrides={"supports_interval_forecast_with_x_cols": True},
+    ),
+    "var": ModelSpec(
+        key="var",
+        description="Vector autoregression via statsmodels on a multivariate target matrix. Optional dependency.",
+        factory=_factory_var,
+        default_params={"maxlags": 1, "trend": "c", "ic": None},
+        param_help={
+            "maxlags": "Maximum autoregressive lag order",
+            "trend": "Deterministic trend: n, c, ct, ctt",
+            "ic": "Optional lag-order selection criterion: aic, bic, hqic, fpe, or none",
+        },
+        requires=("stats",),
+        interface="multivariate",
     ),
     "auto-arima": ModelSpec(
         key="auto-arima",
         description="AutoARIMA-style grid search via statsmodels. Optional dependency.",
         factory=_factory_auto_arima,
-        default_params={"max_p": 3, "max_d": 2, "max_q": 3, "information_criterion": "aic"},
+        default_params={
+            "max_p": 3,
+            "max_d": 2,
+            "max_q": 3,
+            "max_P": 0,
+            "max_D": 0,
+            "max_Q": 0,
+            "seasonal_period": None,
+            "trend": None,
+            "x_cols": (),
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "information_criterion": "aic",
+        },
         param_help={
             "max_p": "Max AR order p to consider",
             "max_d": "Max differencing order d to consider",
             "max_q": "Max MA order q to consider",
+            "max_P": "Max seasonal AR order P to consider",
+            "max_D": "Max seasonal differencing order D to consider",
+            "max_Q": "Max seasonal MA order Q to consider",
+            "seasonal_period": "Optional seasonal period s for SARIMA-style search",
+            "trend": "Trend term (e.g. n, c, t, ct) or none",
+            "x_cols": "Optional future covariate columns for forecast_model_long_df / forecast csv",
+            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
+            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
             "information_criterion": "Model selection criterion: aic or bic",
+        },
+        requires=("stats",),
+        capability_overrides={"supports_interval_forecast_with_x_cols": True},
+    ),
+    "fourier-auto-arima": ModelSpec(
+        key="fourier-auto-arima",
+        description="Dynamic harmonic regression: Fourier seasonal terms + AutoARIMA errors. Optional dependency.",
+        factory=_factory_fourier_auto_arima,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "max_p": 3,
+            "max_d": 2,
+            "max_q": 3,
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "information_criterion": "aic",
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "max_p": "Max AR order p to consider for the residual model",
+            "max_d": "Max differencing order d to consider for the residual model",
+            "max_q": "Max MA order q to consider for the residual model",
+            "trend": "Trend term for the residual ARIMA search (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
+            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
+            "information_criterion": "Model selection criterion: aic or bic",
+        },
+        requires=("stats",),
+    ),
+    "fourier-arima": ModelSpec(
+        key="fourier-arima",
+        description="Dynamic harmonic regression: Fourier seasonal terms + fixed-order ARIMA errors. Optional dependency.",
+        factory=_factory_fourier_arima,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "order": (1, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "order": "ARIMA order for the residual model (p,d,q)",
+            "trend": "Trend term for the residual ARIMA model (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for the residual ARIMA model (true/false)",
+            "enforce_invertibility": "Enforce invertibility for the residual ARIMA model (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "fourier-sarimax": ModelSpec(
+        key="fourier-sarimax",
+        description="Dynamic harmonic regression: Fourier seasonal terms + fixed-order SARIMAX errors. Optional dependency.",
+        factory=_factory_fourier_sarimax,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "order": (1, 0, 0),
+            "seasonal_order": (0, 0, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "order": "SARIMAX non-seasonal order for the residual model (p,d,q)",
+            "seasonal_order": "SARIMAX seasonal order for the residual model (P,D,Q,s)",
+            "trend": "Trend term for the residual SARIMAX model (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for the residual SARIMAX model (true/false)",
+            "enforce_invertibility": "Enforce invertibility for the residual SARIMAX model (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "fourier-autoreg": ModelSpec(
+        key="fourier-autoreg",
+        description="Dynamic harmonic regression: Fourier seasonal terms + AutoReg / AR-X errors. Optional dependency.",
+        factory=_factory_fourier_autoreg,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "lags": 0,
+            "trend": "c",
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "lags": "AutoReg lag order; 0 disables AR lags and uses deterministic regression only",
+            "trend": "Deterministic trend: n, c, t, ct",
+        },
+        requires=("stats",),
+    ),
+    "fourier-ets": ModelSpec(
+        key="fourier-ets",
+        description="Dynamic harmonic regression: Fourier seasonal terms + ETS residuals. Optional dependency.",
+        factory=_factory_fourier_ets,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "trend": None,
+            "damped_trend": False,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "trend": "Residual ETS trend: add, mul, or none",
+            "damped_trend": "Use damped trend in the residual ETS model (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "fourier-uc": ModelSpec(
+        key="fourier-uc",
+        description="Dynamic harmonic regression: Fourier seasonal terms + UnobservedComponents residuals. Optional dependency.",
+        factory=_factory_fourier_uc,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "level": "local level",
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods for Fourier terms (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "level": "Residual structural level model (e.g. local level, local linear trend, random walk)",
         },
         requires=("stats",),
     ),
@@ -13991,6 +15265,7 @@ _REGISTRY: dict[str, ModelSpec] = {
             "trend": None,
             "enforce_stationarity": True,
             "enforce_invertibility": True,
+            "x_cols": (),
         },
         param_help={
             "order": "Non-seasonal order (p,d,q)",
@@ -13998,8 +15273,10 @@ _REGISTRY: dict[str, ModelSpec] = {
             "trend": "Trend term (e.g. c, t, ct) or none",
             "enforce_stationarity": "Enforce stationarity (true/false)",
             "enforce_invertibility": "Enforce invertibility (true/false)",
+            "x_cols": "Optional future covariate columns for forecast_model_long_df / forecast csv",
         },
         requires=("stats",),
+        capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
     "autoreg": ModelSpec(
         key="autoreg",
@@ -14030,6 +15307,17 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={"level": "Level specification string (default: 'local linear trend')"},
         requires=("stats",),
     ),
+    "uc-seasonal": ModelSpec(
+        key="uc-seasonal",
+        description="UnobservedComponents local level + seasonal component via statsmodels. Optional dependency.",
+        factory=_factory_unobserved_components,
+        default_params={"level": "local level", "seasonal": 12},
+        param_help={
+            "level": "Level specification string (default: 'local level')",
+            "seasonal": "Seasonal cycle length for the structural seasonal component",
+        },
+        requires=("stats",),
+    ),
     "stl-arima": ModelSpec(
         key="stl-arima",
         description="STL + ARIMA remainder forecasting via statsmodels. Optional dependency.",
@@ -14038,6 +15326,102 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={
             "period": "Seasonal period for STL",
             "order": "ARIMA order for remainder model (p,d,q)",
+            "seasonal": "STL seasonal smoother length (odd integer >= 3; default 7)",
+            "robust": "Robust STL (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "stl-ets": ModelSpec(
+        key="stl-ets",
+        description="STL + ETS remainder forecasting via statsmodels. Optional dependency.",
+        factory=_factory_stl_ets,
+        default_params={"period": 12, "trend": "add", "damped_trend": False, "robust": False},
+        param_help={
+            "period": "Seasonal period for STL",
+            "trend": "Remainder ETS trend: add, mul, or none",
+            "damped_trend": "Use damped trend in the ETS remainder model (true/false)",
+            "robust": "Robust STL (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "stl-autoreg": ModelSpec(
+        key="stl-autoreg",
+        description="STL + AutoReg remainder forecasting via statsmodels. Optional dependency.",
+        factory=_factory_stl_autoreg,
+        default_params={"period": 12, "lags": 1, "trend": "c", "seasonal": 7, "robust": False},
+        param_help={
+            "period": "Seasonal period for STL",
+            "lags": "AutoReg lag order for the remainder model",
+            "trend": "Deterministic trend for the remainder AutoReg model: n, c, t, ct",
+            "seasonal": "STL seasonal smoother length (odd integer >= 3; default 7)",
+            "robust": "Robust STL (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "stl-uc": ModelSpec(
+        key="stl-uc",
+        description="STL decomposition + UnobservedComponents on the seasonally-adjusted series. Optional dependency.",
+        factory=_factory_stl_uc,
+        default_params={"period": 12, "level": "local level", "seasonal": 7, "robust": False},
+        param_help={
+            "period": "Seasonal period for STL",
+            "level": "Adjusted-series structural level model (e.g. local level, local linear trend, random walk)",
+            "seasonal": "STL seasonal smoother length (odd integer >= 3; default 7)",
+            "robust": "Robust STL (true/false)",
+        },
+        requires=("stats",),
+    ),
+    "stl-auto-arima": ModelSpec(
+        key="stl-auto-arima",
+        description="STL decomposition + AutoARIMA-style grid search on the seasonally-adjusted series. Optional dependency.",
+        factory=_factory_stl_auto_arima,
+        default_params={
+            "period": 12,
+            "seasonal": 7,
+            "robust": False,
+            "max_p": 3,
+            "max_d": 2,
+            "max_q": 3,
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "information_criterion": "aic",
+        },
+        param_help={
+            "period": "Seasonal period for STL",
+            "seasonal": "STL seasonal smoother length (odd integer >= 3; default 7)",
+            "robust": "Robust STL (true/false)",
+            "max_p": "Maximum AR order p for adjusted-series AutoARIMA search",
+            "max_d": "Maximum differencing order d for adjusted-series AutoARIMA search",
+            "max_q": "Maximum MA order q for adjusted-series AutoARIMA search",
+            "trend": "Trend term for the adjusted-series AutoARIMA model (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity in the adjusted-series AutoARIMA model (true/false)",
+            "enforce_invertibility": "Enforce invertibility in the adjusted-series AutoARIMA model (true/false)",
+            "information_criterion": "Model selection criterion for adjusted-series AutoARIMA search: aic or bic",
+        },
+        requires=("stats",),
+    ),
+    "stl-sarimax": ModelSpec(
+        key="stl-sarimax",
+        description="STL decomposition + SARIMAX on the seasonally-adjusted series. Optional dependency.",
+        factory=_factory_stl_sarimax,
+        default_params={
+            "period": 12,
+            "order": (1, 0, 0),
+            "seasonal_order": (0, 0, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "seasonal": 7,
+            "robust": False,
+        },
+        param_help={
+            "period": "Seasonal period for STL",
+            "order": "SARIMAX order for the adjusted series (p,d,q)",
+            "seasonal_order": "Seasonal SARIMAX order for the adjusted series (P,D,Q,s)",
+            "trend": "Trend term for the adjusted-series SARIMAX model (e.g. c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity in the adjusted-series SARIMAX model (true/false)",
+            "enforce_invertibility": "Enforce invertibility in the adjusted-series SARIMAX model (true/false)",
             "seasonal": "STL seasonal smoother length (odd integer >= 3; default 7)",
             "robust": "Robust STL (true/false)",
         },
@@ -14056,6 +15440,84 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("stats",),
     ),
+    "mstl-autoreg": ModelSpec(
+        key="mstl-autoreg",
+        description="MSTL (multi-seasonal STL) + AutoReg on seasonally-adjusted series. Optional dependency.",
+        factory=_factory_mstl_autoreg,
+        default_params={"periods": (12,), "lags": 1, "trend": "c", "iterate": 2, "lmbda": None},
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,24)",
+            "lags": "AutoReg lag order for the adjusted series",
+            "trend": "Deterministic trend for the adjusted-series AutoReg model: n, c, t, ct",
+            "iterate": "MSTL iterations (default: 2)",
+            "lmbda": "Box-Cox lambda for MSTL (float, 'auto', or none)",
+        },
+        requires=("stats",),
+    ),
+    "mstl-ets": ModelSpec(
+        key="mstl-ets",
+        description="MSTL (multi-seasonal STL) + ETS on seasonally-adjusted series. Optional dependency.",
+        factory=_factory_mstl_ets,
+        default_params={
+            "periods": (12,),
+            "trend": "add",
+            "damped_trend": False,
+            "iterate": 2,
+            "lmbda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "trend": "Adjusted-series ETS trend: add, mul, or none",
+            "damped_trend": "Use damped trend in the adjusted-series ETS model (true/false)",
+            "iterate": "MSTL iterations (default: 2)",
+            "lmbda": "Box-Cox lambda for MSTL (float, 'auto', or none)",
+        },
+        requires=("stats",),
+    ),
+    "mstl-uc": ModelSpec(
+        key="mstl-uc",
+        description="MSTL (multi-seasonal STL) + UnobservedComponents on seasonally-adjusted series. Optional dependency.",
+        factory=_factory_mstl_uc,
+        default_params={
+            "periods": (12,),
+            "level": "local level",
+            "iterate": 2,
+            "lmbda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "level": "Adjusted-series structural level model (e.g. local level, local linear trend, random walk)",
+            "iterate": "MSTL iterations (default: 2)",
+            "lmbda": "Box-Cox lambda for MSTL (float, 'auto', or none)",
+        },
+        requires=("stats",),
+    ),
+    "mstl-sarimax": ModelSpec(
+        key="mstl-sarimax",
+        description="MSTL (multi-seasonal STL) + SARIMAX on seasonally-adjusted series. Optional dependency.",
+        factory=_factory_mstl_sarimax,
+        default_params={
+            "periods": (12,),
+            "order": (1, 0, 0),
+            "seasonal_order": (0, 0, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "iterate": 2,
+            "lmbda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "order": "SARIMAX order for adjusted series (p,d,q)",
+            "seasonal_order": "Seasonal SARIMAX order for adjusted series (P,D,Q,s)",
+            "trend": "Trend term for the adjusted-series SARIMAX model (e.g. c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity in the adjusted-series SARIMAX model (true/false)",
+            "enforce_invertibility": "Enforce invertibility in the adjusted-series SARIMAX model (true/false)",
+            "iterate": "MSTL iterations (default: 2)",
+            "lmbda": "Box-Cox lambda for MSTL (float, 'auto', or none)",
+        },
+        requires=("stats",),
+    ),
     "mstl-auto-arima": ModelSpec(
         key="mstl-auto-arima",
         description="MSTL + AutoARIMA-style grid search on adjusted series. Optional dependency.",
@@ -14067,6 +15529,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_p": 3,
             "max_d": 2,
             "max_q": 3,
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
             "information_criterion": "aic",
         },
         param_help={
@@ -14076,6 +15541,9 @@ _REGISTRY: dict[str, ModelSpec] = {
             "max_p": "Max AR order p to consider",
             "max_d": "Max differencing order d to consider",
             "max_q": "Max MA order q to consider",
+            "trend": "Trend term for the adjusted-series ARIMA search (e.g. n, c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
+            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
             "information_criterion": "Model selection criterion: aic or bic",
         },
         requires=("stats",),
@@ -14096,6 +15564,130 @@ _REGISTRY: dict[str, ModelSpec] = {
             "orders": "Fourier order per period (int or comma-separated list)",
             "include_trend": "Include linear trend term (true/false)",
             "arima_order": "ARIMA order for residual errors (p,d,q)",
+            "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
+        },
+        requires=("stats",),
+    ),
+    "tbats-lite-autoreg": ModelSpec(
+        key="tbats-lite-autoreg",
+        description="TBATS-like: multi-season Fourier + AutoReg residuals (optional Box-Cox). Optional dependency.",
+        factory=_factory_tbats_lite_autoreg,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "include_trend": True,
+            "lags": 1,
+            "trend": "n",
+            "boxcox_lambda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "include_trend": "Include linear trend term (true/false)",
+            "lags": "AutoReg lag order for residual errors",
+            "trend": "Residual AutoReg deterministic trend: n, c, t, ct",
+            "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
+        },
+        requires=("stats",),
+    ),
+    "tbats-lite-ets": ModelSpec(
+        key="tbats-lite-ets",
+        description="TBATS-like: multi-season Fourier + ETS residuals (optional Box-Cox). Optional dependency.",
+        factory=_factory_tbats_lite_ets,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "include_trend": True,
+            "trend": None,
+            "damped_trend": False,
+            "boxcox_lambda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "include_trend": "Include linear trend term (true/false)",
+            "trend": "Residual ETS trend: add, mul, or none",
+            "damped_trend": "Use damped trend in the residual ETS model (true/false)",
+            "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
+        },
+        requires=("stats",),
+    ),
+    "tbats-lite-sarimax": ModelSpec(
+        key="tbats-lite-sarimax",
+        description="TBATS-like: multi-season Fourier + SARIMAX residuals (optional Box-Cox). Optional dependency.",
+        factory=_factory_tbats_lite_sarimax,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "include_trend": True,
+            "order": (1, 0, 0),
+            "seasonal_order": (0, 0, 0, 0),
+            "trend": None,
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "boxcox_lambda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "include_trend": "Include linear trend term (true/false)",
+            "order": "SARIMAX order for residual errors (p,d,q)",
+            "seasonal_order": "Seasonal SARIMAX order for residual errors (P,D,Q,s)",
+            "trend": "Residual SARIMAX trend term (e.g. c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for residual SARIMAX model (true/false)",
+            "enforce_invertibility": "Enforce invertibility for residual SARIMAX model (true/false)",
+            "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
+        },
+        requires=("stats",),
+    ),
+    "tbats-lite-auto-arima": ModelSpec(
+        key="tbats-lite-auto-arima",
+        description="TBATS-like: multi-season Fourier + AutoARIMA residual search (optional Box-Cox). Optional dependency.",
+        factory=_factory_tbats_lite_auto_arima,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "include_trend": True,
+            "max_p": 3,
+            "max_d": 2,
+            "max_q": 3,
+            "trend": "c",
+            "enforce_stationarity": True,
+            "enforce_invertibility": True,
+            "information_criterion": "aic",
+            "boxcox_lambda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "include_trend": "Include linear trend term (true/false)",
+            "max_p": "Max AR order p to consider for residual AutoARIMA",
+            "max_d": "Max differencing order d to consider for residual AutoARIMA",
+            "max_q": "Max MA order q to consider for residual AutoARIMA",
+            "trend": "Residual AutoARIMA trend term (e.g. c, t, ct) or none",
+            "enforce_stationarity": "Enforce stationarity for residual AutoARIMA candidates (true/false)",
+            "enforce_invertibility": "Enforce invertibility for residual AutoARIMA candidates (true/false)",
+            "information_criterion": "Model selection criterion: aic or bic",
+            "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
+        },
+        requires=("stats",),
+    ),
+    "tbats-lite-uc": ModelSpec(
+        key="tbats-lite-uc",
+        description="TBATS-like: multi-season Fourier + UnobservedComponents residuals (optional Box-Cox). Optional dependency.",
+        factory=_factory_tbats_lite_uc,
+        default_params={
+            "periods": (12,),
+            "orders": 2,
+            "include_trend": True,
+            "level": "local level",
+            "boxcox_lambda": None,
+        },
+        param_help={
+            "periods": "Comma-separated seasonal periods (e.g. 7,365)",
+            "orders": "Fourier order per period (int or comma-separated list)",
+            "include_trend": "Include linear trend term (true/false)",
+            "level": "Residual structural level model (e.g. local level, local linear trend, random walk)",
             "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
         },
         requires=("stats",),
@@ -15006,3 +16598,68 @@ def make_global_forecaster(key: str, **params: Any) -> GlobalForecasterFn:
     if not callable(out):
         raise TypeError(f"Global model factory must return a callable, got: {type(out).__name__}")
     return out
+
+
+def make_multivariate_forecaster(key: str, **params: Any) -> MultivariateForecasterFn:
+    """
+    Build a (train_matrix, horizon) -> forecast_matrix callable.
+
+    Multivariate models consume a 2D target matrix rather than a single series or long-format panel.
+    """
+    spec = get_model_spec(key)
+    if str(spec.interface).lower().strip() != "multivariate":
+        raise ValueError(
+            f"Model {key!r} uses interface={spec.interface!r} (not 'multivariate'). "
+            "Use `make_forecaster()` or `make_global_forecaster()` instead."
+        )
+    merged = dict(spec.default_params)
+    merged.update(params)
+    out = spec.factory(**merged)
+    if not callable(out):
+        raise TypeError(
+            f"Multivariate model factory must return a callable, got: {type(out).__name__}"
+        )
+    return out
+
+
+def make_forecaster_object(key: str, **params: Any) -> BaseForecaster:
+    """
+    Build a persistent object wrapper around a registered local forecaster.
+
+    The returned object supports `fit(y)` and `predict(horizon)` while preserving
+    the underlying registry-based forecasting logic.
+    """
+    spec = get_model_spec(key)
+    if str(spec.interface).lower().strip() != "local":
+        raise ValueError(
+            f"Model {key!r} uses interface={spec.interface!r} (not 'local'). "
+            "Use `make_global_forecaster_object()` instead."
+        )
+    merged = dict(spec.default_params)
+    merged.update(params)
+    return RegistryForecaster(
+        model_key=str(key),
+        model_params=merged,
+        factory=lambda: spec.factory(**dict(merged)),
+    )
+
+
+def make_global_forecaster_object(key: str, **params: Any) -> BaseGlobalForecaster:
+    """
+    Build a persistent object wrapper around a registered global forecaster.
+
+    The returned object supports `fit(long_df)` and `predict(cutoff, horizon)`.
+    """
+    spec = get_model_spec(key)
+    if str(spec.interface).lower().strip() != "global":
+        raise ValueError(
+            f"Model {key!r} uses interface={spec.interface!r} (not 'global'). "
+            "Use `make_forecaster_object()` instead."
+        )
+    merged = dict(spec.default_params)
+    merged.update(params)
+    return RegistryGlobalForecaster(
+        model_key=str(key),
+        model_params=merged,
+        factory=lambda: spec.factory(**dict(merged)),
+    )

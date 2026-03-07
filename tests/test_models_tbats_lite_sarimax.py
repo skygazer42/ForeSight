@@ -1,0 +1,41 @@
+import importlib.util
+
+import numpy as np
+import pytest
+
+from foresight.models.registry import make_forecaster
+
+
+@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+def test_tbats_lite_sarimax_tracks_multi_season_fourier_signal() -> None:
+    t = np.arange(120, dtype=float)
+    y = (
+        5.0
+        + 0.3 * t
+        + 1.5 * np.sin(2.0 * np.pi * t / 7.0)
+        + 0.75 * np.cos(2.0 * np.pi * t / 30.0)
+    )
+
+    f = make_forecaster(
+        "tbats-lite-sarimax",
+        periods=(7, 30),
+        orders=(2, 1),
+        include_trend=True,
+        order=(1, 0, 0),
+        seasonal_order=(0, 0, 0, 0),
+        trend=None,
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    )
+    yhat = f(y, 8)
+
+    tf = np.arange(120, 128, dtype=float)
+    expected = (
+        5.0
+        + 0.3 * tf
+        + 1.5 * np.sin(2.0 * np.pi * tf / 7.0)
+        + 0.75 * np.cos(2.0 * np.pi * tf / 30.0)
+    )
+
+    assert yhat.shape == (8,)
+    assert np.allclose(yhat, expected, atol=1e-6)

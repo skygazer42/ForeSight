@@ -1,511 +1,563 @@
+<div align="center">
+
 # ForeSight
 
-> A practical time-series forecasting playground + a lightweight benchmarking toolkit (`foresight`).
+**A lightweight, batteries-included time-series forecasting toolkit for Python.**
 
-![GitHub last commit](https://img.shields.io/github/last-commit/skygazer42/ForeSight)
-![GitHub stars](https://img.shields.io/github/stars/skygazer42/ForeSight)
-![License](https://img.shields.io/github/license/skygazer42/ForeSight)
+Unified model registry &bull; Walk-forward backtesting &bull; Probabilistic forecasting &bull; CLI + Python API
 
----
+[![PyPI](https://img.shields.io/pypi/v/foresight-ts?color=blue)](https://pypi.org/project/foresight-ts/)
+[![Python](https://img.shields.io/pypi/pyversions/foresight-ts)](https://pypi.org/project/foresight-ts/)
+[![License](https://img.shields.io/github/license/skygazer42/ForeSight)](https://github.com/skygazer42/ForeSight/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/skygazer42/ForeSight)](https://github.com/skygazer42/ForeSight)
+[![Last commit](https://img.shields.io/github/last-commit/skygazer42/ForeSight)](https://github.com/skygazer42/ForeSight/commits/main)
 
-## 📖 项目简介 | Overview
+[Installation](#-installation) &middot; [Quick Start](#-quick-start) &middot; [Docs](https://skygazer42.github.io/ForeSight/) &middot; [Models](#-model-zoo) &middot; [Evaluation](#-evaluation--backtesting) &middot; [Contributing](#-contributing)
 
-这个仓库有两条主线：
-
-1) **脚本/笔记集合（仓库根目录各子文件夹）**  
-   - `statistics time series/`：经典统计模型与示例脚本（ARMA/ARIMA/VAR…）  
-   - `ml time series/`：传统 ML 的时序建模脚本（Prophet/树模型特征工程…）  
-   - `transformer time series/`：深度学习/Transformer 系列实验区（Informer/FEDformer/Autoformer…）  
-   - `paper/`：阅读笔记与资料整理
-
-2) **`foresight` Python 包（`src/foresight/`）**  
-   一个“默认依赖很轻”的 forecasting toolkit：**模型注册表 + 统一评测/回测 + 指标 + CLI**。  
-   目标是让你用一套统一接口快速跑 baseline、做 walk-forward backtesting、输出可对比的 leaderboard。
-
-> 设计风格参考主流时间序列工具的常见模式：统一模型接口（sktime/Darts 风格）、长表/面板数据（StatsForecast/Prophet 常见列约定）、backtesting-first（walk-forward / cross-validation）。见文末 *Related Projects*。
+</div>
 
 ---
 
-## 🚀 快速开始 | Quick Start (CLI)
+ForeSight ships **250+ forecasting models** — from naive baselines and exponential smoothing to Transformers and Mamba — behind a **unified interface**, with built-in walk-forward backtesting, cross-validation, conformal intervals, hierarchical reconciliation, and a CLI-first workflow.
+
+Core models require only `numpy` and `pandas`; heavier backends (PyTorch, XGBoost, LightGBM, CatBoost, statsmodels, scikit-learn) are opt-in extras.
+
+### Why ForeSight?
+
+- **250+ models, one interface** — statistical, ML, and deep learning models all share the same `forecaster(train, horizon) → yhat` contract
+- **Backtesting-first** — walk-forward evaluation with expanding or rolling windows, cross-validation predictions table, per-step metrics
+- **Panel / global models** — first-class multi-series support via `unique_id / ds / y` long format (compatible with StatsForecast / Prophet)
+- **Probabilistic forecasting** — quantile regression, conformal intervals, bootstrap intervals, CRPS
+- **Multivariate & hierarchical** — VAR models, top-down / bottom-up reconciliation
+- **Tuning** — built-in grid search over model parameters with backtesting-based scoring
+- **Production-friendly** — `fit` / `predict` object API, model artifact save/load, forecast CLI for direct predictions
+- **Minimal by default** — core depends only on `numpy` + `pandas`; everything else is opt-in
+
+> Design inspired by [StatsForecast](https://github.com/Nixtla/statsforecast), [Darts](https://github.com/unit8co/darts), [sktime](https://www.sktime.org/), [NeuralForecast](https://github.com/Nixtla/neuralforecast), and [Prophet](https://facebook.github.io/prophet/). See [Related Projects](#-related-projects).
+
+---
+
+## 📦 Installation
 
 ```bash
-# 1) 环境
-python -m venv .venv
-source .venv/bin/activate
+pip install foresight-ts                # core (numpy + pandas only)
+```
 
-# 2) 安装
-# (a) 从 PyPI 安装（推荐给使用者）
-pip install foresight-ts
+Install optional backends as needed:
+
+```bash
+pip install "foresight-ts[ml]"          # scikit-learn models
+pip install "foresight-ts[xgb]"         # XGBoost models
+pip install "foresight-ts[lgbm]"        # LightGBM models
+pip install "foresight-ts[catboost]"    # CatBoost models
+pip install "foresight-ts[stats]"       # statsmodels (ARIMA, ETS, VAR, …)
+pip install "foresight-ts[torch]"       # PyTorch neural models
+pip install "foresight-ts[all]"         # everything above
+```
+
+<details>
+<summary><b>Install from source (for development)</b></summary>
+
+```bash
+git clone https://github.com/skygazer42/ForeSight.git
+cd ForeSight
+pip install -e ".[dev]"     # editable install + pytest, ruff
+```
+
+</details>
+
+---
+
+## 🚀 Quick Start
+
+### Python API
+
+```python
+from foresight import eval_model, make_forecaster, make_forecaster_object
+
+# 1. Walk-forward evaluation on a built-in dataset
+metrics = eval_model(
+    model="theta", dataset="catfish", y_col="Total",
+    horizon=3, step=3, min_train_size=12,
+)
+print(metrics)  # {'mae': ..., 'rmse': ..., 'mape': ..., 'smape': ...}
+
+# 2. Functional API — stateless forecaster
+f = make_forecaster("holt", alpha=0.3, beta=0.1)
+yhat = f([112, 118, 132, 129, 121, 135, 148, 148], horizon=3)
+
+# 3. Object API — fit / predict / save / load
+obj = make_forecaster_object("moving-average", window=3)
+obj.fit([1, 2, 3, 4, 5, 6])
+yhat = obj.predict(3)
+```
+
+<details>
+<summary><b>More Python API examples</b></summary>
+
+```python
+import pandas as pd
+from foresight import (
+    bootstrap_intervals, forecast_model, tune_model,
+    save_forecaster, load_forecaster,
+    make_global_forecaster, make_global_forecaster_object,
+    make_multivariate_forecaster, eval_multivariate_model_df,
+    to_long, prepare_long_df,
+    build_hierarchy_spec, reconcile_hierarchical_forecasts,
+    eval_hierarchical_forecast_df,
+)
+
+# Forecast with bootstrap prediction intervals
+future_df = forecast_model(
+    model="naive-last",
+    y=[1, 2, 3, 4, 5, 6],
+    ds=pd.date_range("2024-01-01", periods=6, freq="D"),
+    horizon=3,
+    interval_levels=(0.8, 0.9),
+    interval_min_train_size=4,
+)
+
+# Save / load trained model artifacts
+obj = make_forecaster_object("theta", alpha=0.3)
+obj.fit([1, 2, 3, 4, 5])
+save_forecaster(obj, "/tmp/theta.pkl")
+loaded = load_forecaster("/tmp/theta.pkl")
+yhat = loaded.predict(3)
+
+# Serialized artifacts carry a schema version plus package/model metadata.
+# If a future release rejects an older artifact as incompatible, re-save it
+# with the current foresight package.
+
+# Grid search tuning
+result = tune_model(
+    model="moving-average", dataset="catfish", y_col="Total",
+    horizon=1, step=1, min_train_size=24, max_windows=8,
+    search_space={"window": (1, 3, 6)},
+)
+
+# Global / panel model (trains across all series)
+# g = make_global_forecaster("ridge-step-lag-global", lags=48, alpha=1.0, x_cols=("promo",))
+# pred_df = g(long_df, cutoff=cutoff, horizon=14)  # returns: unique_id, ds, yhat
 #
-# (b) 从源码安装（推荐给开发者；可跑 tests/tools）
-pip install -e ".[dev]"
+# g_obj = make_global_forecaster_object("ridge-step-lag-global", lags=48, alpha=1.0)
+# g_obj.fit(long_df)
+# pred_df = g_obj.predict(cutoff=cutoff, horizon=14)
 
-# 3) 数据集
+# Multivariate model (VAR)
+mv = make_multivariate_forecaster("var", maxlags=1)
+yhat_mv = mv(wide_df[["sales", "traffic"]], horizon=2)  # shape: (2, 2)
+
+# Hierarchical reconciliation
+hierarchy = build_hierarchy_spec(raw_df, id_cols=("region", "store"), root="total")
+reconciled = reconcile_hierarchical_forecasts(
+    forecast_df=pred_df, hierarchy=hierarchy,
+    method="top_down", history_df=history_long,
+)
+
+hier_payload = eval_hierarchical_forecast_df(
+    forecast_df=pred_df,
+    hierarchy=hierarchy,
+    method="top_down",
+    history_df=history_long,
+)
+```
+
+</details>
+
+### CLI
+
+```bash
+# Browse built-in datasets and models
 foresight datasets list
 foresight datasets preview catfish --nrows 10
-# 注：`catfish` / `ice_cream_interest` 在 wheel 中自带；其余数据集可用 `--data-dir` / `FORESIGHT_DATA_DIR` 指向数据根目录。
-
-# 4) 模型注册表
 foresight models list
 foresight models info theta
 
-# 5) 评测（任意注册模型）
-foresight eval run --model naive-last --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12
-foresight eval run --model seasonal-naive --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --model-param season_length=12
+# Evaluate a single model
+foresight eval run --model theta --dataset catfish --y-col Total \
+    --horizon 3 --step 3 --min-train-size 12
 
-# 6) Leaderboard（多个模型）
-foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive,theta,holt
-foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --models naive-last,seasonal-naive --format md
+# Grid search tuning
+foresight tuning run --model moving-average --dataset catfish --y-col Total \
+    --horizon 1 --step 1 --min-train-size 24 --max-windows 8 \
+    --grid-param window=1,3,6
 
-# 6b) Leaderboard Sweep（多数据集×多模型 + 并行 + 断点续跑 + 汇总）
-foresight leaderboard sweep --datasets catfish,ice_cream_interest --horizon 3 --step 3 --min-train-size 12 --max-windows 2 --models naive-last,mean --jobs 2 --backend process --progress --chunk-size 0 --output /tmp/sweep.json --summary-output /tmp/summary.md --summary-format md --failures-output /tmp/failures.txt
+# Compare multiple models on a leaderboard
+foresight leaderboard models --dataset catfish --y-col Total \
+    --horizon 3 --step 3 --min-train-size 12 \
+    --models naive-last,seasonal-naive,theta,holt
 
-# 6c) 汇总对比（跨数据集聚合：rank/rel/score）
+# Multi-dataset sweep (parallel + resumable)
+foresight leaderboard sweep \
+    --datasets catfish,ice_cream_interest \
+    --models naive-last,theta --horizon 3 --step 3 \
+    --min-train-size 12 --jobs 4 --progress
+
+# Cross-validation predictions table
+foresight cv run --model theta --dataset catfish --y-col Total \
+    --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30
+
+# Conformal prediction intervals
+foresight eval run --model theta --dataset catfish --y-col Total \
+    --horizon 3 --step 3 --min-train-size 12 --conformal-levels 80,90
+
+# Reproducible packaged benchmark smoke run
+python benchmarks/run_benchmarks.py --smoke
+```
+
+<details>
+<summary><b>More CLI examples (forecast, artifacts, covariates)</b></summary>
+
+```bash
+# Direct forecast from any CSV
+foresight forecast csv --model naive-last --path ./my.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3
+
+# Forecast with bootstrap prediction intervals
+foresight forecast csv --model naive-last --path ./my.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 \
+    --interval-levels 80,90 --interval-min-train-size 12
+
+# Save and reuse model artifacts
+foresight forecast csv --model naive-last --path ./my.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 \
+    --save-artifact /tmp/naive-last.pkl
+foresight forecast artifact --artifact /tmp/naive-last.pkl --horizon 3 --format json
+
+# Artifact loads validate schema compatibility and fail early with a clear
+# error if the saved payload comes from an unsupported artifact format.
+
+# SARIMAX with future covariates
+foresight forecast csv --model sarimax --path ./my_exog.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 \
+    --model-param order=0,0,0 --model-param seasonal_order=0,0,0,0 \
+    --model-param trend=c --model-param x_cols=promo
+
+# Seasonal auto-ARIMA
+foresight forecast csv --model auto-arima --path ./monthly.csv \
+    --time-col ds --y-col y --parse-dates --horizon 6 \
+    --model-param max_p=2 --model-param max_d=1 --model-param max_q=2 \
+    --model-param max_P=1 --model-param max_D=1 --model-param max_Q=1 \
+    --model-param seasonal_period=12
+
+# Evaluate any CSV (no dataset registry needed)
+foresight eval csv --model naive-last --path ./my.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 --step 1 --min-train-size 12
+
+# Leaderboard: summarize across datasets
 foresight leaderboard summarize --input /tmp/sweep.json --format md --min-datasets 2
-
-# 7) Cross-validation 预测明细表（用于分析/画图/区间校准）
-foresight cv run --model theta --dataset catfish --y-col Total --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30 --format csv
-
-# 8) Conformal intervals（基于回测残差的对称区间；快速 baseline）
-foresight eval run --model theta --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --conformal-levels 80,90
-
-# 9) 直接评测任意 CSV（无需注册到 datasets registry）
-foresight eval csv --model naive-last --path ./my.csv --time-col ds --y-col y --parse-dates --horizon 3 --step 1 --min-train-size 12
 ```
 
----
+</details>
 
-## 🧪 快速开始 | Quick Start (Python API)
+### Reproducible benchmark smoke run
 
-```python
-from foresight.eval_forecast import eval_model
-from foresight.intervals import bootstrap_intervals
-from foresight.models.registry import make_forecaster, make_global_forecaster
-
-metrics = eval_model(
-    model="theta",
-    dataset="catfish",
-    y_col="Total",
-    horizon=3,
-    step=3,
-    min_train_size=12,
-    model_params={"alpha": 0.2},
-)
-
-f = make_forecaster("moving-average", window=3)
-intervals = bootstrap_intervals([1, 2, 3, 4, 5, 6], horizon=3, forecaster=f, min_train_size=4)
-
-# Global / panel model (requires torch or ml extras; trains across all series in a long-format DataFrame)
-# g = make_global_forecaster("ridge-step-lag-global", lags=48, alpha=1.0, x_cols=("promo",))
-# cutoff = sorted(long_df["ds"].unique())[-(14 + 1)]  # leave 14 steps for the horizon
-# pred_df = g(long_df, cutoff=cutoff, horizon=14)  # returns: unique_id, ds, yhat
-```
-
-更多可运行示例见：
-- `examples/quickstart_eval.py`
-- `examples/leaderboard.py`
-- `examples/cv_and_conformal.py`
-- `examples/intermittent_demand.py`
-- `examples/torch_global_models.py`
-- `examples/rnn_paper_zoo.py`
-
----
-
-## 🗂️ 目录结构 | Repository Structure
-
-| Path | What | Notes |
-| --- | --- | --- |
-| `src/foresight/` | Python package | CLI + model registry + eval/backtesting |
-| `examples/` | Runnable scripts | No notebooks; quick smoke demos |
-| `data/` | Local data files | Some datasets are bundled as CSV |
-| `statistics time series/` | Classic stats scripts | Educational / experiments |
-| `ml time series/` | ML scripts | Feature engineering & models |
-| `transformer time series/` | Transformer experiments | Larger dependencies; separate area |
-| `paper/` | Notes | Papers & summaries |
-
----
-
-## 🧠 Model Zoo (`foresight.models`)
-
-`foresight` 内置的是“轻量、可跑、可回测”的模型集合（多数为纯 numpy 实现；少数为可选依赖封装）。
-
-### Core (no optional deps)
-
-- `naive-last`：最后值重复
-- `seasonal-naive`：季节性重复（`season_length`）
-- `mean` / `median`
-- `drift`：线性漂移外推
-- `moving-average`：滑动均值（`window`）
-- `seasonal-mean`：季节均值（`season_length`）
-- `ses`：Simple Exponential Smoothing（`alpha`）
-- `ses-auto`：SES 参数自动调参（`grid_size`）
-- `holt`：Holt 线性趋势（`alpha`, `beta`）
-- `holt-auto`：Holt 参数自动调参（`grid_size`）
-- `holt-damped`：Holt damped trend（`alpha`, `beta`, `phi`）
-- `holt-winters-add`：Holt-Winters 加性季节（`season_length`, `alpha`, `beta`, `gamma`）
-- `holt-winters-add-auto`：HW Add 参数自动调参（`season_length`, `grid_size`）
-- `theta`：Theta-style baseline（`alpha`）
-- `theta-auto`：Theta 参数自动调参（`grid_size`）
-- `ar-ols`：AR(p) by OLS（`p`）
-- `ar-ols-lags`：自定义 lag 集的 AR-OLS（`lags=1,2,12`）
-- `sar-ols`：季节性 AR-OLS（`p`, `P`, `season_length`）
-- `ar-ols-auto`：AIC 自动选择 AR(p)（`max_p`）
-- `lr-lag`：lag 特征 + 线性回归（`lags`）
-- `lr-lag-direct`：lag 特征 + 线性回归（direct multi-horizon, `lags`）
-- `fourier`：Fourier 回归季节项 + 趋势（`period`, `order`, `include_trend`）
-- `fourier-multi`：多季节 Fourier 回归（`periods=7,365`, `orders=2`）
-- `poly-trend`：多项式趋势回归（`degree`）
-- `fft`：FFT 频域外推 baseline（`top_k`, `include_trend`）
-- `analog-knn`：Analog kNN（非参数，lag window 最近邻）（`lags`, `k`, `normalize`, `weights`）
-- `kalman-level`：Kalman local-level（`process_variance`, `obs_variance`）
-- `kalman-trend`：Kalman local linear trend（`level_variance`, `trend_variance`, `obs_variance`）
-- `croston`：Croston classic 间歇需求（`alpha`）
-- `croston-sba`：Croston SBA bias correction（`alpha`）
-- `croston-sbj`：Croston SBJ bias correction（`alpha`）
-- `croston-opt`：Croston alpha 自动调参（`grid_size`）
-- `tsb`：TSB 间歇需求（`alpha`, `beta`）
-- `les`：LES（Linear-Exponential Smoothing，支持“无需求时线性衰减”）（`alpha`, `beta`）
-- `adida`：ADIDA 聚合/反聚合（`agg_period`, `base`, `alpha`）
-- `pipeline`：meta 模型：先做变换再跑 base 模型（`base`, `transforms`, 其余参数透传）
-- `ensemble-mean`：meta 模型：多个成员模型取平均（`members=naive-last,theta,...`）
-- `ensemble-median`：meta 模型：多个成员模型取中位数（`members=...`）
-
-### Optional extras
-
-> 注：仓库内的 RNN 系列 Torch 模型均采用 **手动 unroll** 实现（不依赖 PyTorch 内置的循环模块），便于对照论文结构做消融与对比。
-> Tip：可以用 `foresight models list --prefix torch-rnnpaper` / `foresight models list --prefix torch-rnnzoo` 快速筛选。
-> Paper Zoo 结构索引见：`docs/rnn_paper_zoo.md`；RNN Zoo 结构索引见：`docs/rnn_zoo.md`。
-
-- 安装 extras（PyPI）：`pip install "foresight-ts[torch]"` / `pip install "foresight-ts[ml]"` / `pip install "foresight-ts[xgb]"` / `pip install "foresight-ts[lgbm]"` / `pip install "foresight-ts[catboost]"` / `pip install "foresight-ts[all]"`
-- 安装 extras（源码 editable）：`pip install -e ".[torch]"` / `pip install -e ".[ml]"` / `pip install -e ".[xgb]"` / `pip install -e ".[lgbm]"` / `pip install -e ".[catboost]"` / `pip install -e ".[all]"`
-
-- `ridge-lag`（requires `.[ml]`）：lag 特征 + Ridge 回归（`lags`, `alpha`）
-- `ridge-lag-direct`（requires `.[ml]`）：lag 特征 + Ridge（direct multi-horizon, `lags`, `alpha`）
-- `rf-lag`（requires `.[ml]`）：lag 特征 + RandomForest（direct multi-horizon, `lags`, `n_estimators`…）
-- `decision-tree-lag`（requires `.[ml]`）：lag 特征 + DecisionTreeRegressor（direct multi-horizon, `lags`, `max_depth`…）
-- `extra-trees-lag`（requires `.[ml]`）：lag 特征 + ExtraTreesRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `adaboost-lag`（requires `.[ml]`）：lag 特征 + AdaBoostRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `bagging-lag`（requires `.[ml]`）：lag 特征 + BaggingRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `lasso-lag`（requires `.[ml]`）：lag 特征 + Lasso（direct multi-horizon, `lags`, `alpha`…）
-- `elasticnet-lag`（requires `.[ml]`）：lag 特征 + ElasticNet（direct multi-horizon, `lags`, `alpha`, `l1_ratio`…）
-- `knn-lag`（requires `.[ml]`）：lag 特征 + KNN（direct multi-horizon, `lags`, `n_neighbors`…）
-- `gbrt-lag`（requires `.[ml]`）：lag 特征 + GradientBoosting（direct multi-horizon, `lags`, `n_estimators`…）
-- `hgb-lag`（requires `.[ml]`）：lag 特征 + HistGradientBoostingRegressor（direct multi-horizon, `lags`, `max_iter`…）
-- `ridge-step-lag-global`（requires `.[ml]`）：全局/面板 Ridge 回归（单模型 step-lag；共享所有序列训练样本，支持 `x_cols` / `add_time_features` / lag-derived features）
-- `decision-tree-step-lag-global`（requires `.[ml]`）：全局/面板 DecisionTreeRegressor（单模型 step-lag；支持 `max_depth`, `step_scale` 和 lag-derived features）
-- `bagging-step-lag-global`（requires `.[ml]`）：全局/面板 BaggingRegressor（单模型 step-lag；支持 `n_estimators`, `max_samples` 和全局 covariates）
-- `gbrt-step-lag-global`（requires `.[ml]`）：全局/面板 GradientBoostingRegressor（单模型 step-lag；支持 `n_estimators`, `learning_rate`, `max_depth`）
-- `lasso-step-lag-global`（requires `.[ml]`）：全局/面板 Lasso 回归（单模型 step-lag；支持 `alpha`, `max_iter` 和 lag-derived features）
-- `elasticnet-step-lag-global`（requires `.[ml]`）：全局/面板 ElasticNet 回归（单模型 step-lag；支持 `alpha`, `l1_ratio`, `max_iter`）
-- `knn-step-lag-global`（requires `.[ml]`）：全局/面板 KNeighborsRegressor（单模型 step-lag；支持 `n_neighbors`, `weights` 和全局 covariates）
-- `kernel-ridge-step-lag-global`（requires `.[ml]`）：全局/面板 KernelRidge（单模型 step-lag；支持 `alpha`, `kernel`, `gamma`）
-- `svr-step-lag-global`（requires `.[ml]`）：全局/面板 SVR（单模型 step-lag；支持 `C`, `gamma`, `epsilon` 和 lag-derived features）
-- `linear-svr-step-lag-global`（requires `.[ml]`）：全局/面板 LinearSVR（单模型 step-lag；支持 `C`, `epsilon`, `max_iter`）
-- `huber-step-lag-global`（requires `.[ml]`）：全局/面板 HuberRegressor（单模型 step-lag；支持 `epsilon`, `alpha`, `max_iter`）
-- `quantile-step-lag-global`（requires `.[ml]`）：全局/面板 QuantileRegressor（单模型 step-lag；支持 `quantile`, `alpha`）
-- `sgd-step-lag-global`（requires `.[ml]`）：全局/面板 SGDRegressor（单模型 step-lag；支持 `penalty`, `alpha`, `max_iter`）
-- `adaboost-step-lag-global`（requires `.[ml]`）：全局/面板 AdaBoostRegressor（单模型 step-lag；支持 `n_estimators`, `learning_rate`）
-- `mlp-step-lag-global`（requires `.[ml]`）：全局/面板 MLPRegressor（单模型 step-lag；支持 `hidden_layer_sizes`, `max_iter`, `learning_rate_init`）
-- `rf-step-lag-global`（requires `.[ml]`）：全局/面板 RandomForestRegressor（单模型 step-lag；支持 `n_estimators`, `max_depth`, `step_scale` 等）
-- `extra-trees-step-lag-global`（requires `.[ml]`）：全局/面板 ExtraTreesRegressor（单模型 step-lag；支持 `n_estimators`, `max_depth`, `step_scale` 等）
-- `xgb-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost step-lag（单模型；支持 `quantiles=0.1,0.5,0.9` 输出 `yhat_pXX` 分位数列）
-- `xgb-gamma-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Gamma step-lag（单模型；适合 `y>0` 的正值目标）
-- `xgb-logistic-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost logistic step-lag（单模型；适合 `y∈[0,1]` 的比例型目标）
-- `xgb-msle-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost squared-log-error step-lag（单模型；适合 `y>=0` 的目标）
-- `xgb-mae-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost MAE step-lag（单模型；使用 `reg:absoluteerror` 目标）
-- `xgb-huber-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost pseudo-Huber step-lag（单模型；支持 `huber_slope`）
-- `xgb-poisson-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Poisson step-lag（单模型；适合 `y>=0` 的计数型目标）
-- `xgb-tweedie-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost Tweedie step-lag（单模型；支持 `tweedie_variance_power`）
-- `xgb-dart-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost DART step-lag（单模型；支持 `n_estimators`, `learning_rate`, `max_depth` 和 lag-derived features）
-- `xgb-linear-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost `gblinear` step-lag（单模型；支持 `reg_alpha`, `reg_lambda` 和全局 covariates）
-- `xgbrf-step-lag-global`（requires `.[xgb]`）：全局/面板 XGBoost random forest / `XGBRFRegressor` step-lag（单模型；支持 `n_estimators`, `max_depth`, `subsample`）
-- `svr-lag`（requires `.[ml]`）：lag 特征 + SVR(RBF)（direct multi-horizon, `lags`, `C`, `gamma`…）
-- `linear-svr-lag`（requires `.[ml]`）：lag 特征 + LinearSVR（direct multi-horizon, `lags`, `C`, `max_iter`…）
-- `kernel-ridge-lag`（requires `.[ml]`）：lag 特征 + KernelRidge（direct multi-horizon, `lags`, `kernel`, `gamma`…）
-- `mlp-lag`（requires `.[ml]`）：lag 特征 + MLPRegressor（direct multi-horizon, `lags`, `hidden_layer_sizes`…）
-- `huber-lag`（requires `.[ml]`）：lag 特征 + HuberRegressor（direct multi-horizon, `lags`, `epsilon`…）
-- `quantile-lag`（requires `.[ml]`）：lag 特征 + QuantileRegressor（direct multi-horizon, `lags`, `quantile`…）
-- `sgd-lag`（requires `.[ml]`）：lag 特征 + SGDRegressor（direct multi-horizon, `lags`, `penalty`…）
-- `lgbm-custom-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（direct multi-horizon；任意 LGBMRegressor 参数可用 `--model-param` 透传）
-- `lgbm-custom-lag-recursive`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（recursive one-step；任意 LGBMRegressor 参数可用 `--model-param` 透传）
-- `lgbm-custom-step-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`；参数透传）
-- `lgbm-custom-dirrec-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（DirRec：每步模型逐步加入前序步作为额外特征；参数透传）
-- `lgbm-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `lgbm-lag-recursive`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（recursive one-step, `lags`, `n_estimators`…）
-- `lgbm-step-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`）
-- `lgbm-dirrec-lag`（requires `.[lgbm]`）：lag 特征 + LGBMRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
-- `catboost-custom-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（direct multi-horizon；任意参数可用 `--model-param` 透传）
-- `catboost-custom-lag-recursive`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（recursive one-step；任意参数可用 `--model-param` 透传）
-- `catboost-custom-step-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`；参数透传）
-- `catboost-custom-dirrec-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（DirRec：每步模型逐步加入前序步作为额外特征；参数透传）
-- `catboost-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（direct multi-horizon, `lags`, `iterations`…）
-- `catboost-lag-recursive`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（recursive one-step, `lags`, `iterations`…）
-- `catboost-step-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（单模型 direct multi-horizon；额外 step index 特征，支持 `step_scale`）
-- `catboost-dirrec-lag`（requires `.[catboost]`）：lag 特征 + CatBoostRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
-- `xgb-custom-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon；任意 XGBRegressor 参数可用 `--model-param` 透传）
-- `xgb-custom-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step；任意 XGBRegressor 参数可用 `--model-param` 透传）
-- `xgb-custom-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；可自定义 objective/booster 等；额外 `step_scale`）
-- `xgb-custom-dirrec-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（DirRec；可自定义 objective/booster 等）
-- `xgb-custom-mimo-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（MIMO multi-output；可自定义 objective/booster 等；支持 `multi_strategy`）
-- `xgb-step-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（单模型 direct multi-horizon；额外加入 step index 特征，支持 `step_scale`）
-- `xgb-dirrec-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（DirRec：每步模型逐步加入前序步作为额外特征）
-- `xgb-mimo-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（MIMO multi-output：单模型直接输出整个 horizon，`multi_strategy` 可配）
-- `xgb-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `xgb-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor（recursive one-step, `lags`, `n_estimators`…）
-- `xgb-msle-lag`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（direct multi-horizon, `lags`…；y>=0）
-- `xgb-msle-lag-recursive`（requires `.[xgb]`）：lag 特征 + squared-log-error objective（recursive one-step, `lags`…；y>=0）
-- `xgb-logistic-lag`（requires `.[xgb]`）：lag 特征 + logistic objective（direct multi-horizon, `lags`…；y∈[0,1]）
-- `xgb-logistic-lag-recursive`（requires `.[xgb]`）：lag 特征 + logistic objective（recursive one-step, `lags`…；y∈[0,1]）
-- `xgb-dart-lag`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（direct multi-horizon, `lags`, `n_estimators`…）
-- `xgb-dart-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRegressor(DART)（recursive one-step, `lags`, `n_estimators`…）
-- `xgb-linear-lag`（requires `.[xgb]`）：lag 特征 + gblinear（direct multi-horizon, `lags`, `n_estimators`…）
-- `xgb-linear-lag-recursive`（requires `.[xgb]`）：lag 特征 + gblinear（recursive one-step, `lags`, `n_estimators`…）
-- `xgb-mae-lag`（requires `.[xgb]`）：lag 特征 + MAE objective（direct multi-horizon, `lags`, `n_estimators`…）
-- `xgb-mae-lag-recursive`（requires `.[xgb]`）：lag 特征 + MAE objective（recursive one-step, `lags`, `n_estimators`…）
-- `xgb-huber-lag`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（direct multi-horizon, `lags`, `huber_slope`…）
-- `xgb-huber-lag-recursive`（requires `.[xgb]`）：lag 特征 + pseudo-Huber objective（recursive one-step, `lags`, `huber_slope`…）
-- `xgb-quantile-lag`（requires `.[xgb]`）：lag 特征 + quantile objective（direct multi-horizon, `lags`, `quantile_alpha`…）
-- `xgb-quantile-lag-recursive`（requires `.[xgb]`）：lag 特征 + quantile objective（recursive one-step, `lags`, `quantile_alpha`…）
-- `xgb-poisson-lag`（requires `.[xgb]`）：lag 特征 + Poisson objective（direct multi-horizon, `lags`…；y>=0）
-- `xgb-poisson-lag-recursive`（requires `.[xgb]`）：lag 特征 + Poisson objective（recursive one-step, `lags`…；y>=0）
-- `xgb-gamma-lag`（requires `.[xgb]`）：lag 特征 + Gamma objective（direct multi-horizon, `lags`…；y>0）
-- `xgb-gamma-lag-recursive`（requires `.[xgb]`）：lag 特征 + Gamma objective（recursive one-step, `lags`…；y>0）
-- `xgb-tweedie-lag`（requires `.[xgb]`）：lag 特征 + Tweedie objective（direct multi-horizon, `lags`, `tweedie_variance_power`…；y>=0）
-- `xgb-tweedie-lag-recursive`（requires `.[xgb]`）：lag 特征 + Tweedie objective（recursive one-step, `lags`, `tweedie_variance_power`…；y>=0）
-- `xgbrf-lag`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（direct multi-horizon, `lags`, `n_estimators`…）
-- `xgbrf-lag-recursive`（requires `.[xgb]`）：lag 特征 + XGBRFRegressor（recursive one-step, `lags`, `n_estimators`…）
-- `torch-mlp-direct`（requires `.[torch]`）：Torch MLP（direct multi-horizon, `lags`, `hidden_sizes`, `epochs`…）
-- `torch-lstm-direct`（requires `.[torch]`）：Torch LSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
-- `torch-gru-direct`（requires `.[torch]`）：Torch GRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
-- `torch-rnnpaper-*-direct`（requires `.[torch]`）：RNN Paper Zoo（100 个具名论文结构，统一 direct forecasting 接口）
-- `torch-rnnzoo-*-direct`（requires `.[torch]`）：RNN Zoo（20 个 base × 5 个 wrapper = 100 个组合：direct/bidir/ln/attn/proj）
-- `torch-tcn-direct`（requires `.[torch]`）：Torch TCN（direct multi-horizon, `lags`, `channels`, `epochs`…）
-- `torch-nbeats-direct`（requires `.[torch]`）：Torch N-BEATS（direct multi-horizon, `lags`, `num_blocks`, `layer_width`, `epochs`…）
-- `torch-nlinear-direct`（requires `.[torch]`）：Torch NLinear（last-value centering + linear, `lags`, `epochs`…）
-- `torch-dlinear-direct`（requires `.[torch]`）：Torch DLinear（moving-average decomposition + linear, `lags`, `ma_window`, `epochs`…）
-- `torch-transformer-direct`（requires `.[torch]`）：Torch Transformer encoder（direct multi-horizon, `lags`, `d_model`, `nhead`, `epochs`…）
-- `torch-mamba-direct`（requires `.[torch]`）：Torch Mamba-style selective SSM（lite, `lags`, `d_model`, `num_layers`, `conv_kernel`, `epochs`…）
-- `torch-rwkv-direct`（requires `.[torch]`）：Torch RWKV-style time-mix + channel-mix（lite, `lags`, `d_model`, `num_layers`, `ffn_dim`, `epochs`…）
-- `torch-hyena-direct`（requires `.[torch]`）：Torch Hyena-style long convolution（lite, `lags`, `d_model`, `num_layers`, `kernel_size`, `epochs`…）
-- `torch-dilated-rnn-direct`（requires `.[torch]`）：Torch Dilated RNN（lite, `lags`, `cell`, `hidden_size`, `dilation_base`, `epochs`…）
-- `torch-kan-direct`（requires `.[torch]`）：Torch KAN-style spline MLP（lite, `lags`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
-- `torch-scinet-direct`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction, `lags`, `d_model`, `num_stages`, `epochs`…）
-- `torch-etsformer-direct`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual, `lags`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
-- `torch-esrnn-direct`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual, `lags`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
-- `torch-patchtst-direct`（requires `.[torch]`）：Torch PatchTST-style（patching + encoder, `lags`, `patch_len`, `stride`, `epochs`…）
-- `torch-crossformer-direct`（requires `.[torch]`）：Torch Crossformer-style（lite, multi-scale segmentation + encoder, `lags`, `segment_len`, `stride`, `num_scales`, `epochs`…）
-- `torch-pyraformer-direct`（requires `.[torch]`）：Torch Pyraformer-style（lite, pyramid pooling + encoder, `lags`, `segment_len`, `stride`, `num_levels`, `epochs`…）
-- `torch-tsmixer-direct`（requires `.[torch]`）：Torch TSMixer-style（token/channel mixing, `lags`, `d_model`, `num_blocks`, `epochs`…）
-- `torch-cnn-direct`（requires `.[torch]`）：Torch Conv1D stack（direct multi-horizon, `lags`, `channels`, `kernel_size`, `epochs`…）
-- `torch-resnet1d-direct`（requires `.[torch]`）：Torch ResNet-1D（direct multi-horizon, `lags`, `channels`, `num_blocks`, `epochs`…）
-- `torch-wavenet-direct`（requires `.[torch]`）：Torch WaveNet-style（gated dilated CNN, `lags`, `channels`, `num_layers`, `epochs`…）
-- `torch-bilstm-direct`（requires `.[torch]`）：Torch BiLSTM（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
-- `torch-bigru-direct`（requires `.[torch]`）：Torch BiGRU（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
-- `torch-attn-gru-direct`（requires `.[torch]`）：Torch GRU + attention pooling（direct multi-horizon, `lags`, `hidden_size`, `epochs`…）
-- `torch-fnet-direct`（requires `.[torch]`）：Torch FNet-style（Fourier mixing, `lags`, `d_model`, `epochs`…）
-- `torch-linear-attn-direct`（requires `.[torch]`）：Torch linear attention encoder（`lags`, `d_model`, `epochs`…）
-- `torch-inception-direct`（requires `.[torch]`）：Torch InceptionTime-style Conv1D（`lags`, `channels`, `epochs`…）
-- `torch-gmlp-direct`（requires `.[torch]`）：Torch gMLP-style（token gating + mixing, `lags`, `d_model`, `epochs`…）
-- `torch-nhits-direct`（requires `.[torch]`）：Torch N-HiTS-style（multi-rate residual MLP, `lags`, `pool_sizes`, `epochs`…）
-- `torch-tide-direct`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, `lags`, `d_model`, `epochs`…）
-- `torch-deepar-recursive`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN, recursive forecast, `lags`, `hidden_size`, `epochs`…）
-- `torch-qrnn-recursive`（requires `.[torch]`）：Torch Quantile RNN（pinball loss, recursive forecast, `lags`, `q`, `epochs`…）
-- `torch-xformer-*-direct`（requires `.[torch]`）：可配置 Transformer-family（full/local/logsparse/longformer/performer/linformer/nystrom/probsparse/autocorr/reformer + RoPE/sincos/Time2Vec + RMSNorm/SwiGLU/RevIN…）
-- `torch-seq2seq-*-direct`（requires `.[torch]`）：Seq2Seq RNN（LSTM/GRU，可选 Bahdanau attention，scheduled teacher forcing）
-- `torch-lstnet-direct`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway，lite）
-- `torch-tft-global`（requires `.[torch]`）：Torch TFT（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `epochs`…）
-- `torch-informer-global`（requires `.[torch]`）：Torch Informer（lite）全局/面板训练（`context_length`, `x_cols`, `add_time_features`, `d_model`, `num_layers`, `epochs`…）
-- `torch-nonstationary-transformer-global`（requires `.[torch]`）：Torch Non-stationary Transformer（lite，RevIN + de-stationary attention factors）全局/面板训练（`context_length`, `d_model`, `nhead`, `num_layers`, `epochs`…）
-- `torch-autoformer-global`（requires `.[torch]`）：Torch Autoformer（lite）多尺度分解 + 全局训练（`context_length`, `x_cols`, `ma_window`, `epochs`…）
-- `torch-fedformer-global`（requires `.[torch]`）：Torch FEDformer-style（lite，分解 + 频域混合/FFT）全局/面板训练（`context_length`, `d_model`, `num_layers`, `modes`, `ma_window`, `epochs`…）
-- `torch-patchtst-global`（requires `.[torch]`）：Torch PatchTST-style（lite）全局/面板训练（patch tokens + encoder，`context_length`, `patch_len`, `stride`, `epochs`…）
-- `torch-crossformer-global`（requires `.[torch]`）：Torch Crossformer-style（lite）全局/面板训练（multi-scale segmented tokens + encoder，`context_length`, `segment_len`, `stride`, `num_scales`, `epochs`…）
-- `torch-pyraformer-global`（requires `.[torch]`）：Torch Pyraformer-style（lite）全局/面板训练（pyramid pooling tokens + encoder，`context_length`, `segment_len`, `stride`, `num_levels`, `epochs`…）
-- `torch-tsmixer-global`（requires `.[torch]`）：Torch TSMixer-style（lite）全局/面板训练（token/channel mixing，`context_length`, `num_blocks`, `epochs`…）
-- `torch-itransformer-global`（requires `.[torch]`）：Torch iTransformer-style（lite）全局/面板训练（inverted tokens: variables-as-tokens，`context_length`, `d_model`, `epochs`…）
-- `torch-timesnet-global`（requires `.[torch]`）：Torch TimesNet-style（lite）全局/面板训练（FFT period detection + period Conv2D blocks，`context_length`, `top_k`, `epochs`…）
-- `torch-tcn-global`（requires `.[torch]`）：Torch TCN（causal dilated Conv1D residual blocks）全局/面板训练（`context_length`, `channels`, `epochs`…）
-- `torch-nbeats-global`（requires `.[torch]`）：Torch N-BEATS-style（generic residual MLP blocks）全局/面板训练（`context_length`, `num_blocks`, `layer_width`, `epochs`…）
-- `torch-nhits-global`（requires `.[torch]`）：Torch N-HiTS-style（multi-rate residual MLP, lite）全局/面板训练（`context_length`, `pool_sizes`, `num_blocks`, `epochs`…）
-- `torch-nlinear-global`（requires `.[torch]`）：Torch NLinear-style（last-value centering + linear head, lite）全局/面板训练（`context_length`, `epochs`…）
-- `torch-dlinear-global`（requires `.[torch]`）：Torch DLinear-style（moving-average decomposition + linear heads, lite）全局/面板训练（`context_length`, `ma_window`, `epochs`…）
-- `torch-deepar-global`（requires `.[torch]`）：Torch DeepAR-style（Gaussian RNN NLL, lite）全局/面板训练（`context_length`, `hidden_size`, `epochs`…）
-- `torch-tide-global`（requires `.[torch]`）：Torch TiDE-style（encoder/decoder MLP, lite）全局/面板训练（`context_length`, `d_model`, `epochs`…）
-- `torch-wavenet-global`（requires `.[torch]`）：Torch WaveNet-style（gated dilated CNN, lite）全局/面板训练（`context_length`, `channels`, `num_layers`, `epochs`…）
-- `torch-resnet1d-global`（requires `.[torch]`）：Torch ResNet-1D（Conv1D residual blocks, lite）全局/面板训练（`context_length`, `channels`, `num_blocks`, `epochs`…）
-- `torch-inception-global`（requires `.[torch]`）：Torch InceptionTime-style（multi-kernel Conv1D, lite）全局/面板训练（`context_length`, `channels`, `kernel_sizes`, `epochs`…）
-- `torch-lstnet-global`（requires `.[torch]`）：LSTNet-style（CNN + GRU + skip + highway, lite）全局/面板训练（`context_length`, `cnn_channels`, `rnn_hidden`, `epochs`…）
-- `torch-fnet-global`（requires `.[torch]`）：Torch FNet-style（FFT token mixing, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
-- `torch-gmlp-global`（requires `.[torch]`）：Torch gMLP-style（spatial gating, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
-- `torch-ssm-global`（requires `.[torch]`）：Torch diagonal state-space（SSM, lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `epochs`…）
-- `torch-mamba-global`（requires `.[torch]`）：Torch Mamba-style selective SSM（lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `conv_kernel`, `epochs`…）
-- `torch-rwkv-global`（requires `.[torch]`）：Torch RWKV-style time-mix + channel-mix（lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `ffn_dim`, `epochs`…）
-- `torch-hyena-global`（requires `.[torch]`）：Torch Hyena-style long convolution（lite）全局/面板训练（`context_length`, `d_model`, `num_layers`, `kernel_size`, `epochs`…）
-- `torch-dilated-rnn-global`（requires `.[torch]`）：Torch Dilated RNN（lite）全局/面板训练（`context_length`, `cell`, `d_model`, `dilation_base`, `epochs`…）
-- `torch-kan-global`（requires `.[torch]`）：Torch KAN-style spline MLP（lite）全局/面板训练（`context_length`, `d_model`, `grid_size`, `grid_range`, `epochs`…）
-- `torch-scinet-global`（requires `.[torch]`）：Torch SCINet-style（lite, even/odd split + conv interaction）全局/面板训练（`context_length`, `d_model`, `num_stages`, `epochs`…）
-- `torch-etsformer-global`（requires `.[torch]`）：Torch ETSformer-style（lite, Holt smoothing + Transformer residual）全局/面板训练（`context_length`, `d_model`, `alpha_init`, `beta_init`, `epochs`…）
-- `torch-esrnn-global`（requires `.[torch]`）：Torch ESRNN-style（lite, Holt smoothing + RNN residual）全局/面板训练（`context_length`, `cell`, `hidden_size`, `alpha_init`, `beta_init`, `epochs`…）
-- `torch-transformer-encdec-global`（requires `.[torch]`）：Torch encoder-decoder Transformer（lite）全局/面板训练（`context_length`, `d_model`, `nhead`, `epochs`…）
-- `torch-seq2seq-*-global`（requires `.[torch]`）：Torch Seq2Seq（encoder-decoder RNN，optional Bahdanau attention + teacher forcing，panel/global 训练）
-- `torch-xformer-*-global`（requires `.[torch]`）：全局/面板 Transformer-family（支持 covariates + time features；attn 支持 logsparse/longformer/probsparse/autocorr/reformer 等）
-- `torch-rnn-*-global`（requires `.[torch]`）：全局/面板 RNN（LSTM/GRU，token-wise horizon head）
-- `arima`（requires `.[stats]`）：ARIMA(p,d,q) via statsmodels（`order=1,0,0`）
-- `auto-arima`（requires `.[stats]`）：AutoARIMA-style 网格搜索（`max_p`, `max_d`, `max_q`, `information_criterion`）
-- `sarimax`（requires `.[stats]`）：SARIMAX / seasonal ARIMA（`order=...`, `seasonal_order=...`）
-- `autoreg`（requires `.[stats]`）：AutoReg（`lags`, `trend`, `seasonal`, `period`）
-- `uc-local-level`（requires `.[stats]`）：UnobservedComponents local level
-- `uc-local-linear-trend`（requires `.[stats]`）：UnobservedComponents local linear trend
-- `stl-arima`（requires `.[stats]`）：STL + ARIMA remainder forecasting（`period`, `order`, `seasonal`…）
-- `mstl-arima`（requires `.[stats]`）：MSTL（多季节 STL）+ ARIMA remainder forecasting（`periods=7,365`, `order=...`）
-- `mstl-auto-arima`（requires `.[stats]`）：MSTL + AutoARIMA-style 网格搜索（`periods=...`, `max_p/max_d/max_q`…）
-- `tbats-lite`（requires `.[stats]`）：TBATS-like（multi-season Fourier + ARIMA residuals，可选 Box-Cox）（`periods`, `orders`, `arima_order`, `boxcox_lambda`）
-- `ets`（requires `.[stats]`）：ETS / ExponentialSmoothing via statsmodels（`trend`, `seasonal`, `season_length`, `damped_trend`）
-
-查看完整列表/参数说明：
+ForeSight ships a tiny regression benchmark harness for packaged demo datasets.
+The checked-in config lives in `benchmarks/benchmark_config.json`, and the CI
+lane runs the smoke subset:
 
 ```bash
-foresight models list
-foresight models info holt-winters-add
+python benchmarks/run_benchmarks.py --smoke
+python benchmarks/run_benchmarks.py --config baseline --format md
 ```
 
-### Probabilistic Forecasting (Quantiles)
-
-部分 **global/panel Torch 模型**支持 `quantiles` 参数（分位数回归 / pinball loss），例如：
-
-```bash
-foresight eval run --model torch-itransformer-global --dataset catfish --y-col Total --horizon 7 --step 7 --min-train-size 60 \
-  --model-param quantiles=0.1,0.5,0.9
-```
-
-当 `quantiles` 非空时：
-- 预测表会多输出 `yhat_p10 / yhat_p50 / yhat_p90 ...` 等列（与 quantiles 对应）
-- `yhat` 默认取 `p50`（或最接近 0.5 的分位数）
-- `eval` 的输出会附加 `q_` 前缀的指标（pinball / coverage / interval_score 等）
+The smoke config intentionally stays small: packaged datasets only, dependency-free
+baseline models only, fixed backtest settings, and deterministic summary ordering.
 
 ---
 
-## 📐 Data Format (Panel-friendly)
+## 🧠 Model Zoo
 
-`foresight` 的通用评测会把原始数据转换为一个 canonical long format：
+ForeSight organizes **250+** registered models into families. Core models are dependency-free; optional models are activated by installing the corresponding extra.
 
-- `unique_id`：序列 ID（单序列时为空）
-- `ds`：时间列（datetime）
-- `y`：目标值（float）
+### Core Models (no extra dependencies)
 
-这个格式也支持 **额外的协变量列（covariates / exogenous features）**：只要保留在 long_df 里即可。  
-当你需要把原始 DataFrame 转成 long_df 并保留协变量时，可使用 `x_cols=...`：
+| Family | Models | Key Parameters |
+|--------|--------|---------------|
+| **Naive / Baseline** | `naive-last`, `seasonal-naive`, `mean`, `median`, `drift`, `moving-average`, `seasonal-mean` | `season_length`, `window` |
+| **Exponential Smoothing** | `ses`, `ses-auto`, `holt`, `holt-auto`, `holt-damped`, `holt-winters-add`, `holt-winters-add-auto` | `alpha`, `beta`, `gamma`, `season_length` |
+| **Theta** | `theta`, `theta-auto` | `alpha`, `grid_size` |
+| **AR / Regression** | `ar-ols`, `ar-ols-lags`, `sar-ols`, `ar-ols-auto`, `lr-lag`, `lr-lag-direct` | `p`, `lags`, `season_length` |
+| **Fourier / Spectral** | `fourier`, `fourier-multi`, `poly-trend`, `fft` | `period`, `order`, `top_k` |
+| **Kalman Filter** | `kalman-level`, `kalman-trend` | `process_variance`, `obs_variance` |
+| **Analog** | `analog-knn` | `lags`, `k`, `weights` |
+| **Intermittent Demand** | `croston`, `croston-sba`, `croston-sbj`, `croston-opt`, `tsb`, `les`, `adida` | `alpha`, `beta` |
+| **Meta / Ensemble** | `pipeline`, `ensemble-mean`, `ensemble-median` | `base`, `members`, `transforms` |
+
+### Optional Models
+
+<details>
+<summary><b>scikit-learn</b> — <code>pip install "foresight-ts[ml]"</code></summary>
+
+**Local (lag-feature + direct multi-horizon):**
+
+`ridge-lag`, `ridge-lag-direct`, `rf-lag`, `decision-tree-lag`, `extra-trees-lag`, `adaboost-lag`, `bagging-lag`, `lasso-lag`, `elasticnet-lag`, `knn-lag`, `gbrt-lag`, `hgb-lag`, `svr-lag`, `linear-svr-lag`, `kernel-ridge-lag`, `mlp-lag`, `huber-lag`, `quantile-lag`, `sgd-lag`
+
+**Global/panel (step-lag, trains across all series):**
+
+`ridge-step-lag-global`, `decision-tree-step-lag-global`, `bagging-step-lag-global`, `gbrt-step-lag-global`, `lasso-step-lag-global`, `elasticnet-step-lag-global`, `knn-step-lag-global`, `kernel-ridge-step-lag-global`, `svr-step-lag-global`, `linear-svr-step-lag-global`, `huber-step-lag-global`, `quantile-step-lag-global`, `sgd-step-lag-global`, `adaboost-step-lag-global`, `mlp-step-lag-global`, `rf-step-lag-global`, `extra-trees-step-lag-global`
+
+All global models support `x_cols`, `add_time_features`, `id_feature`, and derived lag features (`roll_windows`, `roll_stats`, `diff_lags`).
+
+</details>
+
+<details>
+<summary><b>XGBoost</b> — <code>pip install "foresight-ts[xgb]"</code></summary>
+
+**Local models:**
+
+| Strategy | Models |
+|----------|--------|
+| Direct | `xgb-lag`, `xgb-dart-lag`, `xgbrf-lag`, `xgb-linear-lag` |
+| Recursive | `xgb-lag-recursive`, `xgb-dart-lag-recursive`, `xgb-linear-lag-recursive` |
+| Step-index | `xgb-step-lag` |
+| DirRec | `xgb-dirrec-lag` |
+| MIMO | `xgb-mimo-lag` |
+| Custom objectives | `xgb-mae-lag(-recursive)`, `xgb-huber-lag(-recursive)`, `xgb-quantile-lag(-recursive)`, `xgb-poisson-lag(-recursive)`, `xgb-gamma-lag(-recursive)`, `xgb-tweedie-lag(-recursive)`, `xgb-msle-lag(-recursive)`, `xgb-logistic-lag(-recursive)` |
+| Customizable | `xgb-custom-lag`, `xgb-custom-lag-recursive`, `xgb-custom-step-lag`, `xgb-custom-dirrec-lag`, `xgb-custom-mimo-lag` |
+
+**Global/panel (step-lag, supports `quantiles` for probabilistic output):**
+
+`xgb-step-lag-global`, `xgb-mae-step-lag-global`, `xgb-huber-step-lag-global`, `xgb-poisson-step-lag-global`, `xgb-gamma-step-lag-global`, `xgb-tweedie-step-lag-global`, `xgb-msle-step-lag-global`, `xgb-logistic-step-lag-global`, `xgb-dart-step-lag-global`, `xgb-linear-step-lag-global`, `xgbrf-step-lag-global`
+
+</details>
+
+<details>
+<summary><b>LightGBM</b> — <code>pip install "foresight-ts[lgbm]"</code></summary>
+
+**Local:** `lgbm-lag`, `lgbm-lag-recursive`, `lgbm-step-lag`, `lgbm-dirrec-lag`, `lgbm-custom-lag`, `lgbm-custom-lag-recursive`, `lgbm-custom-step-lag`, `lgbm-custom-dirrec-lag`
+
+**Global/panel:** `lgbm-step-lag-global` (supports `quantiles`)
+
+</details>
+
+<details>
+<summary><b>CatBoost</b> — <code>pip install "foresight-ts[catboost]"</code></summary>
+
+**Local:** `catboost-lag`, `catboost-lag-recursive`, `catboost-step-lag`, `catboost-dirrec-lag`, `catboost-custom-lag`, `catboost-custom-lag-recursive`, `catboost-custom-step-lag`, `catboost-custom-dirrec-lag`
+
+**Global/panel:** `catboost-step-lag-global` (supports `quantiles`)
+
+</details>
+
+<details>
+<summary><b>statsmodels</b> — <code>pip install "foresight-ts[stats]"</code></summary>
+
+| Family | Models |
+|--------|--------|
+| ARIMA / Harmonic Regression | `arima`, `auto-arima`, `fourier-arima`, `fourier-auto-arima`, `fourier-autoreg`, `fourier-sarimax`, `sarimax`, `autoreg` |
+| Multivariate | `var` |
+| Unobserved Components | `uc-local-level`, `uc-local-linear-trend`, `uc-seasonal` |
+| Decomposition | `stl-arima`, `stl-autoreg`, `stl-ets`, `mstl-arima`, `mstl-autoreg`, `mstl-ets`, `mstl-auto-arima`, `tbats-lite`, `tbats-lite-autoreg`, `tbats-lite-auto-arima` |
+| ETS | `ets` |
+
+`sarimax` and `auto-arima` support exogenous covariates via `x_cols`. `fourier-arima`, `fourier-auto-arima`, `fourier-autoreg`, and `fourier-sarimax` add deterministic Fourier seasonality with residual modeling on top. `stl-arima`, `stl-autoreg`, and `stl-ets` apply STL decomposition before forecasting the remainder. `mstl-arima`, `mstl-autoreg`, `mstl-ets`, and `mstl-auto-arima` extend that pattern to multiple seasonal periods. `tbats-lite`, `tbats-lite-autoreg`, and `tbats-lite-auto-arima` fit multi-season Fourier structure with residual ARIMA-family errors.
+
+</details>
+
+<details>
+<summary><b>PyTorch — Local models</b> — <code>pip install "foresight-ts[torch]"</code></summary>
+
+| Category | Models |
+|----------|--------|
+| MLP / Linear | `torch-mlp-direct`, `torch-nlinear-direct`, `torch-dlinear-direct`, `torch-tide-direct`, `torch-kan-direct` |
+| RNN | `torch-lstm-direct`, `torch-gru-direct`, `torch-bilstm-direct`, `torch-bigru-direct`, `torch-attn-gru-direct`, `torch-dilated-rnn-direct` |
+| CNN | `torch-cnn-direct`, `torch-tcn-direct`, `torch-resnet1d-direct`, `torch-wavenet-direct`, `torch-inception-direct`, `torch-scinet-direct` |
+| Transformer | `torch-transformer-direct`, `torch-patchtst-direct`, `torch-crossformer-direct`, `torch-pyraformer-direct`, `torch-fnet-direct`, `torch-linear-attn-direct`, `torch-gmlp-direct`, `torch-tsmixer-direct` |
+| Residual Blocks | `torch-nbeats-direct`, `torch-nhits-direct` |
+| SSM / State-space | `torch-mamba-direct`, `torch-rwkv-direct`, `torch-hyena-direct` |
+| Hybrid | `torch-etsformer-direct`, `torch-esrnn-direct`, `torch-lstnet-direct` |
+| Probabilistic | `torch-deepar-recursive`, `torch-qrnn-recursive` |
+| Seq2Seq | `torch-seq2seq-lstm-direct`, `torch-seq2seq-gru-direct` (optional Bahdanau attention + teacher forcing) |
+| RNN Paper Zoo | 100 named paper architectures (`torch-rnnpaper-*-direct`) — manual unroll, no PyTorch built-in RNN modules |
+| RNN Zoo | 100 combos: 20 bases × 5 wrappers (`torch-rnnzoo-*-direct`: direct/bidir/ln/attn/proj) |
+| Configurable Transformer | `torch-xformer-*-direct` — attention: full/local/logsparse/longformer/performer/linformer/nystrom/probsparse/autocorr/reformer; position: RoPE/sincos/Time2Vec; extras: RMSNorm/SwiGLU/RevIN |
+
+> Tip: `foresight models list --prefix torch-rnnpaper` to filter. Docs: `docs/rnn_paper_zoo.md`, `docs/rnn_zoo.md`
+
+</details>
+
+<details>
+<summary><b>PyTorch — Global/panel models</b> — <code>pip install "foresight-ts[torch]"</code></summary>
+
+Train across all series in long-format DataFrame; supports covariates (`x_cols`), time features, and optional quantile regression.
+
+| Category | Models |
+|----------|--------|
+| Transformer | `torch-tft-global`, `torch-informer-global`, `torch-autoformer-global`, `torch-fedformer-global`, `torch-nonstationary-transformer-global`, `torch-patchtst-global`, `torch-crossformer-global`, `torch-pyraformer-global`, `torch-itransformer-global`, `torch-timesnet-global`, `torch-tsmixer-global`, `torch-transformer-encdec-global` |
+| MLP / Linear | `torch-nbeats-global`, `torch-nhits-global`, `torch-nlinear-global`, `torch-dlinear-global`, `torch-tide-global` |
+| RNN | `torch-deepar-global`, `torch-lstnet-global`, `torch-esrnn-global`, `torch-rnn-*-global` |
+| CNN | `torch-tcn-global`, `torch-wavenet-global`, `torch-resnet1d-global`, `torch-inception-global`, `torch-scinet-global` |
+| SSM | `torch-ssm-global`, `torch-mamba-global`, `torch-rwkv-global`, `torch-hyena-global` |
+| Other | `torch-fnet-global`, `torch-gmlp-global`, `torch-dilated-rnn-global`, `torch-kan-global`, `torch-etsformer-global`, `torch-seq2seq-*-global`, `torch-xformer-*-global` |
+
+</details>
+
+Discover all models and their parameters:
+
+```bash
+foresight models list                     # list all registered models
+foresight models list --prefix xgb        # filter by prefix
+foresight models info holt-winters-add    # show parameters & defaults
+```
+
+Model discovery output also surfaces machine-readable capability flags from the
+registry. These fields are intended to stay stable across CLI JSON and Python
+registry usage:
+
+- `supports_x_cols`: model accepts future covariates / exogenous regressors
+- `supports_quantiles`: model can emit quantile forecast columns directly
+- `supports_interval_forecast`: model supports forecast intervals in at least one supported path
+- `supports_interval_forecast_with_x_cols`: model supports intervals when `x_cols` are used
+- `supports_artifact_save`: model can be saved and reused through the artifact workflow
+- `requires_future_covariates`: model requires known future covariates instead of treating them as optional
+
+### Derived Lag Features
+
+All lag-based regression models support optional feature engineering — leakage-free by design:
+
+```bash
+--model-param roll_windows=3,7,14         # rolling statistics over lag window tail
+--model-param roll_stats=mean,std,min,max,median,slope
+--model-param diff_lags=1,7,14            # lag differences (last − lag(k+1))
+```
+
+### Multi-horizon Strategies
+
+| Strategy | How it works | Example suffix |
+|----------|-------------|---------------|
+| **Direct** | One model per horizon step | `*-lag` |
+| **Recursive** | One-step model, iteratively re-fed | `*-lag-recursive` |
+| **Step-index** | Single model with step as a feature | `*-step-lag` |
+| **DirRec** | Per-step model with previous-step features | `*-dirrec-lag` |
+| **MIMO** | Single model predicts entire horizon | `*-mimo-lag` |
+
+---
+
+## 📐 Data Format
+
+ForeSight uses a panel-friendly **long format** compatible with StatsForecast and Prophet:
+
+| Column | Description |
+|--------|-------------|
+| `unique_id` | Series identifier (optional for single series) |
+| `ds` | Timestamp (`datetime`) |
+| `y` | Target value (`float`) |
+| *extra columns* | Covariates / exogenous features |
 
 ```python
-from foresight.data import to_long
+from foresight.data import to_long, validate_long_df, prepare_long_df
 
+# Convert raw data to long format with covariates
 long_df = to_long(
-    raw_df,
-    time_col="ds",
-    y_col="y",
-    id_cols=("store", "dept"),
-    x_cols=("promo", "price"),
+    raw_df, time_col="ds", y_col="y",
+    id_cols=("store", "dept"), x_cols=("promo", "price"),
 )
+
+# Optional: fill missing timestamps, handle NaN
+prepared = prepare_long_df(
+    long_df, freq="D",
+    y_missing="interpolate", x_missing="ffill",
+)
+
+# Validate
+validate_long_df(prepared)
 ```
-
-你可以直接使用 `foresight.data.to_long()`：
-
-```python
-from foresight.data import to_long
-```
-
-也可以用 `foresight.data.validate_long_df()` 对 `unique_id/ds/y` 做基础校验（时间排序/重复时间戳等）：
-
-```python
-from foresight.data import validate_long_df
-```
-
-这个格式和很多主流库的约定兼容（例如 StatsForecast 使用 `unique_id/ds/y`，Prophet 使用 `ds/y`）。
 
 ---
 
 ## 📊 Evaluation & Backtesting
 
-- **Walk-forward backtesting**（`foresight.backtesting.walk_forward`）
-- **Rolling/expanding windows**：支持 `max_train_size`（rolling window）或默认 expanding window
-- **Cross-validation predictions table**：`foresight.cv.cross_validation_predictions` / `foresight cv run`
-- 支持 **单序列** 与 **面板数据（按 `unique_id` 分组）**
-- 输出包含 **整体指标** + **按预测步长（horizon step）的指标列表**
+| Capability | Description |
+|-----------|-------------|
+| **Walk-forward backtesting** | Expanding or rolling-window evaluation (`horizon`, `step`, `min_train_size`, `max_train_size`) |
+| **Cross-validation table** | Full predictions DataFrame: `unique_id, ds, cutoff, step, y, yhat, model` |
+| **Leaderboard** | Multi-model comparison on a single dataset |
+| **Sweep** | Multi-dataset × multi-model benchmark with parallel workers + resume |
+| **Tuning** | Grid search over model parameters, scored via backtesting |
+| **Conformal intervals** | Symmetric prediction intervals from backtesting residuals |
+| **Bootstrap intervals** | Non-parametric prediction intervals |
 
-当前 CLI 默认输出的点预测指标：
-- MAE / RMSE / MAPE / sMAPE
+**Point metrics:** MAE, RMSE, MAPE, sMAPE, WAPE, MASE, RMSSE, MSE
 
-同时支持一个“快速 baseline”的 **conformal 对称区间**（从回测残差估计半径）：
+**Probabilistic metrics:** Pinball loss, CRPS, interval coverage, interval width, sharpness, interval score, Winkler score, weighted interval score, MSIS
+
+When `--conformal-levels` is enabled, the evaluation payload additionally reports per-level coverage, calibration gap, mean width, sharpness, interval score, and Winkler score (both overall and per-step).
+
+### Probabilistic Forecasting
+
+Torch global models and gradient boosting global models support `quantiles` for pinball-loss-trained prediction intervals:
 
 ```bash
-foresight eval run --model theta --dataset catfish --y-col Total --horizon 3 --step 3 --min-train-size 12 --conformal-levels 80,90
+foresight eval run --model torch-itransformer-global \
+    --dataset catfish --y-col Total --horizon 7 --step 7 --min-train-size 60 \
+    --model-param quantiles=0.1,0.5,0.9
 ```
 
-更多可用指标（供自定义评测使用）见 `foresight.metrics`：
-- MSE, WAPE, MASE, RMSSE
-- Pinball loss / Interval coverage / Interval width / Interval score / MSIS
+This produces `yhat_p10`, `yhat_p50`, `yhat_p90` columns alongside `yhat` (which defaults to the median quantile).
 
 ---
 
 ## 📦 Optional Dependencies
 
-默认安装只需要 `numpy` / `pandas`。
+| Extra | Backend | Version | Example Models |
+|-------|---------|---------|---------------|
+| `[ml]` | scikit-learn | ≥ 1.0 | `ridge-lag`, `rf-lag`, `hgb-lag`, `mlp-lag`, `*-step-lag-global` |
+| `[xgb]` | XGBoost | ≥ 2.0 | `xgb-lag`, `xgb-step-lag`, `xgb-mimo-lag`, `xgb-step-lag-global` |
+| `[lgbm]` | LightGBM | ≥ 4.0 | `lgbm-lag`, `lgbm-step-lag-global` |
+| `[catboost]` | CatBoost | ≥ 1.2 | `catboost-lag`, `catboost-step-lag-global` |
+| `[stats]` | statsmodels | ≥ 0.14 | `arima`, `auto-arima`, `sarimax`, `ets`, `var`, `fourier-*`, `stl-*`, `mstl-*`, `tbats-lite-*`, `uc-*` |
+| `[torch]` | PyTorch | ≥ 2.0 | `torch-transformer-direct`, `torch-tft-global`, `torch-mamba-global` |
+| `[all]` | All of the above | — | — |
 
-```bash
-# ML extras (ridge-lag)
-pip install -e ".[ml]"
+---
 
-# torch extras (torch-mlp-direct / torch-transformer-direct / torch-patchtst-direct / ...)
-pip install -e ".[torch]"
+## 🗂️ Repository Structure
 
-# stats extras (arima / ets)
-pip install -e ".[stats]"
-
-# everything above
-pip install -e ".[all]"
 ```
+src/foresight/              Python package — CLI, model registry, eval, backtesting
+examples/                   Runnable scripts (no notebooks)
+data/                       Bundled CSV datasets (catfish, ice_cream_interest, …)
+statistics time series/     Classic statistics experiments (ARMA, ARIMA, VAR)
+ml time series/             ML feature-engineering scripts (Prophet, tree models)
+transformer time series/    DL / Transformer experiments (Informer, Autoformer, …)
+paper/                      Reading notes & paper summaries
+```
+
+**Example scripts:**
+`examples/quickstart_eval.py`, `examples/leaderboard.py`, `examples/cv_and_conformal.py`, `examples/intermittent_demand.py`, `examples/torch_global_models.py`, `examples/rnn_paper_zoo.py`
 
 ---
 
 ## 🤝 Contributing
 
 ```bash
-ruff check src tests tools
-ruff format src tests tools
-pytest -q
+ruff check src tests tools    # lint
+ruff format src tests tools   # format
+pytest -q                     # test
 ```
 
-开发说明见 `docs/DEVELOPMENT.md`。
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for detailed development guidelines.
 
 ---
 
-## 🔎 Related Projects / Inspiration
+## 🔗 Related Projects
 
-ForeSight 的 `foresight` toolkit 参考了这些主流项目的接口/数据形态与评测习惯（强烈推荐）：
+ForeSight draws design inspiration from these excellent projects:
 
-- **StatsForecast (Nixtla)**: fast statistical baselines + `unique_id/ds/y` + cross-validation  
-  https://github.com/Nixtla/statsforecast
-- **Prophet**: `ds/y` dataframe convention for forecasting  
-  https://facebook.github.io/prophet/
-- **sktime**: unified forecasting interface (`fit`/`predict`) and evaluation utilities  
-  https://www.sktime.org/
-- **Darts**: unified model API + backtesting helpers  
-  https://github.com/unit8co/darts
-- **GluonTS**: probabilistic forecasting datasets + benchmarking  
-  https://github.com/awslabs/gluonts
-- **NeuralForecast (Nixtla)**: modern neural forecasting models (TFT / Informer / Autoformer / …)  
-  https://github.com/Nixtla/neuralforecast
-- **PyTorch Forecasting**: deep learning forecasting pipelines  
-  https://pytorch-forecasting.readthedocs.io/
-- **Crossformer**: Cross-Dimension Transformer for multivariate forecasting (ICLR 2023)  
-  https://github.com/Thinklab-SJTU/Crossformer
-- **Pyraformer**: Pyramidal Attention Transformer for long-range forecasting (ICLR 2022)  
-  https://github.com/ant-research/Pyraformer
-- **Kats**: (Meta/Facebook) time series analysis & forecasting toolbox  
-  https://github.com/facebookresearch/Kats
+| Project | Highlights |
+|---------|-----------|
+| [StatsForecast](https://github.com/Nixtla/statsforecast) | Fast statistical baselines, `unique_id/ds/y` convention, cross-validation |
+| [NeuralForecast](https://github.com/Nixtla/neuralforecast) | Modern neural architectures (TFT, Informer, Autoformer, …) |
+| [Darts](https://github.com/unit8co/darts) | Unified model API + backtesting helpers |
+| [sktime](https://www.sktime.org/) | Unified `fit`/`predict` interface and evaluation utilities |
+| [GluonTS](https://github.com/awslabs/gluonts) | Probabilistic forecasting datasets + benchmarking |
+| [Prophet](https://facebook.github.io/prophet/) | `ds/y` DataFrame convention for forecasting |
+| [PyTorch Forecasting](https://pytorch-forecasting.readthedocs.io/) | Deep learning forecasting pipelines |
+| [Kats](https://github.com/facebookresearch/Kats) | Time series analysis & forecasting toolbox (Meta) |
 
 ---
 
 ## ⚖️ License
 
-GPL-3.0-only. See `LICENSE`.
+[GPL-3.0-only](LICENSE)

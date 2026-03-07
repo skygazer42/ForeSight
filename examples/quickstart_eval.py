@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 
-from foresight.eval_forecast import eval_model
+from foresight import eval_model, forecast_model
+from foresight.datasets.loaders import load_dataset
+from foresight.datasets.registry import get_dataset_spec
 
 
 def main() -> None:
     """
-    Quickstart example: evaluate a few builtin models on the bundled `catfish` dataset.
+    Quickstart example: evaluate a few builtin models, then produce a direct future forecast
+    from the end of the bundled `catfish` dataset.
 
     Run from repo root after installing:
         pip install -e ".[dev]"
@@ -37,6 +40,18 @@ def main() -> None:
         )
         print(f"\n=== {model_key} ===")
         print(json.dumps(res, ensure_ascii=False, sort_keys=True, indent=2))
+
+    spec = get_dataset_spec(dataset)
+    raw = load_dataset(dataset)
+    future_df = forecast_model(
+        model="theta",
+        y=raw[y_col].to_numpy(),
+        ds=raw[spec.time_col],
+        horizon=horizon,
+        model_params={"alpha": 0.2},
+    )
+    print("\n=== theta future forecast ===")
+    print(future_df.to_string(index=False))
 
 
 if __name__ == "__main__":

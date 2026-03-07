@@ -31,8 +31,14 @@ ML_MODELS = [
 
 GLOBAL_ML_MODELS = [
     "adaboost-step-lag-global",
+    "ard-step-lag-global",
+    "bayesian-ridge-step-lag-global",
+    "gamma-step-lag-global",
     "mlp-step-lag-global",
     "huber-step-lag-global",
+    "omp-step-lag-global",
+    "passive-aggressive-step-lag-global",
+    "poisson-step-lag-global",
     "quantile-step-lag-global",
     "sgd-step-lag-global",
     "kernel-ridge-step-lag-global",
@@ -47,6 +53,7 @@ GLOBAL_ML_MODELS = [
     "ridge-step-lag-global",
     "rf-step-lag-global",
     "extra-trees-step-lag-global",
+    "tweedie-step-lag-global",
 ]
 
 

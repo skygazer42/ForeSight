@@ -15,28 +15,45 @@ This is a lightweight checklist for publishing `foresight-ts` as a pip-installab
 python tools/fetch_rnn_paper_metadata.py --refresh --sleep 0.02
 
 # Required when code changes affect the generated tables/line numbers
+python tools/generate_model_capability_docs.py
 python tools/generate_rnn_docs.py
 ```
 
-## 3) Run release checks
+## 3) Run benchmark smoke + docs build locally
+
+```bash
+python benchmarks/run_benchmarks.py --smoke
+mkdocs build --strict
+```
+
+## 4) Run release checks
 
 ```bash
 python tools/release_check.py
 ```
 
-## 4) Build artifacts
+## 5) Build artifacts
 
 ```bash
 python -m build
 ```
 
-## 5) Validate artifacts
+## 6) Validate artifacts
 
 ```bash
 twine check dist/*
 ```
 
-## 6) Publish (manual)
+## 7) Check serialization compatibility notes
+
+If a release changes the saved forecaster artifact payload, make sure the
+artifact schema/version guardrails are updated intentionally:
+
+- update `src/foresight/serialization.py` schema constants if the on-disk payload changes
+- keep `tests/test_serialization.py` and `tests/test_cli_forecast.py` green
+- document whether users must re-save existing artifacts after upgrading
+
+## 8) Publish (manual)
 
 This step requires credentials and is intentionally not automated here.
 
@@ -52,3 +69,11 @@ There is a `Release` workflow at `.github/workflows/release.yml` that can run th
   inputs `publish=true` and `repository=pypi`.
 - To publish to **TestPyPI**, add a repository secret named `TESTPYPI_API_TOKEN`, then run the workflow with
   inputs `publish=true` and `repository=testpypi`.
+
+## Optional: GitHub Pages docs publish
+
+There is a dedicated docs workflow at `.github/workflows/docs.yml`.
+
+- It regenerates `docs/models.md`, `docs/api.md`, `docs/rnn_paper_zoo.md`, and `docs/rnn_zoo.md`
+- It builds the site with `mkdocs build --strict`
+- It deploys the generated `site/` output to GitHub Pages on pushes to `main`

@@ -195,6 +195,76 @@ def interval_score(y_true: Any, lower: Any, upper: Any, *, alpha: float) -> floa
     return float(np.mean(score))
 
 
+def winkler_score(y_true: Any, lower: Any, upper: Any, *, alpha: float) -> float:
+    """
+    Winkler score alias for the interval score used for central prediction intervals.
+    """
+    return interval_score(y_true, lower, upper, alpha=float(alpha))
+
+
+def weighted_interval_score(
+    y_true: Any,
+    median: Any,
+    *,
+    intervals: list[tuple[Any, Any, float]] | tuple[tuple[Any, Any, float], ...],
+) -> float:
+    """
+    Weighted Interval Score (WIS) from a median forecast and one or more central intervals.
+
+    Uses the standard weighted combination:
+      (0.5 * |y - median| + sum_k (alpha_k / 2) * IS_alpha_k) / (K + 0.5)
+    """
+    if not intervals:
+        raise ValueError("intervals must be non-empty")
+
+    yt = _as_float_array(y_true)
+    med = _as_float_array(median)
+    _require_same_shape(yt, med)
+
+    total = 0.5 * float(np.mean(np.abs(yt - med)))
+    k = 0
+    for lower, upper, alpha in intervals:
+        a = float(alpha)
+        if not (0.0 < a < 1.0):
+            raise ValueError("interval alpha must be in (0, 1)")
+        total += (a / 2.0) * float(interval_score(yt, lower, upper, alpha=a))
+        k += 1
+
+    return float(total / (float(k) + 0.5))
+
+
+def crps_from_quantiles(
+    y_true: Any,
+    quantile_forecasts: Any,
+    *,
+    quantiles: tuple[float, ...] | list[float],
+) -> float:
+    """
+    Approximate CRPS from a grid of quantile forecasts using
+    `2 * mean(pinball losses across quantiles)`.
+
+    Expected `quantile_forecasts` shape: (n_obs, n_quantiles). A 1D array is also accepted
+    when `y_true` has a single observation.
+    """
+    yt = _as_float_array(y_true).reshape(-1)
+    qs = tuple(float(q) for q in quantiles)
+    if not qs:
+        raise ValueError("quantiles must be non-empty")
+    if any(not (0.0 < q < 1.0) for q in qs):
+        raise ValueError("quantiles must be in (0, 1)")
+
+    qhat = np.asarray(quantile_forecasts, dtype=float)
+    if qhat.ndim == 1:
+        qhat = qhat.reshape(1, -1)
+    if qhat.shape != (yt.size, len(qs)):
+        raise ValueError(
+            f"quantile_forecasts must have shape ({yt.size}, {len(qs)}), got {qhat.shape}"
+        )
+
+    pinballs = [pinball_loss(yt, qhat[:, i], q=qs[i]) for i in range(len(qs))]
+    return float(2.0 * np.mean(np.asarray(pinballs, dtype=float)))
+
+
 def msis(
     y_true: Any,
     lower: Any,
