@@ -25,6 +25,12 @@ def _yhat_at(df: pd.DataFrame, unique_id: str, ds: str) -> float:
     return float(row.iloc[0])
 
 
+def _value_at(df: pd.DataFrame, unique_id: str, ds: str, col: str) -> float:
+    row = df.loc[(df["unique_id"] == unique_id) & (df["ds"] == pd.Timestamp(ds)), col]
+    assert len(row) == 1
+    return float(row.iloc[0])
+
+
 def test_build_hierarchy_spec_from_id_columns_returns_parent_child_edges():
     raw = _make_history_raw()
 
@@ -98,6 +104,68 @@ def test_top_down_reconciliation_splits_parent_forecasts_using_historical_propor
     assert _yhat_at(out, "region=north|store=a", "2020-01-03") == pytest.approx(15.0)
     assert _yhat_at(out, "region=north|store=b", "2020-01-03") == pytest.approx(5.0)
     assert _yhat_at(out, "region=south|store=c", "2020-01-03") == pytest.approx(30.0)
+
+
+def test_bottom_up_reconciliation_aggregates_exogenous_columns_with_per_column_rules():
+    raw = _make_history_raw()
+    hierarchy = build_hierarchy_spec(raw, id_cols=("region", "store"), root="total")
+
+    forecast_df = pd.DataFrame(
+        {
+            "unique_id": [
+                "region=north|store=a",
+                "region=north|store=b",
+                "region=south|store=c",
+                "region=north",
+                "region=south",
+                "total",
+            ],
+            "ds": [pd.Timestamp("2020-01-03")] * 6,
+            "yhat": [12.0, 8.0, 30.0, 999.0, 999.0, 999.0],
+            "promo": [1.0, 2.0, 4.0, 999.0, 999.0, 999.0],
+            "temp": [10.0, 16.0, 20.0, 999.0, 999.0, 999.0],
+        }
+    )
+
+    out = reconcile_hierarchical_forecasts(
+        forecast_df=forecast_df,
+        hierarchy=hierarchy,
+        method="bottom_up",
+        exog_agg={"promo": "sum", "temp": "mean"},
+    )
+
+    assert _value_at(out, "region=north", "2020-01-03", "promo") == pytest.approx(3.0)
+    assert _value_at(out, "region=south", "2020-01-03", "promo") == pytest.approx(4.0)
+    assert _value_at(out, "total", "2020-01-03", "promo") == pytest.approx(7.0)
+    assert _value_at(out, "region=north", "2020-01-03", "temp") == pytest.approx(13.0)
+    assert _value_at(out, "region=south", "2020-01-03", "temp") == pytest.approx(20.0)
+    assert _value_at(out, "total", "2020-01-03", "temp") == pytest.approx(16.5)
+
+
+def test_reconcile_hierarchical_forecasts_rejects_unknown_exogenous_aggregation():
+    raw = _make_history_raw()
+    hierarchy = build_hierarchy_spec(raw, id_cols=("region", "store"), root="total")
+
+    forecast_df = pd.DataFrame(
+        {
+            "unique_id": [
+                "region=north|store=a",
+                "region=north|store=b",
+                "region=south|store=c",
+            ],
+            "ds": [pd.Timestamp("2020-01-03")] * 3,
+            "yhat": [12.0, 8.0, 30.0],
+            "promo": [1.0, 2.0, 4.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="unknown aggregation"):
+        reconcile_hierarchical_forecasts(
+            forecast_df=forecast_df,
+            hierarchy=hierarchy,
+            method="bottom_up",
+            exog_agg={"promo": "median"},
+        )
 
 
 def test_eval_hierarchical_forecast_df_reports_consistency_summary():

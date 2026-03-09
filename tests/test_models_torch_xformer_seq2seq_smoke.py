@@ -1,9 +1,348 @@
 import importlib.util
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from foresight.models.registry import make_forecaster, make_global_forecaster
+
+WAVE1A_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-informer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-autoformer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "ma_window": 7,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-nonstationary-transformer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-fedformer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 1,
+            "ffn_dim": 64,
+            "modes": 8,
+            "ma_window": 7,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-itransformer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-timesnet-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 1,
+            "top_k": 3,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-tft-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "lstm_layers": 1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-timemixer-direct",
+        {
+            "lags": 48,
+            "d_model": 16,
+            "num_blocks": 2,
+            "token_mixing_hidden": 32,
+            "channel_mixing_hidden": 32,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-sparsetsf-direct",
+        {
+            "lags": 48,
+            "period_len": 12,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+LIGHTWEIGHT_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-lightts-direct",
+        {
+            "lags": 48,
+            "chunk_len": 12,
+            "d_model": 32,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-frets-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "top_k_freqs": 8,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+DECOMP_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-film-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "ma_window": 7,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-micn-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "kernel_sizes": (3, 5),
+            "ma_window": 7,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+WAVE1B_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-koopa-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "latent_dim": 16,
+            "num_blocks": 2,
+            "ma_window": 7,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-samformer-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "nhead": 4,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+TIMEXER_LOCAL_SMOKE_CASE = (
+    "torch-timexer-direct",
+    {
+        "lags": 32,
+        "x_cols": ("promo",),
+        "d_model": 32,
+        "nhead": 4,
+        "num_layers": 1,
+        "dropout": 0.1,
+        "epochs": 2,
+        "batch_size": 16,
+    },
+)
+
+STATE_SPACE_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-lmu-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "memory_dim": 16,
+            "num_layers": 1,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-s4d-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+CT_RNN_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-ltc-direct",
+        {
+            "lags": 48,
+            "hidden_size": 24,
+            "num_layers": 1,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-cfc-direct",
+        {
+            "lags": 48,
+            "hidden_size": 24,
+            "num_layers": 1,
+            "backbone_hidden": 32,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+REVIVAL_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-xlstm-direct",
+        {
+            "lags": 48,
+            "hidden_size": 24,
+            "num_layers": 1,
+            "proj_factor": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-mamba2-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "conv_kernel": 3,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+SSM_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-s4-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "state_dim": 16,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-s5-direct",
+        {
+            "lags": 48,
+            "d_model": 32,
+            "num_layers": 2,
+            "state_dim": 16,
+            "heads": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-griffin-direct",
+        {
+            "lags": 48,
+            "hidden_size": 24,
+            "num_layers": 1,
+            "conv_kernel": 3,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-hawk-direct",
+        {
+            "lags": 48,
+            "hidden_size": 24,
+            "num_layers": 1,
+            "expansion_factor": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
@@ -135,6 +474,108 @@ def test_torch_xformer_local_smoke():
     yhat7 = f7(y, 5)
     assert yhat7.shape == (5,)
     assert np.all(np.isfinite(yhat7))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), WAVE1A_TORCH_LOCAL_SMOKE_CASES)
+def test_wave1a_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(140, dtype=float) / 5.0) + 0.05 * np.arange(140, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), LIGHTWEIGHT_TORCH_LOCAL_SMOKE_CASES)
+def test_lightweight_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(144, dtype=float) / 6.0) + 0.03 * np.arange(144, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), DECOMP_TORCH_LOCAL_SMOKE_CASES)
+def test_decomposition_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(144, dtype=float) / 7.0) + 0.04 * np.arange(144, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), WAVE1B_TORCH_LOCAL_SMOKE_CASES)
+def test_wave1b_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(150, dtype=float) / 8.0) + 0.02 * np.arange(150, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_timexer_local_smoke():
+    y = np.sin(np.arange(96, dtype=float) / 6.0) + 0.04 * np.arange(96, dtype=float)
+    train_exog = (np.arange(96, dtype=float) % 5 == 0).astype(float).reshape(-1, 1)
+    future_exog = np.array([[1.0], [0.0], [1.0], [0.0], [1.0]], dtype=float)
+    key, params = TIMEXER_LOCAL_SMOKE_CASE
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5, train_exog=train_exog, future_exog=future_exog)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), STATE_SPACE_TORCH_LOCAL_SMOKE_CASES)
+def test_state_space_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(128, dtype=float) / 5.0) + 0.03 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), CT_RNN_TORCH_LOCAL_SMOKE_CASES)
+def test_continuous_time_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(128, dtype=float) / 6.0) + 0.02 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), REVIVAL_TORCH_LOCAL_SMOKE_CASES)
+def test_revival_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(128, dtype=float) / 7.0) + 0.025 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), SSM_TORCH_LOCAL_SMOKE_CASES)
+def test_ssm_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(128, dtype=float) / 8.0) + 0.02 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES)
+def test_recurrent_revival_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(128, dtype=float) / 9.0) + 0.02 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
@@ -1125,6 +1566,39 @@ def test_torch_xformer_and_rnn_global_smoke():
     pred32 = g32(long_df, cutoff, horizon)
     assert set(pred32.columns) >= {"unique_id", "ds", "yhat"}
     assert np.all(np.isfinite(pred32["yhat"].to_numpy(dtype=float)))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_timexer_global_smoke():
+    rng = np.random.default_rng(0)
+    ds = pd.date_range("2020-01-01", periods=72, freq="D")
+    rows = []
+    for uid, bias in [("s0", 0.0), ("s1", 0.5)]:
+        promo = (rng.random(ds.size) < 0.2).astype(float)
+        y = bias + np.sin(np.arange(ds.size, dtype=float) / 7.0) + 2.0 * promo
+        for t, yv, pv in zip(ds, y, promo, strict=True):
+            rows.append({"unique_id": uid, "ds": t, "y": float(yv), "promo": float(pv)})
+    long_df = pd.DataFrame(rows)
+
+    cutoff = ds[-6]
+    g = make_global_forecaster(
+        "torch-timexer-global",
+        context_length=32,
+        x_cols=("promo",),
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        device="cpu",
+        seed=0,
+    )
+    pred = g(long_df, cutoff, 5)
+    assert set(pred.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")

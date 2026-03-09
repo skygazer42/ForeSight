@@ -1,12 +1,140 @@
 from pathlib import Path
 
-from foresight.models.registry import get_model_spec, list_models
+from foresight.models.registry import ModelSpec, get_model_spec, list_models
+
+WAVE1A_TORCH_LOCAL_KEYS = (
+    "torch-informer-direct",
+    "torch-autoformer-direct",
+    "torch-nonstationary-transformer-direct",
+    "torch-fedformer-direct",
+    "torch-itransformer-direct",
+    "torch-timesnet-direct",
+    "torch-tft-direct",
+    "torch-timemixer-direct",
+    "torch-sparsetsf-direct",
+)
+
+LIGHTWEIGHT_TORCH_LOCAL_KEYS = (
+    "torch-lightts-direct",
+    "torch-frets-direct",
+)
+
+DECOMP_TORCH_LOCAL_KEYS = (
+    "torch-film-direct",
+    "torch-micn-direct",
+)
+
+WAVE1B_TORCH_LOCAL_KEYS = (
+    "torch-koopa-direct",
+    "torch-samformer-direct",
+)
+
+TIME_XER_TORCH_KEYS = (
+    "torch-timexer-direct",
+    "torch-timexer-global",
+)
+
+STATE_SPACE_TORCH_LOCAL_KEYS = (
+    "torch-lmu-direct",
+    "torch-s4d-direct",
+)
+
+CT_RNN_TORCH_LOCAL_KEYS = (
+    "torch-ltc-direct",
+    "torch-cfc-direct",
+)
+
+REVIVAL_TORCH_LOCAL_KEYS = (
+    "torch-xlstm-direct",
+    "torch-mamba2-direct",
+)
+
+SSM_TORCH_LOCAL_KEYS = (
+    "torch-s4-direct",
+    "torch-s5-direct",
+)
+
+RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
+    "torch-griffin-direct",
+    "torch-hawk-direct",
+)
+
+TORCH_MULTIVARIATE_KEYS = ("torch-stid-multivariate",)
 
 
 def test_list_models_contains_expected_keys():
     keys = set(list_models())
     assert "naive-last" in keys
     assert "seasonal-naive" in keys
+    assert "weighted-moving-average" in keys
+    assert "moving-median" in keys
+    assert "seasonal-drift" in keys
+
+
+def test_wave1a_torch_local_models_are_registered():
+    keys = set(list_models())
+    for key in WAVE1A_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_lightweight_torch_local_models_are_registered():
+    keys = set(list_models())
+    for key in LIGHTWEIGHT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_decomposition_torch_local_models_are_registered():
+    keys = set(list_models())
+    for key in DECOMP_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_wave1b_torch_local_models_are_registered():
+    keys = set(list_models())
+    for key in WAVE1B_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_timexer_torch_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in TIME_XER_TORCH_KEYS:
+        assert key in keys
+
+
+def test_state_space_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in STATE_SPACE_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_continuous_time_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in CT_RNN_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_revival_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_ssm_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in SSM_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_recurrent_revival_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in RECURRENT_REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_torch_multivariate_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in TORCH_MULTIVARIATE_KEYS:
+        assert key in keys
 
 
 def test_model_spec_has_description():
@@ -25,6 +153,19 @@ def test_model_spec_exposes_normalized_capabilities():
     assert spec.capabilities["supports_interval_forecast_with_x_cols"] is False
     assert spec.capabilities["supports_artifact_save"] is True
     assert spec.capabilities["requires_future_covariates"] is False
+
+
+def test_model_spec_capability_overrides_can_require_future_covariates() -> None:
+    spec = ModelSpec(
+        key="__test__",
+        description="test",
+        factory=lambda **_params: None,
+        param_help={"x_cols": "Required future covariates"},
+        capability_overrides={"requires_future_covariates": True},
+    )
+
+    assert spec.capabilities["supports_x_cols"] is True
+    assert spec.capabilities["requires_future_covariates"] is True
 
 
 def test_model_spec_capabilities_reflect_model_family_support():
@@ -48,6 +189,14 @@ def test_model_spec_capabilities_reflect_model_family_support():
     var = get_model_spec("var")
     assert var.interface == "multivariate"
     assert var.capabilities["supports_artifact_save"] is False
+
+    timexer_local = get_model_spec("torch-timexer-direct")
+    assert timexer_local.capabilities["supports_x_cols"] is True
+    assert timexer_local.capabilities["requires_future_covariates"] is True
+
+    timexer_global = get_model_spec("torch-timexer-global")
+    assert timexer_global.capabilities["supports_x_cols"] is True
+    assert timexer_global.capabilities["requires_future_covariates"] is True
 
 
 def test_readme_documents_all_model_capability_flags() -> None:

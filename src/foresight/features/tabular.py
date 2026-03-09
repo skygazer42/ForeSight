@@ -47,6 +47,43 @@ def normalize_int_tuple(items: Any) -> tuple[int, ...]:
     return (int(float(items)),)
 
 
+def normalize_lag_steps(
+    items: Any,
+    *,
+    allow_zero: bool = False,
+    name: str = "lags",
+) -> tuple[int, ...]:
+    """
+    Normalize lag specs into deterministic descending lag offsets.
+
+    Scalar ints are interpreted as window lengths:
+      - allow_zero=False -> n => (n, ..., 1)
+      - allow_zero=True  -> n => (n-1, ..., 0)
+
+    Explicit lists/tuples/strings are treated as lag offsets directly.
+    """
+    if items is None:
+        return ()
+
+    if isinstance(items, str | list | tuple):
+        values = normalize_int_tuple(items)
+        if not values:
+            return ()
+        lower = 0 if allow_zero else 1
+        if any(int(v) < lower for v in values):
+            if allow_zero:
+                raise ValueError(f"{name} must be >= 0")
+            raise ValueError(f"{name} must be >= 1")
+        return tuple(sorted({int(v) for v in values}, reverse=True))
+
+    n = int(float(items))
+    if n <= 0:
+        raise ValueError(f"{name} must be >= 1")
+    if allow_zero:
+        return tuple(range(n - 1, -1, -1))
+    return tuple(range(n, 0, -1))
+
+
 def normalize_str_tuple(items: Any) -> tuple[str, ...]:
     """
     Normalize user input into a tuple of non-empty strings.
@@ -71,6 +108,62 @@ def normalize_str_tuple(items: Any) -> tuple[str, ...]:
 
     s = str(items).strip()
     return (s,) if s else ()
+
+
+def build_column_lag_features(
+    values: Any,
+    *,
+    t: Any,
+    lags: Any,
+    column_names: Any = (),
+    prefix: str = "x",
+    allow_zero: bool = False,
+) -> tuple[np.ndarray, list[str]]:
+    """
+    Build lagged column features from a 1D/2D source for target indices `t`.
+    """
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
+    if arr.ndim != 2:
+        raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
+    if arr.size > 0 and not np.all(np.isfinite(arr)):
+        raise ValueError("Non-finite values in lag feature source")
+
+    tt = np.asarray(t, dtype=int).reshape(-1)
+    if tt.size == 0:
+        return np.empty((0, 0), dtype=float), []
+    if np.any(tt < 0):
+        raise ValueError("t indices must be >= 0")
+    if int(np.max(tt)) >= int(arr.shape[0]):
+        raise ValueError("t indices must be < len(values)")
+
+    lag_steps = normalize_lag_steps(lags, allow_zero=allow_zero, name=f"{prefix}_lags")
+    if not lag_steps:
+        return np.empty((int(tt.size), 0), dtype=float), []
+
+    names_in = normalize_str_tuple(column_names)
+    if names_in:
+        if len(names_in) != int(arr.shape[1]):
+            raise ValueError("column_names must match values.shape[1]")
+        cols = list(names_in)
+    else:
+        cols = [f"col{i}" for i in range(int(arr.shape[1]))]
+
+    feats: list[np.ndarray] = []
+    names: list[str] = []
+    for lag in lag_steps:
+        idx = tt - int(lag)
+        if np.any(idx < 0):
+            raise ValueError(f"{prefix}_lags require t >= lag")
+        feats.append(arr[idx, :].astype(float, copy=False))
+        for col in cols:
+            names.append(f"{prefix}_{col}_lag{int(lag)}")
+
+    out = np.concatenate(feats, axis=1).astype(float, copy=False)
+    if not np.all(np.isfinite(out)):
+        raise ValueError("Non-finite values in generated lag features")
+    return out, names
 
 
 def build_lag_derived_features(

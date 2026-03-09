@@ -61,3 +61,44 @@ def test_eval_model_long_df_rejects_multivariate_models_in_single_target_api():
             step=1,
             min_train_size=4,
         )
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_eval_multivariate_model_df_supports_torch_stid() -> None:
+    from foresight.eval_forecast import eval_multivariate_model_df
+
+    t = np.arange(32.0)
+    df = pd.DataFrame(
+        {
+            "ds": pd.date_range("2020-01-01", periods=32, freq="D"),
+            "y_a": np.sin(t / 5.0) + 0.01 * t,
+            "y_b": np.cos(t / 7.0) + 0.02 * t,
+            "y_c": np.sin(t / 9.0 + 0.5) + 0.015 * t,
+        }
+    )
+
+    out = eval_multivariate_model_df(
+        model="torch-stid-multivariate",
+        df=df,
+        target_cols=["y_a", "y_b", "y_c"],
+        horizon=2,
+        step=2,
+        min_train_size=20,
+        model_params={
+            "lags": 16,
+            "d_model": 16,
+            "num_blocks": 2,
+            "epochs": 2,
+            "batch_size": 16,
+            "device": "cpu",
+            "seed": 0,
+            "patience": 2,
+        },
+    )
+
+    assert out["model"] == "torch-stid-multivariate"
+    assert out["n_targets"] == 3
+    assert out["target_cols"] == ["y_a", "y_b", "y_c"]
+    assert out["n_points"] > 0
+    assert np.isfinite(float(out["mae"]))
+    assert np.isfinite(float(out["rmse"]))

@@ -22,6 +22,9 @@ def test_models_list_contains_naive_last():
     proc = _run_cli("models", "list")
     assert proc.returncode == 0
     assert "naive-last" in proc.stdout
+    assert "weighted-moving-average" in proc.stdout
+    assert "moving-median" in proc.stdout
+    assert "seasonal-drift" in proc.stdout
 
 
 def test_models_info_outputs_json():

@@ -24,7 +24,7 @@ from foresight import (
 | symbol | source | purpose |
 | --- | --- | --- |
 | `forecast_model` | `foresight.forecast` | Run a one-off forecast for a single series and return a forecast dataframe. |
-| `forecast_model_long_df` | `foresight.forecast` | Run a one-off forecast for long-format panel/global inputs. |
+| `forecast_model_long_df` | `foresight.forecast` | Run a one-off forecast for long-format panel/global inputs, optionally with a separate future_df for known future covariates. |
 | `make_forecaster` | `foresight.models.registry` | Create a stateless local forecasting callable from the registry. |
 | `make_forecaster_object` | `foresight.models.registry` | Create a stateful local forecaster object with fit/predict/save support. |
 | `make_global_forecaster` | `foresight.models.registry` | Create a stateless global/panel forecasting callable from the registry. |
@@ -52,8 +52,8 @@ from foresight import (
 | symbol | source | purpose |
 | --- | --- | --- |
 | `infer_series_frequency` | `foresight.data` | Infer a sensible pandas-compatible series frequency from timestamps. |
-| `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation. |
-| `to_long` | `foresight.data` | Convert wide or column-mapped inputs into ForeSight long format. |
+| `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
+| `to_long` | `foresight.data` | Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support. |
 | `validate_long_df` | `foresight.data` | Check that long-format inputs satisfy required schema and null rules. |
 
 ## Hierarchical forecasting
@@ -62,8 +62,8 @@ from foresight import (
 | --- | --- | --- |
 | `build_hierarchy_spec` | `foresight.data` | Build a hierarchy specification from raw identifier columns. |
 | `check_hierarchical_consistency` | `foresight.hierarchical` | Validate whether hierarchical forecasts reconcile cleanly. |
-| `eval_hierarchical_forecast_df` | `foresight.eval_forecast` | Score reconciled hierarchical forecasts against held-out history. |
-| `reconcile_hierarchical_forecasts` | `foresight.hierarchical` | Reconcile hierarchical forecasts with top-down or bottom-up methods. |
+| `eval_hierarchical_forecast_df` | `foresight.eval_forecast` | Score reconciled hierarchical forecasts against held-out history, including bottom-up exogenous aggregation when requested. |
+| `reconcile_hierarchical_forecasts` | `foresight.hierarchical` | Reconcile hierarchical forecasts with top-down or bottom-up methods, with optional bottom-up exogenous aggregation via exog_agg. |
 
 ## Intervals and tuning
 
@@ -78,6 +78,14 @@ from foresight import (
 | symbol | source | purpose |
 | --- | --- | --- |
 | `__version__` | `foresight.__init__` | Installed ForeSight package version. |
+
+## Notable data contracts
+
+- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).
+- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion.
+- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history.
+- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied.
+- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={"promo": "sum", "temp": "mean"}` for bottom-up exogenous aggregation.
 
 ## Root package export list
 

@@ -4,10 +4,12 @@ from typing import Any
 
 import numpy as np
 
-from .tabular import normalize_int_tuple
+from .tabular import normalize_int_tuple, normalize_lag_steps
 
 
-def make_lagged_xy(y: Any, *, lags: int, start_t: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+def make_lagged_xy(
+    y: Any, *, lags: Any, start_t: int | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert a 1D series into a supervised learning dataset for 1-step forecasting.
 
@@ -18,20 +20,21 @@ def make_lagged_xy(y: Any, *, lags: int, start_t: int | None = None) -> tuple[np
     arr = np.asarray(y, dtype=float)
     if arr.ndim != 1:
         raise ValueError(f"make_lagged_xy expects 1D input, got shape {arr.shape}")
-    if lags <= 0:
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="lags")
+    if not lag_steps:
         raise ValueError("lags must be >= 1")
 
-    t0 = int(lags) if start_t is None else max(int(lags), int(start_t))
+    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
     if arr.size <= t0:
         raise ValueError(f"Need > start_t points (start_t={t0}), got {arr.size}")
 
     n = int(arr.size)
     rows = n - t0
-    X = np.empty((rows, lags), dtype=float)
+    X = np.empty((rows, len(lag_steps)), dtype=float)
     yt = np.empty((rows,), dtype=float)
     for i in range(rows):
         t = i + t0
-        X[i, :] = arr[t - lags : t]
+        X[i, :] = np.asarray([arr[t - lag] for lag in lag_steps], dtype=float)
         yt[i] = arr[t]
     return X, yt
 

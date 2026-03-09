@@ -62,7 +62,7 @@ _API_METADATA: dict[str, dict[str, str]] = {
     "eval_hierarchical_forecast_df": {
         "group": "Hierarchical forecasting",
         "source": "foresight.eval_forecast",
-        "purpose": "Score reconciled hierarchical forecasts against held-out history.",
+        "purpose": "Score reconciled hierarchical forecasts against held-out history, including bottom-up exogenous aggregation when requested.",
     },
     "eval_model": {
         "group": "Evaluation",
@@ -87,7 +87,7 @@ _API_METADATA: dict[str, dict[str, str]] = {
     "forecast_model_long_df": {
         "group": "Forecasting",
         "source": "foresight.forecast",
-        "purpose": "Run a one-off forecast for long-format panel/global inputs.",
+        "purpose": "Run a one-off forecast for long-format panel/global inputs, optionally with a separate future_df for known future covariates.",
     },
     "infer_series_frequency": {
         "group": "Data preparation",
@@ -132,12 +132,12 @@ _API_METADATA: dict[str, dict[str, str]] = {
     "prepare_long_df": {
         "group": "Data preparation",
         "source": "foresight.data",
-        "purpose": "Normalize and validate long-format panel data before forecasting/evaluation.",
+        "purpose": "Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates.",
     },
     "reconcile_hierarchical_forecasts": {
         "group": "Hierarchical forecasting",
         "source": "foresight.hierarchical",
-        "purpose": "Reconcile hierarchical forecasts with top-down or bottom-up methods.",
+        "purpose": "Reconcile hierarchical forecasts with top-down or bottom-up methods, with optional bottom-up exogenous aggregation via exog_agg.",
     },
     "save_forecaster": {
         "group": "Artifacts",
@@ -147,7 +147,7 @@ _API_METADATA: dict[str, dict[str, str]] = {
     "to_long": {
         "group": "Data preparation",
         "source": "foresight.data",
-        "purpose": "Convert wide or column-mapped inputs into ForeSight long format.",
+        "purpose": "Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support.",
     },
     "tune_model": {
         "group": "Intervals and tuning",
@@ -329,6 +329,15 @@ def _render_api_doc() -> str:
             meta = _API_METADATA[name]
             lines.append(f"| `{name}` | `{meta['source']}` | {meta['purpose']} |")
         lines.append("")
+
+    lines.append("## Notable data contracts")
+    lines.append("")
+    lines.append("- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).")
+    lines.append("- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion.")
+    lines.append("- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history.")
+    lines.append("- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied.")
+    lines.append("- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={\"promo\": \"sum\", \"temp\": \"mean\"}` for bottom-up exogenous aggregation.")
+    lines.append("")
 
     lines.append("## Root package export list")
     lines.append("")

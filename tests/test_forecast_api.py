@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from foresight.forecast import forecast_model, forecast_model_long_df
+from foresight.models import registry as registry_mod
 
 
 def _small_panel_long_df() -> pd.DataFrame:
@@ -23,6 +24,71 @@ def _small_panel_long_df() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _install_dummy_local_xreg_model(monkeypatch: pytest.MonkeyPatch, *, key: str) -> str:
+    def _factory(**_params: object):
+        def _f(
+            train: object,
+            horizon: int,
+            *,
+            train_exog: object | None = None,
+            future_exog: object | None = None,
+        ) -> np.ndarray:
+            train_arr = np.asarray(train, dtype=float)
+            if train_arr.ndim != 1:
+                raise ValueError("train must be 1D")
+            if train_exog is None or future_exog is None:
+                raise ValueError("train_exog and future_exog are required")
+            train_x = np.asarray(train_exog, dtype=float)
+            future_x = np.asarray(future_exog, dtype=float)
+            if train_x.ndim == 1:
+                train_x = train_x.reshape(-1, 1)
+            if future_x.ndim == 1:
+                future_x = future_x.reshape(-1, 1)
+            if train_x.shape[0] != train_arr.size:
+                raise ValueError("train_exog rows must equal train length")
+            if future_x.shape[0] != int(horizon):
+                raise ValueError("future_exog rows must equal horizon")
+            return future_x[:, 0].astype(float, copy=False)
+
+        return _f
+
+    spec = registry_mod.ModelSpec(
+        key=key,
+        description="Test-only local xreg model",
+        factory=_factory,
+        param_help={"x_cols": "Required future covariate columns"},
+        capability_overrides={"requires_future_covariates": True},
+    )
+    monkeypatch.setitem(registry_mod._REGISTRY, key, spec)
+    return key
+
+
+def _install_dummy_global_covariate_model(monkeypatch: pytest.MonkeyPatch, *, key: str) -> str:
+    def _factory(**_params: object):
+        def _f(long_df: pd.DataFrame, cutoff: object, horizon: int) -> pd.DataFrame:
+            observed = (
+                long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+                .groupby("unique_id", sort=False)
+                .tail(int(horizon))
+                .copy()
+            )
+            observed["yhat"] = observed["promo"].to_numpy(dtype=float, copy=False)
+            return observed.loc[:, ["unique_id", "ds", "yhat"]]
+
+        return _f
+
+    spec = registry_mod.ModelSpec(
+        key=key,
+        description="Test-only global covariate model",
+        factory=_factory,
+        param_help={"x_cols": "Required future covariate columns"},
+        interface="global",
+        capability_overrides={"requires_future_covariates": True},
+    )
+    monkeypatch.setitem(registry_mod._REGISTRY, key, spec)
+    return key
+
+
 def test_forecast_model_returns_future_rows_for_single_series() -> None:
     ds = pd.date_range("2020-01-01", periods=5, freq="D")
     y = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=float)
@@ -36,6 +102,312 @@ def test_forecast_model_returns_future_rows_for_single_series() -> None:
     assert pred["step"].tolist() == [1, 2, 3]
     assert np.allclose(pred["yhat"].to_numpy(dtype=float), np.array([5.0, 5.0, 5.0]))
     assert pred["model"].tolist() == ["naive-last", "naive-last", "naive-last"]
+
+
+def test_forecast_model_long_df_supports_generic_local_xreg_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-xreg-generic__")
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "y": [np.nan, np.nan, np.nan],
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    pred = forecast_model_long_df(
+        model=key,
+        long_df=long_df,
+        horizon=3,
+        model_params={"x_cols": ("promo",)},
+    )
+
+    assert pred["yhat"].tolist() == [1.0, 0.0, 1.0]
+    assert pred["step"].tolist() == [1, 2, 3]
+
+
+def test_forecast_model_long_df_supports_generic_local_xreg_models_with_future_x_cols(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-future-x__")
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "y": [np.nan, np.nan, np.nan],
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    pred = forecast_model_long_df(
+        model=key,
+        long_df=long_df,
+        horizon=3,
+        model_params={"future_x_cols": ("promo",)},
+    )
+
+    assert pred["yhat"].tolist() == [1.0, 0.0, 1.0]
+
+
+def test_forecast_model_long_df_supports_generic_local_xreg_models_with_future_df(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-future-df__")
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+
+    pred = forecast_model_long_df(
+        model=key,
+        long_df=history,
+        future_df=future_df,
+        horizon=3,
+        model_params={"future_x_cols": ("promo",)},
+    )
+
+    assert pred["yhat"].tolist() == [1.0, 0.0, 1.0]
+    assert pred["step"].tolist() == [1, 2, 3]
+
+
+def test_forecast_model_long_df_rejects_historic_x_cols_for_current_local_xreg_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-historic-x__")
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i % 2) for i in range(8)],
+            "promo_hist": [float(i % 2) for i in range(8)],
+            "promo": [float(i % 2) for i in range(8)],
+        }
+    )
+
+    with pytest.raises(ValueError, match="historic_x_cols are not yet supported"):
+        forecast_model_long_df(
+            model=key,
+            long_df=long_df,
+            horizon=2,
+            model_params={"historic_x_cols": ("promo_hist",), "future_x_cols": ("promo",)},
+        )
+
+
+def test_forecast_model_long_df_requires_x_cols_for_local_models_that_need_future_covariates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-xreg-required__")
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i % 2) for i in range(8)],
+            "promo": [float(i % 2) for i in range(8)],
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires future covariates via x_cols"):
+        forecast_model_long_df(
+            model=key,
+            long_df=long_df,
+            horizon=2,
+            model_params={},
+        )
+
+
+def test_forecast_model_long_df_requires_x_cols_for_global_models_that_need_future_covariates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_global_covariate_model(monkeypatch, key="__test-global-xreg-required__")
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(8)],
+            "promo": [float(i % 2) for i in range(8)],
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires future covariates via x_cols"):
+        forecast_model_long_df(
+            model=key,
+            long_df=long_df,
+            horizon=2,
+            model_params={},
+        )
+
+
+def test_forecast_model_long_df_supports_global_models_with_future_df(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_global_covariate_model(monkeypatch, key="__test-global-future-df__")
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6 + ["s1"] * 6,
+            "ds": list(pd.date_range("2020-01-01", periods=6, freq="D")) * 2,
+            "y": [float(i) for i in range(6)] + [float(i + 10) for i in range(6)],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0] * 2,
+        }
+    )
+    future_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": [
+                pd.Timestamp("2020-01-07"),
+                pd.Timestamp("2020-01-08"),
+                pd.Timestamp("2020-01-07"),
+                pd.Timestamp("2020-01-08"),
+            ],
+            "promo": [1.0, 0.0, 0.0, 1.0],
+        }
+    )
+
+    pred = forecast_model_long_df(
+        model=key,
+        long_df=history,
+        future_df=future_df,
+        horizon=2,
+        model_params={"future_x_cols": ("promo",)},
+    )
+
+    assert pred["yhat"].tolist() == [1.0, 0.0, 0.0, 1.0]
+    assert pred["step"].tolist() == [1, 2, 1, 2]
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_forecast_model_long_df_supports_local_timexer_with_future_covariates() -> None:
+    ds = pd.date_range("2020-01-01", periods=40, freq="D")
+    promo = np.array(([0, 1, 0, 1, 0] * 8)[:40], dtype=float)
+    y = 5.0 + np.sin(np.arange(40, dtype=float) / 6.0) + 1.5 * promo
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 40,
+            "ds": ds,
+            "y": y,
+            "promo": promo,
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-02-10", periods=3, freq="D"),
+            "y": [np.nan, np.nan, np.nan],
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    pred = forecast_model_long_df(
+        model="torch-timexer-direct",
+        long_df=long_df,
+        horizon=3,
+        model_params={
+            "x_cols": ("promo",),
+            "lags": 16,
+            "d_model": 16,
+            "nhead": 4,
+            "num_layers": 1,
+            "epochs": 2,
+            "batch_size": 16,
+            "device": "cpu",
+            "seed": 0,
+            "patience": 2,
+        },
+    )
+
+    assert pred.shape == (3, 6)
+    assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_forecast_model_long_df_supports_global_timexer_with_future_covariates() -> None:
+    ds = pd.date_range("2020-01-01", periods=36, freq="D")
+    rows: list[dict[str, object]] = []
+    for uid, bias in [("s0", 0.0), ("s1", 1.0)]:
+        promo = np.array(([0, 1, 0, 1, 0, 0] * 6)[:36], dtype=float)
+        y = bias + 4.0 + np.sin(np.arange(36, dtype=float) / 5.0) + 1.0 * promo
+        rows.extend(
+            {
+                "unique_id": uid,
+                "ds": d,
+                "y": float(v),
+                "promo": float(p),
+            }
+            for d, v, p in zip(ds, y, promo, strict=True)
+        )
+        rows.extend(
+            {
+                "unique_id": uid,
+                "ds": d,
+                "y": np.nan,
+                "promo": float(p),
+            }
+            for d, p in zip(
+                pd.date_range("2020-02-06", periods=3, freq="D"), [1.0, 0.0, 1.0], strict=True
+            )
+        )
+    long_df = pd.DataFrame(rows)
+
+    pred = forecast_model_long_df(
+        model="torch-timexer-global",
+        long_df=long_df,
+        horizon=3,
+        model_params={
+            "x_cols": ("promo",),
+            "context_length": 16,
+            "d_model": 16,
+            "nhead": 4,
+            "num_layers": 1,
+            "epochs": 1,
+            "batch_size": 16,
+            "sample_step": 4,
+            "val_split": 0.0,
+            "device": "cpu",
+            "seed": 0,
+            "patience": 2,
+        },
+    )
+
+    assert pred.shape[0] == 6
+    assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))
 
 
 def test_forecast_model_can_emit_bootstrap_interval_quantiles_for_local_models() -> None:
@@ -72,7 +444,9 @@ def test_forecast_model_can_emit_bootstrap_interval_quantiles_for_local_models()
     assert np.allclose(pred["yhat_hi_90"].to_numpy(dtype=float), np.array([6.0, 6.0]))
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_model_supports_arima_trend_parameter() -> None:
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     y = np.arange(1.0, 31.0, dtype=float)
@@ -89,7 +463,9 @@ def test_forecast_model_supports_arima_trend_parameter() -> None:
     assert np.allclose(pred["yhat"].to_numpy(dtype=float), np.array([31.0, 32.0, 33.0]), atol=1e-3)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates() -> None:
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     promo = np.array(([0, 1, 0, 1, 0] * 6)[:30], dtype=float)
@@ -135,8 +511,12 @@ def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates() 
     assert abs(float(yhat[0]) - float(yhat[2])) < 1e-6
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
-def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_for_multiple_series() -> None:
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_for_multiple_series() -> (
+    None
+):
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     promo = np.array(([0, 1, 0, 1, 0] * 6)[:30], dtype=float)
 
@@ -159,7 +539,9 @@ def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_fo
                 "y": np.nan,
                 "promo": float(p),
             }
-            for d, p in zip(pd.date_range("2020-01-31", periods=2, freq="D"), [1.0, 0.0], strict=True)
+            for d, p in zip(
+                pd.date_range("2020-01-31", periods=2, freq="D"), [1.0, 0.0], strict=True
+            )
         )
     long_df = pd.DataFrame(rows)
 
@@ -187,7 +569,9 @@ def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_fo
     ]
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_model_long_df_supports_local_auto_arima_with_future_covariates() -> None:
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     promo = np.array(([0, 1, 0, 1, 0] * 6)[:30], dtype=float)
@@ -237,8 +621,12 @@ def test_forecast_model_long_df_supports_local_auto_arima_with_future_covariates
     assert abs(float(yhat[0]) - float(yhat[2])) < 1e-3
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
-def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_and_intervals() -> None:
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_and_intervals() -> (
+    None
+):
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     promo = np.array(([0, 1, 0, 1, 0] * 6)[:30], dtype=float)
     y = 10.0 + 5.0 * promo + 0.1 * np.arange(30, dtype=float)
@@ -286,8 +674,12 @@ def test_forecast_model_long_df_supports_local_sarimax_with_future_covariates_an
     assert yhat[2] > yhat[1] + 4.0
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
-def test_forecast_model_long_df_supports_local_auto_arima_with_future_covariates_and_intervals() -> None:
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_model_long_df_supports_local_auto_arima_with_future_covariates_and_intervals() -> (
+    None
+):
     ds = pd.date_range("2020-01-01", periods=30, freq="D")
     promo = np.array(([0, 1, 0, 1, 0] * 6)[:30], dtype=float)
     y = 10.0 + 5.0 * promo
@@ -339,7 +731,9 @@ def test_forecast_model_long_df_supports_local_auto_arima_with_future_covariates
     assert yhat[2] > yhat[1] + 4.0
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_model_long_df_supports_global_models() -> None:
     long_df = _small_panel_long_df()
 
@@ -370,7 +764,9 @@ def test_forecast_model_long_df_supports_global_models() -> None:
     assert pred["model"].tolist() == ["ridge-step-lag-global"] * 4
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_model_long_df_supports_global_models_with_future_covariates() -> None:
     long_df = _small_panel_long_df()
     future_rows = []
@@ -440,14 +836,24 @@ def test_forecast_model_long_df_emits_interval_columns_for_quantile_global_model
         },
     )
 
-    assert {"yhat_p10", "yhat_p50", "yhat_p90", "yhat_lo_80", "yhat_hi_80"}.issubset(set(pred.columns))
+    assert {"yhat_p10", "yhat_p50", "yhat_p90", "yhat_lo_80", "yhat_hi_80"}.issubset(
+        set(pred.columns)
+    )
     assert np.allclose(pred["yhat"].to_numpy(dtype=float), pred["yhat_p50"].to_numpy(dtype=float))
-    assert np.allclose(pred["yhat_lo_80"].to_numpy(dtype=float), pred["yhat_p10"].to_numpy(dtype=float))
-    assert np.allclose(pred["yhat_hi_80"].to_numpy(dtype=float), pred["yhat_p90"].to_numpy(dtype=float))
+    assert np.allclose(
+        pred["yhat_lo_80"].to_numpy(dtype=float), pred["yhat_p10"].to_numpy(dtype=float)
+    )
+    assert np.allclose(
+        pred["yhat_hi_80"].to_numpy(dtype=float), pred["yhat_p90"].to_numpy(dtype=float)
+    )
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
-def test_forecast_model_long_df_rejects_interval_levels_for_global_models_without_capability() -> None:
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_model_long_df_rejects_interval_levels_for_global_models_without_capability() -> (
+    None
+):
     long_df = _small_panel_long_df()
 
     with pytest.raises(
@@ -468,7 +874,9 @@ def test_forecast_model_long_df_rejects_interval_levels_for_global_models_withou
         )
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_model_long_df_rejects_missing_y_inside_global_history() -> None:
     long_df = _small_panel_long_df()
     long_df.loc[

@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from ..features.lag import build_seasonal_lag_features, make_lagged_xy
-from ..features.tabular import build_lag_derived_features, normalize_int_tuple
+from ..features.tabular import build_lag_derived_features, normalize_int_tuple, normalize_lag_steps
 from ..features.time import build_fourier_features
 
 
@@ -29,9 +29,7 @@ def _wants_seasonal_or_fourier_features(
     return bool(seasonal_lags) or bool(seasonal_diff_lags) or bool(fourier_periods)
 
 
-def _compute_feature_start_t(
-    *, lags: int, seasonal_lags: Any, seasonal_diff_lags: Any
-) -> int:
+def _compute_feature_start_t(*, lags: Any, seasonal_lags: Any, seasonal_diff_lags: Any) -> int:
     """
     Compute the earliest target index t such that all requested lag-based features are available.
 
@@ -39,7 +37,10 @@ def _compute_feature_start_t(
     For seasonal_lags (y[t-p]) we need t >= max(p).
     For seasonal_diff_lags (y[t-1]-y[t-1-p]) we need t >= 1 + max(p).
     """
-    start_t = int(lags)
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
+    if not lag_steps:
+        raise ValueError("target_lags must be >= 1")
+    start_t = int(max(lag_steps))
 
     seas = normalize_int_tuple(seasonal_lags)
     diffs = normalize_int_tuple(seasonal_diff_lags)
@@ -53,6 +54,19 @@ def _compute_feature_start_t(
     if diffs:
         start_t = max(start_t, 1 + int(max(diffs)))
     return start_t
+
+
+def _make_target_feat_row(history: Any, *, lags: Any) -> np.ndarray:
+    x = _as_1d_float_array(history)
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
+    if not lag_steps:
+        raise ValueError("target_lags must be >= 1")
+
+    t_next = int(x.size)
+    max_lag = int(max(lag_steps))
+    if t_next <= max_lag - 1:
+        raise ValueError(f"Need > max target lag points (max_lag={max_lag}), got {t_next}")
+    return np.asarray([[x[t_next - lag] for lag in lag_steps]], dtype=float)
 
 
 def _augment_lag_matrix(
@@ -70,7 +84,9 @@ def _augment_lag_matrix(
 ) -> np.ndarray:
     parts: list[np.ndarray] = [X_base]
 
-    if _wants_lag_derived_features(roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags):
+    if _wants_lag_derived_features(
+        roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
+    ):
         derived, _ = build_lag_derived_features(
             X_base,
             roll_windows=roll_windows,
@@ -81,7 +97,9 @@ def _augment_lag_matrix(
             parts.append(derived)
 
     if _wants_seasonal_or_fourier_features(
-        seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags, fourier_periods=fourier_periods
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
     ):
         if t_index is None:
             raise ValueError("t_index is required for seasonal/fourier features")
@@ -125,7 +143,9 @@ def _augment_lag_feat_row(
 ) -> np.ndarray:
     parts: list[np.ndarray] = [feat_1xL]
 
-    if _wants_lag_derived_features(roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags):
+    if _wants_lag_derived_features(
+        roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
+    ):
         derived, _ = build_lag_derived_features(
             feat_1xL,
             roll_windows=roll_windows,
@@ -136,7 +156,9 @@ def _augment_lag_feat_row(
             parts.append(derived)
 
     if _wants_seasonal_or_fourier_features(
-        seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags, fourier_periods=fourier_periods
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
     ):
         if t_next is None or history is None:
             raise ValueError("t_next and history are required for seasonal/fourier features")
@@ -152,7 +174,9 @@ def _augment_lag_feat_row(
             parts.append(seasonal)
 
     if bool(fourier_periods):
-        fourier, _ = build_fourier_features([int(t_next)], periods=fourier_periods, orders=fourier_orders)
+        fourier, _ = build_fourier_features(
+            [int(t_next)], periods=fourier_periods, orders=fourier_orders
+        )
         if fourier.shape[1] > 0:
             parts.append(fourier)
 
@@ -165,7 +189,7 @@ def lr_lag_forecast(
     train: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
     roll_windows: Any = (),
     roll_stats: Any = (),
     diff_lags: Any = (),
@@ -180,17 +204,19 @@ def lr_lag_forecast(
     This is intentionally lightweight (pure numpy) and suitable as a baseline.
     """
     x = _as_1d_float_array(train)
+    target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
+    max_target_lag = int(max(target_lags))
     if horizon <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
-    if x.size <= lags:
-        raise ValueError(f"lr_lag_forecast requires > lags points (lags={lags}), got {x.size}")
+    if x.size <= max_target_lag:
+        raise ValueError(
+            f"lr_lag_forecast requires > lags points (lags={max_target_lag}), got {x.size}"
+        )
 
     start_t = _compute_feature_start_t(
-        lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+        lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    X_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
         X_base,
@@ -213,7 +239,7 @@ def lr_lag_forecast(
     history = x.astype(float, copy=True).tolist()
     out: list[float] = []
     for _h in range(horizon):
-        feat_base = np.array(history[-lags:], dtype=float).reshape(1, -1)
+        feat_base = _make_target_feat_row(np.asarray(history, dtype=float), lags=target_lags)
         feat_aug = _augment_lag_feat_row(
             feat_base,
             roll_windows=roll_windows,
@@ -233,25 +259,26 @@ def lr_lag_forecast(
 
 
 def _make_lagged_xy_multi(
-    x: np.ndarray, *, lags: int, horizon: int, start_t: int | None = None
+    x: np.ndarray, *, lags: Any, horizon: int, start_t: int | None = None
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = int(x.size)
     h = int(horizon)
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if h <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
+    if not lag_steps:
+        raise ValueError("target_lags must be >= 1")
 
-    t0 = int(lags) if start_t is None else max(int(lags), int(start_t))
+    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
     if n < t0 + h:
         raise ValueError(f"Need >= start_t+horizon points (start_t={t0}, horizon={h}), got {n}")
 
     rows = n - t0 - h + 1
-    X = np.empty((rows, lags), dtype=float)
+    X = np.empty((rows, len(lag_steps)), dtype=float)
     Y = np.empty((rows, h), dtype=float)
     t_idx = np.arange(t0, t0 + rows, dtype=int)
     for i, t in enumerate(t_idx):
-        X[i, :] = x[t - lags : t]
+        X[i, :] = np.asarray([x[t - lag] for lag in lag_steps], dtype=float)
         Y[i, :] = x[t : t + h]
     return X, Y, t_idx
 
@@ -260,7 +287,7 @@ def lr_lag_direct_forecast(
     train: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
     roll_windows: Any = (),
     roll_stats: Any = (),
     diff_lags: Any = (),
@@ -276,15 +303,16 @@ def lr_lag_direct_forecast(
     all steps directly from the last `lags` observed values.
     """
     x = _as_1d_float_array(train)
+    target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if horizon <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
 
     start_t = _compute_feature_start_t(
-        lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+        lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    X_base, Y, t_idx = _make_lagged_xy_multi(
+        x, lags=target_lags, horizon=int(horizon), start_t=start_t
+    )
     X = _augment_lag_matrix(
         X_base,
         roll_windows=roll_windows,
@@ -303,7 +331,7 @@ def lr_lag_direct_forecast(
     intercept = coef[0, :].astype(float, copy=False)
     w = coef[1:, :].astype(float, copy=False)  # (n_features, horizon)
 
-    feat_base = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    feat_base = _make_target_feat_row(x, lags=target_lags)
     feat_aug = _augment_lag_feat_row(
         feat_base,
         roll_windows=roll_windows,
@@ -324,7 +352,7 @@ def ridge_lag_forecast(
     train: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
     alpha: float = 1.0,
     roll_windows: Any = (),
     roll_stats: Any = (),
@@ -345,17 +373,19 @@ def ridge_lag_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
+    target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
+    max_target_lag = int(max(target_lags))
     if horizon <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
-    if x.size <= lags:
-        raise ValueError(f"ridge_lag_forecast requires > lags points (lags={lags}), got {x.size}")
+    if x.size <= max_target_lag:
+        raise ValueError(
+            f"ridge_lag_forecast requires > lags points (lags={max_target_lag}), got {x.size}"
+        )
 
     start_t = _compute_feature_start_t(
-        lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+        lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    X_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
         X_base,
@@ -375,7 +405,7 @@ def ridge_lag_forecast(
     history = x.astype(float, copy=True).tolist()
     out: list[float] = []
     for _h in range(horizon):
-        feat_base = np.array(history[-lags:], dtype=float).reshape(1, -1)
+        feat_base = _make_target_feat_row(np.asarray(history, dtype=float), lags=target_lags)
         feat = _augment_lag_feat_row(
             feat_base,
             roll_windows=roll_windows,
@@ -769,7 +799,7 @@ def ridge_lag_direct_forecast(
     train: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
     alpha: float = 1.0,
     roll_windows: Any = (),
     roll_stats: Any = (),
@@ -793,15 +823,16 @@ def ridge_lag_direct_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
+    target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if horizon <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
 
     start_t = _compute_feature_start_t(
-        lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+        lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    X_base, Y, t_idx = _make_lagged_xy_multi(
+        x, lags=target_lags, horizon=int(horizon), start_t=start_t
+    )
     X = _augment_lag_matrix(
         X_base,
         roll_windows=roll_windows,
@@ -817,7 +848,7 @@ def ridge_lag_direct_forecast(
     model = Ridge(alpha=float(alpha), fit_intercept=True)
     model.fit(X, Y)
 
-    feat_base = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    feat_base = _make_target_feat_row(x, lags=target_lags)
     feat = _augment_lag_feat_row(
         feat_base,
         roll_windows=roll_windows,
@@ -3852,7 +3883,9 @@ def _xgb_lag_step_forecast_kwargs(
 
     if bool(fourier_periods):
         t_flat = np.repeat(t_idx, repeats=h) + np.tile(np.arange(h, dtype=int), rows)
-        fourier_long, _ = build_fourier_features(t_flat, periods=fourier_periods, orders=fourier_orders)
+        fourier_long, _ = build_fourier_features(
+            t_flat, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
@@ -3874,7 +3907,9 @@ def _xgb_lag_step_forecast_kwargs(
     seasonal_rep_pred = np.repeat(seasonal_pred, repeats=h, axis=0)
     if bool(fourier_periods):
         t_pred = np.arange(int(x.size), int(x.size) + h, dtype=int)
-        fourier_pred, _ = build_fourier_features(t_pred, periods=fourier_periods, orders=fourier_orders)
+        fourier_pred, _ = build_fourier_features(
+            t_pred, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_pred = np.empty((h, 0), dtype=float)
 
@@ -4536,7 +4571,9 @@ def _lgbm_lag_step_forecast_kwargs(
 
     if bool(fourier_periods):
         t_flat = np.repeat(t_idx, repeats=h) + np.tile(np.arange(h, dtype=int), rows)
-        fourier_long, _ = build_fourier_features(t_flat, periods=fourier_periods, orders=fourier_orders)
+        fourier_long, _ = build_fourier_features(
+            t_flat, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
@@ -4559,7 +4596,9 @@ def _lgbm_lag_step_forecast_kwargs(
 
     if bool(fourier_periods):
         t_pred = np.arange(int(x.size), int(x.size) + h, dtype=int)
-        fourier_pred, _ = build_fourier_features(t_pred, periods=fourier_periods, orders=fourier_orders)
+        fourier_pred, _ = build_fourier_features(
+            t_pred, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_pred = np.empty((h, 0), dtype=float)
 
@@ -5058,7 +5097,11 @@ def _catboost_validate_common_regressor_params(params: dict[str, Any]) -> None:
     if "l2_leaf_reg" in params and params["l2_leaf_reg"] is not None:
         if float(params["l2_leaf_reg"]) < 0:
             raise ValueError("l2_leaf_reg must be >= 0")
-    if "thread_count" in params and params["thread_count"] is not None and int(params["thread_count"]) == 0:
+    if (
+        "thread_count" in params
+        and params["thread_count"] is not None
+        and int(params["thread_count"]) == 0
+    ):
         raise ValueError("thread_count must be non-zero")
 
 
@@ -5302,7 +5345,9 @@ def _catboost_lag_step_forecast_kwargs(
 
     if bool(fourier_periods):
         t_flat = np.repeat(t_idx, repeats=h) + np.tile(np.arange(h, dtype=int), rows)
-        fourier_long, _ = build_fourier_features(t_flat, periods=fourier_periods, orders=fourier_orders)
+        fourier_long, _ = build_fourier_features(
+            t_flat, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
@@ -5325,7 +5370,9 @@ def _catboost_lag_step_forecast_kwargs(
 
     if bool(fourier_periods):
         t_pred = np.arange(int(x.size), int(x.size) + h, dtype=int)
-        fourier_pred, _ = build_fourier_features(t_pred, periods=fourier_periods, orders=fourier_orders)
+        fourier_pred, _ = build_fourier_features(
+            t_pred, periods=fourier_periods, orders=fourier_orders
+        )
     else:
         fourier_pred = np.empty((h, 0), dtype=float)
 

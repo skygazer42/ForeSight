@@ -100,6 +100,7 @@ import pandas as pd
 from foresight import (
     bootstrap_intervals, forecast_model, tune_model,
     save_forecaster, load_forecaster,
+    forecast_model_long_df,
     make_global_forecaster, make_global_forecaster_object,
     make_multivariate_forecaster, eval_multivariate_model_df,
     to_long, prepare_long_df,
@@ -139,6 +140,19 @@ result = tune_model(
 # g = make_global_forecaster("ridge-step-lag-global", lags=48, alpha=1.0, x_cols=("promo",))
 # pred_df = g(long_df, cutoff=cutoff, horizon=14)  # returns: unique_id, ds, yhat
 #
+# Or keep observed history and known-future covariates in separate tables.
+# pred_df = forecast_model_long_df(
+#     model="ridge-step-lag-global",
+#     long_df=history_df,
+#     future_df=future_covariates_df,
+#     horizon=14,
+#     model_params={
+#         "future_x_cols": ("promo", "price"),
+#         "target_lags": (1, 7, 14),
+#         "future_x_lags": (1, 0),
+#     },
+# )
+#
 # g_obj = make_global_forecaster_object("ridge-step-lag-global", lags=48, alpha=1.0)
 # g_obj.fit(long_df)
 # pred_df = g_obj.predict(cutoff=cutoff, horizon=14)
@@ -152,6 +166,7 @@ hierarchy = build_hierarchy_spec(raw_df, id_cols=("region", "store"), root="tota
 reconciled = reconcile_hierarchical_forecasts(
     forecast_df=pred_df, hierarchy=hierarchy,
     method="top_down", history_df=history_long,
+    exog_agg={"promo": "sum", "temp": "mean"},
 )
 
 hier_payload = eval_hierarchical_forecast_df(
@@ -274,7 +289,7 @@ ForeSight organizes **250+** registered models into families. Core models are de
 
 | Family | Models | Key Parameters |
 |--------|--------|---------------|
-| **Naive / Baseline** | `naive-last`, `seasonal-naive`, `mean`, `median`, `drift`, `moving-average`, `seasonal-mean` | `season_length`, `window` |
+| **Naive / Baseline** | `naive-last`, `seasonal-naive`, `mean`, `median`, `drift`, `moving-average`, `weighted-moving-average`, `moving-median`, `seasonal-mean`, `seasonal-drift` | `season_length`, `window` |
 | **Exponential Smoothing** | `ses`, `ses-auto`, `holt`, `holt-auto`, `holt-damped`, `holt-winters-add`, `holt-winters-add-auto` | `alpha`, `beta`, `gamma`, `season_length` |
 | **Theta** | `theta`, `theta-auto` | `alpha`, `grid_size` |
 | **AR / Regression** | `ar-ols`, `ar-ols-lags`, `sar-ols`, `ar-ols-auto`, `lr-lag`, `lr-lag-direct` | `p`, `lags`, `season_length` |
@@ -297,7 +312,7 @@ ForeSight organizes **250+** registered models into families. Core models are de
 
 `ridge-step-lag-global`, `decision-tree-step-lag-global`, `bagging-step-lag-global`, `gbrt-step-lag-global`, `lasso-step-lag-global`, `elasticnet-step-lag-global`, `knn-step-lag-global`, `kernel-ridge-step-lag-global`, `svr-step-lag-global`, `linear-svr-step-lag-global`, `huber-step-lag-global`, `quantile-step-lag-global`, `sgd-step-lag-global`, `adaboost-step-lag-global`, `mlp-step-lag-global`, `rf-step-lag-global`, `extra-trees-step-lag-global`
 
-All global models support `x_cols`, `add_time_features`, `id_feature`, and derived lag features (`roll_windows`, `roll_stats`, `diff_lags`).
+These sklearn global step-lag models support `x_cols`, `add_time_features`, `id_feature`, explicit `target_lags`, covariate-aware lag blocks via `historic_x_lags` / `future_x_lags`, and derived lag features (`roll_windows`, `roll_stats`, `diff_lags`).
 
 </details>
 
@@ -445,24 +460,41 @@ ForeSight uses a panel-friendly **long format** compatible with StatsForecast an
 | `y` | Target value (`float`) |
 | *extra columns* | Covariates / exogenous features |
 
+### Covariate roles
+
+| Surface | Meaning |
+|--------|---------|
+| `y` | Forecast target |
+| `historic_x_cols` | Covariates observed only up to the forecast cutoff |
+| `future_x_cols` | Covariates known through the forecast horizon |
+| `x_cols` | Backward-compatible alias for `future_x_cols` |
+
 ```python
 from foresight.data import to_long, validate_long_df, prepare_long_df
 
-# Convert raw data to long format with covariates
+# Convert raw data to long format with role-aware covariates
 long_df = to_long(
     raw_df, time_col="ds", y_col="y",
-    id_cols=("store", "dept"), x_cols=("promo", "price"),
+    id_cols=("store", "dept"),
+    historic_x_cols=("promo_hist",),
+    future_x_cols=("promo_plan", "price"),
 )
 
-# Optional: fill missing timestamps, handle NaN
+# Optional: fill missing timestamps, handle NaN by role
 prepared = prepare_long_df(
     long_df, freq="D",
-    y_missing="interpolate", x_missing="ffill",
+    y_missing="interpolate",
+    historic_x_missing="ffill",
+    future_x_missing="ffill",
 )
 
 # Validate
 validate_long_df(prepared)
 ```
+
+If known-future covariates arrive separately from observed history,
+`forecast_model_long_df(...)` also accepts `future_df=...` and validates
+horizon coverage per series before forecasting.
 
 ---
 

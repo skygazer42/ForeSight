@@ -997,6 +997,263 @@ def torch_informer_global_forecaster(
     return _f
 
 
+def _predict_torch_timexer_global(
+    df: pd.DataFrame,
+    cutoff: Any,
+    horizon: int,
+    *,
+    context_length: int,
+    x_cols: Any,
+    add_time_features: bool,
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+    device: str,
+    d_model: int,
+    nhead: int,
+    num_layers: int,
+    id_emb_dim: int,
+    dropout: float,
+) -> pd.DataFrame:
+    torch = _require_torch()
+    nn = torch.nn
+
+    x_cols_tup = _normalize_x_cols(x_cols)
+    if not x_cols_tup:
+        raise ValueError("torch-timexer-global requires non-empty x_cols")
+
+    (
+        X_train,
+        ids_train,
+        Y_train,
+        X_pred,
+        ids_pred,
+        pred_uids,
+        pred_ds_list,
+        pred_mean,
+        pred_std,
+        n_total_series,
+    ) = _build_panel_dataset(
+        df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols_tup,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+    )
+
+    h = int(horizon)
+    ctx = int(context_length)
+    input_dim = int(X_train.shape[2])
+    query_dim = int(input_dim - 1)
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    class _CrossBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm_q = nn.LayerNorm(d)
+            self.cross = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
+            self.norm_ffn = nn.LayerNorm(d)
+            self.ffn = nn.Sequential(
+                nn.Linear(d, 2 * d),
+                nn.GELU(),
+                nn.Dropout(p=drop),
+                nn.Linear(2 * d, d),
+            )
+            self.drop = nn.Dropout(p=drop)
+
+        def forward(self, q: Any, mem: Any) -> Any:
+            attn, _ = self.cross(self.norm_q(q), mem, mem, need_weights=False)
+            q = q + self.drop(attn)
+            q = q + self.drop(self.ffn(self.norm_ffn(q)))
+            return q
+
+    class _TimeXerGlobal(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id_emb = nn.Embedding(int(n_total_series), int(id_emb_dim))
+            self.past_proj = nn.Linear(int(input_dim + id_emb_dim), d)
+            self.future_proj = nn.Linear(int(query_dim + id_emb_dim), d)
+            past_pe = _make_positional_encoding(int(ctx), d)
+            future_pe = _make_positional_encoding(int(h), d)
+            self.register_buffer(
+                "past_pe", torch.tensor(past_pe, dtype=torch.float32), persistent=False
+            )
+            self.register_buffer(
+                "future_pe", torch.tensor(future_pe, dtype=torch.float32), persistent=False
+            )
+            enc_layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=2 * d,
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(enc_layer, num_layers=layers)
+            self.blocks = nn.ModuleList([_CrossBlock() for _ in range(layers)])
+            self.out = nn.Linear(d, 1)
+
+        def forward(self, xb: Any, ids: Any) -> Any:
+            emb = self.id_emb(ids)
+            emb_p = emb.unsqueeze(1).expand(-1, ctx, -1)
+            emb_f = emb.unsqueeze(1).expand(-1, h, -1)
+            past = torch.cat([xb[:, :ctx, :], emb_p], dim=-1)
+            future_cov = xb[:, ctx:, 1:]
+            future = torch.cat([future_cov, emb_f], dim=-1)
+            mem = self.enc(self.past_proj(past) + self.past_pe.unsqueeze(0))
+            q = self.future_proj(future) + self.future_pe.unsqueeze(0)
+            for blk in self.blocks:
+                q = blk(q, mem)
+            return self.out(q).squeeze(-1)
+
+    model = _TimeXerGlobal()
+    cfg = TorchGlobalTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop_global(
+        model,
+        X_train,
+        ids_train,
+        Y_train,
+        cfg=cfg,
+        device=str(device),
+    )
+
+    dev = torch.device(str(device))
+    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
+    with torch.no_grad():
+        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+
+    return _make_pred_df_from_scaled(
+        yhat_scaled=np.asarray(yhat_scaled, dtype=float),
+        pred_uids=pred_uids,
+        pred_ds_list=pred_ds_list,
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        horizon=h,
+        qs=(),
+    )
+
+
+def torch_timexer_global_forecaster(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+) -> Any:
+    """
+    TimeXer-style exogenous-aware global/panel forecaster (lite).
+    """
+
+    def _f(long_df: pd.DataFrame, cutoff: Any, horizon: int) -> pd.DataFrame:
+        return _predict_torch_timexer_global(
+            long_df,
+            cutoff,
+            int(horizon),
+            context_length=int(context_length),
+            x_cols=x_cols,
+            add_time_features=bool(add_time_features),
+            normalize=bool(normalize),
+            max_train_size=max_train_size,
+            sample_step=int(sample_step),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            restore_best=bool(restore_best),
+            device=str(device),
+            d_model=int(d_model),
+            nhead=int(nhead),
+            num_layers=int(num_layers),
+            id_emb_dim=int(id_emb_dim),
+            dropout=float(dropout),
+        )
+
+    return _f
+
+
 def torch_autoformer_global_forecaster(
     *,
     context_length: int = 96,

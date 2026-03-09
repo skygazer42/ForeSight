@@ -5,6 +5,46 @@ from collections.abc import Iterable
 import pandas as pd
 
 
+def _normalize_covariate_arg(values: Iterable[str] | str | None) -> tuple[str, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        s = values.strip()
+        return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
+    return tuple([str(v).strip() for v in values if str(v).strip()])
+
+
+def _merge_unique_columns(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for col in group:
+            if col not in seen:
+                seen.add(col)
+                out.append(col)
+    return tuple(out)
+
+
+def resolve_covariate_roles(
+    *,
+    x_cols: Iterable[str] | str | None = (),
+    historic_x_cols: Iterable[str] | str | None = (),
+    future_x_cols: Iterable[str] | str | None = (),
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """
+    Normalize covariate-role arguments.
+
+    `x_cols` is kept as a compatibility alias and is merged into `future_x_cols`.
+    """
+    historic = _normalize_covariate_arg(historic_x_cols)
+    future = _merge_unique_columns(
+        _normalize_covariate_arg(future_x_cols),
+        _normalize_covariate_arg(x_cols),
+    )
+    all_x = _merge_unique_columns(historic, future)
+    return historic, future, all_x
+
+
 def _build_unique_id(df: pd.DataFrame, *, id_cols: tuple[str, ...]) -> pd.Series:
     if not id_cols:
         return pd.Series(["series=0"] * len(df), index=df.index, dtype="string")
@@ -71,12 +111,16 @@ def to_long(
     y_col: str,
     id_cols: Iterable[str] = (),
     x_cols: Iterable[str] = (),
+    historic_x_cols: Iterable[str] = (),
+    future_x_cols: Iterable[str] = (),
     dropna: bool = True,
     prepare: bool = False,
     freq: str | None = None,
     strict_freq: bool = False,
     y_missing: str = "error",
     x_missing: str = "error",
+    historic_x_missing: str | None = None,
+    future_x_missing: str | None = None,
 ) -> pd.DataFrame:
     """
     Convert an arbitrary DataFrame into a canonical long format:
@@ -91,21 +135,27 @@ def to_long(
         raise KeyError(f"y_col not found: {y_col!r}")
 
     id_cols_tup = tuple(id_cols)
-    x_cols_tup = tuple(x_cols)
+    historic_x_cols_tup, future_x_cols_tup, all_x_cols_tup = resolve_covariate_roles(
+        x_cols=x_cols,
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+    )
     out = pd.DataFrame(index=df.index)
     out["unique_id"] = _build_unique_id(df, id_cols=id_cols_tup)
     out["ds"] = df[time_col]
     out["y"] = df[y_col]
 
-    for col in x_cols_tup:
+    for col in all_x_cols_tup:
         if col in {"unique_id", "ds", "y"}:
             raise ValueError(f"x_cols cannot include reserved column name: {col!r}")
         if col not in df.columns:
             raise KeyError(f"x col not found: {col!r}")
         out[col] = df[col]
 
+    out.attrs["historic_x_cols"] = historic_x_cols_tup
+    out.attrs["future_x_cols"] = future_x_cols_tup
     if dropna:
-        out = out.dropna(subset=["ds", "y", *x_cols_tup])
+        out = out.dropna(subset=["ds", "y", *all_x_cols_tup])
 
     if prepare:
         from .prep import prepare_long_df
@@ -116,6 +166,10 @@ def to_long(
             strict_freq=bool(strict_freq),
             y_missing=str(y_missing),
             x_missing=str(x_missing),
+            historic_x_cols=historic_x_cols_tup,
+            future_x_cols=future_x_cols_tup,
+            historic_x_missing=historic_x_missing,
+            future_x_missing=future_x_missing,
         )
 
     return out.reset_index(drop=True)

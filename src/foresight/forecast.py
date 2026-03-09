@@ -26,6 +26,52 @@ def _require_long_df(long_df: Any) -> pd.DataFrame:
     return long_df
 
 
+def _require_future_df(future_df: Any) -> pd.DataFrame:
+    if not isinstance(future_df, pd.DataFrame):
+        raise TypeError("future_df must be a pandas DataFrame")
+    required = {"unique_id", "ds"}
+    missing = required.difference(future_df.columns)
+    if missing:
+        raise KeyError(f"future_df missing required columns: {sorted(missing)}")
+    if future_df.empty:
+        raise ValueError("future_df is empty")
+
+    out = future_df.copy()
+    if "y" not in out.columns:
+        out["y"] = np.nan
+    elif out["y"].notna().any():
+        raise ValueError("future_df must not contain observed y values")
+    return out
+
+
+def _merge_history_and_future_df(long_df: pd.DataFrame, future_df: pd.DataFrame) -> pd.DataFrame:
+    overlap = (
+        long_df.loc[:, ["unique_id", "ds"]]
+        .merge(future_df.loc[:, ["unique_id", "ds"]], on=["unique_id", "ds"], how="inner")
+        .drop_duplicates()
+    )
+    if not overlap.empty:
+        raise ValueError("future_df overlaps with long_df on unique_id/ds")
+
+    cols = list(long_df.columns)
+    for col in future_df.columns:
+        if col not in cols:
+            cols.append(col)
+
+    left = long_df.copy()
+    right = future_df.copy()
+    for col in cols:
+        if col not in left.columns:
+            left[col] = np.nan
+        if col not in right.columns:
+            right[col] = np.nan
+
+    merged = pd.concat(
+        [left.loc[:, cols], right.loc[:, cols]], axis=0, ignore_index=True, sort=False
+    )
+    return merged.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+
+
 def _require_observed_history_only(df: pd.DataFrame) -> pd.DataFrame:
     if df["y"].isna().any():
         raise ValueError("long_df contains missing y values; provide observed history only")
@@ -47,6 +93,39 @@ def _normalize_x_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
         return tuple([str(v).strip() for v in raw if str(v).strip()])
     s = str(raw).strip()
     return (s,) if s else ()
+
+
+def _normalize_covariate_roles(
+    model_params: dict[str, Any],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    def _normalize(raw: Any) -> tuple[str, ...]:
+        if raw is None:
+            return ()
+        if isinstance(raw, str):
+            s = raw.strip()
+            return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
+        if isinstance(raw, list | tuple):
+            return tuple([str(v).strip() for v in raw if str(v).strip()])
+        s = str(raw).strip()
+        return (s,) if s else ()
+
+    future = _normalize(model_params.get("future_x_cols"))
+    legacy = _normalize_x_cols(model_params)
+    if legacy:
+        future = tuple([*future, *[c for c in legacy if c not in future]])
+    historic = _normalize(model_params.get("historic_x_cols"))
+    return historic, future
+
+
+def _require_x_cols_if_needed(
+    *,
+    model: str,
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    context: str,
+) -> None:
+    if bool(capabilities.get("requires_future_covariates", False)) and not x_cols:
+        raise ValueError(f"Model {model!r} requires future covariates via x_cols in {context}")
 
 
 def _parse_interval_levels(levels: Any) -> tuple[float, ...]:
@@ -266,6 +345,35 @@ def _local_xreg_interval_payload(
     return out
 
 
+def _call_local_xreg_forecaster(
+    *,
+    model: str,
+    train_y: np.ndarray,
+    horizon: int,
+    train_exog: np.ndarray,
+    future_exog: np.ndarray,
+    model_params: dict[str, Any],
+) -> np.ndarray:
+    forecaster = make_forecaster(str(model), **dict(model_params))
+    try:
+        out = forecaster(
+            train_y,
+            int(horizon),
+            train_exog=train_exog,
+            future_exog=future_exog,
+        )
+    except TypeError as e:
+        raise ValueError(
+            f"Model {model!r} advertises x_cols support but its local callable does not accept "
+            "`train_exog` / `future_exog`."
+        ) from e
+
+    yhat = np.asarray(out, dtype=float)
+    if yhat.shape != (int(horizon),):
+        raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
+    return yhat
+
+
 def _as_datetime_index(ds: Any) -> pd.DatetimeIndex | None:
     idx = pd.Index(ds)
     if isinstance(idx, pd.DatetimeIndex):
@@ -369,7 +477,9 @@ def _prepare_local_xreg_forecast_group(
     observed = g.iloc[:observed_count].copy()
     future = g.iloc[observed_count:].copy()
     if len(future) < h:
-        raise ValueError("Local forecast with x_cols requires at least horizon future rows per series")
+        raise ValueError(
+            "Local forecast with x_cols requires at least horizon future rows per series"
+        )
 
     future = future.iloc[:h].copy()
     missing_observed_x = [col for col in x_cols if observed[col].isna().any()]
@@ -433,7 +543,9 @@ def _prepare_global_forecast_input(
                 raise ValueError(
                     f"Global forecast future rows are missing required x_cols: {missing_future_x}"
                 )
-            missing_observed_x = [col for col in x_cols if g.iloc[:observed_count][col].isna().any()]
+            missing_observed_x = [
+                col for col in x_cols if g.iloc[:observed_count][col].isna().any()
+            ]
             if missing_observed_x:
                 raise ValueError(
                     f"Global forecast observed rows are missing required x_cols: {missing_observed_x}"
@@ -479,6 +591,7 @@ def forecast_model_long_df(
     *,
     model: str,
     long_df: Any,
+    future_df: Any | None = None,
     horizon: int,
     model_params: dict[str, Any] | None = None,
     interval_levels: Any = None,
@@ -493,6 +606,8 @@ def forecast_model_long_df(
       unique_id, ds, cutoff, step, yhat, model
     """
     df = _require_long_df(long_df)
+    if future_df is not None:
+        df = _merge_history_and_future_df(df, _require_future_df(future_df))
 
     params = _normalize_model_params(model_params)
     model_spec = get_model_spec(str(model))
@@ -502,18 +617,20 @@ def forecast_model_long_df(
 
     if interface == "local":
         df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
-        x_cols = _normalize_x_cols(params)
+        historic_x_cols, x_cols = _normalize_covariate_roles(params)
+        if historic_x_cols:
+            raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
+        _require_x_cols_if_needed(
+            model=str(model),
+            capabilities=capabilities,
+            x_cols=x_cols,
+            context="forecast_model_long_df",
+        )
         if x_cols:
             if not bool(capabilities.get("supports_x_cols", False)):
-                raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
-            model_key = str(model).strip()
-            if model_key == "sarimax":
-                from .models.statsmodels_wrap import sarimax_forecast as _local_xreg_forecast
-            elif model_key == "auto-arima":
-                from .models.statsmodels_wrap import auto_arima_forecast as _local_xreg_forecast
-            else:
-                raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
-
+                raise ValueError(
+                    f"Model {model!r} does not support x_cols in forecast_model_long_df"
+                )
             interval_cols = _interval_column_names(levels)
             rows: list[dict[str, Any]] = []
             local_xreg_params = dict(params)
@@ -543,20 +660,14 @@ def forecast_model_long_df(
                     )
                     yhat = np.asarray(pred_payload["yhat"], dtype=float)
                 else:
-                    yhat = np.asarray(
-                        _local_xreg_forecast(
-                            observed["y"].to_numpy(dtype=float, copy=False),
-                            int(horizon),
-                            train_exog=train_exog,
-                            future_exog=future_exog,
-                            **local_xreg_params,
-                        ),
-                        dtype=float,
+                    yhat = _call_local_xreg_forecaster(
+                        model=str(model),
+                        train_y=observed["y"].to_numpy(dtype=float, copy=False),
+                        horizon=int(horizon),
+                        train_exog=train_exog,
+                        future_exog=future_exog,
+                        model_params=local_xreg_params,
                     )
-                    if yhat.shape != (int(horizon),):
-                        raise ValueError(
-                            f"forecaster must return shape ({int(horizon)},), got {yhat.shape}"
-                        )
                 for i in range(int(horizon)):
                     row = {
                         "unique_id": str(uid),
@@ -579,13 +690,24 @@ def forecast_model_long_df(
         interval_cols = _interval_column_names(levels)
         rows: list[dict[str, Any]] = []
         for uid, g in df.groupby("unique_id", sort=False):
-            cutoff = g["ds"].iloc[-1]
-            future_ds = _infer_future_ds(g["ds"], int(horizon))
-            train_y = g["y"].to_numpy(dtype=float, copy=False)
+            if future_df is not None:
+                observed, future, cutoff = _prepare_local_xreg_forecast_group(
+                    g,
+                    horizon=int(horizon),
+                    x_cols=(),
+                )
+                future_ds = pd.Index(future["ds"])
+                train_y = observed["y"].to_numpy(dtype=float, copy=False)
+            else:
+                cutoff = g["ds"].iloc[-1]
+                future_ds = _infer_future_ds(g["ds"], int(horizon))
+                train_y = g["y"].to_numpy(dtype=float, copy=False)
             forecaster = make_forecaster_object(str(model), **params).fit(train_y)
             yhat = np.asarray(forecaster.predict(int(horizon)), dtype=float)
             if yhat.shape != (int(horizon),):
-                raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
+                raise ValueError(
+                    f"forecaster must return shape ({int(horizon)},), got {yhat.shape}"
+                )
             interval_data = _local_interval_columns(
                 train_y=np.asarray(train_y, dtype=float),
                 model=str(model),
@@ -616,7 +738,15 @@ def forecast_model_long_df(
         )
 
     if interface == "global":
-        x_cols = _normalize_x_cols(params)
+        historic_x_cols, x_cols = _normalize_covariate_roles(params)
+        if historic_x_cols:
+            raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
+        _require_x_cols_if_needed(
+            model=str(model),
+            capabilities=capabilities,
+            x_cols=x_cols,
+            context="forecast_model_long_df",
+        )
         if x_cols and not bool(capabilities.get("supports_x_cols", False)):
             raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
         if levels:

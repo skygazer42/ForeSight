@@ -21,7 +21,10 @@ from .baselines import (
     mean_forecast,
     median_forecast,
     moving_average_forecast,
+    moving_median_forecast,
+    seasonal_drift_forecast,
     seasonal_mean_forecast,
+    weighted_moving_average_forecast,
 )
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
 from .global_regression import (
@@ -74,7 +77,7 @@ from .intermittent import (
     tsb_forecast,
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
-from .multivariate import var_forecast
+from .multivariate import torch_stid_forecast, var_forecast
 from .naive import naive_last, seasonal_naive
 from .regression import (
     adaboost_lag_direct_forecast,
@@ -187,6 +190,14 @@ from .statsmodels_wrap import (
     unobserved_components_forecast,
 )
 from .theta import theta_auto_forecast, theta_forecast
+from .torch_ct_rnn import (
+    torch_cfc_direct_forecast,
+    torch_griffin_direct_forecast,
+    torch_hawk_direct_forecast,
+    torch_lmu_direct_forecast,
+    torch_ltc_direct_forecast,
+    torch_xlstm_direct_forecast,
+)
 from .torch_global import (
     torch_autoformer_global_forecaster,
     torch_crossformer_global_forecaster,
@@ -221,6 +232,7 @@ from .torch_global import (
     torch_tft_global_forecaster,
     torch_tide_global_forecaster,
     torch_timesnet_global_forecaster,
+    torch_timexer_global_forecaster,
     torch_transformer_encdec_global_forecaster,
     torch_tsmixer_global_forecaster,
     torch_wavenet_global_forecaster,
@@ -228,6 +240,7 @@ from .torch_global import (
 )
 from .torch_nn import (
     torch_attn_gru_direct_forecast,
+    torch_autoformer_direct_forecast,
     torch_bigru_direct_forecast,
     torch_bilstm_direct_forecast,
     torch_cnn_direct_forecast,
@@ -237,27 +250,42 @@ from .torch_nn import (
     torch_dlinear_direct_forecast,
     torch_esrnn_direct_forecast,
     torch_etsformer_direct_forecast,
+    torch_fedformer_direct_forecast,
+    torch_film_direct_forecast,
     torch_fnet_direct_forecast,
+    torch_frets_direct_forecast,
     torch_gmlp_direct_forecast,
     torch_gru_direct_forecast,
     torch_hyena_direct_forecast,
     torch_inception_direct_forecast,
+    torch_informer_direct_forecast,
+    torch_itransformer_direct_forecast,
     torch_kan_direct_forecast,
+    torch_koopa_direct_forecast,
+    torch_lightts_direct_forecast,
     torch_linear_attention_direct_forecast,
     torch_lstm_direct_forecast,
     torch_mamba_direct_forecast,
+    torch_micn_direct_forecast,
     torch_mlp_lag_direct_forecast,
     torch_nbeats_direct_forecast,
     torch_nhits_direct_forecast,
     torch_nlinear_direct_forecast,
+    torch_nonstationary_transformer_direct_forecast,
     torch_patchtst_direct_forecast,
     torch_pyraformer_direct_forecast,
     torch_qrnn_recursive_forecast,
     torch_resnet1d_direct_forecast,
     torch_rwkv_direct_forecast,
+    torch_samformer_direct_forecast,
     torch_scinet_direct_forecast,
+    torch_sparsetsf_direct_forecast,
     torch_tcn_direct_forecast,
+    torch_tft_direct_forecast,
     torch_tide_direct_forecast,
+    torch_timemixer_direct_forecast,
+    torch_timesnet_direct_forecast,
+    torch_timexer_direct_forecast,
     torch_transformer_direct_forecast,
     torch_tsmixer_direct_forecast,
     torch_wavenet_direct_forecast,
@@ -265,6 +293,12 @@ from .torch_nn import (
 from .torch_rnn_paper_zoo import list_rnnpaper_specs, torch_rnnpaper_direct_forecast
 from .torch_rnn_zoo import list_rnnzoo_specs, torch_rnnzoo_direct_forecast
 from .torch_seq2seq import torch_lstnet_direct_forecast, torch_seq2seq_direct_forecast
+from .torch_ssm import (
+    torch_mamba2_direct_forecast,
+    torch_s4_direct_forecast,
+    torch_s4d_direct_forecast,
+    torch_s5_direct_forecast,
+)
 from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
 
@@ -293,9 +327,7 @@ class ModelSpec:
     default_params: dict[str, Any] = field(default_factory=dict)
     param_help: dict[str, str] = field(default_factory=dict)
     requires: tuple[str, ...] = ()
-    interface: str = (
-        "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df ; multivariate: (train_2d, horizon)->yhat_matrix
-    )
+    interface: str = "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df ; multivariate: (train_2d, horizon)->yhat_matrix
     capability_overrides: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -384,6 +416,15 @@ _SEASONAL_FOURIER_PARAM_HELP: dict[str, str] = {
 }
 
 
+def _resolve_target_lags_param(*, lags: Any, target_lags: Any = ()) -> Any:
+    spec = target_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return lags
+    return spec
+
+
 def _factory_naive_last(**_params: Any) -> ForecasterFn:
     return naive_last
 
@@ -418,11 +459,38 @@ def _factory_moving_average(*, window: int = 3, **_params: Any) -> ForecasterFn:
     return _f
 
 
+def _factory_weighted_moving_average(*, window: int = 3, **_params: Any) -> ForecasterFn:
+    window_int = int(window)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return weighted_moving_average_forecast(train, horizon, window=window_int)
+
+    return _f
+
+
+def _factory_moving_median(*, window: int = 3, **_params: Any) -> ForecasterFn:
+    window_int = int(window)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return moving_median_forecast(train, horizon, window=window_int)
+
+    return _f
+
+
 def _factory_seasonal_mean(*, season_length: int = 12, **_params: Any) -> ForecasterFn:
     season_length_int = int(season_length)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return seasonal_mean_forecast(train, horizon, season_length=season_length_int)
+
+    return _f
+
+
+def _factory_seasonal_drift(*, season_length: int = 12, **_params: Any) -> ForecasterFn:
+    season_length_int = int(season_length)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return seasonal_drift_forecast(train, horizon, season_length=season_length_int)
 
     return _f
 
@@ -557,7 +625,8 @@ def _factory_ar_ols_auto(*, max_p: int = 10, **_params: Any) -> ForecasterFn:
 
 def _factory_lr_lag(
     *,
-    lags: int = 5,
+    lags: Any = 5,
+    target_lags: Any = (),
     roll_windows: Any = (),
     roll_stats: Any = (),
     diff_lags: Any = (),
@@ -567,13 +636,13 @@ def _factory_lr_lag(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
-    lags_int = int(lags)
+    lag_spec = _resolve_target_lags_param(lags=lags, target_lags=target_lags)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return lr_lag_forecast(
             train,
             horizon,
-            lags=lags_int,
+            lags=lag_spec,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -588,7 +657,8 @@ def _factory_lr_lag(
 
 def _factory_lr_lag_direct(
     *,
-    lags: int = 5,
+    lags: Any = 5,
+    target_lags: Any = (),
     roll_windows: Any = (),
     roll_stats: Any = (),
     diff_lags: Any = (),
@@ -598,13 +668,13 @@ def _factory_lr_lag_direct(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
-    lags_int = int(lags)
+    lag_spec = _resolve_target_lags_param(lags=lags, target_lags=target_lags)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return lr_lag_direct_forecast(
             train,
             horizon,
-            lags=lags_int,
+            lags=lag_spec,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -619,7 +689,8 @@ def _factory_lr_lag_direct(
 
 def _factory_ridge_lag(
     *,
-    lags: int = 5,
+    lags: Any = 5,
+    target_lags: Any = (),
     alpha: float = 1.0,
     roll_windows: Any = (),
     roll_stats: Any = (),
@@ -630,14 +701,14 @@ def _factory_ridge_lag(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
-    lags_int = int(lags)
+    lag_spec = _resolve_target_lags_param(lags=lags, target_lags=target_lags)
     alpha_f = float(alpha)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return ridge_lag_forecast(
             train,
             horizon,
-            lags=lags_int,
+            lags=lag_spec,
             alpha=alpha_f,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -847,7 +918,8 @@ def _factory_gbrt_lag(
 
 def _factory_ridge_lag_direct(
     *,
-    lags: int = 12,
+    lags: Any = 12,
+    target_lags: Any = (),
     alpha: float = 1.0,
     roll_windows: Any = (),
     roll_stats: Any = (),
@@ -858,14 +930,14 @@ def _factory_ridge_lag_direct(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
-    lags_int = int(lags)
+    lag_spec = _resolve_target_lags_param(lags=lags, target_lags=target_lags)
     alpha_f = float(alpha)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return ridge_lag_direct_forecast(
             train,
             horizon,
-            lags=lags_int,
+            lags=lag_spec,
             alpha=alpha_f,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -4655,6 +4727,2181 @@ def _factory_torch_transformer_direct(
     return _f
 
 
+def _factory_torch_informer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_informer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_autoformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    ma_window: int = 7,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    ma_window_int = int(ma_window)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_autoformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            ma_window=ma_window_int,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_nonstationary_transformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_nonstationary_transformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_fedformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ffn_dim: int = 256,
+    modes: int = 16,
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    ffn_dim_int = int(ffn_dim)
+    modes_int = int(modes)
+    ma_window_int = int(ma_window)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_fedformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            ffn_dim=ffn_dim_int,
+            modes=modes_int,
+            ma_window=ma_window_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_itransformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dim_feedforward_int = int(dim_feedforward)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_itransformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dim_feedforward=dim_feedforward_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_timesnet_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    top_k: int = 3,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    top_k_int = int(top_k)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_timesnet_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            top_k=top_k_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_tft_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    lstm_layers: int = 1,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    lstm_layers_int = int(lstm_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_tft_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            lstm_layers=lstm_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_timemixer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_blocks: int = 4,
+    multiscale_factors: Any = (1, 2, 4),
+    token_mixing_hidden: int = 128,
+    channel_mixing_hidden: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_blocks_int = int(num_blocks)
+    token_mixing_hidden_int = int(token_mixing_hidden)
+    channel_mixing_hidden_int = int(channel_mixing_hidden)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_timemixer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_blocks=num_blocks_int,
+            multiscale_factors=multiscale_factors,
+            token_mixing_hidden=token_mixing_hidden_int,
+            channel_mixing_hidden=channel_mixing_hidden_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_sparsetsf_direct(
+    *,
+    lags: int = 192,
+    period_len: int = 24,
+    d_model: int = 64,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    period_len_int = int(period_len)
+    d_model_int = int(d_model)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_sparsetsf_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            period_len=period_len_int,
+            d_model=d_model_int,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_lightts_direct(
+    *,
+    lags: int = 96,
+    chunk_len: int = 12,
+    d_model: int = 64,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    chunk_len_int = int(chunk_len)
+    d_model_int = int(d_model)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_lightts_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            chunk_len=chunk_len_int,
+            d_model=d_model_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_frets_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    top_k_freqs: int = 8,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    top_k_freqs_int = int(top_k_freqs)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_frets_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            top_k_freqs=top_k_freqs_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_film_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ma_window: int = 7,
+    kernel_size: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    ma_window_int = int(ma_window)
+    kernel_size_int = int(kernel_size)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_film_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            ma_window=ma_window_int,
+            kernel_size=kernel_size_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_micn_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    kernel_sizes: Any = (3, 5, 7),
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    ma_window_int = int(ma_window)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_micn_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            kernel_sizes=kernel_sizes,
+            ma_window=ma_window_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_koopa_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    latent_dim: int = 32,
+    num_blocks: int = 2,
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    latent_dim_int = int(latent_dim)
+    num_blocks_int = int(num_blocks)
+    ma_window_int = int(ma_window)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_koopa_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            latent_dim=latent_dim_int,
+            num_blocks=num_blocks_int,
+            ma_window=ma_window_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_samformer_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_samformer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_timexer_direct(
+    *,
+    x_cols: Any = (),
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+    x_cols_v = x_cols
+
+    def _f(
+        train: Any,
+        horizon: int,
+        *,
+        train_exog: Any | None = None,
+        future_exog: Any | None = None,
+    ) -> np.ndarray:
+        return torch_timexer_direct_forecast(
+            train,
+            horizon,
+            x_cols=x_cols_v,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+            train_exog=train_exog,
+            future_exog=future_exog,
+        )
+
+    return _f
+
+
+def _factory_torch_lmu_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    memory_dim: int = 32,
+    num_layers: int = 1,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    memory_dim_int = int(memory_dim)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_lmu_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            memory_dim=memory_dim_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_ltc_direct(
+    *,
+    lags: int = 96,
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_ltc_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_cfc_direct(
+    *,
+    lags: int = 96,
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    backbone_hidden: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    backbone_hidden_int = int(backbone_hidden)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_cfc_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            backbone_hidden=backbone_hidden_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_xlstm_direct(
+    *,
+    lags: int = 96,
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    proj_factor: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    proj_factor_int = int(proj_factor)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_xlstm_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            proj_factor=proj_factor_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_griffin_direct(
+    *,
+    lags: int = 96,
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    conv_kernel: int = 3,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    conv_kernel_int = int(conv_kernel)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_griffin_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            conv_kernel=conv_kernel_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_hawk_direct(
+    *,
+    lags: int = 96,
+    hidden_size: int = 64,
+    num_layers: int = 1,
+    expansion_factor: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    expansion_factor_int = int(expansion_factor)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_hawk_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            expansion_factor=expansion_factor_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_s4d_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_s4d_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_mamba2_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    conv_kernel: int = 3,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    conv_kernel_int = int(conv_kernel)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_mamba2_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            conv_kernel=conv_kernel_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_s4_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    state_dim: int = 32,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    state_dim_int = int(state_dim)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_s4_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            state_dim=state_dim_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_s5_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    state_dim: int = 32,
+    heads: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_layers_int = int(num_layers)
+    state_dim_int = int(state_dim)
+    heads_int = int(heads)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_s5_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_layers=num_layers_int,
+            state_dim=state_dim_int,
+            heads=heads_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_timexer_global(
+    *,
+    context_length: int = 96,
+    x_cols: Any = (),
+    add_time_features: bool = True,
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    epochs: int = 30,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 64,
+    seed: int = 0,
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.1,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    device: str = "cpu",
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    id_emb_dim: int = 8,
+    dropout: float = 0.1,
+    **_params: Any,
+) -> GlobalForecasterFn:
+    return torch_timexer_global_forecaster(
+        context_length=int(context_length),
+        x_cols=x_cols,
+        add_time_features=bool(add_time_features),
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+        device=str(device),
+        d_model=int(d_model),
+        nhead=int(nhead),
+        num_layers=int(num_layers),
+        id_emb_dim=int(id_emb_dim),
+        dropout=float(dropout),
+    )
+
+
 def _factory_torch_mamba_direct(
     *,
     lags: int = 96,
@@ -7501,7 +9748,13 @@ def _factory_auto_arima(
     enforce_invertibility_bool = _normalize_bool_like(enforce_invertibility)
     ic_s = str(information_criterion)
 
-    def _f(train: Any, horizon: int) -> np.ndarray:
+    def _f(
+        train: Any,
+        horizon: int,
+        *,
+        train_exog: Any | None = None,
+        future_exog: Any | None = None,
+    ) -> np.ndarray:
         return auto_arima_forecast(
             train,
             horizon,
@@ -7515,6 +9768,8 @@ def _factory_auto_arima(
             trend=trend_s,
             enforce_stationarity=enforce_stationarity_bool,
             enforce_invertibility=enforce_invertibility_bool,
+            train_exog=train_exog,
+            future_exog=future_exog,
             information_criterion=ic_s,
         )
 
@@ -7735,7 +9990,13 @@ def _factory_sarimax(
     enforce_stationarity_bool = bool(enforce_stationarity)
     enforce_invertibility_bool = bool(enforce_invertibility)
 
-    def _f(train: Any, horizon: int) -> np.ndarray:
+    def _f(
+        train: Any,
+        horizon: int,
+        *,
+        train_exog: Any | None = None,
+        future_exog: Any | None = None,
+    ) -> np.ndarray:
         return sarimax_forecast(
             train,
             horizon,
@@ -7744,6 +10005,8 @@ def _factory_sarimax(
             trend=trend_final,
             enforce_stationarity=enforce_stationarity_bool,
             enforce_invertibility=enforce_invertibility_bool,
+            train_exog=train_exog,
+            future_exog=future_exog,
         )
 
     return _f
@@ -8455,6 +10718,83 @@ def _factory_var(
     return _f
 
 
+def _factory_torch_stid_multivariate(
+    *,
+    lags: int = 24,
+    d_model: int = 64,
+    num_blocks: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> MultivariateForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_blocks_int = int(num_blocks)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_stid_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_blocks=num_blocks_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
 _REGISTRY: dict[str, ModelSpec] = {
     "naive-last": ModelSpec(
         key="naive-last",
@@ -8490,12 +10830,33 @@ _REGISTRY: dict[str, ModelSpec] = {
         default_params={"window": 3},
         param_help={"window": "Trailing window size for the moving average"},
     ),
+    "weighted-moving-average": ModelSpec(
+        key="weighted-moving-average",
+        description="Repeat the linearly weighted mean of the last `window` values.",
+        factory=_factory_weighted_moving_average,
+        default_params={"window": 3},
+        param_help={"window": "Trailing window size for the weighted moving average"},
+    ),
+    "moving-median": ModelSpec(
+        key="moving-median",
+        description="Repeat the median of the last `window` values.",
+        factory=_factory_moving_median,
+        default_params={"window": 3},
+        param_help={"window": "Trailing window size for the moving median"},
+    ),
     "seasonal-mean": ModelSpec(
         key="seasonal-mean",
         description="Repeat the seasonal means for each position in a season.",
         factory=_factory_seasonal_mean,
         default_params={"season_length": 12},
         param_help={"season_length": "Season length for seasonal means"},
+    ),
+    "seasonal-drift": ModelSpec(
+        key="seasonal-drift",
+        description="Repeat the last season with per-position drift estimated from the previous season.",
+        factory=_factory_seasonal_drift,
+        default_params={"season_length": 12},
+        param_help={"season_length": "Season length for per-position seasonal drift"},
     ),
     "ses": ModelSpec(
         key="ses",
@@ -8778,7 +11139,12 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="rf-lag",
         description="RandomForest on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_rf_lag,
-        default_params={"lags": 10, "n_estimators": 200, "random_state": 0, **_LAG_DERIVED_DEFAULTS},
+        default_params={
+            "lags": 10,
+            "n_estimators": 200,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "n_estimators": "RandomForest n_estimators",
@@ -8824,7 +11190,12 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="knn-lag",
         description="KNN regression on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_knn_lag,
-        default_params={"lags": 12, "n_neighbors": 10, "weights": "distance", **_LAG_DERIVED_DEFAULTS},
+        default_params={
+            "lags": 12,
+            "n_neighbors": 10,
+            "weights": "distance",
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "n_neighbors": "KNN n_neighbors",
@@ -8966,7 +11337,13 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="svr-lag",
         description="SVR (RBF) on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_svr_lag,
-        default_params={"lags": 12, "C": 1.0, "gamma": "scale", "epsilon": 0.1, **_LAG_DERIVED_DEFAULTS},
+        default_params={
+            "lags": 12,
+            "C": 1.0,
+            "gamma": "scale",
+            "epsilon": 0.1,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "C": "SVR regularization (must be > 0)",
@@ -9002,7 +11379,13 @@ _REGISTRY: dict[str, ModelSpec] = {
         key="kernel-ridge-lag",
         description="KernelRidge on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_kernel_ridge_lag,
-        default_params={"lags": 12, "alpha": 1.0, "kernel": "rbf", "gamma": None, **_LAG_DERIVED_DEFAULTS},
+        default_params={
+            "lags": 12,
+            "alpha": 1.0,
+            "kernel": "rbf",
+            "gamma": None,
+            **_LAG_DERIVED_DEFAULTS,
+        },
         param_help={
             "lags": "Number of lag features",
             "alpha": "Ridge regularization strength (>=0)",
@@ -11121,6 +13504,597 @@ _REGISTRY: dict[str, ModelSpec] = {
             "nhead": "Number of attention heads",
             "num_layers": "Number of Transformer encoder layers",
             "dim_feedforward": "Feed-forward dimension",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-informer-direct": ModelSpec(
+        key="torch-informer-direct",
+        description="Torch Informer-style (lite) encoder (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_informer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Transformer embedding dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder layers",
+            "dim_feedforward": "Feed-forward dimension",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-autoformer-direct": ModelSpec(
+        key="torch-autoformer-direct",
+        description="Torch Autoformer-style decomposition encoder (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_autoformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "ma_window": 7,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Transformer embedding dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder layers",
+            "dim_feedforward": "Feed-forward dimension",
+            "dropout": "Dropout probability in [0,1)",
+            "ma_window": "Moving average window size for decomposition",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-nonstationary-transformer-direct": ModelSpec(
+        key="torch-nonstationary-transformer-direct",
+        description="Torch Non-stationary Transformer-style model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_nonstationary_transformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Transformer embedding dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder layers",
+            "dim_feedforward": "Feed-forward dimension",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-fedformer-direct": ModelSpec(
+        key="torch-fedformer-direct",
+        description="Torch FEDformer-style decomposition + frequency mixing model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_fedformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "ffn_dim": 256,
+            "modes": 16,
+            "ma_window": 7,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_layers": "Number of frequency-mixing blocks",
+            "ffn_dim": "Feed-forward dimension",
+            "modes": "Number of retained low-frequency Fourier modes",
+            "ma_window": "Moving average window size for decomposition",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-itransformer-direct": ModelSpec(
+        key="torch-itransformer-direct",
+        description="Torch iTransformer-style inverted-token encoder (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_itransformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Transformer embedding dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder layers",
+            "dim_feedforward": "Feed-forward dimension",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-timesnet-direct": ModelSpec(
+        key="torch-timesnet-direct",
+        description="Torch TimesNet-style period-mixing Conv2D model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_timesnet_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "top_k": 3,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "num_layers": "Number of TimesBlocks",
+            "top_k": "Number of dominant periods to mix",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-tft-direct": ModelSpec(
+        key="torch-tft-direct",
+        description="Torch TFT-style hybrid encoder (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_tft_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "lstm_layers": 1,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "nhead": "Number of attention heads",
+            "lstm_layers": "Number of stacked LSTM layers",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-timemixer-direct": ModelSpec(
+        key="torch-timemixer-direct",
+        description="Torch TimeMixer-style multiscale mixer (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_timemixer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_blocks": 4,
+            "multiscale_factors": (1, 2, 4),
+            "token_mixing_hidden": 128,
+            "channel_mixing_hidden": 128,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Mixer embedding dimension",
+            "num_blocks": "Number of mixer blocks",
+            "multiscale_factors": "Temporal smoothing scales, e.g. 1,2,4",
+            "token_mixing_hidden": "Token-mixing MLP hidden size",
+            "channel_mixing_hidden": "Channel-mixing MLP hidden size",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-sparsetsf-direct": ModelSpec(
+        key="torch-sparsetsf-direct",
+        description="Torch SparseTSF-style sparse seasonal readout (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_sparsetsf_direct,
+        default_params={
+            "lags": 192,
+            "period_len": 24,
+            "d_model": 64,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "period_len": "Seasonal stride for sparse lag selection",
+            "d_model": "Hidden width of the sparse projection head",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-timexer-direct": ModelSpec(
+        key="torch-timexer-direct",
+        description="Torch TimeXer-style exogenous-aware transformer (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_timexer_direct,
+        default_params={
+            "x_cols": (),
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "x_cols": "Required future covariate columns for forecast_model_long_df / forecast csv",
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder / cross-attention blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        capability_overrides={"requires_future_covariates": True},
+    ),
+    "torch-lmu-direct": ModelSpec(
+        key="torch-lmu-direct",
+        description="Torch LMU-style recurrent memory model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_lmu_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "memory_dim": 32,
+            "num_layers": 1,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden model dimension",
+            "memory_dim": "Continuous-time memory state dimension",
+            "num_layers": "Number of stacked LMU blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-ltc-direct": ModelSpec(
+        key="torch-ltc-direct",
+        description="Torch LTC-style liquid time-constant recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_ltc_direct,
+        default_params={
+            "lags": 96,
+            "hidden_size": 64,
+            "num_layers": 1,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_size": "Recurrent hidden size",
+            "num_layers": "Number of stacked LTC blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-cfc-direct": ModelSpec(
+        key="torch-cfc-direct",
+        description="Torch CfC-style closed-form continuous-time recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_cfc_direct,
+        default_params={
+            "lags": 96,
+            "hidden_size": 64,
+            "num_layers": 1,
+            "backbone_hidden": 128,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_size": "Recurrent hidden size",
+            "num_layers": "Number of stacked CfC blocks",
+            "backbone_hidden": "Closed-form backbone hidden size",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-xlstm-direct": ModelSpec(
+        key="torch-xlstm-direct",
+        description="Torch xLSTM-style expanded-gate recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_xlstm_direct,
+        default_params={
+            "lags": 96,
+            "hidden_size": 64,
+            "num_layers": 1,
+            "proj_factor": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_size": "Recurrent hidden size",
+            "num_layers": "Number of stacked xLSTM blocks",
+            "proj_factor": "Expansion factor for the gated inner projection",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-griffin-direct": ModelSpec(
+        key="torch-griffin-direct",
+        description="Torch Griffin-style recurrent hybrid model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_griffin_direct,
+        default_params={
+            "lags": 96,
+            "hidden_size": 64,
+            "num_layers": 1,
+            "conv_kernel": 3,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_size": "Recurrent hidden size",
+            "num_layers": "Number of stacked Griffin blocks",
+            "conv_kernel": "Depthwise convolution kernel size (>=1)",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-hawk-direct": ModelSpec(
+        key="torch-hawk-direct",
+        description="Torch Hawk-style gated recurrent mixer (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_hawk_direct,
+        default_params={
+            "lags": 96,
+            "hidden_size": 64,
+            "num_layers": 1,
+            "expansion_factor": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "hidden_size": "Recurrent hidden size",
+            "num_layers": "Number of stacked Hawk blocks",
+            "expansion_factor": "Expansion factor for the recurrent mixer",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-s4d-direct": ModelSpec(
+        key="torch-s4d-direct",
+        description="Torch S4D-style diagonal state-space model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_s4d_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "State-space model dimension",
+            "num_layers": "Number of stacked diagonal SSM blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-s4-direct": ModelSpec(
+        key="torch-s4-direct",
+        description="Torch S4-style structured state-space model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_s4_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "state_dim": 32,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "State-space model dimension",
+            "num_layers": "Number of stacked structured SSM blocks",
+            "state_dim": "Latent state dimension per block",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-s5-direct": ModelSpec(
+        key="torch-s5-direct",
+        description="Torch S5-style multi-state-space model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_s5_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "state_dim": 32,
+            "heads": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "State-space model dimension",
+            "num_layers": "Number of stacked multi-state SSM blocks",
+            "state_dim": "Latent state dimension per head",
+            "heads": "Number of state-space heads",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-mamba2-direct": ModelSpec(
+        key="torch-mamba2-direct",
+        description="Torch Mamba-2-style selective state-space refinement (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_mamba2_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "conv_kernel": 3,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "State-space model dimension",
+            "num_layers": "Number of stacked Mamba-2 refinement blocks",
+            "conv_kernel": "Causal depthwise conv kernel size (>=1)",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-lightts-direct": ModelSpec(
+        key="torch-lightts-direct",
+        description="Torch LightTS-style dual-sampling MLP (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_lightts_direct,
+        default_params={
+            "lags": 96,
+            "chunk_len": 12,
+            "d_model": 64,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "chunk_len": "Chunk size for continuous / interval sampling views",
+            "d_model": "Hidden width of the fused sampling head",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-frets-direct": ModelSpec(
+        key="torch-frets-direct",
+        description="Torch FreTS-style frequency-domain MLP (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_frets_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "top_k_freqs": 8,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden width of the frequency MLP",
+            "num_layers": "Number of frequency-domain MLP blocks",
+            "top_k_freqs": "Number of non-DC frequencies retained per window",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-film-direct": ModelSpec(
+        key="torch-film-direct",
+        description="Torch FiLM-style decomposition + long-filter mixer (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_film_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "ma_window": 7,
+            "kernel_size": 7,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden model dimension",
+            "num_layers": "Number of long-filter mixer blocks",
+            "ma_window": "Moving average window size for decomposition",
+            "kernel_size": "Odd depthwise filter width for the seasonal mixer",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-micn-direct": ModelSpec(
+        key="torch-micn-direct",
+        description="Torch MICN-style multiscale convolutional decomposition model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_micn_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "num_layers": 2,
+            "kernel_sizes": (3, 5, 7),
+            "ma_window": 7,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden model dimension",
+            "num_layers": "Number of multiscale convolution blocks",
+            "kernel_sizes": "Odd multiscale Conv1D kernel sizes, e.g. 3,5,7",
+            "ma_window": "Moving average window size for decomposition",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-koopa-direct": ModelSpec(
+        key="torch-koopa-direct",
+        description="Torch Koopa-style decomposition + latent linear dynamics model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_koopa_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "latent_dim": 32,
+            "num_blocks": 2,
+            "ma_window": 7,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden token dimension",
+            "latent_dim": "Latent Koopman state dimension",
+            "num_blocks": "Number of seasonal encoder blocks",
+            "ma_window": "Moving average window size for decomposition",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-samformer-direct": ModelSpec(
+        key="torch-samformer-direct",
+        description="Torch SAMformer-style linear-attention + adaptive mixing model (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_samformer_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of linear-attention mixer blocks",
             "dropout": "Dropout probability in [0,1)",
             **_TORCH_COMMON_PARAM_HELP,
         },
@@ -13536,6 +16510,43 @@ _REGISTRY: dict[str, ModelSpec] = {
         requires=("torch",),
         interface="global",
     ),
+    "torch-timexer-global": ModelSpec(
+        key="torch-timexer-global",
+        description="Torch TimeXer-style exogenous-aware transformer (lite) trained globally across panel series. Requires PyTorch.",
+        factory=_factory_torch_timexer_global,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Required covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "nhead": "Number of attention heads",
+            "num_layers": "Number of encoder / cross-attention blocks",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+        capability_overrides={"requires_future_covariates": True},
+    ),
     "torch-informer-global": ModelSpec(
         key="torch-informer-global",
         description="Torch Informer (lite) trained globally across panel series. Requires PyTorch.",
@@ -15092,6 +18103,27 @@ _REGISTRY: dict[str, ModelSpec] = {
             "ic": "Optional lag-order selection criterion: aic, bic, hqic, fpe, or none",
         },
         requires=("stats",),
+        interface="multivariate",
+    ),
+    "torch-stid-multivariate": ModelSpec(
+        key="torch-stid-multivariate",
+        description="Torch STID-style multivariate baseline (lite) on a wide target matrix. Requires PyTorch.",
+        factory=_factory_torch_stid_multivariate,
+        default_params={
+            "lags": 24,
+            "d_model": 64,
+            "num_blocks": 2,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Node embedding / hidden dimension",
+            "num_blocks": "Number of identity-style mixing blocks",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
         interface="multivariate",
     ),
     "auto-arima": ModelSpec(

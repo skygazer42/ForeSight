@@ -515,8 +515,16 @@ def build_parser() -> argparse.ArgumentParser:
     forecast_sub = forecast_p.add_subparsers(dest="forecast_command", required=True)
 
     forecast_csv = forecast_sub.add_parser("csv", help="Forecast a model on an arbitrary CSV file")
-    forecast_csv.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    forecast_csv.add_argument(
+        "--model", required=True, help="Model key (see: `foresight models list`)"
+    )
     forecast_csv.add_argument("--path", required=True, help="Path to a CSV file")
+    forecast_csv.add_argument(
+        "--future-path",
+        type=str,
+        default="",
+        help="Optional path to a CSV file containing future timestamps/covariates only",
+    )
     forecast_csv.add_argument("--time-col", required=True, help="Time column name")
     forecast_csv.add_argument("--y-col", required=True, help="Target column name")
     forecast_csv.add_argument(
@@ -634,7 +642,9 @@ def build_parser() -> argparse.ArgumentParser:
     tuning_sub = tuning.add_subparsers(dest="tuning_command", required=True)
 
     tuning_run = tuning_sub.add_parser("run", help="Run deterministic grid search on a dataset")
-    tuning_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    tuning_run.add_argument(
+        "--model", required=True, help="Model key (see: `foresight models list`)"
+    )
     tuning_run.add_argument("--dataset", required=True, help="Dataset key")
     tuning_run.add_argument(
         "--y-col",
@@ -1936,7 +1946,7 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_forecast_csv(args: argparse.Namespace) -> int:
-    from .data.format import to_long
+    from .data.format import resolve_covariate_roles, to_long
     from .forecast import _prepare_global_forecast_input, forecast_model_long_df
     from .io import ensure_datetime, load_csv, parse_id_cols
     from .models.registry import (
@@ -1954,29 +1964,47 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
         ensure_datetime(df, str(args.time_col))
 
     model_spec = get_model_spec(str(args.model))
-    x_cols: tuple[str, ...] = ()
-    if "x_cols" in model_params:
-        raw = model_params.get("x_cols")
-        if raw is not None:
-            if isinstance(raw, str):
-                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
-            elif isinstance(raw, list | tuple):
-                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
-            else:
-                s = str(raw).strip()
-                x_cols = (s,) if s else ()
+    historic_x_cols, future_x_cols, all_x_cols = resolve_covariate_roles(
+        x_cols=model_params.get("x_cols", ()),
+        historic_x_cols=model_params.get("historic_x_cols", ()),
+        future_x_cols=model_params.get("future_x_cols", ()),
+    )
 
     long_df = to_long(
         df,
         time_col=str(args.time_col),
         y_col=str(args.y_col),
         id_cols=id_cols,
-        x_cols=x_cols,
-        dropna=not (model_spec.interface == "global" or (model_spec.interface == "local" and x_cols)),
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+        x_cols=all_x_cols,
+        dropna=not (
+            model_spec.interface == "global" or (model_spec.interface == "local" and future_x_cols)
+        ),
     )
+
+    future_df = None
+    future_path = str(getattr(args, "future_path", "")).strip()
+    if future_path:
+        future_raw = load_csv(future_path)
+        if bool(args.parse_dates):
+            ensure_datetime(future_raw, str(args.time_col))
+        if str(args.y_col) not in future_raw.columns:
+            future_raw[str(args.y_col)] = np.nan
+        future_df = to_long(
+            future_raw,
+            time_col=str(args.time_col),
+            y_col=str(args.y_col),
+            id_cols=id_cols,
+            historic_x_cols=historic_x_cols,
+            future_x_cols=future_x_cols,
+            x_cols=all_x_cols,
+            dropna=False,
+        )
     pred = forecast_model_long_df(
         model=str(args.model),
         long_df=long_df,
+        future_df=future_df,
         horizon=int(args.horizon),
         model_params=model_params,
         interval_levels=str(getattr(args, "interval_levels", "")).strip(),
@@ -1988,12 +2016,14 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
     save_artifact = str(getattr(args, "save_artifact", "")).strip()
     if save_artifact:
         if model_spec.interface == "local":
-            if x_cols:
+            if future_x_cols:
                 raise ValueError(
                     "Saving local forecast artifacts is not yet supported when x_cols are used"
                 )
             if int(long_df["unique_id"].nunique()) != 1:
-                raise ValueError("Saving local forecast artifacts currently requires a single series")
+                raise ValueError(
+                    "Saving local forecast artifacts currently requires a single series"
+                )
             g = next(iter(long_df.groupby("unique_id", sort=False)))[1]
             forecaster = make_forecaster_object(str(args.model), **model_params).fit(
                 g["y"].to_numpy(dtype=float, copy=False)
@@ -2011,9 +2041,11 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
             augmented, cutoff = _prepare_global_forecast_input(
                 long_df,
                 horizon=int(args.horizon),
-                x_cols=x_cols,
+                x_cols=future_x_cols,
             )
-            forecaster = make_global_forecaster_object(str(args.model), **model_params).fit(augmented)
+            forecaster = make_global_forecaster_object(str(args.model), **model_params).fit(
+                augmented
+            )
             save_forecaster(
                 forecaster,
                 save_artifact,
@@ -2074,7 +2106,9 @@ def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
         if levels:
             train_y = getattr(forecaster, "_train_y", None)
             if train_y is None:
-                raise ValueError("Local artifact is missing training history required for intervals")
+                raise ValueError(
+                    "Local artifact is missing training history required for intervals"
+                )
             interval_data = _local_interval_columns(
                 train_y=np.asarray(train_y, dtype=float),
                 model=str(forecaster.model_key),

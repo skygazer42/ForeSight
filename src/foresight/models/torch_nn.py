@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -401,6 +402,75 @@ def _normalize_series(x: np.ndarray) -> tuple[np.ndarray, float, float]:
     return (x - mean) / std, mean, std
 
 
+def _as_2d_float_array(values: Any, *, name: str) -> np.ndarray:
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
+    if arr.ndim != 2:
+        raise ValueError(f"{name} must be 1D or 2D, got shape {arr.shape}")
+    if arr.size == 0:
+        raise ValueError(f"{name} must be non-empty")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{name} contains NaN/inf")
+    return arr
+
+
+def _normalize_exog_pair(
+    train_exog: np.ndarray, future_exog: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    mean = np.mean(train_exog, axis=0, dtype=float)
+    std = np.std(train_exog, axis=0, dtype=float)
+    std = np.where(std < 1e-8, 1.0, std)
+    return (
+        (train_exog - mean.reshape(1, -1)) / std.reshape(1, -1),
+        (future_exog - mean.reshape(1, -1)) / std.reshape(1, -1),
+    )
+
+
+def _make_lagged_xy_exog_seq(
+    y: np.ndarray,
+    exog: np.ndarray,
+    *,
+    lags: int,
+    horizon: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    n = int(y.size)
+    h = int(horizon)
+    lag_count = int(lags)
+    if exog.ndim != 2:
+        raise ValueError(f"exog must be 2D, got shape {exog.shape}")
+    if int(exog.shape[0]) != n:
+        raise ValueError("exog rows must match target length")
+    if n < lag_count + h:
+        raise ValueError(f"Need >= lags+horizon points (lags={lag_count}, horizon={h}), got {n}")
+
+    rows = n - lag_count - h + 1
+    x_dim = int(exog.shape[1])
+    X = np.empty((rows, lag_count + h, 1 + x_dim), dtype=float)
+    Y = np.empty((rows, h), dtype=float)
+    for i in range(rows):
+        t = i + lag_count
+        y_past = y[t - lag_count : t]
+        x_past = exog[t - lag_count : t, :]
+        x_future = exog[t : t + h, :]
+        y_feat = np.concatenate([y_past, np.zeros((h,), dtype=float)], axis=0).reshape(-1, 1)
+        x_feat = np.concatenate([x_past, x_future], axis=0)
+        X[i] = np.concatenate([y_feat, x_feat], axis=1)
+        Y[i] = y[t : t + h]
+    return X, Y
+
+
+def _make_positional_encoding(seq_len: int, d_model: int) -> np.ndarray:
+    pe = np.zeros((int(seq_len), int(d_model)), dtype=float)
+    position = np.arange(int(seq_len), dtype=float).reshape(-1, 1)
+    div_term = np.exp(
+        np.arange(0, int(d_model), 2, dtype=float) * (-math.log(10000.0) / float(d_model))
+    )
+    pe[:, 0::2] = np.sin(position * div_term)
+    pe[:, 1::2] = np.cos(position * div_term)
+    return pe
+
+
 @dataclass(frozen=True)
 class TorchTrainConfig:
     epochs: int
@@ -418,6 +488,22 @@ class TorchTrainConfig:
     scheduler_step_size: int = 10
     scheduler_gamma: float = 0.1
     restore_best: bool = True
+
+
+def _moving_average_1d(xb: Any, *, window: int) -> Any:
+    torch = _require_torch()
+    F = torch.nn.functional
+
+    k = int(window)
+    if k <= 0:
+        raise ValueError("window must be >= 1")
+
+    left = k // 2
+    right = k - 1 - left
+    x1 = xb.unsqueeze(1)
+    xpad = F.pad(x1, (left, right), mode="replicate")
+    weight = torch.ones((1, 1, k), device=xb.device, dtype=xb.dtype) / float(k)
+    return F.conv1d(xpad, weight).squeeze(1)
 
 
 def _train_loop(
@@ -585,6 +671,118 @@ def _train_loop(
 
     model.eval()
     return model
+
+
+def _fit_encoder_direct_model(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    build_model: Callable[[int, int], Any],
+    normalize: bool,
+    device: str,
+    cfg: TorchTrainConfig,
+) -> np.ndarray:
+    torch = _require_torch()
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+
+    model = build_model(lag_count, h)
+    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def _make_grn(d_in: int, d_hidden: int, d_out: int | None = None, dropout: float = 0.0) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    d_in_i = int(d_in)
+    d_hidden_i = int(d_hidden)
+    d_out_i = int(d_in_i) if d_out is None else int(d_out)
+
+    class _GRN(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(d_in_i, d_hidden_i)
+            self.fc2 = nn.Linear(d_hidden_i, d_out_i)
+            self.gate = nn.Linear(d_out_i, d_out_i)
+            self.dropout = nn.Dropout(float(dropout))
+            self.skip = nn.Identity() if d_in_i == d_out_i else nn.Linear(d_in_i, d_out_i)
+            self.norm = nn.LayerNorm(d_out_i)
+
+        def forward(self, x: Any) -> Any:
+            h = F.elu(self.fc1(x))
+            h = self.fc2(h)
+            h = self.dropout(h)
+            g = torch.sigmoid(self.gate(h))
+            return self.norm(self.skip(x) + g * h)
+
+    return _GRN()
+
+
+def _make_positional_encoding(seq_len: int, d_model: int) -> np.ndarray:
+    pe = np.zeros((int(seq_len), int(d_model)), dtype=float)
+    pos = np.arange(int(seq_len), dtype=float).reshape(-1, 1)
+    div = np.exp(np.arange(0, int(d_model), 2, dtype=float) * (-math.log(10000.0) / float(d_model)))
+    pe[:, 0::2] = np.sin(pos * div)
+    pe[:, 1::2] = np.cos(pos * div[: pe[:, 1::2].shape[1]])
+    return pe
+
+
+def _moving_average_1d(y: Any, *, window: int) -> Any:
+    torch = _require_torch()
+    F = torch.nn.functional
+
+    k = int(window)
+    if k <= 0:
+        raise ValueError("window must be >= 1")
+
+    left = k // 2
+    right = k - 1 - left
+    y_in = y.unsqueeze(1)
+    y_pad = F.pad(y_in, (left, right), mode="replicate")
+    return F.avg_pool1d(y_pad, kernel_size=k, stride=1).squeeze(1)
+
+
+def _parse_int_tuple(value: Any, *, name: str) -> tuple[int, ...]:
+    if isinstance(value, int):
+        items = (int(value),)
+    elif isinstance(value, str):
+        parts = [p.strip() for p in str(value).split(",") if p.strip()]
+        items = tuple(int(p) for p in parts)
+    elif isinstance(value, list | tuple):
+        items = tuple(int(v) for v in value)
+    else:
+        items = (int(value),)
+
+    if not items or any(int(v) <= 0 for v in items):
+        raise ValueError(f"{name} must be a non-empty sequence of positive ints")
+    return items
 
 
 def torch_mlp_lag_direct_forecast(
@@ -1469,6 +1667,2085 @@ def torch_transformer_direct_forecast(
     yhat = yhat_t.astype(float, copy=False)
     if bool(normalize):
         yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_informer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch Informer-style encoder (lite) direct multi-horizon forecast on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    ff_dim = int(dim_feedforward)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ff_dim <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        pe = _make_positional_encoding(lag_count, d)
+
+        class _InformerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.register_buffer("pe", torch.tensor(pe, dtype=torch.float32), persistent=False)
+                layer = nn.TransformerEncoderLayer(
+                    d_model=d,
+                    nhead=heads,
+                    dim_feedforward=ff_dim,
+                    dropout=drop,
+                    activation="gelu",
+                    batch_first=True,
+                    norm_first=True,
+                )
+                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.head = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                z = self.in_proj(xb) + self.pe.unsqueeze(0)
+                z = self.enc(z)
+                return self.head(z[:, -1, :])
+
+        return _InformerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_autoformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    ma_window: int = 7,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch Autoformer-style decomposition encoder (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    ff_dim = int(dim_feedforward)
+    ma = int(ma_window)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ff_dim <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    if ma <= 1:
+        raise ValueError("ma_window must be >= 2")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        pe = _make_positional_encoding(lag_count, d)
+
+        class _AutoformerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.register_buffer("pe", torch.tensor(pe, dtype=torch.float32), persistent=False)
+                layer = nn.TransformerEncoderLayer(
+                    d_model=d,
+                    nhead=heads,
+                    dim_feedforward=ff_dim,
+                    dropout=drop,
+                    activation="gelu",
+                    batch_first=True,
+                    norm_first=True,
+                )
+                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.seasonal_head = nn.Linear(d, h)
+                self.trend_proj = nn.Linear(lag_count, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                trend = _moving_average_1d(y_ctx, window=ma)
+                seasonal = y_ctx - trend
+                z = self.in_proj(seasonal.unsqueeze(-1)) + self.pe.unsqueeze(0)
+                z = self.enc(z)
+                seasonal_hat = self.seasonal_head(z[:, -1, :])
+                trend_hat = self.trend_proj(trend)
+                return seasonal_hat + trend_hat
+
+        return _AutoformerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_nonstationary_transformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch Non-stationary Transformer-style model (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    ff_dim = int(dim_feedforward)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ff_dim <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    head_dim = d // heads
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        pe = _make_positional_encoding(lag_count, d)
+
+        class _DSFactors(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                hidden = max(8, d)
+                self.mlp = nn.Sequential(
+                    nn.Linear(2, hidden),
+                    nn.GELU(),
+                    nn.Linear(hidden, 2 * heads),
+                )
+
+            def forward(self, mu: Any, sigma: Any) -> tuple[Any, Any]:
+                feats = torch.stack([mu, sigma], dim=-1)
+                out = self.mlp(feats)
+                tau_raw, delta = out.chunk(2, dim=-1)
+                tau = F.softplus(tau_raw) + 1e-3
+                return tau, delta
+
+        class _NSAttention(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.qkv = nn.Linear(d, 3 * d)
+                self.out = nn.Linear(d, d)
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any, tau: Any, delta: Any) -> Any:
+                qkv = self.qkv(xb)
+                q, k, v = qkv.chunk(3, dim=-1)
+
+                def _reshape(z: Any) -> Any:
+                    return z.reshape(z.shape[0], z.shape[1], heads, head_dim).permute(0, 2, 1, 3)
+
+                qh = _reshape(q)
+                kh = _reshape(k)
+                vh = _reshape(v)
+                scores = (qh @ kh.transpose(-2, -1)) / math.sqrt(float(head_dim))
+                scores = scores * tau.reshape(tau.shape[0], heads, 1, 1)
+                scores = scores + delta.reshape(delta.shape[0], heads, 1, 1)
+                attn = torch.softmax(scores, dim=-1)
+                attn = self.drop(attn)
+                out = attn @ vh
+                out = out.permute(0, 2, 1, 3).reshape(out.shape[0], out.shape[2], d)
+                return self.out(out)
+
+        class _NSTBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.attn = _NSAttention()
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, ff_dim),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(ff_dim, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any, tau: Any, delta: Any) -> Any:
+                xb = xb + self.drop(self.attn(self.norm1(xb), tau, delta))
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _NSTDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.register_buffer("pe", torch.tensor(pe, dtype=torch.float32), persistent=False)
+                self.ds = _DSFactors()
+                self.blocks = nn.ModuleList([_NSTBlock() for _ in range(layers)])
+                self.head = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                mu = torch.mean(y_ctx, dim=1)
+                sigma = torch.sqrt(torch.mean((y_ctx - mu.unsqueeze(1)) ** 2, dim=1) + 1e-6)
+                x_norm = ((y_ctx - mu.unsqueeze(1)) / sigma.unsqueeze(1)).unsqueeze(-1)
+                tau, delta = self.ds(mu, sigma)
+                z = self.in_proj(x_norm) + self.pe.unsqueeze(0)
+                for blk in self.blocks:
+                    z = blk(z, tau, delta)
+                yhat_norm = self.head(z[:, -1, :])
+                return yhat_norm * sigma.unsqueeze(1) + mu.unsqueeze(1)
+
+        return _NSTDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_fedformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ffn_dim: int = 256,
+    modes: int = 16,
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch FEDformer-style decomposition + frequency-mixing model (lite) direct forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    layers = int(num_layers)
+    ff_dim = int(ffn_dim)
+    mode_count = int(modes)
+    ma = int(ma_window)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ff_dim <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    if mode_count <= 0:
+        raise ValueError("modes must be >= 1")
+    if ma <= 1:
+        raise ValueError("ma_window must be >= 2")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        pe = _make_positional_encoding(lag_count, d)
+
+        class _FourierMix(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.w_re = nn.Parameter(torch.randn(mode_count, d, dtype=torch.float32) * 0.02)
+                self.w_im = nn.Parameter(torch.randn(mode_count, d, dtype=torch.float32) * 0.02)
+
+            def forward(self, xb: Any) -> Any:
+                xf = torch.fft.rfft(xb, dim=1)
+                lf = int(xf.shape[1])
+                m = min(mode_count, lf)
+                w_c = torch.complex(self.w_re[:m, :], self.w_im[:m, :])
+                out_f = torch.zeros_like(xf)
+                out_f[:, :m, :] = xf[:, :m, :] * w_c.unsqueeze(0)
+                return torch.fft.irfft(out_f, n=int(xb.shape[1]), dim=1)
+
+        class _FEDformerBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.mix = _FourierMix()
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, ff_dim),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(ff_dim, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any) -> Any:
+                xb = xb + self.drop(self.mix(self.norm1(xb)))
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _FEDformerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.register_buffer("pe", torch.tensor(pe, dtype=torch.float32), persistent=False)
+                self.blocks = nn.ModuleList([_FEDformerBlock() for _ in range(layers)])
+                self.seasonal_head = nn.Linear(d, h)
+                self.trend_proj = nn.Linear(lag_count, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                trend = _moving_average_1d(y_ctx, window=ma)
+                seasonal = y_ctx - trend
+                z = self.in_proj(seasonal.unsqueeze(-1)) + self.pe.unsqueeze(0)
+                for blk in self.blocks:
+                    z = blk(z)
+                seasonal_hat = self.seasonal_head(z[:, -1, :])
+                trend_hat = self.trend_proj(trend)
+                return seasonal_hat + trend_hat
+
+        return _FEDformerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_itransformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dim_feedforward: int = 256,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch iTransformer-style inverted-token encoder (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    ff_dim = int(dim_feedforward)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ff_dim <= 0:
+        raise ValueError("dim_feedforward must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _ITransformerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(lag_count, d)
+                self.token_pos = nn.Parameter(torch.zeros((1, 1, d), dtype=torch.float32))
+                layer = nn.TransformerEncoderLayer(
+                    d_model=d,
+                    nhead=heads,
+                    dim_feedforward=ff_dim,
+                    dropout=drop,
+                    activation="gelu",
+                    batch_first=True,
+                    norm_first=True,
+                )
+                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.out = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                xinv = xb.transpose(1, 2)
+                z = self.in_proj(xinv) + self.token_pos
+                z = self.enc(z)
+                return self.out(z[:, 0, :])
+
+        return _ITransformerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_timesnet_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    top_k: int = 3,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch TimesNet-style period-mixing Conv2D model (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    layers = int(num_layers)
+    k = int(top_k)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if k <= 0:
+        raise ValueError("top_k must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        def _detect_periods(y_ctx: Any) -> tuple[list[int], Any]:
+            amp = torch.fft.rfft(y_ctx, dim=1).abs().mean(dim=0)
+            if int(amp.numel()) <= 1:
+                w = torch.ones((1,), dtype=torch.float32, device=y_ctx.device)
+                return [1], w
+
+            amp = amp.to(dtype=torch.float32).clone()
+            amp[0] = 0.0
+            k_eff = min(k, int(amp.numel() - 1))
+            vals, idx = torch.topk(amp, k=k_eff, largest=True)
+
+            period_to_val: dict[int, float] = {}
+            for f_i, v_i in zip(idx.tolist(), vals.tolist(), strict=True):
+                f = int(f_i)
+                if f <= 0:
+                    continue
+                p = int(round(float(lag_count) / float(f)))
+                p = max(1, min(p, lag_count))
+                prev = period_to_val.get(p)
+                if prev is None or float(v_i) > float(prev):
+                    period_to_val[p] = float(v_i)
+
+            if not period_to_val:
+                w = torch.ones((1,), dtype=torch.float32, device=y_ctx.device)
+                return [1], w
+
+            items = sorted(period_to_val.items(), key=lambda kv: kv[1], reverse=True)
+            periods = [int(p) for p, _v in items]
+            vals_t = torch.tensor(
+                [float(v) for _p, v in items], dtype=torch.float32, device=y_ctx.device
+            )
+            weights = torch.softmax(vals_t, dim=0)
+            return periods, weights
+
+        class _TimesBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.conv = nn.Sequential(
+                    nn.Conv2d(d, d, kernel_size=3, padding=1),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Conv2d(d, d, kernel_size=3, padding=1),
+                    nn.Dropout(p=drop),
+                )
+                self.norm = nn.LayerNorm(d)
+
+            def forward(self, z: Any, periods: list[int], weights: Any) -> Any:
+                bsz, seq_len, _dim = z.shape
+                out = torch.zeros_like(z)
+                for w, p in zip(weights, periods, strict=True):
+                    pp = int(p)
+                    if pp <= 0:
+                        continue
+                    pad_len = (pp - (int(seq_len) % pp)) % pp
+                    if pad_len:
+                        pad = z[:, -1:, :].expand(-1, int(pad_len), -1)
+                        z_pad = torch.cat([z, pad], dim=1)
+                    else:
+                        z_pad = z
+
+                    full_len = int(z_pad.shape[1])
+                    z2 = z_pad.reshape(int(bsz), full_len // pp, pp, d).permute(0, 3, 1, 2)
+                    z2 = self.conv(z2)
+                    z2 = z2.permute(0, 2, 3, 1).reshape(int(bsz), full_len, d)
+                    out = out + w * z2[:, : int(seq_len), :]
+                return self.norm(z + out)
+
+        class _TimesNetDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.blocks = nn.ModuleList([_TimesBlock() for _ in range(layers)])
+                self.head = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                with torch.no_grad():
+                    periods, weights = _detect_periods(y_ctx)
+                z = self.in_proj(xb)
+                for blk in self.blocks:
+                    z = blk(z, periods, weights)
+                return self.head(z[:, -1, :])
+
+        return _TimesNetDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_tft_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    lstm_layers: int = 1,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch TFT-style (lite) direct multi-horizon forecast on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    heads = int(nhead)
+    rnn_layers = int(lstm_layers)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if rnn_layers <= 0:
+        raise ValueError("lstm_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(_lag_count: int, h: int) -> Any:
+        rnn_drop = drop if rnn_layers > 1 else 0.0
+
+        class _TFTDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.pre_grn = _make_grn(d, max(8, d), d, dropout=drop)
+                self.lstm = _make_manual_lstm(
+                    input_size=d,
+                    hidden_size=d,
+                    num_layers=rnn_layers,
+                    dropout=rnn_drop,
+                    bidirectional=False,
+                )
+                self.attn = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
+                self.post_grn = _make_grn(d, max(8, d), d, dropout=drop)
+                self.out = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                h0 = self.pre_grn(self.in_proj(xb))
+                h1, _ = self.lstm(h0)
+                attn, _ = self.attn(h1, h1, h1, need_weights=False)
+                h2 = self.post_grn(h1 + attn)
+                return self.out(h2[:, -1, :])
+
+        return _TFTDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_timemixer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_blocks: int = 4,
+    multiscale_factors: Any = (1, 2, 4),
+    token_mixing_hidden: int = 128,
+    channel_mixing_hidden: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch TimeMixer-style (lite) direct multi-horizon forecast on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    d = int(d_model)
+    blocks = int(num_blocks)
+    token_hidden = int(token_mixing_hidden)
+    channel_hidden = int(channel_mixing_hidden)
+    scales = _parse_int_tuple(multiscale_factors, name="multiscale_factors")
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if blocks <= 0:
+        raise ValueError("num_blocks must be >= 1")
+    if token_hidden <= 0:
+        raise ValueError("token_mixing_hidden must be >= 1")
+    if channel_hidden <= 0:
+        raise ValueError("channel_mixing_hidden must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _MixerBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm_t = nn.LayerNorm(d)
+                self.token_mlp = nn.Sequential(
+                    nn.Linear(lag_count, token_hidden),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(token_hidden, lag_count),
+                )
+                self.norm_c = nn.LayerNorm(d)
+                self.channel_mlp = nn.Sequential(
+                    nn.Linear(d, channel_hidden),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(channel_hidden, d),
+                )
+
+            def forward(self, xb: Any) -> Any:
+                z = self.norm_t(xb)
+                xb = xb + self.token_mlp(z.transpose(1, 2)).transpose(1, 2)
+                z = self.norm_c(xb)
+                xb = xb + self.channel_mlp(z)
+                return xb
+
+        class _TimeMixerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.scale_proj = nn.ModuleList([nn.Linear(d, d) for _ in scales])
+                self.fuse = nn.Linear(d * len(scales), d)
+                self.blocks = nn.ModuleList([_MixerBlock() for _ in range(blocks)])
+                self.out = nn.Linear(d, h)
+
+            def _smooth_scale(self, z: Any, factor: int) -> Any:
+                if int(factor) <= 1:
+                    return z
+                left = int(factor) // 2
+                right = int(factor) - 1 - left
+                zc = z.transpose(1, 2)
+                z_pad = F.pad(zc, (left, right), mode="replicate")
+                return F.avg_pool1d(z_pad, kernel_size=int(factor), stride=1).transpose(1, 2)
+
+            def forward(self, xb: Any) -> Any:
+                base = self.in_proj(xb)
+                multiscale = []
+                for factor, proj in zip(scales, self.scale_proj, strict=True):
+                    multiscale.append(proj(self._smooth_scale(base, int(factor))))
+                z = self.fuse(torch.cat(multiscale, dim=-1))
+                for blk in self.blocks:
+                    z = blk(z)
+                return self.out(z[:, -1, :])
+
+        return _TimeMixerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_sparsetsf_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 192,
+    period_len: int = 24,
+    d_model: int = 64,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch SparseTSF-style (lite) direct multi-horizon forecast on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    period = int(period_len)
+    d = int(d_model)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+    if period <= 0:
+        raise ValueError("period_len must be >= 1")
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    start = lag_count % period
+    sparse_idx = np.arange(start, lag_count, period, dtype=int)
+    if sparse_idx.size == 0:
+        sparse_idx = np.array([lag_count - 1], dtype=int)
+
+    class _SparseTSFDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.proj = nn.Linear(int(sparse_idx.size), d)
+            self.out = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:
+            xs = xb[:, sparse_idx]
+            z = F.gelu(self.proj(xs))
+            return self.out(z)
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(_SparseTSFDirect(), X, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, -1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_lightts_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    chunk_len: int = 12,
+    d_model: int = 64,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch LightTS-style (lite) dual-sampling MLP on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    chunk = int(chunk_len)
+    d = int(d_model)
+    drop = float(dropout)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+    if chunk <= 0:
+        raise ValueError("chunk_len must be >= 1")
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+    n_chunks = int(math.ceil(float(lag_count) / float(chunk)))
+    pad_len = int(n_chunks * chunk - lag_count)
+
+    class _LightTSDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.cont_proj = nn.Linear(n_chunks, d)
+            self.inter_proj = nn.Linear(chunk, d)
+            self.fuse = nn.Linear(2 * d, d)
+            self.dropout = nn.Dropout(p=drop)
+            self.out = nn.Linear(d, h)
+
+        def forward(self, xb: Any) -> Any:
+            if pad_len > 0:
+                pad = xb[:, -1:].expand(-1, pad_len)
+                xb = torch.cat([xb, pad], dim=1)
+            chunks = xb.reshape(xb.shape[0], n_chunks, chunk)
+            cont = chunks.mean(dim=2)
+            inter = chunks.transpose(1, 2).mean(dim=2)
+            zc = F.gelu(self.cont_proj(cont))
+            zi = F.gelu(self.inter_proj(inter))
+            z = self.dropout(F.gelu(self.fuse(torch.cat([zc, zi], dim=1))))
+            return self.out(z)
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(_LightTSDirect(), X, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, -1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_frets_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    top_k_freqs: int = 8,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch FreTS-style (lite) frequency-domain MLP on lag windows.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    d = int(d_model)
+    layers = int(num_layers)
+    k = int(top_k_freqs)
+    drop = float(dropout)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if k <= 0:
+        raise ValueError("top_k_freqs must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
+
+    class _FreTSDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.k_eff = min(k, max(1, lag_count // 2))
+            in_dim = 2 * self.k_eff
+            layers_list: list[Any] = []
+            cur = in_dim
+            for _ in range(layers):
+                layers_list.extend(
+                    [
+                        nn.Linear(cur, d),
+                        nn.GELU(),
+                        nn.Dropout(p=drop),
+                    ]
+                )
+                cur = d
+            self.backbone = nn.Sequential(*layers_list)
+            self.out = nn.Linear(cur, h)
+
+        def _freq_features(self, xb: Any) -> Any:
+            xf = torch.fft.rfft(xb, dim=1)
+            mag = xf.abs()
+            if int(mag.shape[1]) <= 1:
+                mag = torch.ones_like(mag)
+            mag = mag.clone()
+            mag[:, 0] = 0.0
+            k_eff = min(self.k_eff, int(mag.shape[1] - 1))
+            vals, idx = torch.topk(mag[:, 1:], k=k_eff, dim=1, largest=True)
+            del vals
+            idx = idx + 1
+            batch = torch.arange(xb.shape[0], device=xb.device).unsqueeze(1)
+            picked = xf[batch, idx]
+            feat = torch.cat([picked.real, picked.imag], dim=1)
+            if k_eff < self.k_eff:
+                pad = feat.new_zeros((feat.shape[0], 2 * (self.k_eff - k_eff)))
+                feat = torch.cat([feat, pad], dim=1)
+            return feat
+
+        def forward(self, xb: Any) -> Any:
+            feat = self._freq_features(xb)
+            z = self.backbone(feat)
+            return self.out(z)
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(_FreTSDirect(), X, Y, cfg=cfg, device=str(device))
+
+    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, -1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def torch_film_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    ma_window: int = 7,
+    kernel_size: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch FiLM-style decomposition + long-filter mixer (lite) direct forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    layers = int(num_layers)
+    ma = int(ma_window)
+    k = int(kernel_size)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ma <= 1:
+        raise ValueError("ma_window must be >= 2")
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    if k % 2 == 0:
+        raise ValueError("kernel_size must be odd for same-length filtering")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _FiLMBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.dwconv = nn.Conv1d(d, d, kernel_size=k, padding=k // 2, groups=d)
+                self.pwconv = nn.Conv1d(d, d, kernel_size=1)
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, 2 * d),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(2 * d, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any) -> Any:
+                z = self.norm1(xb).transpose(1, 2)
+                z = self.pwconv(self.dwconv(z)).transpose(1, 2)
+                xb = xb + self.drop(z)
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _FiLMDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.blocks = nn.ModuleList([_FiLMBlock() for _ in range(layers)])
+                self.out = nn.Linear(d, h)
+                self.trend_proj = nn.Linear(lag_count, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                trend = _moving_average_1d(y_ctx, window=ma)
+                seasonal = y_ctx - trend
+                z = self.in_proj(seasonal.unsqueeze(-1))
+                for blk in self.blocks:
+                    z = blk(z)
+                pooled = z.mean(dim=1)
+                seasonal_hat = self.out(pooled)
+                trend_hat = self.trend_proj(trend)
+                return seasonal_hat + trend_hat
+
+        return _FiLMDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_micn_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    num_layers: int = 2,
+    kernel_sizes: Any = (3, 5, 7),
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch MICN-style multiscale convolutional decomposition model (lite) direct forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    layers = int(num_layers)
+    ma = int(ma_window)
+    ks = _parse_int_tuple(kernel_sizes, name="kernel_sizes")
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if ma <= 1:
+        raise ValueError("ma_window must be >= 2")
+    if any(int(v) % 2 == 0 for v in ks):
+        raise ValueError("kernel_sizes must be odd for same-length convolutions")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _MICNBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.branches = nn.ModuleList(
+                    [nn.Conv1d(d, d, kernel_size=int(v), padding=int(v) // 2) for v in ks]
+                )
+                self.proj = nn.Conv1d(d * len(ks), d, kernel_size=1)
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, 2 * d),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(2 * d, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any) -> Any:
+                z = self.norm1(xb).transpose(1, 2)
+                merged = torch.cat([branch(z) for branch in self.branches], dim=1)
+                merged = self.proj(merged).transpose(1, 2)
+                xb = xb + self.drop(merged)
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _MICNDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.blocks = nn.ModuleList([_MICNBlock() for _ in range(layers)])
+                self.out = nn.Linear(d, h)
+                self.trend_proj = nn.Linear(lag_count, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                trend = _moving_average_1d(y_ctx, window=ma)
+                seasonal = y_ctx - trend
+                z = self.in_proj(seasonal.unsqueeze(-1))
+                for blk in self.blocks:
+                    z = blk(z)
+                pooled = z.mean(dim=1)
+                seasonal_hat = self.out(pooled)
+                trend_hat = self.trend_proj(trend)
+                return seasonal_hat + trend_hat
+
+        return _MICNDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_koopa_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    latent_dim: int = 32,
+    num_blocks: int = 2,
+    ma_window: int = 7,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch Koopa-style decomposition + latent linear dynamics model (lite) direct forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    d = int(d_model)
+    latent = int(latent_dim)
+    blocks = int(num_blocks)
+    ma = int(ma_window)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if latent <= 0:
+        raise ValueError("latent_dim must be >= 1")
+    if blocks <= 0:
+        raise ValueError("num_blocks must be >= 1")
+    if ma <= 1:
+        raise ValueError("ma_window must be >= 2")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _KoopaBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, 2 * d),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(2 * d, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def forward(self, xb: Any) -> Any:
+                return xb + self.drop(self.ffn(self.norm(xb)))
+
+        class _KoopaDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.blocks = nn.ModuleList([_KoopaBlock() for _ in range(blocks)])
+                self.to_latent = nn.Linear(d, latent)
+                self.transition = nn.Parameter(torch.randn(latent, latent) * 0.02)
+                self.decoder = nn.Linear(latent, 1)
+                self.trend_proj = nn.Linear(lag_count, h)
+
+            def forward(self, xb: Any) -> Any:
+                y_ctx = xb[:, :, 0]
+                trend = _moving_average_1d(y_ctx, window=ma)
+                seasonal = y_ctx - trend
+                z = self.in_proj(seasonal.unsqueeze(-1))
+                for blk in self.blocks:
+                    z = blk(z)
+                state = self.to_latent(z.mean(dim=1))
+                trans = torch.eye(latent, device=state.device, dtype=state.dtype) + torch.tanh(
+                    self.transition
+                ) / math.sqrt(float(latent))
+                outs: list[Any] = []
+                cur = state
+                for _ in range(h):
+                    cur = cur @ trans
+                    outs.append(self.decoder(cur).squeeze(-1))
+                seasonal_hat = torch.stack(outs, dim=1)
+                trend_hat = self.trend_proj(trend)
+                return seasonal_hat + trend_hat
+
+        return _KoopaDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_samformer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch SAMformer-style linear-attention + adaptive mixing model (lite) direct forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    head_dim = d // heads
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(_lag_count: int, h: int) -> Any:
+        class _SAMBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.qkv = nn.Linear(d, 3 * d)
+                self.out = nn.Linear(d, d)
+                self.mix_gate = nn.Linear(d, d)
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, 2 * d),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(2 * d, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def _linear_attention(self, xb: Any) -> Any:
+                qkv = self.qkv(xb)
+                q, k, v = qkv.chunk(3, dim=-1)
+
+                def _reshape(z: Any) -> Any:
+                    return z.reshape(z.shape[0], z.shape[1], heads, head_dim).permute(0, 2, 1, 3)
+
+                qh = F.elu(_reshape(q)) + 1.0
+                kh = F.elu(_reshape(k)) + 1.0
+                vh = _reshape(v)
+                kv = torch.einsum("bhtd,bhte->bhde", kh, vh)
+                numer = torch.einsum("bhtd,bhde->bhte", qh, kv)
+                denom = torch.einsum("bhtd,bhd->bht", qh, kh.sum(dim=2)) + 1e-6
+                out = numer / denom.unsqueeze(-1)
+                out = out.permute(0, 2, 1, 3).reshape(out.shape[0], out.shape[2], d)
+                return self.out(out)
+
+            def forward(self, xb: Any) -> Any:
+                attn = self._linear_attention(self.norm1(xb))
+                gate = torch.sigmoid(self.mix_gate(xb.mean(dim=1))).unsqueeze(1)
+                xb = xb + self.drop(gate * attn)
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _SAMformerDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                self.blocks = nn.ModuleList([_SAMBlock() for _ in range(layers)])
+                self.head = nn.Linear(d, h)
+
+            def forward(self, xb: Any) -> Any:
+                z = self.in_proj(xb)
+                for blk in self.blocks:
+                    z = blk(z)
+                return self.head(z[:, -1, :])
+
+        return _SAMformerDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_timexer_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    x_cols: Any = (),
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    train_exog: Any | None = None,
+    future_exog: Any | None = None,
+) -> np.ndarray:
+    """
+    Torch TimeXer-style exogenous-aware transformer (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+
+    y = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    drop = float(dropout)
+    _x_cols = x_cols
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+    if train_exog is None or future_exog is None:
+        raise ValueError("torch-timexer-direct requires train_exog and future_exog")
+
+    train_x_raw = _as_2d_float_array(train_exog, name="train_exog")
+    future_x_raw = _as_2d_float_array(future_exog, name="future_exog")
+    if int(train_x_raw.shape[0]) != int(y.size):
+        raise ValueError("train_exog rows must match train length")
+    if int(future_x_raw.shape[0]) != h:
+        raise ValueError("future_exog rows must have horizon rows")
+
+    y_work = y
+    y_mean = 0.0
+    y_std = 1.0
+    if bool(normalize):
+        y_work, y_mean, y_std = _normalize_series(y_work)
+    train_x, future_x = _normalize_exog_pair(train_x_raw, future_x_raw)
+    X, Y = _make_lagged_xy_exog_seq(y_work, train_x, lags=lag_count, horizon=h)
+
+    x_dim = int(train_x.shape[1])
+    past_dim = 1 + x_dim
+    future_dim = x_dim
+
+    class _CrossBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm_q = nn.LayerNorm(d)
+            self.cross = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
+            self.norm_ffn = nn.LayerNorm(d)
+            self.ffn = nn.Sequential(
+                nn.Linear(d, 2 * d),
+                nn.GELU(),
+                nn.Dropout(p=drop),
+                nn.Linear(2 * d, d),
+            )
+            self.drop = nn.Dropout(p=drop)
+
+        def forward(self, q: Any, mem: Any) -> Any:
+            attn, _ = self.cross(self.norm_q(q), mem, mem, need_weights=False)
+            q = q + self.drop(attn)
+            q = q + self.drop(self.ffn(self.norm_ffn(q)))
+            return q
+
+    class _TimeXerDirect(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.past_proj = nn.Linear(past_dim, d)
+            self.future_proj = nn.Linear(future_dim, d)
+            self.past_pos = nn.Parameter(torch.zeros((1, lag_count, d), dtype=torch.float32))
+            self.future_pos = nn.Parameter(torch.zeros((1, h, d), dtype=torch.float32))
+            enc_layer = nn.TransformerEncoderLayer(
+                d_model=d,
+                nhead=heads,
+                dim_feedforward=2 * d,
+                dropout=drop,
+                activation="gelu",
+                batch_first=True,
+                norm_first=True,
+            )
+            self.enc = nn.TransformerEncoder(enc_layer, num_layers=layers)
+            self.blocks = nn.ModuleList([_CrossBlock() for _ in range(layers)])
+            self.out = nn.Linear(d, 1)
+
+        def forward(self, xb: Any) -> Any:
+            past = xb[:, :lag_count, :]
+            future_x = xb[:, lag_count:, 1:]
+            mem = self.enc(self.past_proj(past) + self.past_pos)
+            q = self.future_proj(future_x) + self.future_pos
+            for blk in self.blocks:
+                q = blk(q, mem)
+            return self.out(q).squeeze(-1)
+
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(_TimeXerDirect(), X, Y, cfg=cfg, device=str(device))
+
+    future_tokens = np.concatenate(
+        [np.zeros((h, 1), dtype=float), future_x.astype(float, copy=False)],
+        axis=1,
+    )
+    feat = np.concatenate(
+        [
+            np.concatenate([y_work[-lag_count:].reshape(-1, 1), train_x[-lag_count:, :]], axis=1),
+            future_tokens,
+        ],
+        axis=0,
+    ).reshape(1, lag_count + h, 1 + x_dim)
+
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
+
+    yhat = yhat_t.astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * y_std + y_mean
     return np.asarray(yhat, dtype=float)
 
 

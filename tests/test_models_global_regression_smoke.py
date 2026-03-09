@@ -105,6 +105,19 @@ def test_decision_tree_step_lag_global_smoke() -> None:
     )
 
 
+def test_decision_tree_step_lag_global_honors_target_lags() -> None:
+    with pytest.raises(ValueError, match="exceeds lags=2"):
+        _assert_global_point_smoke(
+            "decision-tree-step-lag-global",
+            model_params={
+                "lags": 8,
+                "target_lags": (1, 3),
+                "roll_windows": (3,),
+                "roll_stats": ("mean",),
+            },
+        )
+
+
 def test_lasso_step_lag_global_smoke() -> None:
     _assert_global_point_smoke(
         "lasso-step-lag-global",
@@ -145,6 +158,18 @@ def test_knn_step_lag_global_smoke() -> None:
             "x_cols": ("promo",),
         },
     )
+
+
+def test_rf_step_lag_global_validates_future_x_lags() -> None:
+    with pytest.raises(ValueError, match="future_x_lags must be >= 0"):
+        _assert_global_point_smoke(
+            "rf-step-lag-global",
+            model_params={
+                "lags": 5,
+                "x_cols": ("promo",),
+                "future_x_lags": (-1,),
+            },
+        )
 
 
 def test_kernel_ridge_step_lag_global_smoke() -> None:
@@ -456,6 +481,22 @@ def test_hgb_step_lag_global_smoke() -> None:
     assert {"unique_id", "ds", "cutoff", "step", "y", "yhat", "model"}.issubset(set(pred.columns))
 
 
+def test_hgb_step_lag_global_honors_target_lags() -> None:
+    with pytest.raises(ValueError, match="exceeds lags=2"):
+        _assert_global_point_smoke(
+            "hgb-step-lag-global",
+            model_params={
+                "lags": 8,
+                "target_lags": (1, 4),
+                "max_iter": 20,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "roll_windows": (3,),
+                "roll_stats": ("mean",),
+            },
+        )
+
+
 def test_xgb_step_lag_global_quantiles_smoke() -> None:
     if importlib.util.find_spec("xgboost") is None:
         pytest.skip("xgboost not installed")
@@ -489,6 +530,24 @@ def test_xgb_step_lag_global_quantiles_smoke() -> None:
     q = evaluate_quantile_predictions(pred)
     assert q["quantiles"] == [10, 50, 90]
     assert np.isfinite(float(q["pinball_mean"]))
+
+
+def test_xgb_step_lag_global_validates_future_x_lags() -> None:
+    if importlib.util.find_spec("xgboost") is None:
+        pytest.skip("xgboost not installed")
+
+    with pytest.raises(ValueError, match="future_x_lags must be >= 0"):
+        _assert_global_point_smoke(
+            "xgb-step-lag-global",
+            model_params={
+                "lags": 5,
+                "n_estimators": 10,
+                "learning_rate": 0.1,
+                "max_depth": 3,
+                "x_cols": ("promo",),
+                "future_x_lags": (-1,),
+            },
+        )
 
 
 def test_xgb_dart_step_lag_global_smoke() -> None:

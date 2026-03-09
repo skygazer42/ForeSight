@@ -62,6 +62,35 @@ def moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndar
     return np.full(shape=(horizon,), fill_value=m, dtype=float)
 
 
+def weighted_moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if window <= 0:
+        raise ValueError("window must be >= 1")
+    if x.size < window:
+        raise ValueError(
+            f"weighted_moving_average_forecast requires at least {window} points, got {x.size}"
+        )
+
+    weights = np.arange(1, int(window) + 1, dtype=float)
+    m = float(np.dot(x[-window:], weights) / np.sum(weights))
+    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+
+
+def moving_median_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if window <= 0:
+        raise ValueError("window must be >= 1")
+    if x.size < window:
+        raise ValueError(f"moving_median_forecast requires at least {window} points, got {x.size}")
+
+    m = float(np.median(x[-window:]))
+    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+
+
 def seasonal_mean_forecast(train: Any, horizon: int, *, season_length: int) -> np.ndarray:
     """
     Seasonal mean baseline.
@@ -85,3 +114,34 @@ def seasonal_mean_forecast(train: Any, horizon: int, *, season_length: int) -> n
     )
     idx = np.arange(horizon) % season_length
     return means[idx].astype(float, copy=False)
+
+
+def seasonal_drift_forecast(train: Any, horizon: int, *, season_length: int) -> np.ndarray:
+    """
+    Seasonal drift baseline using the last two complete seasons.
+
+    For each seasonal position, estimate the season-over-season delta from the
+    previous season to the latest season, then extend that delta forward for
+    each future season.
+    """
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if season_length <= 0:
+        raise ValueError("season_length must be >= 1")
+    if x.size < 2 * season_length:
+        raise ValueError(
+            "seasonal_drift_forecast requires at least two full seasons "
+            f"({2 * season_length} points), got {x.size}"
+        )
+
+    prev_season = x[-2 * season_length : -season_length]
+    last_season = x[-season_length:]
+    seasonal_delta = last_season - prev_season
+
+    steps = np.arange(horizon, dtype=int)
+    idx = steps % season_length
+    seasons_ahead = (steps // season_length) + 1
+    return last_season[idx].astype(float, copy=False) + seasonal_delta[idx].astype(
+        float, copy=False
+    ) * seasons_ahead.astype(float, copy=False)

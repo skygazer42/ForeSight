@@ -63,6 +63,70 @@ def _normalize_x_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
     return (s,) if s else ()
 
 
+def _normalize_covariate_roles(
+    model_params: dict[str, Any] | None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    params = dict(model_params or {})
+
+    def _normalize(raw: Any) -> tuple[str, ...]:
+        if raw is None:
+            return ()
+        if isinstance(raw, str):
+            s = raw.strip()
+            return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
+        if isinstance(raw, list | tuple):
+            return tuple([str(v).strip() for v in raw if str(v).strip()])
+        s = str(raw).strip()
+        return (s,) if s else ()
+
+    future = _normalize(params.get("future_x_cols"))
+    legacy = _normalize_x_cols(params)
+    if legacy:
+        future = tuple([*future, *[c for c in legacy if c not in future]])
+    historic = _normalize(params.get("historic_x_cols"))
+    return historic, future
+
+
+def _require_x_cols_if_needed(
+    *,
+    model: str,
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    context: str,
+) -> None:
+    if bool(capabilities.get("requires_future_covariates", False)) and not x_cols:
+        raise ValueError(f"Model {model!r} requires future covariates via x_cols in {context}")
+
+
+def _call_local_xreg_forecaster(
+    *,
+    model: str,
+    train_y: np.ndarray,
+    horizon: int,
+    train_exog: np.ndarray,
+    future_exog: np.ndarray,
+    model_params: dict[str, Any],
+) -> np.ndarray:
+    forecaster = make_forecaster(str(model), **dict(model_params))
+    try:
+        out = forecaster(
+            train_y,
+            int(horizon),
+            train_exog=train_exog,
+            future_exog=future_exog,
+        )
+    except TypeError as e:
+        raise ValueError(
+            f"Model {model!r} advertises x_cols support but its local callable does not accept "
+            "`train_exog` / `future_exog`."
+        ) from e
+
+    yhat = np.asarray(out, dtype=float)
+    if yhat.shape != (int(horizon),):
+        raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
+    return yhat
+
+
 def _require_multivariate_df(
     df: Any,
     *,
@@ -192,10 +256,22 @@ def eval_multivariate_model_df(
             "rmse": rmse(target_true, target_pred),
             "mape": mape(target_true, target_pred),
             "smape": smape(target_true, target_pred),
-            "mae_by_step": [mae(target_true[:, step_idx], target_pred[:, step_idx]) for step_idx in range(int(horizon))],
-            "rmse_by_step": [rmse(target_true[:, step_idx], target_pred[:, step_idx]) for step_idx in range(int(horizon))],
-            "mape_by_step": [mape(target_true[:, step_idx], target_pred[:, step_idx]) for step_idx in range(int(horizon))],
-            "smape_by_step": [smape(target_true[:, step_idx], target_pred[:, step_idx]) for step_idx in range(int(horizon))],
+            "mae_by_step": [
+                mae(target_true[:, step_idx], target_pred[:, step_idx])
+                for step_idx in range(int(horizon))
+            ],
+            "rmse_by_step": [
+                rmse(target_true[:, step_idx], target_pred[:, step_idx])
+                for step_idx in range(int(horizon))
+            ],
+            "mape_by_step": [
+                mape(target_true[:, step_idx], target_pred[:, step_idx])
+                for step_idx in range(int(horizon))
+            ],
+            "smape_by_step": [
+                smape(target_true[:, step_idx], target_pred[:, step_idx])
+                for step_idx in range(int(horizon))
+            ],
         }
 
     return {
@@ -213,10 +289,19 @@ def eval_multivariate_model_df(
         "rmse": rmse(yt, yp),
         "mape": mape(yt, yp),
         "smape": smape(yt, yp),
-        "mae_by_step": [mae(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))],
-        "rmse_by_step": [rmse(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))],
-        "mape_by_step": [mape(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))],
-        "smape_by_step": [smape(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))],
+        "mae_by_step": [
+            mae(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))
+        ],
+        "rmse_by_step": [
+            rmse(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))
+        ],
+        "mape_by_step": [
+            mape(y_true[:, step_idx, :], y_pred[:, step_idx, :]) for step_idx in range(int(horizon))
+        ],
+        "smape_by_step": [
+            smape(y_true[:, step_idx, :], y_pred[:, step_idx, :])
+            for step_idx in range(int(horizon))
+        ],
         "target_metrics": target_metrics,
     }
 
@@ -228,6 +313,7 @@ def eval_hierarchical_forecast_df(
     method: str,
     history_df: Any = None,
     yhat_col: str = "yhat",
+    exog_agg: Any = None,
 ) -> dict[str, Any]:
     """
     Reconcile a forecast table to a hierarchy and report consistency summary.
@@ -243,6 +329,7 @@ def eval_hierarchical_forecast_df(
         method=str(method),
         history_df=history_df,
         yhat_col=str(yhat_col),
+        exog_agg=exog_agg,
     )
     consistency = check_hierarchical_consistency(
         reconciled,
@@ -291,6 +378,18 @@ def eval_model_long_df(
     df = df.sort_values(["unique_id", "ds"], kind="mergesort")
     model_spec = get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
+    params = dict(model_params or {})
+    capabilities = dict(model_spec.capabilities)
+    historic_x_cols, x_cols = _normalize_covariate_roles(params)
+
+    _require_x_cols_if_needed(
+        model=str(model),
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context="eval_model_long_df",
+    )
+    if historic_x_cols:
+        raise ValueError("historic_x_cols are not yet supported in eval_model_long_df")
 
     if interface == "multivariate":
         raise ValueError(
@@ -361,21 +460,9 @@ def eval_model_long_df(
 
     n_series = 0
     n_series_skipped = 0
-    params = dict(model_params or {})
-    capabilities = dict(model_spec.capabilities)
-    x_cols = _normalize_x_cols(params)
-
     if x_cols:
         if not bool(capabilities.get("supports_x_cols", False)):
             raise ValueError(f"Model {model!r} does not support x_cols in eval_model_long_df")
-        model_key = str(model).strip()
-        if model_key == "sarimax":
-            from .models.statsmodels_wrap import sarimax_forecast as _local_xreg_forecast
-        elif model_key == "auto-arima":
-            from .models.statsmodels_wrap import auto_arima_forecast as _local_xreg_forecast
-        else:
-            raise ValueError(f"Model {model!r} does not support x_cols in eval_model_long_df")
-
         local_xreg_params = dict(params)
         local_xreg_params.pop("x_cols", None)
         for _uid, g in df.groupby("unique_id", sort=False):
@@ -404,21 +491,15 @@ def eval_model_long_df(
                 min_train_size=int(min_train_size),
                 max_train_size=max_train_size,
             ):
-                pred = np.asarray(
-                    _local_xreg_forecast(
-                        y[split.train_start : split.train_end],
-                        int(horizon),
-                        train_exog=x[split.train_start : split.train_end, :],
-                        future_exog=x[split.test_start : split.test_end, :],
-                        **local_xreg_params,
-                    ),
-                    dtype=float,
+                pred = _call_local_xreg_forecaster(
+                    model=str(model),
+                    train_y=y[split.train_start : split.train_end],
+                    horizon=int(horizon),
+                    train_exog=x[split.train_start : split.train_end, :],
+                    future_exog=x[split.test_start : split.test_end, :],
+                    model_params=local_xreg_params,
                 )
                 y_true = y[split.test_start : split.test_end]
-                if pred.shape != (int(horizon),):
-                    raise ValueError(
-                        f"forecaster must return shape ({int(horizon)},), got {pred.shape}"
-                    )
                 y_true_all.append(y_true.reshape(-1))
                 y_pred_all.append(pred.reshape(-1))
                 for i in range(int(horizon)):

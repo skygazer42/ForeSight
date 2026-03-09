@@ -12,7 +12,10 @@ from .baselines import (
     mean_forecast,
     median_forecast,
     moving_average_forecast,
+    moving_median_forecast,
+    seasonal_drift_forecast,
     seasonal_mean_forecast,
+    weighted_moving_average_forecast,
 )
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
 from .intermittent import (
@@ -25,7 +28,7 @@ from .intermittent import (
     tsb_forecast,
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
-from .multivariate import var_forecast
+from .multivariate import torch_stid_forecast, var_forecast
 from .naive import naive_last, seasonal_naive
 from .registry import (
     ModelSpec,
@@ -90,33 +93,63 @@ from .statsmodels_wrap import (
     unobserved_components_forecast,
 )
 from .theta import theta_auto_forecast, theta_forecast
+from .torch_ct_rnn import (
+    torch_cfc_direct_forecast,
+    torch_griffin_direct_forecast,
+    torch_hawk_direct_forecast,
+    torch_lmu_direct_forecast,
+    torch_ltc_direct_forecast,
+    torch_xlstm_direct_forecast,
+)
 from .torch_nn import (
     torch_attn_gru_direct_forecast,
+    torch_autoformer_direct_forecast,
     torch_bigru_direct_forecast,
     torch_bilstm_direct_forecast,
     torch_cnn_direct_forecast,
     torch_deepar_recursive_forecast,
     torch_dlinear_direct_forecast,
+    torch_fedformer_direct_forecast,
+    torch_film_direct_forecast,
     torch_fnet_direct_forecast,
+    torch_frets_direct_forecast,
     torch_gmlp_direct_forecast,
     torch_gru_direct_forecast,
     torch_inception_direct_forecast,
+    torch_informer_direct_forecast,
+    torch_itransformer_direct_forecast,
+    torch_koopa_direct_forecast,
+    torch_lightts_direct_forecast,
     torch_linear_attention_direct_forecast,
     torch_lstm_direct_forecast,
+    torch_micn_direct_forecast,
     torch_mlp_lag_direct_forecast,
     torch_nbeats_direct_forecast,
     torch_nhits_direct_forecast,
     torch_nlinear_direct_forecast,
+    torch_nonstationary_transformer_direct_forecast,
     torch_patchtst_direct_forecast,
     torch_qrnn_recursive_forecast,
     torch_resnet1d_direct_forecast,
+    torch_samformer_direct_forecast,
+    torch_sparsetsf_direct_forecast,
     torch_tcn_direct_forecast,
+    torch_tft_direct_forecast,
     torch_tide_direct_forecast,
+    torch_timemixer_direct_forecast,
+    torch_timesnet_direct_forecast,
+    torch_timexer_direct_forecast,
     torch_transformer_direct_forecast,
     torch_tsmixer_direct_forecast,
     torch_wavenet_direct_forecast,
 )
 from .torch_seq2seq import torch_lstnet_direct_forecast, torch_seq2seq_direct_forecast
+from .torch_ssm import (
+    torch_mamba2_direct_forecast,
+    torch_s4_direct_forecast,
+    torch_s4d_direct_forecast,
+    torch_s5_direct_forecast,
+)
 from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
 
@@ -127,7 +160,10 @@ __all__ = [
     "median_forecast",
     "drift_forecast",
     "moving_average_forecast",
+    "weighted_moving_average_forecast",
+    "moving_median_forecast",
     "seasonal_mean_forecast",
+    "seasonal_drift_forecast",
     "ses_forecast",
     "ses_auto_forecast",
     "holt_forecast",
@@ -188,6 +224,32 @@ __all__ = [
     "torch_nlinear_direct_forecast",
     "torch_dlinear_direct_forecast",
     "torch_transformer_direct_forecast",
+    "torch_informer_direct_forecast",
+    "torch_autoformer_direct_forecast",
+    "torch_nonstationary_transformer_direct_forecast",
+    "torch_fedformer_direct_forecast",
+    "torch_itransformer_direct_forecast",
+    "torch_timesnet_direct_forecast",
+    "torch_tft_direct_forecast",
+    "torch_timexer_direct_forecast",
+    "torch_lmu_direct_forecast",
+    "torch_ltc_direct_forecast",
+    "torch_cfc_direct_forecast",
+    "torch_xlstm_direct_forecast",
+    "torch_griffin_direct_forecast",
+    "torch_hawk_direct_forecast",
+    "torch_s4d_direct_forecast",
+    "torch_mamba2_direct_forecast",
+    "torch_s4_direct_forecast",
+    "torch_s5_direct_forecast",
+    "torch_timemixer_direct_forecast",
+    "torch_sparsetsf_direct_forecast",
+    "torch_lightts_direct_forecast",
+    "torch_frets_direct_forecast",
+    "torch_film_direct_forecast",
+    "torch_micn_direct_forecast",
+    "torch_koopa_direct_forecast",
+    "torch_samformer_direct_forecast",
     "torch_patchtst_direct_forecast",
     "torch_tsmixer_direct_forecast",
     "torch_cnn_direct_forecast",
@@ -222,6 +284,7 @@ __all__ = [
     "kalman_local_level_forecast",
     "kalman_local_linear_trend_forecast",
     "var_forecast",
+    "torch_stid_forecast",
     "ModelSpec",
     "BaseForecaster",
     "BaseGlobalForecaster",

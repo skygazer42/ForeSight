@@ -8,7 +8,67 @@ from foresight.models.registry import (
     list_models,
     make_forecaster,
     make_global_forecaster,
+    make_multivariate_forecaster,
 )
+
+WAVE1A_TORCH_LOCAL_KEYS = (
+    "torch-informer-direct",
+    "torch-autoformer-direct",
+    "torch-nonstationary-transformer-direct",
+    "torch-fedformer-direct",
+    "torch-itransformer-direct",
+    "torch-timesnet-direct",
+    "torch-tft-direct",
+    "torch-timemixer-direct",
+    "torch-sparsetsf-direct",
+)
+
+LIGHTWEIGHT_TORCH_LOCAL_KEYS = (
+    "torch-lightts-direct",
+    "torch-frets-direct",
+)
+
+DECOMP_TORCH_LOCAL_KEYS = (
+    "torch-film-direct",
+    "torch-micn-direct",
+)
+
+WAVE1B_TORCH_LOCAL_KEYS = (
+    "torch-koopa-direct",
+    "torch-samformer-direct",
+)
+
+TIME_XER_TORCH_KEYS = (
+    "torch-timexer-direct",
+    "torch-timexer-global",
+)
+
+STATE_SPACE_TORCH_LOCAL_KEYS = (
+    "torch-lmu-direct",
+    "torch-s4d-direct",
+)
+
+CT_RNN_TORCH_LOCAL_KEYS = (
+    "torch-ltc-direct",
+    "torch-cfc-direct",
+)
+
+REVIVAL_TORCH_LOCAL_KEYS = (
+    "torch-xlstm-direct",
+    "torch-mamba2-direct",
+)
+
+SSM_TORCH_LOCAL_KEYS = (
+    "torch-s4-direct",
+    "torch-s5-direct",
+)
+
+RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
+    "torch-griffin-direct",
+    "torch-hawk-direct",
+)
+
+TORCH_MULTIVARIATE_KEYS = ("torch-stid-multivariate",)
 
 
 def _torch_model_keys() -> list[str]:
@@ -23,10 +83,80 @@ def _torch_global_model_keys() -> list[str]:
     return [k for k in _torch_model_keys() if get_model_spec(k).interface == "global"]
 
 
+def _torch_multivariate_model_keys() -> list[str]:
+    return [k for k in _torch_model_keys() if get_model_spec(k).interface == "multivariate"]
+
+
 def test_torch_models_are_registered_as_optional():
     for key in _torch_model_keys():
         spec = get_model_spec(key)
         assert "torch" in spec.requires
+
+
+def test_wave1a_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in WAVE1A_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_lightweight_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in LIGHTWEIGHT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_decomposition_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in DECOMP_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_wave1b_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in WAVE1B_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_timexer_torch_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_model_keys())
+    for key in TIME_XER_TORCH_KEYS:
+        assert key in keys
+
+
+def test_state_space_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in STATE_SPACE_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_continuous_time_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in CT_RNN_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_revival_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_ssm_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in SSM_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_recurrent_revival_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RECURRENT_REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_torch_multivariate_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_multivariate_model_keys())
+    for key in TORCH_MULTIVARIATE_KEYS:
+        assert key in keys
 
 
 def test_torch_models_raise_importerror_when_torch_missing():
@@ -54,6 +184,11 @@ def test_torch_models_raise_importerror_when_torch_missing():
                 pd.Timestamp("2020-01-02"),
                 2,
             )
+
+    for key in _torch_multivariate_model_keys():
+        mv = make_multivariate_forecaster(key)
+        with pytest.raises(ImportError):
+            mv(np.ones((8, 2), dtype=float), 2)
 
 
 def test_torch_models_smoke_when_installed():

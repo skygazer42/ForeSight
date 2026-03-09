@@ -6,7 +6,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..features.tabular import build_lag_derived_features
+from ..features.tabular import (
+    build_column_lag_features,
+    build_lag_derived_features,
+    normalize_lag_steps,
+)
 from ..features.time import build_time_features
 
 
@@ -23,6 +27,43 @@ def _normalize_x_cols(x_cols: Any) -> tuple[str, ...]:
         return tuple(out)
     s = str(x_cols).strip()
     return (s,) if s else ()
+
+
+def _resolve_target_lags(*, lags: Any, target_lags: Any = ()) -> tuple[int, ...]:
+    spec = target_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        spec = lags
+    return normalize_lag_steps(spec, allow_zero=False, name="target_lags")
+
+
+def _resolve_historic_x_lags(historic_x_lags: Any) -> tuple[int, ...]:
+    spec = historic_x_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return ()
+    return normalize_lag_steps(spec, allow_zero=False, name="historic_x_lags")
+
+
+def _resolve_future_x_lags(*, x_cols: tuple[str, ...], future_x_lags: Any) -> tuple[int, ...]:
+    if not x_cols:
+        return ()
+    spec = future_x_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return (0,)
+    return normalize_lag_steps(spec, allow_zero=True, name="future_x_lags")
+
+
+def _extract_step_lag_role_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "target_lags": params.get("target_lags", ()),
+        "historic_x_lags": params.get("historic_x_lags", ()),
+        "future_x_lags": params.get("future_x_lags", ()),
+    }
 
 
 def _find_cutoff_index(ds: np.ndarray, cutoff: Any) -> int | None:
@@ -65,30 +106,37 @@ def _step_vector(horizon: int, *, step_scale: str) -> np.ndarray:
 
 
 def _make_lagged_xy_multi(
-    x: np.ndarray, *, lags: int, horizon: int
-) -> tuple[np.ndarray, np.ndarray]:
+    x: np.ndarray,
+    *,
+    lags: Any,
+    horizon: int,
+    start_t: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = int(x.size)
     h = int(horizon)
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if h <= 0:
         raise ValueError("horizon must be >= 1")
-    if lags <= 0:
-        raise ValueError("lags must be >= 1")
-    if n < lags + h:
+    if not lag_steps:
+        raise ValueError("target_lags must be >= 1")
+    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
+    if n < t0 + h:
         # No rows.
         return (
-            np.empty((0, int(lags)), dtype=float),
+            np.empty((0, int(len(lag_steps))), dtype=float),
             np.empty((0, int(h)), dtype=float),
+            np.empty((0,), dtype=int),
         )
 
-    rows = n - lags - h + 1
-    X = np.empty((rows, lags), dtype=float)
+    rows = n - t0 - h + 1
+    X = np.empty((rows, len(lag_steps)), dtype=float)
     Y = np.empty((rows, h), dtype=float)
-    for i in range(rows):
-        t = i + lags
-        X[i, :] = x[t - lags : t]
+    t_idx = np.arange(t0, t0 + rows, dtype=int)
+    for i, t in enumerate(t_idx):
+        X[i, :] = np.asarray([x[t - lag] for lag in lag_steps], dtype=float)
         for j in range(h):
             Y[i, j] = x[t + j]
-    return X, Y
+    return X, Y, t_idx
 
 
 def _panel_step_lag_train_xy(
@@ -96,7 +144,10 @@ def _panel_step_lag_train_xy(
     cutoff: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
     roll_windows: Any,
     roll_stats: Any,
     diff_lags: Any,
@@ -107,8 +158,6 @@ def _panel_step_lag_train_xy(
     max_train_size: int | None,
     sample_step: int,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float], int, int, int]:
-    if int(lags) <= 0:
-        raise ValueError("lags must be >= 1")
     if max_train_size is not None and int(max_train_size) <= 0:
         raise ValueError("max_train_size must be >= 1 or None")
     if int(sample_step) <= 0:
@@ -120,6 +169,9 @@ def _panel_step_lag_train_xy(
 
     step = _step_vector(int(horizon), step_scale=str(step_scale))  # (H,1)
     h = int(horizon)
+    target_lag_steps = _resolve_target_lags(lags=lags, target_lags=target_lags)
+    historic_lag_steps = _resolve_historic_x_lags(historic_x_lags)
+    future_lag_steps = _resolve_future_x_lags(x_cols=x_cols, future_x_lags=future_x_lags)
 
     uid_to_val: dict[str, float] = {}
     next_uid = 0
@@ -147,16 +199,29 @@ def _panel_step_lag_train_xy(
             train_start = max(0, train_end - int(max_train_size))
 
         y_train = y_arr[train_start:train_end]
-        if y_train.size < int(lags) + h:
+        min_required_t = max(
+            [
+                int(max(target_lag_steps)),
+                *([int(max(historic_lag_steps))] if historic_lag_steps else []),
+                *([int(max(future_lag_steps))] if future_lag_steps else []),
+            ]
+        )
+        if y_train.size < min_required_t + h:
             continue
 
-        X_base, Y = _make_lagged_xy_multi(y_train, lags=int(lags), horizon=h)
+        X_base, Y, t_idx = _make_lagged_xy_multi(
+            y_train,
+            lags=target_lag_steps,
+            horizon=h,
+            start_t=min_required_t,
+        )
         if X_base.size == 0:
             continue
 
         if int(sample_step) > 1:
             X_base = X_base[:: int(sample_step), :]
             Y = Y[:: int(sample_step), :]
+            t_idx = t_idx[:: int(sample_step)]
 
         rows = int(X_base.shape[0])
         derived, _derived_names = build_lag_derived_features(
@@ -171,11 +236,10 @@ def _panel_step_lag_train_xy(
         step_rep = np.tile(step, (rows, 1))  # (rows*h, 1)
 
         # Target indices (global into g arrays) aligned with Y.reshape(-1)
-        t0_local = (np.arange(rows, dtype=int) * int(sample_step)) + int(lags)  # (rows,)
-        # Each row i corresponds to local target indices t0_local[i] + j for j=0..h-1.
-        target_local = t0_local.reshape(-1, 1) + np.arange(h, dtype=int).reshape(1, -1)
+        target_local = t_idx.reshape(-1, 1) + np.arange(h, dtype=int).reshape(1, -1)
         target_global = int(train_start) + target_local  # (rows, h)
         target_flat = target_global.reshape(-1)
+        base_global = int(train_start) + t_idx
 
         extra_parts: list[np.ndarray] = []
 
@@ -189,7 +253,25 @@ def _panel_step_lag_train_xy(
 
         if x_cols:
             ex = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-            extra_parts.append(ex[target_flat, :].astype(float, copy=False))
+            if historic_lag_steps:
+                hist_block, _ = build_column_lag_features(
+                    ex,
+                    t=base_global,
+                    lags=historic_lag_steps,
+                    column_names=x_cols,
+                    prefix="historic_x",
+                )
+                extra_parts.append(np.repeat(hist_block, repeats=h, axis=0))
+            if future_lag_steps:
+                futr_block, _ = build_column_lag_features(
+                    ex,
+                    t=target_flat,
+                    lags=future_lag_steps,
+                    column_names=x_cols,
+                    prefix="future_x",
+                    allow_zero=True,
+                )
+                extra_parts.append(futr_block)
 
         X_core = np.concatenate([X_rep, derived_rep, step_rep], axis=1)
         if extra_parts:
@@ -223,7 +305,7 @@ def _panel_step_lag_train_xy(
         # Derive dimension from a tiny probe.
         probe_tf, _ = build_time_features(pd.Series([df["ds"].iloc[0]]))
         time_dim = int(probe_tf.shape[1])
-    exog_dim = int(len(x_cols))
+    exog_dim = int(len(x_cols)) * (int(len(historic_lag_steps)) + int(len(future_lag_steps)))
     id_dim = 1 if str(id_feature).lower().strip() == "ordinal" else 0
 
     return X_all, y_all, uid_to_val, id_dim, time_dim, exog_dim
@@ -235,7 +317,10 @@ def _panel_step_lag_predict_X(
     uid_val: float,
     cutoff: Any,
     horizon: int,
-    lags: int,
+    lags: Any,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
     roll_windows: Any,
     roll_stats: Any,
     diff_lags: Any,
@@ -246,6 +331,10 @@ def _panel_step_lag_predict_X(
 ) -> tuple[np.ndarray, np.ndarray]:
     ds_arr = g["ds"].to_numpy(copy=False)
     y_arr = g["y"].to_numpy(dtype=float, copy=False)
+    x_cols_tup = tuple(x_cols)
+    target_lag_steps = _resolve_target_lags(lags=lags, target_lags=target_lags)
+    historic_lag_steps = _resolve_historic_x_lags(historic_x_lags)
+    future_lag_steps = _resolve_future_x_lags(x_cols=x_cols_tup, future_x_lags=future_x_lags)
 
     cutoff_idx = _find_cutoff_index(ds_arr, cutoff)
     if cutoff_idx is None:
@@ -257,10 +346,17 @@ def _panel_step_lag_predict_X(
 
     if pred_end > int(y_arr.size):
         return np.empty((0, 0), dtype=float), np.empty((0,), dtype=object)
-    if pred_start < int(lags):
+    required_start = max(
+        [
+            int(max(target_lag_steps)),
+            *([int(max(historic_lag_steps))] if historic_lag_steps else []),
+            *([int(max(future_lag_steps))] if future_lag_steps else []),
+        ]
+    )
+    if pred_start < required_start:
         return np.empty((0, 0), dtype=float), np.empty((0,), dtype=object)
 
-    base = y_arr[pred_start - int(lags) : pred_start].astype(float, copy=False).reshape(1, -1)
+    base = np.asarray([[y_arr[pred_start - lag] for lag in target_lag_steps]], dtype=float)
     X_rep = np.repeat(base, repeats=h, axis=0)
     derived, _derived_names = build_lag_derived_features(
         base,
@@ -281,9 +377,27 @@ def _panel_step_lag_predict_X(
         tf, _ = build_time_features(ds_arr)
         extra_parts.append(tf[target_idx, :].astype(float, copy=False))
 
-    if x_cols:
-        ex = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-        extra_parts.append(ex[target_idx, :].astype(float, copy=False))
+    if x_cols_tup:
+        ex = g.loc[:, list(x_cols_tup)].to_numpy(dtype=float, copy=False)
+        if historic_lag_steps:
+            hist_block, _ = build_column_lag_features(
+                ex,
+                t=[pred_start],
+                lags=historic_lag_steps,
+                column_names=x_cols_tup,
+                prefix="historic_x",
+            )
+            extra_parts.append(np.repeat(hist_block, repeats=h, axis=0))
+        if future_lag_steps:
+            futr_block, _ = build_column_lag_features(
+                ex,
+                t=target_idx,
+                lags=future_lag_steps,
+                column_names=x_cols_tup,
+                prefix="future_x",
+                allow_zero=True,
+            )
+            extra_parts.append(futr_block)
 
     X_core = np.concatenate([X_rep, derived_rep, step], axis=1)
     if extra_parts:
@@ -304,7 +418,10 @@ def _run_point_global_model(
     cutoff: Any,
     horizon: int,
     *,
-    lags: int,
+    lags: Any,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
     roll_windows: Any,
     roll_stats: Any,
     diff_lags: Any,
@@ -323,7 +440,10 @@ def _run_point_global_model(
         df,
         cutoff,
         int(horizon),
-        lags=int(lags),
+        lags=lags,
+        target_lags=target_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -346,7 +466,10 @@ def _run_point_global_model(
             uid_val=uid_val,
             cutoff=cutoff,
             horizon=int(horizon),
-            lags=int(lags),
+            lags=lags,
+            target_lags=target_lags,
+            historic_x_lags=historic_x_lags,
+            future_x_lags=future_x_lags,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -370,7 +493,10 @@ def _run_point_global_model(
 
 def ridge_step_lag_global_forecaster(
     *,
-    lags: int = 24,
+    lags: Any = 24,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
     alpha: float = 1.0,
     roll_windows: Any = (),
     roll_stats: Any = (),
@@ -391,7 +517,6 @@ def ridge_step_lag_global_forecaster(
             'ridge-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
         ) from e
 
-    lags_int = int(lags)
     alpha_f = float(alpha)
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
@@ -410,7 +535,10 @@ def ridge_step_lag_global_forecaster(
             long_df,
             cutoff,
             int(horizon),
-            lags=lags_int,
+            lags=lags,
+            target_lags=target_lags,
+            historic_x_lags=historic_x_lags,
+            future_x_lags=future_x_lags,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -460,6 +588,7 @@ def rf_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
         raise ValueError("n_estimators must be >= 1")
@@ -492,6 +621,7 @@ def rf_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -531,6 +661,7 @@ def extra_trees_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
         raise ValueError("n_estimators must be >= 1")
@@ -563,6 +694,7 @@ def extra_trees_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -598,6 +730,7 @@ def decision_tree_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_depth_int is not None and max_depth_int <= 0:
         raise ValueError("max_depth must be >= 1 or None")
@@ -623,6 +756,7 @@ def decision_tree_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -660,6 +794,7 @@ def bagging_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
         raise ValueError("n_estimators must be >= 1")
@@ -691,6 +826,7 @@ def bagging_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -730,6 +866,7 @@ def gbrt_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
         raise ValueError("n_estimators must be >= 1")
@@ -764,6 +901,7 @@ def gbrt_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -799,6 +937,7 @@ def lasso_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -826,6 +965,7 @@ def lasso_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -863,6 +1003,7 @@ def elasticnet_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -892,6 +1033,7 @@ def elasticnet_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -927,6 +1069,7 @@ def knn_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_neighbors_int <= 0:
         raise ValueError("n_neighbors must be >= 1")
@@ -954,6 +1097,7 @@ def knn_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -991,6 +1135,7 @@ def kernel_ridge_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -1018,6 +1163,7 @@ def kernel_ridge_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1062,6 +1208,7 @@ def svr_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
         raise ValueError("C must be > 0")
@@ -1089,6 +1236,7 @@ def svr_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1128,6 +1276,7 @@ def linear_svr_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
         raise ValueError("C must be > 0")
@@ -1162,6 +1311,7 @@ def linear_svr_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1199,6 +1349,7 @@ def huber_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if epsilon_f <= 1.0:
         raise ValueError("epsilon must be > 1.0")
@@ -1228,6 +1379,7 @@ def huber_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1271,6 +1423,7 @@ def bayesian_ridge_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
         raise ValueError("max_iter must be >= 1")
@@ -1307,6 +1460,7 @@ def bayesian_ridge_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1352,6 +1506,7 @@ def ard_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
         raise ValueError("max_iter must be >= 1")
@@ -1391,6 +1546,7 @@ def ard_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1426,6 +1582,7 @@ def omp_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if nnz_int is not None and nnz_int <= 0:
         raise ValueError("n_nonzero_coefs must be >= 1 or None")
@@ -1453,6 +1610,7 @@ def omp_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1494,6 +1652,7 @@ def passive_aggressive_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
         raise ValueError("C must be > 0")
@@ -1531,6 +1690,7 @@ def passive_aggressive_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1566,6 +1726,7 @@ def poisson_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -1595,6 +1756,7 @@ def poisson_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1630,6 +1792,7 @@ def gamma_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -1659,6 +1822,7 @@ def gamma_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1696,6 +1860,7 @@ def tweedie_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if 0.0 < power_f < 1.0:
         raise ValueError("power must be <= 0 or >= 1")
@@ -1706,9 +1871,13 @@ def tweedie_step_lag_global_forecaster(
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         if power_f == 1.0 and np.any(y_train < 0.0):
-            raise ValueError("tweedie-step-lag-global with power=1 requires non-negative training targets")
+            raise ValueError(
+                "tweedie-step-lag-global with power=1 requires non-negative training targets"
+            )
         if power_f > 1.0 and np.any(y_train <= 0.0):
-            raise ValueError("tweedie-step-lag-global with power>1 requires strictly positive training targets")
+            raise ValueError(
+                "tweedie-step-lag-global with power>1 requires strictly positive training targets"
+            )
         model = TweedieRegressor(power=power_f, alpha=alpha_f, max_iter=max_iter_int)
         model.fit(X_train, y_train)
         return model
@@ -1729,6 +1898,7 @@ def tweedie_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1830,6 +2000,7 @@ def sgd_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
         raise ValueError("alpha must be >= 0")
@@ -1864,6 +2035,7 @@ def sgd_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1901,6 +2073,7 @@ def adaboost_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
         raise ValueError("n_estimators must be >= 1")
@@ -1932,6 +2105,7 @@ def adaboost_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -1972,6 +2146,7 @@ def mlp_step_lag_global_forecaster(
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     sizes_raw = hidden_layer_sizes
     if isinstance(sizes_raw, tuple | list):
@@ -2015,6 +2190,7 @@ def mlp_step_lag_global_forecaster(
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
             fit_model=_fit_model,
+            **lag_role_params,
         )
 
     return _f
@@ -2054,6 +2230,7 @@ def hgb_step_lag_global_forecaster(
     rs_int = int(random_state)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
         raise ValueError("max_iter must be >= 1")
@@ -2080,6 +2257,7 @@ def hgb_step_lag_global_forecaster(
             step_scale=str(step_scale),
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
+            **lag_role_params,
         )
 
         model = HistGradientBoostingRegressor(
@@ -2107,6 +2285,7 @@ def hgb_step_lag_global_forecaster(
                 add_time_features=bool(add_time_features),
                 id_feature=str(id_feature),
                 step_scale=str(step_scale),
+                **lag_role_params,
             )
             if X_pred.size == 0:
                 continue
@@ -2115,9 +2294,7 @@ def hgb_step_lag_global_forecaster(
             if pred.shape[0] != int(horizon):
                 raise RuntimeError("Unexpected prediction shape")
             for i in range(int(horizon)):
-                rows.append(
-                    {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])}
-                )
+                rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
             raise ValueError("Global model produced 0 predictions at this cutoff")
@@ -2157,6 +2334,7 @@ def _xgb_step_lag_global_forecaster_impl(
     max_train_size: int | None = None,
     sample_step: int = 1,
     quantiles: Any = (),
+    **_params: Any,
 ) -> Any:
     try:
         import xgboost as xgb  # type: ignore
@@ -2170,6 +2348,7 @@ def _xgb_step_lag_global_forecaster_impl(
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     q_items: list[float] = []
     if quantiles is not None:
@@ -2219,6 +2398,7 @@ def _xgb_step_lag_global_forecaster_impl(
             step_scale=step_scale_s,
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
+            **lag_role_params,
         )
 
         def _fit_model(*, objective: str, objective_params: dict[str, Any] | None = None) -> Any:
@@ -2306,6 +2486,7 @@ def _xgb_step_lag_global_forecaster_impl(
                 add_time_features=bool(add_time_features),
                 id_feature=str(id_feature),
                 step_scale=step_scale_s,
+                **lag_role_params,
             )
             if X_pred.size == 0:
                 continue
@@ -2400,6 +2581,7 @@ def xgb_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2460,6 +2642,7 @@ def xgb_dart_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2517,6 +2700,7 @@ def xgb_linear_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2572,6 +2756,7 @@ def xgbrf_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2632,6 +2817,7 @@ def xgb_msle_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2692,6 +2878,7 @@ def xgb_mae_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2757,6 +2944,7 @@ def xgb_huber_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2817,6 +3005,7 @@ def xgb_poisson_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2882,6 +3071,7 @@ def xgb_tweedie_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -2942,6 +3132,7 @@ def xgb_gamma_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -3002,6 +3193,7 @@ def xgb_logistic_step_lag_global_forecaster(
         max_train_size=max_train_size,
         sample_step=sample_step,
         quantiles=quantiles,
+        **_params,
     )
 
 
@@ -3046,6 +3238,7 @@ def lgbm_step_lag_global_forecaster(
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     q_items: list[float] = []
     if quantiles is not None:
@@ -3117,6 +3310,7 @@ def lgbm_step_lag_global_forecaster(
             step_scale=step_scale_s,
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
+            **lag_role_params,
         )
 
         def _fit_model(*, objective: str, objective_params: dict[str, Any] | None = None) -> Any:
@@ -3164,6 +3358,7 @@ def lgbm_step_lag_global_forecaster(
                 add_time_features=bool(add_time_features),
                 id_feature=str(id_feature),
                 step_scale=step_scale_s,
+                **lag_role_params,
             )
             if X_pred.size == 0:
                 continue
@@ -3235,6 +3430,7 @@ def catboost_step_lag_global_forecaster(
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
+    lag_role_params = _extract_step_lag_role_params(_params)
 
     q_items: list[float] = []
     if quantiles is not None:
@@ -3291,6 +3487,7 @@ def catboost_step_lag_global_forecaster(
             step_scale=step_scale_s,
             max_train_size=max_train_size_int,
             sample_step=sample_step_int,
+            **lag_role_params,
         )
 
         def _fit_model(*, loss_function: str) -> Any:
@@ -3331,6 +3528,7 @@ def catboost_step_lag_global_forecaster(
                 add_time_features=bool(add_time_features),
                 id_feature=str(id_feature),
                 step_scale=step_scale_s,
+                **lag_role_params,
             )
             if X_pred.size == 0:
                 continue

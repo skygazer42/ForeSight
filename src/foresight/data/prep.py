@@ -6,6 +6,8 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 
+from .format import resolve_covariate_roles
+
 _MISSING_POLICIES = {"error", "drop", "ffill", "zero", "interpolate"}
 
 
@@ -83,7 +85,9 @@ def _apply_missing_policy(
     out = df.copy()
     if p == "error":
         if out.loc[:, cols].isna().any().any():
-            raise ValueError(f"Missing values remain for unique_id={unique_id!r} in columns: {cols}")
+            raise ValueError(
+                f"Missing values remain for unique_id={unique_id!r} in columns: {cols}"
+            )
         return out
 
     if p == "drop":
@@ -115,6 +119,10 @@ def prepare_long_df(
     strict_freq: bool = False,
     y_missing: str = "error",
     x_missing: str = "error",
+    historic_x_cols: tuple[str, ...] = (),
+    future_x_cols: tuple[str, ...] = (),
+    historic_x_missing: str | None = None,
+    future_x_missing: str | None = None,
 ) -> pd.DataFrame:
     """
     Regularize and validate a canonical long-format DataFrame.
@@ -126,9 +134,32 @@ def prepare_long_df(
     df = _require_long_df(long_df).copy()
     df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
 
-    x_cols = tuple(c for c in df.columns if c not in {"unique_id", "ds", "y"})
+    hist_input = historic_x_cols or tuple(df.attrs.get("historic_x_cols", ()))
+    fut_input = future_x_cols or tuple(df.attrs.get("future_x_cols", ()))
+    historic_x_cols_tup, future_x_cols_tup, all_x_cols = resolve_covariate_roles(
+        historic_x_cols=hist_input,
+        future_x_cols=fut_input,
+    )
+    if not all_x_cols:
+        historic_x_cols_tup = ()
+        future_x_cols_tup = tuple(c for c in df.columns if c not in {"unique_id", "ds", "y"})
+        all_x_cols = future_x_cols_tup
+
     y_policy = _validate_missing_policy(y_missing, arg_name="y_missing")
     x_policy = _validate_missing_policy(x_missing, arg_name="x_missing")
+    historic_policy = (
+        x_policy
+        if historic_x_missing is None
+        else _validate_missing_policy(historic_x_missing, arg_name="historic_x_missing")
+    )
+    future_policy = (
+        x_policy
+        if future_x_missing is None
+        else _validate_missing_policy(future_x_missing, arg_name="future_x_missing")
+    )
+    overlap = set(historic_x_cols_tup).intersection(future_x_cols_tup)
+    if overlap and historic_policy != future_policy:
+        raise ValueError("same covariate columns cannot use different missing policies")
 
     freq_by_uid: dict[str, str | None] = {}
     if freq is not None:
@@ -166,10 +197,20 @@ def prepare_long_df(
             out = g
 
         out = _apply_missing_policy(out, columns=("y",), policy=y_policy, unique_id=uid_s)
-        out = _apply_missing_policy(out, columns=x_cols, policy=x_policy, unique_id=uid_s)
+        overlap_tup = tuple(c for c in historic_x_cols_tup if c in overlap)
+        hist_only = tuple(c for c in historic_x_cols_tup if c not in overlap)
+        future_only = tuple(c for c in future_x_cols_tup if c not in overlap)
+
+        out = _apply_missing_policy(out, columns=hist_only, policy=historic_policy, unique_id=uid_s)
+        out = _apply_missing_policy(out, columns=future_only, policy=future_policy, unique_id=uid_s)
+        out = _apply_missing_policy(
+            out, columns=overlap_tup, policy=historic_policy, unique_id=uid_s
+        )
         frames.append(out)
 
     prepared = pd.concat(frames, axis=0, ignore_index=True, sort=False)
     prepared = prepared.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
-    cols = ["unique_id", "ds", "y", *x_cols]
+    prepared.attrs["historic_x_cols"] = historic_x_cols_tup
+    prepared.attrs["future_x_cols"] = future_x_cols_tup
+    cols = ["unique_id", "ds", "y", *all_x_cols]
     return prepared.loc[:, cols]

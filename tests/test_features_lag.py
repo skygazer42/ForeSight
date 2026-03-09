@@ -1,6 +1,7 @@
 import numpy as np
 
 from foresight.features.lag import make_lagged_xy
+from foresight.features.tabular import build_column_lag_features
 
 
 def test_make_lagged_xy_shapes_and_values():
@@ -10,3 +11,43 @@ def test_make_lagged_xy_shapes_and_values():
     assert yt.shape == (3,)
     assert X.tolist() == [[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]]
     assert yt.tolist() == [2.0, 3.0, 4.0]
+
+
+def test_make_lagged_xy_supports_explicit_target_lags() -> None:
+    y = np.arange(8, dtype=float)
+    X, yt = make_lagged_xy(y, lags=(1, 3, 5))
+
+    assert X.shape == (3, 3)
+    assert yt.tolist() == [5.0, 6.0, 7.0]
+    assert X.tolist() == [
+        [0.0, 2.0, 4.0],
+        [1.0, 3.0, 5.0],
+        [2.0, 4.0, 6.0],
+    ]
+
+
+def test_build_column_lag_features_supports_historic_and_future_roles() -> None:
+    x = np.arange(10.0, 15.0, dtype=float).reshape(-1, 1)
+    t = np.array([3, 4], dtype=int)
+
+    hist, hist_names = build_column_lag_features(
+        x,
+        t=t,
+        lags=(2, 1),
+        column_names=("promo",),
+        prefix="historic_x",
+    )
+    futr, futr_names = build_column_lag_features(
+        x,
+        t=t,
+        lags=(1, 0),
+        column_names=("promo",),
+        prefix="future_x",
+        allow_zero=True,
+    )
+
+    assert hist_names == ["historic_x_promo_lag2", "historic_x_promo_lag1"]
+    assert hist.tolist() == [[11.0, 12.0], [12.0, 13.0]]
+
+    assert futr_names == ["future_x_promo_lag1", "future_x_promo_lag0"]
+    assert futr.tolist() == [[12.0, 13.0], [13.0, 14.0]]

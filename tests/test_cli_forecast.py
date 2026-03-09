@@ -101,7 +101,9 @@ def test_forecast_csv_can_emit_interval_quantile_columns(tmp_path: Path) -> None
     assert rows[0]["yhat_hi_90"] == 6.0
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_csv_supports_arima_trend_parameter(tmp_path: Path) -> None:
     csv_path = tmp_path / "trend.csv"
     csv_path.write_text(
@@ -137,7 +139,9 @@ def test_forecast_csv_supports_arima_trend_parameter(tmp_path: Path) -> None:
     assert [round(float(row["yhat"]), 3) for row in rows] == [31.0, 32.0, 33.0]
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_csv_supports_local_sarimax_with_future_covariates(tmp_path: Path) -> None:
     csv_path = tmp_path / "sarimax_exog.csv"
     rows = ["ds,y,promo"]
@@ -189,7 +193,64 @@ def test_forecast_csv_supports_local_sarimax_with_future_covariates(tmp_path: Pa
     assert abs(yhat[0] - yhat[2]) < 1e-6
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_csv_supports_separate_future_csv_for_local_covariates(tmp_path: Path) -> None:
+    history_path = tmp_path / "sarimax_hist.csv"
+    future_path = tmp_path / "sarimax_future.csv"
+
+    rows = ["ds,y,promo"]
+    promo = ([0, 1, 0, 1, 0] * 6)[:30]
+    for i, p in enumerate(promo, start=1):
+        y = 10.0 + 5.0 * float(p) + 0.1 * float(i - 1)
+        rows.append(f"2020-01-{i:02d},{y},{p}")
+    history_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    future_path.write_text(
+        "ds,promo\n2020-01-31,1\n2020-02-01,0\n2020-02-02,1\n",
+        encoding="utf-8",
+    )
+
+    proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "sarimax",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "3",
+        "--model-param",
+        "order=0,0,0",
+        "--model-param",
+        "seasonal_order=0,0,0,0",
+        "--model-param",
+        "trend=c",
+        "--model-param",
+        "future_x_cols=promo",
+        "--format",
+        "json",
+    )
+    assert proc.returncode == 0
+
+    payload = json.loads(proc.stdout)
+    assert [row["ds"][:10] for row in payload] == ["2020-01-31", "2020-02-01", "2020-02-02"]
+    yhat = [float(row["yhat"]) for row in payload]
+    assert yhat[0] > yhat[1] + 4.0
+    assert yhat[2] > yhat[1] + 4.0
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_csv_supports_local_auto_arima_with_future_covariates(tmp_path: Path) -> None:
     csv_path = tmp_path / "auto_arima_exog.csv"
     rows = ["ds,y,promo"]
@@ -249,7 +310,9 @@ def test_forecast_csv_supports_local_auto_arima_with_future_covariates(tmp_path:
     assert abs(yhat[0] - yhat[2]) < 1e-3
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_csv_supports_local_sarimax_with_future_covariates_and_intervals(
     tmp_path: Path,
 ) -> None:
@@ -299,10 +362,15 @@ def test_forecast_csv_supports_local_sarimax_with_future_covariates_and_interval
 
     payload = json.loads(proc.stdout)
     assert {"yhat_lo_80", "yhat_hi_80"}.issubset(set(payload[0]))
-    assert all(float(row["yhat_lo_80"]) <= float(row["yhat"]) <= float(row["yhat_hi_80"]) for row in payload)
+    assert all(
+        float(row["yhat_lo_80"]) <= float(row["yhat"]) <= float(row["yhat_hi_80"])
+        for row in payload
+    )
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_forecast_csv_rejects_local_artifact_save_with_future_covariates(tmp_path: Path) -> None:
     csv_path = tmp_path / "sarimax_exog.csv"
     rows = ["ds,y,promo"]
@@ -347,7 +415,9 @@ def test_forecast_csv_rejects_local_artifact_save_with_future_covariates(tmp_pat
         "json",
     )
     assert proc.returncode == 2
-    assert "Saving local forecast artifacts is not yet supported when x_cols are used" in proc.stderr
+    assert (
+        "Saving local forecast artifacts is not yet supported when x_cols are used" in proc.stderr
+    )
 
 
 def test_forecast_cli_can_save_and_reuse_local_artifact(tmp_path: Path) -> None:
@@ -503,7 +573,9 @@ def test_forecast_artifact_rejects_unsupported_schema_version(tmp_path: Path) ->
     assert "Unsupported artifact schema version" in reuse_proc.stderr
 
 
-def test_forecast_artifact_rejects_forecast_local_artifact_without_ds_context(tmp_path: Path) -> None:
+def test_forecast_artifact_rejects_forecast_local_artifact_without_ds_context(
+    tmp_path: Path,
+) -> None:
     csv_path = tmp_path / "toy.csv"
     artifact_path = tmp_path / "naive-last.pkl"
     csv_path.write_text(
@@ -552,7 +624,9 @@ def test_forecast_artifact_rejects_forecast_local_artifact_without_ds_context(tm
     assert "Local forecast artifact is missing required ds context" in reuse_proc.stderr
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_csv_supports_global_models_with_future_covariates(tmp_path: Path) -> None:
     csv_path = tmp_path / "panel_future.csv"
     csv_path.write_text(
@@ -645,7 +719,9 @@ def test_forecast_csv_supports_global_models_with_future_covariates(tmp_path: Pa
     assert all("yhat" in row for row in rows)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_csv_saved_global_artifact_reuses_observed_cutoff_with_future_covariates(
     tmp_path: Path,
 ) -> None:
