@@ -20327,7 +20327,140 @@ def _make_torch_rnnzoo_specs() -> dict[str, ModelSpec]:
 def _make_wave1_reservoir_specs() -> dict[str, ModelSpec]:
     """Lane 01 ownership: ESN / reservoir / liquid-state lite families."""
 
-    return {}
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Reservoir family variant: esn, deep-esn, or liquid-state",
+        "lags": "Lag window length",
+        "hidden_size": "Reservoir hidden width",
+        "spectral_radius": "Reservoir spectral radius (>0)",
+        "leak": "Reservoir leaking rate in (0,1]",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "spectral_radius": 0.9,
+        "leak": 1.0,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    descriptions = {
+        "torch-esn-direct": (
+            "Echo State Network / ESN lite local forecaster. Wraps the existing rnnpaper "
+            "reservoir core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-deep-esn-direct": (
+            "Deep ESN lite local forecaster. Wraps the existing rnnpaper deep reservoir core "
+            "behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-liquid-state-direct": (
+            "Liquid State Machine lite local forecaster. Wraps the existing rnnpaper liquid-state "
+            "core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-esn-direct": "esn",
+        "torch-deep-esn-direct": "deep-esn",
+        "torch-liquid-state-direct": "liquid-state",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        hidden_size: int = 32,
+        spectral_radius: float = 0.9,
+        leak: float = 1.0,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **params: Any,
+    ) -> ForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        hidden_size_int = int(hidden_size)
+        spectral_radius_f = float(spectral_radius)
+        leak_f = float(leak)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_reservoir import torch_reservoir_direct_forecast
+
+            return torch_reservoir_direct_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                hidden_size=hidden_size_int,
+                spectral_radius=spectral_radius_f,
+                leak=leak_f,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
 
 
 def _make_wave1_structured_rnn_specs() -> dict[str, ModelSpec]:
