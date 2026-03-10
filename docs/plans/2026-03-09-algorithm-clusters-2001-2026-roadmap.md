@@ -4,7 +4,7 @@
 
 **Scope:** This is a research and taxonomy document, not an implementation plan. It maps current local coverage, identifies gaps, and proposes a practical expansion queue.
 
-**Status Note (March 9, 2026):** The first local/direct transformer-era parity wave and two lightweight families are now present in the registry: TFT, Informer, Autoformer, Non-stationary Transformer, FEDformer, TimesNet, iTransformer, TimeMixer, SparseTSF, LightTS, and FreTS.
+**Status Note (March 11, 2026):** The registry now includes the first local/direct transformer-era parity wave plus a wave of dedicated lite families and wrappers: TFT, Informer, Autoformer, Non-stationary Transformer, FEDformer, TimesNet, iTransformer, TimeMixer, SparseTSF, LightTS, FreTS, ESN / liquid-state / structured recurrent wrappers, ASTGCN / GMAN / AGCRN / MTGNN / StemGNN / FourierGNN-style graph families, TimeGrad / TACTiS lite forecasters, and foundation wrappers for Lag-Llama, Chronos, TimesFM, Moirai, MOMENT, Time-MoE, and Timer-S1.
 
 ---
 
@@ -138,9 +138,9 @@ Legend for `status`:
 
 | # | Year | Cluster | Family | Status | Why it matters |
 | --- | ---: | --- | --- | --- | --- |
-| 1 | 2001 | Reservoir computing / ESN | recurrent | partial | Cheap long-memory baseline family; paper-zoo coverage exists but no dedicated ESN line |
-| 2 | 2002 | Liquid-state / spiking reservoirs | recurrent | partial | Useful for event-driven and irregular dynamics |
-| 3 | 2007 | Multi-dimensional / grid recurrent cells | recurrent | partial | Relevant to structured multivariate or spatial series |
+| 1 | 2001 | Reservoir computing / ESN | recurrent | implemented | Dedicated lite ESN wrappers now exist in the registry |
+| 2 | 2002 | Liquid-state / spiking reservoirs | recurrent | implemented | Dedicated lite liquid-state wrappers now exist in the registry |
+| 3 | 2007 | Multi-dimensional / grid recurrent cells | recurrent | implemented | Dedicated lite multidimensional/grid recurrent wrappers now exist in the registry |
 | 4 | 2019 | Legendre Memory Unit (LMU) | recurrent | missing | Strong long-context recurrent inductive bias |
 | 5 | 2020 | Liquid Time-Constant Networks (LTC) | recurrent | missing | Continuous-time sequence modeling with adaptive dynamics |
 | 6 | 2022 | Closed-form Continuous-time (CfC) | recurrent | missing | Lightweight continuous-time recurrence, easier to train than LTC |
@@ -153,15 +153,15 @@ Legend for `status`:
 | 13 | 2024 | Griffin / Hawk recurrent hybrids | recurrent revival | missing | Strong modern recurrent alternatives to attention-heavy stacks |
 | 14 | 2017 | STGCN | graph / traffic | missing | Canonical graph forecasting baseline for traffic and sensors |
 | 15 | 2018 | DCRNN as a first-class graph family | graph / traffic | partial | Only lite paper-zoo presence today; no graph-native workflow |
-| 16 | 2019 | Graph-attention forecasters | graph / traffic | missing | Covers ASTGCN / GMAN-style attention on sensor graphs |
+| 16 | 2019 | Graph-attention forecasters | graph / traffic | implemented | Dedicated lite ASTGCN / GMAN-style multivariate entries now exist |
 | 17 | 2019 | Graph WaveNet | graph / traffic | missing | Still a very strong practical spatiotemporal baseline |
-| 18 | 2020 | Graph-structure-learning forecasters | graph | missing | Learn adjacency instead of requiring a fixed graph |
-| 19 | 2020 | AGCRN | graph / traffic | missing | Adaptive graph learning for dynamic relations |
-| 20 | 2020 | MTGNN | graph / multivariate | missing | Widely used graph-temporal benchmark family |
-| 21 | 2021 | StemGNN | graph / spectral | missing | Spectral graph-temporal forecasting for multivariate series |
+| 18 | 2020 | Graph-structure-learning forecasters | graph | implemented | Dedicated lite adaptive-graph families now exist in the registry |
+| 19 | 2020 | AGCRN | graph / traffic | implemented | Dedicated lite AGCRN-style multivariate entry now exists |
+| 20 | 2020 | MTGNN | graph / multivariate | implemented | Dedicated lite MTGNN-style multivariate entry now exists |
+| 21 | 2021 | StemGNN | graph / spectral | implemented | Dedicated lite StemGNN-style spectral entry now exists |
 | 22 | 2022 | STEP-style pretrained STGNNs | graph / pretraining | missing | Introduces graph pretraining as a reusable capability |
 | 23 | 2022 | STID | graph / strong baseline | missing | Important surprisingly-strong lightweight baseline |
-| 24 | 2023 | FourierGNN / spectral GNNs | graph / frequency | missing | Connects graph and frequency-domain forecasting |
+| 24 | 2023 | FourierGNN / spectral GNNs | graph / frequency | implemented | Dedicated lite FourierGNN-style spectral entry now exists |
 | 25 | 2020 | TFT local/direct family | transformer / hybrid | implemented | Local/direct + global registry coverage now exists |
 | 26 | 2021 | Informer local/direct family | transformer | implemented | Local/direct + global registry coverage now exists |
 | 27 | 2021 | Autoformer local/direct family | transformer / decomposition | implemented | Local/direct + global registry coverage now exists |
@@ -178,16 +178,16 @@ Legend for `status`:
 | 38 | 2024 | TimeXer | exogenous-aware transformer | missing | Important for future covariate heavy datasets |
 | 39 | 2024 | SAMformer | linear-attention / adaptive mixing | missing | Modern efficient transformer-style family |
 | 40 | 2024 | SparseTSF | sparse linear long-horizon | implemented | Local/direct sparse long-horizon baseline is now present |
-| 41 | 2021 | TimeGrad | probabilistic / diffusion | missing | Canonical diffusion-style forecasting family |
-| 42 | 2022 | TACTiS | probabilistic transformer | missing | Strong multivariate probabilistic forecasting line |
-| 43 | 2023 | Lag-Llama | foundation / pretrained | missing | Open pretrained probabilistic forecasting family |
+| 41 | 2021 | TimeGrad | probabilistic / diffusion | implemented | Dedicated lite TimeGrad-style local entry now exists |
+| 42 | 2022 | TACTiS | probabilistic transformer | implemented | Dedicated lite TACTiS-style local entry now exists |
+| 43 | 2023 | Lag-Llama | foundation / pretrained | implemented | Wrapper entry now exists with offline fixture/backend routing |
 | 44 | 2023 | Time-LLM | LLM / reprogramming | missing | Important bridge between LLMs and forecasting |
-| 45 | 2024 | TimesFM | foundation / zero-shot | missing | One of the most visible decoder-only forecasting foundation models |
-| 46 | 2024 | Chronos / Chronos-Bolt | foundation / zero-shot | missing | Practical pretrained zero-shot family with strong ecosystem value |
-| 47 | 2024 | Moirai / Moirai-MoE | foundation / universal forecasting | missing | High-value universal forecasting transformer family |
-| 48 | 2024 | MOMENT | foundation / representation learning | missing | Useful for pretraining + transfer + embeddings |
-| 49 | 2024 | Time-MoE | foundation / mixture-of-experts | missing | Represents the MoE branch of time-series foundation models |
-| 50 | 2026 | Timer-S1 | foundation / reasoning-era TS model | missing | Good placeholder for 2025-2026 watchlist and latest-cycle coverage |
+| 45 | 2024 | TimesFM | foundation / zero-shot | implemented | Wrapper entry now exists with offline fixture/backend routing |
+| 46 | 2024 | Chronos / Chronos-Bolt | foundation / zero-shot | implemented | Wrapper entries now exist with offline fixture/backend routing |
+| 47 | 2024 | Moirai / Moirai-MoE | foundation / universal forecasting | implemented | Wrapper entry now exists for the Moirai family |
+| 48 | 2024 | MOMENT | foundation / representation learning | implemented | Wrapper entry now exists for the MOMENT family |
+| 49 | 2024 | Time-MoE | foundation / mixture-of-experts | implemented | Wrapper entry now exists for the Time-MoE family |
+| 50 | 2026 | Timer-S1 | foundation / reasoning-era TS model | implemented | Wrapper entry now exists for the Timer-S1 family |
 
 ---
 

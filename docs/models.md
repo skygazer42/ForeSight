@@ -2,7 +2,7 @@
 
 This page is generated from the central model registry. Do not edit it by hand; run `python tools/generate_model_capability_docs.py`.
 
-ForeSight currently registers **598** models: **481** local, **113** global, and **4** multivariate.
+ForeSight currently registers **620** models: **497** local, **113** global, and **10** multivariate.
 
 ## Capability keys
 
@@ -34,8 +34,8 @@ print(len(list_models()))
 
 | requires extra | model_count |
 | --- | ---: |
-| `torch` | 413 |
-| `core` | 46 |
+| `torch` | 427 |
+| `core` | 54 |
 | `ml` | 44 |
 | `xgb` | 43 |
 | `stats` | 33 |
@@ -70,6 +70,8 @@ print(len(list_models()))
 | `catboost-lag-recursive` | `local` | `catboost` | no | no | yes | no | yes | no |
 | `catboost-step-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
 | `catboost-step-lag-global` | `global` | `catboost` | yes | yes | yes | yes | yes | no |
+| `chronos` | `local` | `core` | no | no | yes | no | yes | no |
+| `chronos-bolt` | `local` | `core` | no | no | yes | no | yes | no |
 | `croston` | `local` | `core` | no | no | yes | no | yes | no |
 | `croston-opt` | `local` | `core` | no | no | yes | no | yes | no |
 | `croston-sba` | `local` | `core` | no | no | yes | no | yes | no |
@@ -114,6 +116,7 @@ print(len(list_models()))
 | `kernel-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `knn-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `knn-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `lag-llama` | `local` | `core` | no | no | yes | no | yes | no |
 | `lasso-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `lasso-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `les` | `local` | `core` | no | no | yes | no | yes | no |
@@ -134,6 +137,8 @@ print(len(list_models()))
 | `median` | `local` | `core` | no | no | yes | no | yes | no |
 | `mlp-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `mlp-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `moirai` | `local` | `core` | no | no | yes | no | yes | no |
+| `moment` | `local` | `core` | no | no | yes | no | yes | no |
 | `moving-average` | `local` | `core` | no | no | yes | no | yes | no |
 | `moving-median` | `local` | `core` | no | no | yes | no | yes | no |
 | `mstl-arima` | `local` | `stats` | no | no | yes | no | yes | no |
@@ -182,6 +187,11 @@ print(len(list_models()))
 | `tbats-lite-uc` | `local` | `stats` | no | no | yes | no | yes | no |
 | `theta` | `local` | `core` | no | no | yes | no | yes | no |
 | `theta-auto` | `local` | `core` | no | no | yes | no | yes | no |
+| `time-moe` | `local` | `core` | no | no | yes | no | yes | no |
+| `timer-s1` | `local` | `core` | no | no | yes | no | yes | no |
+| `timesfm` | `local` | `core` | no | no | yes | no | yes | no |
+| `torch-agcrn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
+| `torch-astgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-attn-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-autoformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-autoformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
@@ -191,12 +201,14 @@ print(len(list_models()))
 | `torch-cnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-crossformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-crossformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-deep-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-deepar-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-deepar-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-dilated-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-dilated-rnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-dlinear-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-dlinear-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-esrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-esrnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-etsformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -206,10 +218,13 @@ print(len(list_models()))
 | `torch-film-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-fnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-fnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-fouriergnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-frets-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-gman-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-gmlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-gmlp-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-graphwavenet-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
+| `torch-grid-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-griffin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-hawk-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -226,6 +241,7 @@ print(len(list_models()))
 | `torch-koopa-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-lightts-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-linear-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-liquid-state-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-lmu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-lstnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -236,6 +252,8 @@ print(len(list_models()))
 | `torch-mamba2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-micn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-mlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-mtgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
+| `torch-multidim-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-nbeats-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-nbeats-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-nhits-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -479,14 +497,18 @@ print(len(list_models()))
 | `torch-seq2seq-lstm-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-sparsetsf-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-ssm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-stemgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-stgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-stid-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
+| `torch-structural-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-tactis-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-tcn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-tcn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-tft-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-tft-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-tide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-tide-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-timegrad-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timemixer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timesnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timesnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |

@@ -67,6 +67,7 @@ from .global_regression import (
     xgb_tweedie_step_lag_global_forecaster,
     xgbrf_step_lag_global_forecaster,
 )
+from .hf_time_series import hf_timeseries_transformer_direct_forecast
 from .intermittent import (
     adida_forecast,
     croston_classic_forecast,
@@ -83,7 +84,6 @@ from .multivariate import (
     torch_stid_forecast,
     var_forecast,
 )
-from .hf_time_series import hf_timeseries_transformer_direct_forecast
 from .naive import naive_last, seasonal_naive, seasonal_naive_auto
 from .regression import (
     adaboost_lag_direct_forecast,
@@ -231,8 +231,8 @@ from .torch_global import (
     torch_nonstationary_transformer_global_forecaster,
     torch_patchtst_global_forecaster,
     torch_pyraformer_global_forecaster,
-    torch_retnet_global_forecaster,
     torch_resnet1d_global_forecaster,
+    torch_retnet_global_forecaster,
     torch_rnn_global_forecaster,
     torch_rwkv_global_forecaster,
     torch_scinet_global_forecaster,
@@ -285,9 +285,9 @@ from .torch_nn import (
     torch_patchtst_direct_forecast,
     torch_pyraformer_direct_forecast,
     torch_qrnn_recursive_forecast,
+    torch_resnet1d_direct_forecast,
     torch_retnet_direct_forecast,
     torch_retnet_recursive_forecast,
-    torch_resnet1d_direct_forecast,
     torch_rwkv_direct_forecast,
     torch_samformer_direct_forecast,
     torch_scinet_direct_forecast,
@@ -20324,6 +20324,1088 @@ def _make_torch_rnnzoo_specs() -> dict[str, ModelSpec]:
     return extra
 
 
+def _make_wave1_reservoir_specs() -> dict[str, ModelSpec]:
+    """Lane 01 ownership: ESN / reservoir / liquid-state lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Reservoir family variant: esn, deep-esn, or liquid-state",
+        "lags": "Lag window length",
+        "hidden_size": "Reservoir hidden width",
+        "spectral_radius": "Reservoir spectral radius (>0)",
+        "leak": "Reservoir leaking rate in (0,1]",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "spectral_radius": 0.9,
+        "leak": 1.0,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    descriptions = {
+        "torch-esn-direct": (
+            "Echo State Network / ESN lite local forecaster. Wraps the existing rnnpaper "
+            "reservoir core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-deep-esn-direct": (
+            "Deep ESN lite local forecaster. Wraps the existing rnnpaper deep reservoir core "
+            "behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-liquid-state-direct": (
+            "Liquid State Machine lite local forecaster. Wraps the existing rnnpaper liquid-state "
+            "core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-esn-direct": "esn",
+        "torch-deep-esn-direct": "deep-esn",
+        "torch-liquid-state-direct": "liquid-state",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        hidden_size: int = 32,
+        spectral_radius: float = 0.9,
+        leak: float = 1.0,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **params: Any,
+    ) -> ForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        hidden_size_int = int(hidden_size)
+        spectral_radius_f = float(spectral_radius)
+        leak_f = float(leak)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_reservoir import torch_reservoir_direct_forecast
+
+            return torch_reservoir_direct_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                hidden_size=hidden_size_int,
+                spectral_radius=spectral_radius_f,
+                leak=leak_f,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
+
+
+def _make_wave1_structured_rnn_specs() -> dict[str, ModelSpec]:
+    """Lane 02 ownership: structured / grid recurrent lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Structured recurrent family variant: multidim-rnn, grid-lstm, or structural-rnn",
+        "lags": "Lag window length",
+        "hidden_size": "Hidden size for the wrapped structured recurrent core",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    descriptions = {
+        "torch-multidim-rnn-direct": (
+            "Multi-Dimensional RNN lite local forecaster. Wraps the existing rnnpaper "
+            "structured recurrent core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-grid-lstm-direct": (
+            "Grid LSTM lite local forecaster. Wraps the existing rnnpaper grid-structured "
+            "core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+        "torch-structural-rnn-direct": (
+            "Structural-RNN lite local forecaster. Wraps the existing rnnpaper structured "
+            "spatiotemporal core behind a dedicated first-class model key. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-multidim-rnn-direct": "multidim-rnn",
+        "torch-grid-lstm-direct": "grid-lstm",
+        "torch-structural-rnn-direct": "structural-rnn",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        hidden_size: int = 32,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **params: Any,
+    ) -> ForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        hidden_size_int = int(hidden_size)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_structured_rnn import torch_structured_rnn_direct_forecast
+
+            return torch_structured_rnn_direct_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                hidden_size=hidden_size_int,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
+
+
+def _make_wave1_graph_attention_specs() -> dict[str, ModelSpec]:
+    """Lane 03 ownership: ASTGCN / GMAN style multivariate graph lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Graph-attention lite family variant: astgcn or gman",
+        "lags": "Lag window length",
+        "d_model": "Latent width for the attention backbone",
+        "num_blocks": "Number of stacked attention blocks",
+        "num_heads": "Multi-head attention heads",
+        "dropout": "Dropout in [0,1)",
+        "adj": "Adjacency source: identity, ring, fully-connected, corr, or matrix",
+        "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
+        "adj_top_k": "Top-k neighbors kept for correlation adjacency",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "d_model": 64,
+        "num_blocks": 2,
+        "num_heads": 4,
+        "dropout": 0.1,
+        "adj": "corr",
+        "adj_path": "",
+        "adj_top_k": 8,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    descriptions = {
+        "torch-astgcn-multivariate": (
+            "ASTGCN-style lite multivariate forecaster. Uses adjacency-biased temporal/spatial "
+            "attention over a wide target matrix; this is a compact proxy, not a paper-complete "
+            "ASTGCN reproduction. Requires PyTorch."
+        ),
+        "torch-gman-multivariate": (
+            "GMAN-style lite multivariate forecaster. Uses stacked spatial/temporal attention "
+            "with node and horizon embeddings over a wide target matrix; this is a compact proxy, "
+            "not a paper-complete GMAN reproduction. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-astgcn-multivariate": "astgcn",
+        "torch-gman-multivariate": "gman",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        d_model: int = 64,
+        num_blocks: int = 2,
+        num_heads: int = 4,
+        dropout: float = 0.1,
+        adj: Any = "corr",
+        adj_path: str = "",
+        adj_top_k: int = 8,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **_params: Any,
+    ) -> MultivariateForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        d_model_int = int(d_model)
+        num_blocks_int = int(num_blocks)
+        num_heads_int = int(num_heads)
+        dropout_f = float(dropout)
+        adj_value = adj
+        adj_path_s = str(adj_path)
+        adj_top_k_int = int(adj_top_k)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_graph_attention import torch_graph_attention_forecast
+
+            return torch_graph_attention_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                d_model=d_model_int,
+                num_blocks=num_blocks_int,
+                num_heads=num_heads_int,
+                dropout=dropout_f,
+                adj=adj_value,
+                adj_path=adj_path_s,
+                adj_top_k=adj_top_k_int,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="multivariate",
+        )
+
+    return extra
+
+
+def _make_wave1_graph_structure_specs() -> dict[str, ModelSpec]:
+    """Lane 04 ownership: AGCRN / MTGNN style graph-structure lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Graph-structure lite family variant: agcrn or mtgnn",
+        "lags": "Lag window length",
+        "d_model": "Latent width for the adaptive graph backbone",
+        "num_blocks": "Number of temporal graph blocks",
+        "kernel_size": "Temporal convolution kernel width",
+        "dilation_base": "Temporal dilation growth factor",
+        "dropout": "Dropout in [0,1)",
+        "adj": "Adjacency seed: identity, ring, fully-connected, corr, or matrix",
+        "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
+        "adj_top_k": "Top-k neighbors kept for correlation adjacency",
+        "adaptive_adj": "Whether to learn an adaptive adjacency on top of the seed graph",
+        "adj_emb_dim": "Embedding rank for adaptive adjacency factors",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    common_defaults = {
+        "lags": 24,
+        "d_model": 64,
+        "kernel_size": 2,
+        "dropout": 0.1,
+        "adj_path": "",
+        "adj_top_k": 8,
+        "adaptive_adj": True,
+        "adj_emb_dim": 8,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+    default_params = {
+        "torch-agcrn-multivariate": {
+            **common_defaults,
+            "variant": "agcrn",
+            "num_blocks": 2,
+            "dilation_base": 1,
+            "adj": "identity",
+        },
+        "torch-mtgnn-multivariate": {
+            **common_defaults,
+            "variant": "mtgnn",
+            "num_blocks": 4,
+            "dilation_base": 2,
+            "adj": "corr",
+        },
+    }
+    descriptions = {
+        "torch-agcrn-multivariate": (
+            "AGCRN-style lite multivariate forecaster. Reuses the existing adaptive "
+            "Graph WaveNet-style backbone with an identity-seeded learned adjacency; this is "
+            "a graph-structure proxy, not a paper-complete AGCRN reproduction. Requires PyTorch."
+        ),
+        "torch-mtgnn-multivariate": (
+            "MTGNN-style lite multivariate forecaster. Reuses the existing adaptive "
+            "Graph WaveNet-style backbone with a correlation-seeded learned adjacency and "
+            "dilated temporal mixing; this is a graph-structure proxy, not a paper-complete "
+            "MTGNN reproduction. Requires PyTorch."
+        ),
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        d_model: int = 64,
+        num_blocks: int = 4,
+        kernel_size: int = 2,
+        dilation_base: int = 2,
+        dropout: float = 0.1,
+        adj: Any = "corr",
+        adj_path: str = "",
+        adj_top_k: int = 8,
+        adaptive_adj: bool = True,
+        adj_emb_dim: int = 8,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **_params: Any,
+    ) -> MultivariateForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        d_model_int = int(d_model)
+        num_blocks_int = int(num_blocks)
+        kernel_size_int = int(kernel_size)
+        dilation_base_int = int(dilation_base)
+        dropout_f = float(dropout)
+        adj_value = adj
+        adj_path_s = str(adj_path)
+        adj_top_k_int = int(adj_top_k)
+        adaptive_adj_bool = bool(adaptive_adj)
+        adj_emb_dim_int = int(adj_emb_dim)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_graph_structure import torch_graph_structure_forecast
+
+            return torch_graph_structure_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                d_model=d_model_int,
+                num_blocks=num_blocks_int,
+                kernel_size=kernel_size_int,
+                dilation_base=dilation_base_int,
+                dropout=dropout_f,
+                adj=adj_value,
+                adj_path=adj_path_s,
+                adj_top_k=adj_top_k_int,
+                adaptive_adj=adaptive_adj_bool,
+                adj_emb_dim=adj_emb_dim_int,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params=dict(default_params[key]),
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="multivariate",
+        )
+
+    return extra
+
+
+def _make_wave1_graph_spectral_specs() -> dict[str, ModelSpec]:
+    """Lane 05 ownership: StemGNN / FourierGNN style graph spectral lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Graph-spectral lite family variant: stemgnn or fouriergnn",
+        "lags": "Lag window length",
+        "d_model": "Latent width for the spectral backbone",
+        "num_blocks": "Number of spectral mixer blocks",
+        "top_k_freq": "Number of FFT bins kept per node",
+        "dropout": "Dropout in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "d_model": 64,
+        "num_blocks": 2,
+        "top_k_freq": 8,
+        "dropout": 0.1,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+    descriptions = {
+        "torch-stemgnn-multivariate": (
+            "StemGNN-style lite multivariate forecaster. Fuses lag-history and FFT-derived "
+            "spectral node features through compact node mixers; this is a spectral proxy, not "
+            "a paper-complete StemGNN reproduction. Requires PyTorch."
+        ),
+        "torch-fouriergnn-multivariate": (
+            "FourierGNN-style lite multivariate forecaster. Uses FFT-derived node tokens with "
+            "learned horizon decoding; this is a spectral proxy, not a paper-complete FourierGNN "
+            "reproduction. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-stemgnn-multivariate": "stemgnn",
+        "torch-fouriergnn-multivariate": "fouriergnn",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        d_model: int = 64,
+        num_blocks: int = 2,
+        top_k_freq: int = 8,
+        dropout: float = 0.1,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **_params: Any,
+    ) -> MultivariateForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        d_model_int = int(d_model)
+        num_blocks_int = int(num_blocks)
+        top_k_freq_int = int(top_k_freq)
+        dropout_f = float(dropout)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_graph_spectral import torch_graph_spectral_forecast
+
+            return torch_graph_spectral_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                d_model=d_model_int,
+                num_blocks=num_blocks_int,
+                top_k_freq=top_k_freq_int,
+                dropout=dropout_f,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="multivariate",
+        )
+
+    return extra
+
+
+def _make_wave1_probabilistic_specs() -> dict[str, ModelSpec]:
+    """Lane 06 ownership: TimeGrad / TACTiS style probabilistic lite families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Probabilistic lite family variant: timegrad or tactis",
+        "lags": "Lag window length",
+        "hidden_size": "Hidden width for the probabilistic backbone",
+        "num_layers": "Recurrent depth for timegrad-lite",
+        "num_heads": "Attention heads for tactis-lite (must divide hidden_size)",
+        "dropout": "Dropout in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+        "loss": "Training loss: gaussian, mse, mae, huber",
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "num_layers": 1,
+        "num_heads": 4,
+        "dropout": 0.0,
+        **_TORCH_COMMON_DEFAULTS,
+        "loss": "gaussian",
+    }
+
+    descriptions = {
+        "torch-timegrad-direct": (
+            "TimeGrad-style lite probabilistic local forecaster. Uses a compact recurrent "
+            "Gaussian head and returns predictive means only; it does not implement full "
+            "diffusion sampling semantics. Requires PyTorch."
+        ),
+        "torch-tactis-direct": (
+            "TACTiS-style lite probabilistic local forecaster. Uses horizon-query attention "
+            "with a Gaussian head and returns predictive means only; it does not implement "
+            "full copula or trajectory sampling semantics. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-timegrad-direct": "timegrad",
+        "torch-tactis-direct": "tactis",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        hidden_size: int = 32,
+        num_layers: int = 1,
+        num_heads: int = 4,
+        dropout: float = 0.0,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "gaussian",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+    ) -> ForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        hidden_size_int = int(hidden_size)
+        num_layers_int = int(num_layers)
+        num_heads_int = int(num_heads)
+        dropout_f = float(dropout)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_probabilistic import torch_probabilistic_direct_forecast
+
+            return torch_probabilistic_direct_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                hidden_size=hidden_size_int,
+                num_layers=num_layers_int,
+                num_heads=num_heads_int,
+                dropout=dropout_f,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
+
+
+def _make_wave1_foundation_wrapper_a_specs() -> dict[str, ModelSpec]:
+    """Lane 07 ownership: Lag-Llama / Chronos / TimesFM wrapper families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "backend": "Wrapper backend: auto, fixture-json, or hf-timeseries-transformer",
+        "checkpoint_path": "Local fixture/checkpoint path used by fixture-json or as a backend source",
+        "model_source": "Backend-specific model identifier or local model path",
+        "local_files_only": "If true, disallow backend downloads where supported (true/false)",
+        "context_length": "Context length passed to backend-backed inference when supported",
+        "d_model": "Backend adapter hidden size when constructing a small fallback transformer",
+        "num_samples": "Backend sample count where supported",
+        "normalize": "Normalize the series before inference when supported (true/false)",
+        "device": "Execution device for backend-backed inference",
+        "seed": "Random seed for backend-backed inference",
+    }
+
+    base_defaults = {
+        "backend": "auto",
+        "checkpoint_path": "",
+        "model_source": "",
+        "local_files_only": True,
+        "context_length": 48,
+        "d_model": 16,
+        "num_samples": 20,
+        "normalize": True,
+        "device": "cpu",
+        "seed": 0,
+    }
+
+    families = {
+        "lag-llama": "Lag-Llama wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "chronos": "Chronos wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "chronos-bolt": "Chronos-Bolt wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "timesfm": "TimesFM wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+    }
+
+    def _factory(
+        *,
+        family: str,
+        backend: str = "auto",
+        checkpoint_path: str = "",
+        model_source: str = "",
+        local_files_only: bool = True,
+        context_length: int = 48,
+        d_model: int = 16,
+        num_samples: int = 20,
+        normalize: bool = True,
+        device: str = "cpu",
+        seed: int = 0,
+        **params: Any,
+    ) -> ForecasterFn:
+        family_s = str(family).strip()
+        backend_s = str(backend)
+        checkpoint_path_s = str(checkpoint_path)
+        model_source_s = str(model_source)
+        local_files_only_bool = bool(local_files_only)
+        context_length_int = int(context_length)
+        d_model_int = int(d_model)
+        num_samples_int = int(num_samples)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        seed_int = int(seed)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .foundation_wrappers_a import foundation_wrapper_a_forecast
+
+            return foundation_wrapper_a_forecast(
+                train,
+                horizon,
+                family=family_s,
+                backend=backend_s,
+                checkpoint_path=checkpoint_path_s,
+                model_source=model_source_s,
+                local_files_only=local_files_only_bool,
+                context_length=context_length_int,
+                d_model=d_model_int,
+                num_samples=num_samples_int,
+                normalize=normalize_bool,
+                device=device_s,
+                seed=seed_int,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in families.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "family": key},
+            param_help=dict(help_map),
+            requires=(),
+            interface="local",
+        )
+
+    return extra
+
+
+def _make_wave1_foundation_wrapper_b_specs() -> dict[str, ModelSpec]:
+    """Lane 08 ownership: Moirai / MOMENT / Time-MoE / Timer-S1 wrapper families."""
+
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "backend": "Wrapper backend: auto, fixture-json, or hf-timeseries-transformer",
+        "checkpoint_path": "Local fixture/checkpoint path used by fixture-json or as a backend source",
+        "model_source": "Backend-specific model identifier or local model path",
+        "local_files_only": "If true, disallow backend downloads where supported (true/false)",
+        "context_length": "Context length passed to backend-backed inference when supported",
+        "d_model": "Backend adapter hidden size when constructing a small fallback transformer",
+        "num_samples": "Backend sample count where supported",
+        "normalize": "Normalize the series before inference when supported (true/false)",
+        "device": "Execution device for backend-backed inference",
+        "seed": "Random seed for backend-backed inference",
+    }
+
+    base_defaults = {
+        "backend": "auto",
+        "checkpoint_path": "",
+        "model_source": "",
+        "local_files_only": True,
+        "context_length": 48,
+        "d_model": 16,
+        "num_samples": 20,
+        "normalize": True,
+        "device": "cpu",
+        "seed": 0,
+    }
+
+    families = {
+        "moirai": "Moirai wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "moment": "MOMENT wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "time-moe": "Time-MoE wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "timer-s1": "Timer-S1 wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+    }
+
+    def _factory(
+        *,
+        family: str,
+        backend: str = "auto",
+        checkpoint_path: str = "",
+        model_source: str = "",
+        local_files_only: bool = True,
+        context_length: int = 48,
+        d_model: int = 16,
+        num_samples: int = 20,
+        normalize: bool = True,
+        device: str = "cpu",
+        seed: int = 0,
+        **params: Any,
+    ) -> ForecasterFn:
+        family_s = str(family).strip()
+        backend_s = str(backend)
+        checkpoint_path_s = str(checkpoint_path)
+        model_source_s = str(model_source)
+        local_files_only_bool = bool(local_files_only)
+        context_length_int = int(context_length)
+        d_model_int = int(d_model)
+        num_samples_int = int(num_samples)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        seed_int = int(seed)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .foundation_wrappers_b import foundation_wrapper_b_forecast
+
+            return foundation_wrapper_b_forecast(
+                train,
+                horizon,
+                family=family_s,
+                backend=backend_s,
+                checkpoint_path=checkpoint_path_s,
+                model_source=model_source_s,
+                local_files_only=local_files_only_bool,
+                context_length=context_length_int,
+                d_model=d_model_int,
+                num_samples=num_samples_int,
+                normalize=normalize_bool,
+                device=device_s,
+                seed=seed_int,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in families.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "family": key},
+            param_help=dict(help_map),
+            requires=(),
+            interface="local",
+        )
+
+    return extra
+
+
 _EXTRA_RNNPAPER = _make_torch_rnnpaper_specs()
 _RNNPAPER_CLASH = set(_EXTRA_RNNPAPER).intersection(_REGISTRY)
 if _RNNPAPER_CLASH:
@@ -20343,6 +21425,72 @@ _CLASH = set(_EXTRA_TORCH_VARIANTS).intersection(_REGISTRY)
 if _CLASH:
     raise RuntimeError(f"Internal error: model key collision(s): {sorted(_CLASH)}")
 _REGISTRY.update(_EXTRA_TORCH_VARIANTS)
+
+
+_EXTRA_WAVE1_RESERVOIR = _make_wave1_reservoir_specs()
+_WAVE1_RESERVOIR_CLASH = set(_EXTRA_WAVE1_RESERVOIR).intersection(_REGISTRY)
+if _WAVE1_RESERVOIR_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_RESERVOIR_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_RESERVOIR)
+
+
+_EXTRA_WAVE1_STRUCTURED_RNN = _make_wave1_structured_rnn_specs()
+_WAVE1_STRUCTURED_RNN_CLASH = set(_EXTRA_WAVE1_STRUCTURED_RNN).intersection(_REGISTRY)
+if _WAVE1_STRUCTURED_RNN_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_STRUCTURED_RNN_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_STRUCTURED_RNN)
+
+
+_EXTRA_WAVE1_GRAPH_ATTENTION = _make_wave1_graph_attention_specs()
+_WAVE1_GRAPH_ATTENTION_CLASH = set(_EXTRA_WAVE1_GRAPH_ATTENTION).intersection(_REGISTRY)
+if _WAVE1_GRAPH_ATTENTION_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_ATTENTION_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_ATTENTION)
+
+
+_EXTRA_WAVE1_GRAPH_STRUCTURE = _make_wave1_graph_structure_specs()
+_WAVE1_GRAPH_STRUCTURE_CLASH = set(_EXTRA_WAVE1_GRAPH_STRUCTURE).intersection(_REGISTRY)
+if _WAVE1_GRAPH_STRUCTURE_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_STRUCTURE_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_STRUCTURE)
+
+
+_EXTRA_WAVE1_GRAPH_SPECTRAL = _make_wave1_graph_spectral_specs()
+_WAVE1_GRAPH_SPECTRAL_CLASH = set(_EXTRA_WAVE1_GRAPH_SPECTRAL).intersection(_REGISTRY)
+if _WAVE1_GRAPH_SPECTRAL_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_SPECTRAL_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_SPECTRAL)
+
+
+_EXTRA_WAVE1_PROBABILISTIC = _make_wave1_probabilistic_specs()
+_WAVE1_PROBABILISTIC_CLASH = set(_EXTRA_WAVE1_PROBABILISTIC).intersection(_REGISTRY)
+if _WAVE1_PROBABILISTIC_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_PROBABILISTIC_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_PROBABILISTIC)
+
+
+_EXTRA_WAVE1_FOUNDATION_A = _make_wave1_foundation_wrapper_a_specs()
+_WAVE1_FOUNDATION_A_CLASH = set(_EXTRA_WAVE1_FOUNDATION_A).intersection(_REGISTRY)
+if _WAVE1_FOUNDATION_A_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_FOUNDATION_A_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_FOUNDATION_A)
+
+
+_EXTRA_WAVE1_FOUNDATION_B = _make_wave1_foundation_wrapper_b_specs()
+_WAVE1_FOUNDATION_B_CLASH = set(_EXTRA_WAVE1_FOUNDATION_B).intersection(_REGISTRY)
+if _WAVE1_FOUNDATION_B_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_FOUNDATION_B_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_FOUNDATION_B)
 
 
 def list_models() -> list[str]:
