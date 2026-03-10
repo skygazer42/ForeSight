@@ -20369,7 +20369,103 @@ def _make_wave1_foundation_wrapper_a_specs() -> dict[str, ModelSpec]:
 def _make_wave1_foundation_wrapper_b_specs() -> dict[str, ModelSpec]:
     """Lane 08 ownership: Moirai / MOMENT / Time-MoE / Timer-S1 wrapper families."""
 
-    return {}
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "backend": "Wrapper backend: auto, fixture-json, or hf-timeseries-transformer",
+        "checkpoint_path": "Local fixture/checkpoint path used by fixture-json or as a backend source",
+        "model_source": "Backend-specific model identifier or local model path",
+        "local_files_only": "If true, disallow backend downloads where supported (true/false)",
+        "context_length": "Context length passed to backend-backed inference when supported",
+        "d_model": "Backend adapter hidden size when constructing a small fallback transformer",
+        "num_samples": "Backend sample count where supported",
+        "normalize": "Normalize the series before inference when supported (true/false)",
+        "device": "Execution device for backend-backed inference",
+        "seed": "Random seed for backend-backed inference",
+    }
+
+    base_defaults = {
+        "backend": "auto",
+        "checkpoint_path": "",
+        "model_source": "",
+        "local_files_only": True,
+        "context_length": 48,
+        "d_model": 16,
+        "num_samples": 20,
+        "normalize": True,
+        "device": "cpu",
+        "seed": 0,
+    }
+
+    families = {
+        "moirai": "Moirai wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "moment": "MOMENT wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "time-moe": "Time-MoE wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+        "timer-s1": "Timer-S1 wrapper scaffold (lite, inference-only). Requires explicit checkpoint_path or backend adapter; no native training.",
+    }
+
+    def _factory(
+        *,
+        family: str,
+        backend: str = "auto",
+        checkpoint_path: str = "",
+        model_source: str = "",
+        local_files_only: bool = True,
+        context_length: int = 48,
+        d_model: int = 16,
+        num_samples: int = 20,
+        normalize: bool = True,
+        device: str = "cpu",
+        seed: int = 0,
+        **params: Any,
+    ) -> ForecasterFn:
+        family_s = str(family).strip()
+        backend_s = str(backend)
+        checkpoint_path_s = str(checkpoint_path)
+        model_source_s = str(model_source)
+        local_files_only_bool = bool(local_files_only)
+        context_length_int = int(context_length)
+        d_model_int = int(d_model)
+        num_samples_int = int(num_samples)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        seed_int = int(seed)
+        extra_params = dict(params)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .foundation_wrappers_b import foundation_wrapper_b_forecast
+
+            return foundation_wrapper_b_forecast(
+                train,
+                horizon,
+                family=family_s,
+                backend=backend_s,
+                checkpoint_path=checkpoint_path_s,
+                model_source=model_source_s,
+                local_files_only=local_files_only_bool,
+                context_length=context_length_int,
+                d_model=d_model_int,
+                num_samples=num_samples_int,
+                normalize=normalize_bool,
+                device=device_s,
+                seed=seed_int,
+                **extra_params,
+            )
+
+        return _f
+
+    for key, description in families.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "family": key},
+            param_help=dict(help_map),
+            requires=(),
+            interface="local",
+        )
+
+    return extra
 
 
 _EXTRA_RNNPAPER = _make_torch_rnnpaper_specs()
