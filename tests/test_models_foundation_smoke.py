@@ -27,6 +27,39 @@ def test_foundation_scaffold_modules_import() -> None:
 @pytest.mark.parametrize(
     "key",
     (
+        "lag-llama",
+        "chronos",
+        "chronos-bolt",
+        "timesfm",
+    ),
+)
+def test_foundation_wrapper_a_fixture_json_smoke(tmp_path, key: str) -> None:
+    checkpoint = tmp_path / f"{key}.json"
+    checkpoint.write_text(
+        json.dumps({"bias": 1.25, "scale": 1.0, "use_trend": True}),
+        encoding="utf-8",
+    )
+
+    forecaster = make_forecaster(
+        key,
+        backend="fixture-json",
+        checkpoint_path=str(checkpoint),
+    )
+    yhat = forecaster([1.0, 2.0, 3.0, 5.0, 8.0], 3)
+
+    assert yhat.shape == (3,)
+    assert np.all(np.isfinite(yhat))
+
+
+def test_foundation_wrapper_a_requires_checkpoint_or_model_source() -> None:
+    forecaster = make_forecaster("chronos")
+    with pytest.raises(ValueError, match="requires checkpoint_path|requires model_source"):
+        forecaster([1.0, 2.0, 3.0, 4.0], 2)
+
+
+@pytest.mark.parametrize(
+    "key",
+    (
         "moirai",
         "moment",
         "time-moe",
