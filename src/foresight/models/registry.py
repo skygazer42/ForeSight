@@ -20345,7 +20345,179 @@ def _make_wave1_graph_attention_specs() -> dict[str, ModelSpec]:
 def _make_wave1_graph_structure_specs() -> dict[str, ModelSpec]:
     """Lane 04 ownership: AGCRN / MTGNN style graph-structure lite families."""
 
-    return {}
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Graph-structure lite family variant: agcrn or mtgnn",
+        "lags": "Lag window length",
+        "d_model": "Latent width for the adaptive graph backbone",
+        "num_blocks": "Number of temporal graph blocks",
+        "kernel_size": "Temporal convolution kernel width",
+        "dilation_base": "Temporal dilation growth factor",
+        "dropout": "Dropout in [0,1)",
+        "adj": "Adjacency seed: identity, ring, fully-connected, corr, or matrix",
+        "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
+        "adj_top_k": "Top-k neighbors kept for correlation adjacency",
+        "adaptive_adj": "Whether to learn an adaptive adjacency on top of the seed graph",
+        "adj_emb_dim": "Embedding rank for adaptive adjacency factors",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    common_defaults = {
+        "lags": 24,
+        "d_model": 64,
+        "kernel_size": 2,
+        "dropout": 0.1,
+        "adj_path": "",
+        "adj_top_k": 8,
+        "adaptive_adj": True,
+        "adj_emb_dim": 8,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+    default_params = {
+        "torch-agcrn-multivariate": {
+            **common_defaults,
+            "variant": "agcrn",
+            "num_blocks": 2,
+            "dilation_base": 1,
+            "adj": "identity",
+        },
+        "torch-mtgnn-multivariate": {
+            **common_defaults,
+            "variant": "mtgnn",
+            "num_blocks": 4,
+            "dilation_base": 2,
+            "adj": "corr",
+        },
+    }
+    descriptions = {
+        "torch-agcrn-multivariate": (
+            "AGCRN-style lite multivariate forecaster. Reuses the existing adaptive "
+            "Graph WaveNet-style backbone with an identity-seeded learned adjacency; this is "
+            "a graph-structure proxy, not a paper-complete AGCRN reproduction. Requires PyTorch."
+        ),
+        "torch-mtgnn-multivariate": (
+            "MTGNN-style lite multivariate forecaster. Reuses the existing adaptive "
+            "Graph WaveNet-style backbone with a correlation-seeded learned adjacency and "
+            "dilated temporal mixing; this is a graph-structure proxy, not a paper-complete "
+            "MTGNN reproduction. Requires PyTorch."
+        ),
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        d_model: int = 64,
+        num_blocks: int = 4,
+        kernel_size: int = 2,
+        dilation_base: int = 2,
+        dropout: float = 0.1,
+        adj: Any = "corr",
+        adj_path: str = "",
+        adj_top_k: int = 8,
+        adaptive_adj: bool = True,
+        adj_emb_dim: int = 8,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **_params: Any,
+    ) -> MultivariateForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        d_model_int = int(d_model)
+        num_blocks_int = int(num_blocks)
+        kernel_size_int = int(kernel_size)
+        dilation_base_int = int(dilation_base)
+        dropout_f = float(dropout)
+        adj_value = adj
+        adj_path_s = str(adj_path)
+        adj_top_k_int = int(adj_top_k)
+        adaptive_adj_bool = bool(adaptive_adj)
+        adj_emb_dim_int = int(adj_emb_dim)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_graph_structure import torch_graph_structure_forecast
+
+            return torch_graph_structure_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                d_model=d_model_int,
+                num_blocks=num_blocks_int,
+                kernel_size=kernel_size_int,
+                dilation_base=dilation_base_int,
+                dropout=dropout_f,
+                adj=adj_value,
+                adj_path=adj_path_s,
+                adj_top_k=adj_top_k_int,
+                adaptive_adj=adaptive_adj_bool,
+                adj_emb_dim=adj_emb_dim_int,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params=dict(default_params[key]),
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="multivariate",
+        )
+
+    return extra
 
 
 def _make_wave1_graph_spectral_specs() -> dict[str, ModelSpec]:
