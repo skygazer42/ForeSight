@@ -67,6 +67,7 @@ from .global_regression import (
     xgb_tweedie_step_lag_global_forecaster,
     xgbrf_step_lag_global_forecaster,
 )
+from .hf_time_series import hf_timeseries_transformer_direct_forecast
 from .intermittent import (
     adida_forecast,
     croston_classic_forecast,
@@ -83,7 +84,6 @@ from .multivariate import (
     torch_stid_forecast,
     var_forecast,
 )
-from .hf_time_series import hf_timeseries_transformer_direct_forecast
 from .naive import naive_last, seasonal_naive, seasonal_naive_auto
 from .regression import (
     adaboost_lag_direct_forecast,
@@ -231,8 +231,8 @@ from .torch_global import (
     torch_nonstationary_transformer_global_forecaster,
     torch_patchtst_global_forecaster,
     torch_pyraformer_global_forecaster,
-    torch_retnet_global_forecaster,
     torch_resnet1d_global_forecaster,
+    torch_retnet_global_forecaster,
     torch_rnn_global_forecaster,
     torch_rwkv_global_forecaster,
     torch_scinet_global_forecaster,
@@ -285,9 +285,9 @@ from .torch_nn import (
     torch_patchtst_direct_forecast,
     torch_pyraformer_direct_forecast,
     torch_qrnn_recursive_forecast,
+    torch_resnet1d_direct_forecast,
     torch_retnet_direct_forecast,
     torch_retnet_recursive_forecast,
-    torch_resnet1d_direct_forecast,
     torch_rwkv_direct_forecast,
     torch_samformer_direct_forecast,
     torch_scinet_direct_forecast,
@@ -20324,6 +20324,54 @@ def _make_torch_rnnzoo_specs() -> dict[str, ModelSpec]:
     return extra
 
 
+def _make_wave1_reservoir_specs() -> dict[str, ModelSpec]:
+    """Lane 01 ownership: ESN / reservoir / liquid-state lite families."""
+
+    return {}
+
+
+def _make_wave1_structured_rnn_specs() -> dict[str, ModelSpec]:
+    """Lane 02 ownership: structured / grid recurrent lite families."""
+
+    return {}
+
+
+def _make_wave1_graph_attention_specs() -> dict[str, ModelSpec]:
+    """Lane 03 ownership: ASTGCN / GMAN style multivariate graph lite families."""
+
+    return {}
+
+
+def _make_wave1_graph_structure_specs() -> dict[str, ModelSpec]:
+    """Lane 04 ownership: AGCRN / MTGNN style graph-structure lite families."""
+
+    return {}
+
+
+def _make_wave1_graph_spectral_specs() -> dict[str, ModelSpec]:
+    """Lane 05 ownership: StemGNN / FourierGNN style graph spectral lite families."""
+
+    return {}
+
+
+def _make_wave1_probabilistic_specs() -> dict[str, ModelSpec]:
+    """Lane 06 ownership: TimeGrad / TACTiS style probabilistic lite families."""
+
+    return {}
+
+
+def _make_wave1_foundation_wrapper_a_specs() -> dict[str, ModelSpec]:
+    """Lane 07 ownership: Lag-Llama / Chronos / TimesFM wrapper families."""
+
+    return {}
+
+
+def _make_wave1_foundation_wrapper_b_specs() -> dict[str, ModelSpec]:
+    """Lane 08 ownership: Moirai / MOMENT / Time-MoE / Timer-S1 wrapper families."""
+
+    return {}
+
+
 _EXTRA_RNNPAPER = _make_torch_rnnpaper_specs()
 _RNNPAPER_CLASH = set(_EXTRA_RNNPAPER).intersection(_REGISTRY)
 if _RNNPAPER_CLASH:
@@ -20343,6 +20391,72 @@ _CLASH = set(_EXTRA_TORCH_VARIANTS).intersection(_REGISTRY)
 if _CLASH:
     raise RuntimeError(f"Internal error: model key collision(s): {sorted(_CLASH)}")
 _REGISTRY.update(_EXTRA_TORCH_VARIANTS)
+
+
+_EXTRA_WAVE1_RESERVOIR = _make_wave1_reservoir_specs()
+_WAVE1_RESERVOIR_CLASH = set(_EXTRA_WAVE1_RESERVOIR).intersection(_REGISTRY)
+if _WAVE1_RESERVOIR_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_RESERVOIR_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_RESERVOIR)
+
+
+_EXTRA_WAVE1_STRUCTURED_RNN = _make_wave1_structured_rnn_specs()
+_WAVE1_STRUCTURED_RNN_CLASH = set(_EXTRA_WAVE1_STRUCTURED_RNN).intersection(_REGISTRY)
+if _WAVE1_STRUCTURED_RNN_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_STRUCTURED_RNN_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_STRUCTURED_RNN)
+
+
+_EXTRA_WAVE1_GRAPH_ATTENTION = _make_wave1_graph_attention_specs()
+_WAVE1_GRAPH_ATTENTION_CLASH = set(_EXTRA_WAVE1_GRAPH_ATTENTION).intersection(_REGISTRY)
+if _WAVE1_GRAPH_ATTENTION_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_ATTENTION_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_ATTENTION)
+
+
+_EXTRA_WAVE1_GRAPH_STRUCTURE = _make_wave1_graph_structure_specs()
+_WAVE1_GRAPH_STRUCTURE_CLASH = set(_EXTRA_WAVE1_GRAPH_STRUCTURE).intersection(_REGISTRY)
+if _WAVE1_GRAPH_STRUCTURE_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_STRUCTURE_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_STRUCTURE)
+
+
+_EXTRA_WAVE1_GRAPH_SPECTRAL = _make_wave1_graph_spectral_specs()
+_WAVE1_GRAPH_SPECTRAL_CLASH = set(_EXTRA_WAVE1_GRAPH_SPECTRAL).intersection(_REGISTRY)
+if _WAVE1_GRAPH_SPECTRAL_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_GRAPH_SPECTRAL_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_GRAPH_SPECTRAL)
+
+
+_EXTRA_WAVE1_PROBABILISTIC = _make_wave1_probabilistic_specs()
+_WAVE1_PROBABILISTIC_CLASH = set(_EXTRA_WAVE1_PROBABILISTIC).intersection(_REGISTRY)
+if _WAVE1_PROBABILISTIC_CLASH:
+    raise RuntimeError(
+        f"Internal error: model key collision(s): {sorted(_WAVE1_PROBABILISTIC_CLASH)}"
+    )
+_REGISTRY.update(_EXTRA_WAVE1_PROBABILISTIC)
+
+
+_EXTRA_WAVE1_FOUNDATION_A = _make_wave1_foundation_wrapper_a_specs()
+_WAVE1_FOUNDATION_A_CLASH = set(_EXTRA_WAVE1_FOUNDATION_A).intersection(_REGISTRY)
+if _WAVE1_FOUNDATION_A_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_FOUNDATION_A_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_FOUNDATION_A)
+
+
+_EXTRA_WAVE1_FOUNDATION_B = _make_wave1_foundation_wrapper_b_specs()
+_WAVE1_FOUNDATION_B_CLASH = set(_EXTRA_WAVE1_FOUNDATION_B).intersection(_REGISTRY)
+if _WAVE1_FOUNDATION_B_CLASH:
+    raise RuntimeError(f"Internal error: model key collision(s): {sorted(_WAVE1_FOUNDATION_B_CLASH)}")
+_REGISTRY.update(_EXTRA_WAVE1_FOUNDATION_B)
 
 
 def list_models() -> list[str]:
