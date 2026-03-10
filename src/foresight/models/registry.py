@@ -20339,7 +20339,155 @@ def _make_wave1_structured_rnn_specs() -> dict[str, ModelSpec]:
 def _make_wave1_graph_attention_specs() -> dict[str, ModelSpec]:
     """Lane 03 ownership: ASTGCN / GMAN style multivariate graph lite families."""
 
-    return {}
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Graph-attention lite family variant: astgcn or gman",
+        "lags": "Lag window length",
+        "d_model": "Latent width for the attention backbone",
+        "num_blocks": "Number of stacked attention blocks",
+        "num_heads": "Multi-head attention heads",
+        "dropout": "Dropout in [0,1)",
+        "adj": "Adjacency source: identity, ring, fully-connected, corr, or matrix",
+        "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
+        "adj_top_k": "Top-k neighbors kept for correlation adjacency",
+        **_TORCH_COMMON_PARAM_HELP,
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "d_model": 64,
+        "num_blocks": 2,
+        "num_heads": 4,
+        "dropout": 0.1,
+        "adj": "corr",
+        "adj_path": "",
+        "adj_top_k": 8,
+        **_TORCH_COMMON_DEFAULTS,
+    }
+
+    descriptions = {
+        "torch-astgcn-multivariate": (
+            "ASTGCN-style lite multivariate forecaster. Uses adjacency-biased temporal/spatial "
+            "attention over a wide target matrix; this is a compact proxy, not a paper-complete "
+            "ASTGCN reproduction. Requires PyTorch."
+        ),
+        "torch-gman-multivariate": (
+            "GMAN-style lite multivariate forecaster. Uses stacked spatial/temporal attention "
+            "with node and horizon embeddings over a wide target matrix; this is a compact proxy, "
+            "not a paper-complete GMAN reproduction. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-astgcn-multivariate": "astgcn",
+        "torch-gman-multivariate": "gman",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        d_model: int = 64,
+        num_blocks: int = 2,
+        num_heads: int = 4,
+        dropout: float = 0.1,
+        adj: Any = "corr",
+        adj_path: str = "",
+        adj_top_k: int = 8,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "mse",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+        **_params: Any,
+    ) -> MultivariateForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        d_model_int = int(d_model)
+        num_blocks_int = int(num_blocks)
+        num_heads_int = int(num_heads)
+        dropout_f = float(dropout)
+        adj_value = adj
+        adj_path_s = str(adj_path)
+        adj_top_k_int = int(adj_top_k)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_graph_attention import torch_graph_attention_forecast
+
+            return torch_graph_attention_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                d_model=d_model_int,
+                num_blocks=num_blocks_int,
+                num_heads=num_heads_int,
+                dropout=dropout_f,
+                adj=adj_value,
+                adj_path=adj_path_s,
+                adj_top_k=adj_top_k_int,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="multivariate",
+        )
+
+    return extra
 
 
 def _make_wave1_graph_structure_specs() -> dict[str, ModelSpec]:
