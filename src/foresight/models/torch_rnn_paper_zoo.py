@@ -1493,14 +1493,18 @@ def torch_rnnpaper_direct_forecast(
                 else:
                     xb2 = xb
                 grid = xb2.reshape(int(B), Hh, Ww, 1)
-                h_grid = torch.zeros((int(B), Hh, Ww, hid), device=xb.device, dtype=xb.dtype)
+                zero_state = torch.zeros((int(B), hid), device=xb.device, dtype=xb.dtype)
+                rows: list[Any] = []
                 for i in range(Hh):
+                    row_states = []
                     for j in range(Ww):
                         x_ij = grid[:, i, j, :]
-                        h_l = h_grid[:, i, j - 1, :] if j > 0 else 0.0
-                        h_u = h_grid[:, i - 1, j, :] if i > 0 else 0.0
+                        h_l = row_states[j - 1] if j > 0 else zero_state
+                        h_u = rows[i - 1][j] if i > 0 else zero_state
                         h_ij = torch.tanh(self.wx(x_ij) + self.wh_l(h_l) + self.wh_u(h_u))
-                        h_grid[:, i, j, :] = h_ij
+                        row_states.append(h_ij)
+                    rows.append(row_states)
+                h_grid = torch.stack([torch.stack(row, dim=1) for row in rows], dim=1)
                 last = h_grid[:, -1, -1, :].unsqueeze(1)
                 return last.expand(int(B), int(T), hid)
 
