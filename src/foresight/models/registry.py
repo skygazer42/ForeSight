@@ -20357,7 +20357,141 @@ def _make_wave1_graph_spectral_specs() -> dict[str, ModelSpec]:
 def _make_wave1_probabilistic_specs() -> dict[str, ModelSpec]:
     """Lane 06 ownership: TimeGrad / TACTiS style probabilistic lite families."""
 
-    return {}
+    extra: dict[str, ModelSpec] = {}
+
+    help_map = {
+        "variant": "Probabilistic lite family variant: timegrad or tactis",
+        "lags": "Lag window length",
+        "hidden_size": "Hidden width for the probabilistic backbone",
+        "num_layers": "Recurrent depth for timegrad-lite",
+        "num_heads": "Attention heads for tactis-lite (must divide hidden_size)",
+        "dropout": "Dropout in [0,1)",
+        **_TORCH_COMMON_PARAM_HELP,
+        "loss": "Training loss: gaussian, mse, mae, huber",
+    }
+
+    base_defaults = {
+        "lags": 24,
+        "hidden_size": 32,
+        "num_layers": 1,
+        "num_heads": 4,
+        "dropout": 0.0,
+        **_TORCH_COMMON_DEFAULTS,
+        "loss": "gaussian",
+    }
+
+    descriptions = {
+        "torch-timegrad-direct": (
+            "TimeGrad-style lite probabilistic local forecaster. Uses a compact recurrent "
+            "Gaussian head and returns predictive means only; it does not implement full "
+            "diffusion sampling semantics. Requires PyTorch."
+        ),
+        "torch-tactis-direct": (
+            "TACTiS-style lite probabilistic local forecaster. Uses horizon-query attention "
+            "with a Gaussian head and returns predictive means only; it does not implement "
+            "full copula or trajectory sampling semantics. Requires PyTorch."
+        ),
+    }
+    variants = {
+        "torch-timegrad-direct": "timegrad",
+        "torch-tactis-direct": "tactis",
+    }
+
+    def _factory(
+        *,
+        variant: str,
+        lags: int = 24,
+        hidden_size: int = 32,
+        num_layers: int = 1,
+        num_heads: int = 4,
+        dropout: float = 0.0,
+        epochs: int = 50,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        batch_size: int = 32,
+        seed: int = 0,
+        normalize: bool = True,
+        device: str = "cpu",
+        patience: int = 10,
+        loss: str = "gaussian",
+        val_split: float = 0.0,
+        grad_clip_norm: float = 0.0,
+        optimizer: str = "adam",
+        momentum: float = 0.9,
+        scheduler: str = "none",
+        scheduler_step_size: int = 10,
+        scheduler_gamma: float = 0.1,
+        restore_best: bool = True,
+    ) -> ForecasterFn:
+        variant_s = str(variant)
+        lags_int = int(lags)
+        hidden_size_int = int(hidden_size)
+        num_layers_int = int(num_layers)
+        num_heads_int = int(num_heads)
+        dropout_f = float(dropout)
+        epochs_int = int(epochs)
+        lr_f = float(lr)
+        weight_decay_f = float(weight_decay)
+        batch_size_int = int(batch_size)
+        seed_int = int(seed)
+        normalize_bool = bool(normalize)
+        device_s = str(device)
+        patience_int = int(patience)
+        loss_s = str(loss)
+        val_split_f = float(val_split)
+        grad_clip_norm_f = float(grad_clip_norm)
+        optimizer_s = str(optimizer)
+        momentum_f = float(momentum)
+        scheduler_s = str(scheduler)
+        scheduler_step_size_int = int(scheduler_step_size)
+        scheduler_gamma_f = float(scheduler_gamma)
+        restore_best_bool = bool(restore_best)
+
+        def _f(train: Any, horizon: int) -> np.ndarray:
+            from .torch_probabilistic import torch_probabilistic_direct_forecast
+
+            return torch_probabilistic_direct_forecast(
+                train,
+                horizon,
+                variant=variant_s,
+                lags=lags_int,
+                hidden_size=hidden_size_int,
+                num_layers=num_layers_int,
+                num_heads=num_heads_int,
+                dropout=dropout_f,
+                epochs=epochs_int,
+                lr=lr_f,
+                weight_decay=weight_decay_f,
+                batch_size=batch_size_int,
+                seed=seed_int,
+                normalize=normalize_bool,
+                device=device_s,
+                patience=patience_int,
+                loss=loss_s,
+                val_split=val_split_f,
+                grad_clip_norm=grad_clip_norm_f,
+                optimizer=optimizer_s,
+                momentum=momentum_f,
+                scheduler=scheduler_s,
+                scheduler_step_size=scheduler_step_size_int,
+                scheduler_gamma=scheduler_gamma_f,
+                restore_best=restore_best_bool,
+            )
+
+        return _f
+
+    for key, description in descriptions.items():
+        extra[key] = ModelSpec(
+            key=key,
+            description=description,
+            factory=_factory,
+            default_params={**base_defaults, "variant": variants[key]},
+            param_help=dict(help_map),
+            requires=("torch",),
+            interface="local",
+        )
+
+    return extra
 
 
 def _make_wave1_foundation_wrapper_a_specs() -> dict[str, ModelSpec]:
