@@ -3579,6 +3579,344 @@ def torch_samformer_direct_forecast(
     )
 
 
+def torch_retnet_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch RetNet-style retention network (lite) direct multi-horizon forecast.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    hidden = int(ffn_dim)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if hidden <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    head_dim = d // heads
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+    def _build_model(lag_count: int, h: int) -> Any:
+        class _RetentionBlock(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = nn.LayerNorm(d)
+                self.q_proj = nn.Linear(d, d)
+                self.k_proj = nn.Linear(d, d)
+                self.v_proj = nn.Linear(d, d)
+                self.out_proj = nn.Linear(d, d)
+                self.decay_logits = nn.Parameter(
+                    torch.linspace(-1.25, 1.25, steps=heads, dtype=torch.float32)
+                )
+                self.norm2 = nn.LayerNorm(d)
+                self.ffn = nn.Sequential(
+                    nn.Linear(d, hidden),
+                    nn.GELU(),
+                    nn.Dropout(p=drop),
+                    nn.Linear(hidden, d),
+                )
+                self.drop = nn.Dropout(p=drop)
+
+            def _retention(self, xb: Any) -> Any:
+                batch, seq_len, _dim = xb.shape
+
+                def _reshape(z: Any) -> Any:
+                    return z.reshape(batch, seq_len, heads, head_dim).permute(0, 2, 1, 3)
+
+                q = F.elu(_reshape(self.q_proj(xb))) + 1.0
+                k = F.elu(_reshape(self.k_proj(xb))) + 1.0
+                v = _reshape(self.v_proj(xb))
+
+                decay = torch.sigmoid(self.decay_logits).view(1, heads, 1, 1)
+                state = torch.zeros(
+                    (batch, heads, head_dim, head_dim), device=xb.device, dtype=xb.dtype
+                )
+                key_state = torch.zeros((batch, heads, head_dim), device=xb.device, dtype=xb.dtype)
+                outs: list[Any] = []
+                for idx in range(seq_len):
+                    k_t = k[:, :, idx, :]
+                    v_t = v[:, :, idx, :]
+                    state = decay * state + torch.einsum("bhd,bhe->bhde", k_t, v_t)
+                    key_state = decay.squeeze(-1) * key_state + k_t
+                    numer = torch.einsum("bhd,bhde->bhe", q[:, :, idx, :], state)
+                    denom = torch.einsum("bhd,bhd->bh", q[:, :, idx, :], key_state).unsqueeze(-1)
+                    outs.append(numer / (denom + 1e-6))
+
+                out = torch.stack(outs, dim=2)
+                out = out.permute(0, 2, 1, 3).reshape(batch, seq_len, d)
+                return self.out_proj(out / math.sqrt(float(head_dim)))
+
+            def forward(self, xb: Any) -> Any:
+                xb = xb + self.drop(self._retention(self.norm1(xb)))
+                xb = xb + self.drop(self.ffn(self.norm2(xb)))
+                return xb
+
+        class _RetNetDirect(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.in_proj = nn.Linear(1, d)
+                pos = _make_positional_encoding(lag_count, d)
+                self.register_buffer(
+                    "positional_encoding",
+                    torch.tensor(pos, dtype=torch.float32).unsqueeze(0),
+                )
+                self.blocks = nn.ModuleList([_RetentionBlock() for _ in range(layers)])
+                self.head = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, h))
+
+            def forward(self, xb: Any) -> Any:
+                z = self.in_proj(xb) + self.positional_encoding[:, : xb.shape[1], :]
+                for blk in self.blocks:
+                    z = blk(z)
+                return self.head(z[:, -1, :])
+
+        return _RetNetDirect()
+
+    return _fit_encoder_direct_model(
+        train,
+        horizon,
+        lags=int(lags),
+        build_model=_build_model,
+        normalize=bool(normalize),
+        device=str(device),
+        cfg=cfg,
+    )
+
+
+def torch_retnet_recursive_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+) -> np.ndarray:
+    """
+    Torch RetNet-style retention network trained for one-step prediction, forecasted recursively.
+    """
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
+
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    d = int(d_model)
+    heads = int(nhead)
+    layers = int(num_layers)
+    hidden = int(ffn_dim)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError("d_model must be >= 1")
+    if heads <= 0:
+        raise ValueError("nhead must be >= 1")
+    if d % heads != 0:
+        raise ValueError("d_model must be divisible by nhead")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if hidden <= 0:
+        raise ValueError("ffn_dim must be >= 1")
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    head_dim = d // heads
+
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=1)
+    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    Y_next = Y.reshape(Y.shape[0], 1)
+
+    class _RetentionBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm1 = nn.LayerNorm(d)
+            self.q_proj = nn.Linear(d, d)
+            self.k_proj = nn.Linear(d, d)
+            self.v_proj = nn.Linear(d, d)
+            self.out_proj = nn.Linear(d, d)
+            self.decay_logits = nn.Parameter(
+                torch.linspace(-1.25, 1.25, steps=heads, dtype=torch.float32)
+            )
+            self.norm2 = nn.LayerNorm(d)
+            self.ffn = nn.Sequential(
+                nn.Linear(d, hidden),
+                nn.GELU(),
+                nn.Dropout(p=drop),
+                nn.Linear(hidden, d),
+            )
+            self.drop = nn.Dropout(p=drop)
+
+        def _retention(self, xb: Any) -> Any:
+            batch, seq_len, _dim = xb.shape
+
+            def _reshape(z: Any) -> Any:
+                return z.reshape(batch, seq_len, heads, head_dim).permute(0, 2, 1, 3)
+
+            q = F.elu(_reshape(self.q_proj(xb))) + 1.0
+            k = F.elu(_reshape(self.k_proj(xb))) + 1.0
+            v = _reshape(self.v_proj(xb))
+
+            decay = torch.sigmoid(self.decay_logits).view(1, heads, 1, 1)
+            state = torch.zeros((batch, heads, head_dim, head_dim), device=xb.device, dtype=xb.dtype)
+            key_state = torch.zeros((batch, heads, head_dim), device=xb.device, dtype=xb.dtype)
+            outs: list[Any] = []
+            for idx in range(seq_len):
+                k_t = k[:, :, idx, :]
+                v_t = v[:, :, idx, :]
+                state = decay * state + torch.einsum("bhd,bhe->bhde", k_t, v_t)
+                key_state = decay.squeeze(-1) * key_state + k_t
+                numer = torch.einsum("bhd,bhde->bhe", q[:, :, idx, :], state)
+                denom = torch.einsum("bhd,bhd->bh", q[:, :, idx, :], key_state).unsqueeze(-1)
+                outs.append(numer / (denom + 1e-6))
+
+            out = torch.stack(outs, dim=2)
+            out = out.permute(0, 2, 1, 3).reshape(batch, seq_len, d)
+            return self.out_proj(out / math.sqrt(float(head_dim)))
+
+        def forward(self, xb: Any) -> Any:
+            xb = xb + self.drop(self._retention(self.norm1(xb)))
+            xb = xb + self.drop(self.ffn(self.norm2(xb)))
+            return xb
+
+    class _RetNetRecursive(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.in_proj = nn.Linear(1, d)
+            pos = _make_positional_encoding(lag_count, d)
+            self.register_buffer(
+                "positional_encoding",
+                torch.tensor(pos, dtype=torch.float32).unsqueeze(0),
+            )
+            self.blocks = nn.ModuleList([_RetentionBlock() for _ in range(layers)])
+            self.head = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, 1))
+
+        def forward(self, xb: Any) -> Any:
+            z = self.in_proj(xb) + self.positional_encoding[:, : xb.shape[1], :]
+            for blk in self.blocks:
+                z = blk(z)
+            return self.head(z[:, -1, :])
+
+    model = _RetNetRecursive()
+    cfg = TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+    model = _train_loop(model, X_seq, Y_next, cfg=cfg, device=str(device))
+
+    hist = x_work[-lag_count:].astype(float, copy=True)
+    preds: list[float] = []
+    dev = torch.device(str(device))
+    with torch.no_grad():
+        for _ in range(h):
+            feat = hist.reshape(1, lag_count, 1)
+            feat_t = torch.tensor(feat, dtype=torch.float32, device=dev)
+            mu = float(model(feat_t).detach().cpu().reshape(-1)[0])
+            preds.append(mu)
+            hist = np.concatenate([hist[1:], np.array([mu], dtype=float)], axis=0)
+
+    yhat = np.asarray(preds, dtype=float)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return yhat
+
+
 def torch_timexer_direct_forecast(
     train: Any,
     horizon: int,

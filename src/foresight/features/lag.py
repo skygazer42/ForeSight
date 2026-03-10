@@ -39,6 +39,58 @@ def make_lagged_xy(
     return X, yt
 
 
+def make_lagged_xy_multi(
+    y: Any,
+    *,
+    lags: Any,
+    horizon: int,
+    start_t: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convert a 1D series into a supervised learning dataset for direct multi-step forecasting.
+
+    For each time t, build:
+      X_t = [y_{t-lags}, ..., y_{t-1}]
+      Y_t = [y_t, y_{t+1}, ..., y_{t+horizon-1}]
+
+    Returns:
+      (X, Y, t_index)
+        - X: (rows, n_lags)
+        - Y: (rows, horizon)
+        - t_index: (rows,) starting indices for each target window
+    """
+    arr = np.asarray(y, dtype=float)
+    if arr.ndim != 1:
+        raise ValueError(f"make_lagged_xy_multi expects 1D input, got shape {arr.shape}")
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="lags")
+    if not lag_steps:
+        raise ValueError("lags must be >= 1")
+
+    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
+    if arr.size < (t0 + h):
+        raise ValueError(f"Need >= start_t+horizon points (start_t={t0}, horizon={h}), got {arr.size}")
+
+    n = int(arr.size)
+    last_t = n - h
+    rows = int(last_t - t0 + 1)
+    if rows <= 0:
+        raise ValueError("Not enough points to build lagged multi-horizon dataset")
+
+    X = np.empty((rows, len(lag_steps)), dtype=float)
+    Y = np.empty((rows, h), dtype=float)
+    t_index = np.empty((rows,), dtype=int)
+    for i in range(rows):
+        t = i + t0
+        X[i, :] = np.asarray([arr[t - lag] for lag in lag_steps], dtype=float)
+        Y[i, :] = arr[t : t + h]
+        t_index[i] = int(t)
+    return X, Y, t_index
+
+
 def build_seasonal_lag_features(
     y: Any,
     *,

@@ -182,11 +182,22 @@ hier_payload = eval_hierarchical_forecast_df(
 ### CLI
 
 ```bash
+# Quick discovery shortcuts
+foresight --list
+foresight --list-models
+foresight --list-datasets
+
 # Browse built-in datasets and models
 foresight datasets list
 foresight datasets preview catfish --nrows 10
 foresight models list
 foresight models info theta
+
+# Data utilities (format conversion / prep)
+foresight data to-long --path ./my.csv --time-col ds --y-col y --parse-dates
+foresight data prepare-long --path ./long.csv --parse-dates --freq D --y-missing ffill
+foresight data infer-freq --path ./my.csv --time-col ds --parse-dates
+foresight data splits rolling-origin --n-obs 100 --horizon 7 --min-train-size 28 --step-size 7
 
 # Evaluate a single model
 foresight eval run --model theta --dataset catfish --y-col Total \
@@ -219,6 +230,8 @@ foresight eval run --model theta --dataset catfish --y-col Total \
 # Reproducible packaged benchmark smoke run
 python benchmarks/run_benchmarks.py --smoke
 ```
+
+Want the code-level reading order? See [`docs/SOURCE_ENTRYPOINTS.md`](docs/SOURCE_ENTRYPOINTS.md).
 
 <details>
 <summary><b>More CLI examples (forecast, artifacts, covariates)</b></summary>
@@ -378,7 +391,7 @@ These sklearn global step-lag models support `x_cols`, `add_time_features`, `id_
 | MLP / Linear | `torch-mlp-direct`, `torch-nlinear-direct`, `torch-dlinear-direct`, `torch-tide-direct`, `torch-kan-direct` |
 | RNN | `torch-lstm-direct`, `torch-gru-direct`, `torch-bilstm-direct`, `torch-bigru-direct`, `torch-attn-gru-direct`, `torch-dilated-rnn-direct` |
 | CNN | `torch-cnn-direct`, `torch-tcn-direct`, `torch-resnet1d-direct`, `torch-wavenet-direct`, `torch-inception-direct`, `torch-scinet-direct` |
-| Transformer | `torch-transformer-direct`, `torch-patchtst-direct`, `torch-crossformer-direct`, `torch-pyraformer-direct`, `torch-fnet-direct`, `torch-linear-attn-direct`, `torch-gmlp-direct`, `torch-tsmixer-direct` |
+| Transformer | `torch-transformer-direct`, `torch-patchtst-direct`, `torch-crossformer-direct`, `torch-pyraformer-direct`, `torch-fnet-direct`, `torch-linear-attn-direct`, `torch-gmlp-direct`, `torch-tsmixer-direct`, `torch-retnet-direct`, `torch-retnet-recursive` |
 | Residual Blocks | `torch-nbeats-direct`, `torch-nhits-direct` |
 | SSM / State-space | `torch-mamba-direct`, `torch-rwkv-direct`, `torch-hyena-direct` |
 | Hybrid | `torch-etsformer-direct`, `torch-esrnn-direct`, `torch-lstnet-direct` |
@@ -399,7 +412,7 @@ Train across all series in long-format DataFrame; supports covariates (`x_cols`)
 
 | Category | Models |
 |----------|--------|
-| Transformer | `torch-tft-global`, `torch-informer-global`, `torch-autoformer-global`, `torch-fedformer-global`, `torch-nonstationary-transformer-global`, `torch-patchtst-global`, `torch-crossformer-global`, `torch-pyraformer-global`, `torch-itransformer-global`, `torch-timesnet-global`, `torch-tsmixer-global`, `torch-transformer-encdec-global` |
+| Transformer | `torch-tft-global`, `torch-informer-global`, `torch-autoformer-global`, `torch-fedformer-global`, `torch-nonstationary-transformer-global`, `torch-patchtst-global`, `torch-crossformer-global`, `torch-pyraformer-global`, `torch-itransformer-global`, `torch-timesnet-global`, `torch-tsmixer-global`, `torch-transformer-encdec-global`, `torch-retnet-global` |
 | MLP / Linear | `torch-nbeats-global`, `torch-nhits-global`, `torch-nlinear-global`, `torch-dlinear-global`, `torch-tide-global` |
 | RNN | `torch-deepar-global`, `torch-lstnet-global`, `torch-esrnn-global`, `torch-rnn-*-global` |
 | CNN | `torch-tcn-global`, `torch-wavenet-global`, `torch-resnet1d-global`, `torch-inception-global`, `torch-scinet-global` |

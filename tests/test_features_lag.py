@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from foresight.features.lag import make_lagged_xy
+from foresight.features.lag import make_lagged_xy_multi
 from foresight.features.tabular import build_column_lag_features
 
 
@@ -51,3 +53,23 @@ def test_build_column_lag_features_supports_historic_and_future_roles() -> None:
 
     assert futr_names == ["future_x_promo_lag1", "future_x_promo_lag0"]
     assert futr.tolist() == [[12.0, 13.0], [13.0, 14.0]]
+
+
+def test_make_lagged_xy_multi_shapes_and_values() -> None:
+    y = np.arange(7, dtype=float)  # [0,1,2,3,4,5,6]
+
+    X, Y, t_index = make_lagged_xy_multi(y, lags=2, horizon=3)
+
+    assert X.shape == (3, 2)
+    assert Y.shape == (3, 3)
+    assert t_index.shape == (3,)
+    assert X.tolist() == [[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]]
+    assert Y.tolist() == [[2.0, 3.0, 4.0], [3.0, 4.0, 5.0], [4.0, 5.0, 6.0]]
+    assert t_index.tolist() == [2, 3, 4]
+
+
+def test_make_lagged_xy_multi_rejects_not_enough_points() -> None:
+    y = np.arange(4, dtype=float)
+
+    with pytest.raises(ValueError):
+        make_lagged_xy_multi(y, lags=2, horizon=3)

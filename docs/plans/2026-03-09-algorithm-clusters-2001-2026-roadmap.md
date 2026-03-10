@@ -24,6 +24,7 @@
   ConvRNN nowcasting variants, and many 2014-2018 recurrent ideas.
 - Modern deep forecasting families already present as first-class models:
   PatchTST, Crossformer, Pyraformer, TSMixer, TimeMixer, LightTS, FreTS,
+  RetNet,
   N-BEATS, NHITS, Mamba, RWKV, Hyena, ESRNN, LSTNet, TFT, Informer,
   Autoformer, FEDformer, Non-stationary Transformer, iTransformer,
   TimesNet, SparseTSF, and configurable xFormer variants.
@@ -146,7 +147,7 @@ Legend for `status`:
 | 7 | 2021 | S4 | state-space | missing | Canonical modern long-sequence state-space family |
 | 8 | 2022 | DSS / S4D | state-space | missing | Simpler diagonal SSM variants, easier first step than full S4 |
 | 9 | 2022 | S5 | state-space | missing | Stronger expressive SSM follow-up to S4 |
-| 10 | 2023 | RetNet / retention networks | long-sequence | missing | Useful middle ground between attention and recurrence |
+| 10 | 2023 | RetNet / retention networks | long-sequence | implemented | Useful middle ground between attention and recurrence |
 | 11 | 2024 | Mamba-2 / SSD refinements | state-space | partial | Repo has Mamba, but not the second-generation refinement line |
 | 12 | 2024 | xLSTM | recurrent revival | missing | Important recurrent revival family with modern scaling story |
 | 13 | 2024 | Griffin / Hawk recurrent hybrids | recurrent revival | missing | Strong modern recurrent alternatives to attention-heavy stacks |

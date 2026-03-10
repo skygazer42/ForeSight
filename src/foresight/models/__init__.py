@@ -18,6 +18,7 @@ from .baselines import (
     weighted_moving_average_forecast,
 )
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
+from .hf_time_series import hf_timeseries_transformer_direct_forecast
 from .intermittent import (
     adida_forecast,
     croston_classic_forecast,
@@ -28,7 +29,12 @@ from .intermittent import (
     tsb_forecast,
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
-from .multivariate import torch_stid_forecast, var_forecast
+from .multivariate import (
+    torch_graphwavenet_forecast,
+    torch_stgcn_forecast,
+    torch_stid_forecast,
+    var_forecast,
+)
 from .naive import naive_last, seasonal_naive
 from .registry import (
     ModelSpec,
@@ -60,6 +66,7 @@ from .smoothing import (
     ses_forecast,
 )
 from .spectral import fft_topk_forecast
+from .ssa import ssa_forecast
 from .statsmodels_wrap import (
     arima_forecast,
     auto_arima_forecast,
@@ -130,6 +137,8 @@ from .torch_nn import (
     torch_nonstationary_transformer_direct_forecast,
     torch_patchtst_direct_forecast,
     torch_qrnn_recursive_forecast,
+    torch_retnet_direct_forecast,
+    torch_retnet_recursive_forecast,
     torch_resnet1d_direct_forecast,
     torch_samformer_direct_forecast,
     torch_sparsetsf_direct_forecast,
@@ -266,6 +275,8 @@ __all__ = [
     "torch_tide_direct_forecast",
     "torch_deepar_recursive_forecast",
     "torch_qrnn_recursive_forecast",
+    "torch_retnet_direct_forecast",
+    "torch_retnet_recursive_forecast",
     "torch_xformer_direct_forecast",
     "torch_seq2seq_direct_forecast",
     "torch_lstnet_direct_forecast",
@@ -279,12 +290,16 @@ __all__ = [
     "fourier_regression_forecast",
     "fourier_multi_regression_forecast",
     "fft_topk_forecast",
+    "ssa_forecast",
     "analog_knn_forecast",
     "poly_trend_forecast",
     "kalman_local_level_forecast",
     "kalman_local_linear_trend_forecast",
     "var_forecast",
     "torch_stid_forecast",
+    "torch_stgcn_forecast",
+    "torch_graphwavenet_forecast",
+    "hf_timeseries_transformer_direct_forecast",
     "ModelSpec",
     "BaseForecaster",
     "BaseGlobalForecaster",

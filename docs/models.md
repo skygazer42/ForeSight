@@ -2,7 +2,7 @@
 
 This page is generated from the central model registry. Do not edit it by hand; run `python tools/generate_model_capability_docs.py`.
 
-ForeSight currently registers **588** models: **474** local, **112** global, and **2** multivariate.
+ForeSight currently registers **598** models: **481** local, **113** global, and **4** multivariate.
 
 ## Capability keys
 
@@ -34,13 +34,14 @@ print(len(list_models()))
 
 | requires extra | model_count |
 | --- | ---: |
-| `torch` | 408 |
+| `torch` | 413 |
+| `core` | 46 |
 | `ml` | 44 |
 | `xgb` | 43 |
-| `core` | 42 |
 | `stats` | 33 |
 | `catboost` | 9 |
 | `lgbm` | 9 |
+| `transformers,torch` | 1 |
 
 ## Full registry matrix
 
@@ -95,6 +96,7 @@ print(len(list_models()))
 | `gamma-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `gbrt-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `gbrt-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `hf-timeseries-transformer-direct` | `local` | `transformers,torch` | no | no | yes | no | yes | no |
 | `hgb-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `hgb-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `holt` | `local` | `core` | no | no | yes | no | yes | no |
@@ -102,6 +104,8 @@ print(len(list_models()))
 | `holt-damped` | `local` | `core` | no | no | yes | no | yes | no |
 | `holt-winters-add` | `local` | `core` | no | no | yes | no | yes | no |
 | `holt-winters-add-auto` | `local` | `core` | no | no | yes | no | yes | no |
+| `holt-winters-mul` | `local` | `core` | no | no | yes | no | yes | no |
+| `holt-winters-mul-auto` | `local` | `core` | no | no | yes | no | yes | no |
 | `huber-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `huber-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `kalman-level` | `local` | `core` | no | no | yes | no | yes | no |
@@ -156,10 +160,12 @@ print(len(list_models()))
 | `seasonal-drift` | `local` | `core` | no | no | yes | no | yes | no |
 | `seasonal-mean` | `local` | `core` | no | no | yes | no | yes | no |
 | `seasonal-naive` | `local` | `core` | no | no | yes | no | yes | no |
+| `seasonal-naive-auto` | `local` | `core` | no | no | yes | no | yes | no |
 | `ses` | `local` | `core` | no | no | yes | no | yes | no |
 | `ses-auto` | `local` | `core` | no | no | yes | no | yes | no |
 | `sgd-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `sgd-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `ssa` | `local` | `core` | no | no | yes | no | yes | no |
 | `stl-arima` | `local` | `stats` | no | no | yes | no | yes | no |
 | `stl-auto-arima` | `local` | `stats` | no | no | yes | no | yes | no |
 | `stl-autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
@@ -203,6 +209,7 @@ print(len(list_models()))
 | `torch-frets-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-gmlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-gmlp-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-graphwavenet-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-griffin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-hawk-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -244,6 +251,9 @@ print(len(list_models()))
 | `torch-qrnn-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-resnet1d-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-resnet1d-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-retnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-retnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-retnet-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-rnn-encoder-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-rnn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-rnn-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
@@ -469,6 +479,7 @@ print(len(list_models()))
 | `torch-seq2seq-lstm-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-sparsetsf-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-ssm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-stgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-stid-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-tcn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-tcn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |

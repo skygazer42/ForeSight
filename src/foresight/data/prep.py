@@ -214,3 +214,105 @@ def prepare_long_df(
     prepared.attrs["future_x_cols"] = future_x_cols_tup
     cols = ["unique_id", "ds", "y", *all_x_cols]
     return prepared.loc[:, cols]
+
+
+def prepare_wide_df(
+    wide_df: Any,
+    *,
+    ds_col: str | None = "ds",
+    freq: str | None = None,
+    strict_freq: bool = False,
+    missing: str = "error",
+    target_cols: tuple[str, ...] = (),
+) -> pd.DataFrame:
+    """
+    Regularize and validate a canonical wide-format DataFrame.
+
+    Wide format is defined as:
+      - one row per timestamp
+      - one or more numeric target columns
+
+    This helper mirrors `prepare_long_df` (panel) for multivariate / wide use-cases:
+      - optional regular frequency insertion via `date_range` reindexing
+      - configurable missing-value policy per target column
+
+    Parameters:
+      - ds_col: timestamp column name. If None, uses the DataFrame index and emits a
+        new `ds` column in the output.
+      - freq: optional pandas frequency string (e.g. "D"). If omitted, attempts to
+        infer a regular frequency from ds; when inference fails and `strict_freq=False`,
+        the function skips reindexing.
+      - missing: missing value policy for target columns:
+          error | drop | ffill | zero | interpolate
+      - target_cols: explicit target columns; when empty, defaults to all columns
+        except ds_col.
+    """
+    if not isinstance(wide_df, pd.DataFrame):
+        raise TypeError("wide_df must be a pandas DataFrame")
+    if wide_df.empty:
+        raise ValueError("wide_df is empty")
+
+    df = wide_df.copy()
+
+    out_ds_col: str
+    if ds_col is None:
+        out_ds_col = "ds"
+        if out_ds_col in df.columns:
+            raise ValueError("wide_df already contains a 'ds' column; pass ds_col='ds' instead")
+        if pd.Index(df.index).duplicated().any():
+            raise ValueError("ds contains duplicates")
+        idx_name = df.index.name or "index"
+        df = df.reset_index().rename(columns={idx_name: out_ds_col})
+    else:
+        out_ds_col = str(ds_col).strip()
+        if not out_ds_col:
+            raise ValueError("ds_col must be non-empty")
+        if out_ds_col not in df.columns:
+            raise KeyError(f"ds_col not found: {out_ds_col!r}")
+
+    # Determine target columns.
+    if target_cols:
+        targets = tuple(str(c).strip() for c in target_cols if str(c).strip())
+        if not targets:
+            raise ValueError("target_cols must be non-empty when provided")
+    else:
+        targets = tuple(c for c in df.columns if c != out_ds_col)
+
+    if not targets:
+        raise ValueError("No target columns found in wide_df")
+    for col in targets:
+        if col == out_ds_col:
+            raise ValueError("target_cols cannot include ds_col")
+        if col not in df.columns:
+            raise KeyError(f"target col not found: {col!r}")
+
+    # Keep output deterministic: ds first, then targets in the requested order.
+    df = df.loc[:, [out_ds_col, *targets]].copy()
+    df = df.sort_values(out_ds_col, kind="mergesort").reset_index(drop=True)
+    if df[out_ds_col].isna().any():
+        raise ValueError("ds contains NA values")
+    if df[out_ds_col].duplicated().any():
+        raise ValueError("ds contains duplicates")
+
+    # Frequency inference / enforcement.
+    group_freq: str | None
+    if freq is not None:
+        group_freq = str(to_offset(freq).freqstr)
+    else:
+        try:
+            group_freq = infer_series_frequency(df[out_ds_col], strict=bool(strict_freq))
+        except ValueError:
+            if strict_freq:
+                raise
+            group_freq = None
+
+    out = df
+    if group_freq is not None:
+        start = out[out_ds_col].iloc[0]
+        end = out[out_ds_col].iloc[-1]
+        full_ds = pd.date_range(start=start, end=end, freq=group_freq)
+        out = out.set_index(out_ds_col).reindex(full_ds).reset_index()
+        out = out.rename(columns={"index": out_ds_col})
+
+    out = _apply_missing_policy(out, columns=targets, policy=str(missing), unique_id="__wide__")
+    return out.loc[:, [out_ds_col, *targets]]

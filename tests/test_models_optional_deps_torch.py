@@ -38,6 +38,12 @@ WAVE1B_TORCH_LOCAL_KEYS = (
     "torch-samformer-direct",
 )
 
+RETENTION_TORCH_LOCAL_KEYS = (
+    "torch-retnet-direct",
+    "torch-retnet-recursive",
+)
+RETENTION_TORCH_GLOBAL_KEYS = ("torch-retnet-global",)
+
 TIME_XER_TORCH_KEYS = (
     "torch-timexer-direct",
     "torch-timexer-global",
@@ -68,7 +74,11 @@ RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
     "torch-hawk-direct",
 )
 
-TORCH_MULTIVARIATE_KEYS = ("torch-stid-multivariate",)
+TORCH_MULTIVARIATE_KEYS = (
+    "torch-stid-multivariate",
+    "torch-stgcn-multivariate",
+    "torch-graphwavenet-multivariate",
+)
 
 
 def _torch_model_keys() -> list[str]:
@@ -114,6 +124,18 @@ def test_decomposition_torch_local_models_are_covered_by_optional_dep_paths():
 def test_wave1b_torch_local_models_are_covered_by_optional_dep_paths():
     keys = set(_torch_local_model_keys())
     for key in WAVE1B_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_retnet_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RETENTION_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_retnet_torch_global_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_global_model_keys())
+    for key in RETENTION_TORCH_GLOBAL_KEYS:
         assert key in keys
 
 

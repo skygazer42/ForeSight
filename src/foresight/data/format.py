@@ -202,3 +202,81 @@ def validate_long_df(
             raise ValueError(f"ds is not sorted for unique_id={uid!r}")
         if require_unique_ds and g["ds"].duplicated().any():
             raise ValueError(f"ds contains duplicates for unique_id={uid!r}")
+
+
+def long_to_wide(
+    long_df: Any,
+    *,
+    id_col: str = "unique_id",
+    ds_col: str = "ds",
+    value_col: str = "y",
+    freq: str | None = None,
+    strict_freq: bool = False,
+    missing: str = "error",
+    sort_ids: bool = True,
+) -> pd.DataFrame:
+    """
+    Pivot a canonical long-format DataFrame into wide format.
+
+    Input long format:
+      - one row per (id_col, ds_col)
+      - value_col holds the observed target
+
+    Output wide format:
+      - one row per timestamp (ds_col)
+      - one column per series id (id_col)
+
+    Optionally regularizes the timestamp axis via `freq` and fills / rejects missing
+    target values via `missing`.
+    """
+    if not isinstance(long_df, pd.DataFrame):
+        raise TypeError("long_df must be a pandas DataFrame")
+
+    df = long_df.copy()
+    if df.empty:
+        raise ValueError("long_df is empty")
+
+    id_col_s = str(id_col).strip()
+    ds_col_s = str(ds_col).strip()
+    value_col_s = str(value_col).strip()
+    if not id_col_s:
+        raise ValueError("id_col must be non-empty")
+    if not ds_col_s:
+        raise ValueError("ds_col must be non-empty")
+    if not value_col_s:
+        raise ValueError("value_col must be non-empty")
+
+    required = {id_col_s, ds_col_s, value_col_s}
+    missing_cols = required.difference(df.columns)
+    if missing_cols:
+        raise KeyError(f"long_df missing required columns: {sorted(missing_cols)}")
+
+    df = df.loc[:, [id_col_s, ds_col_s, value_col_s]].copy()
+    if df[[id_col_s, ds_col_s]].duplicated().any():
+        raise ValueError("long_df contains duplicate id/ds pairs")
+
+    # Normalize ids to strings to keep CLI and downstream behavior deterministic.
+    df[id_col_s] = df[id_col_s].astype("string")
+
+    wide = (
+        df.pivot(index=ds_col_s, columns=id_col_s, values=value_col_s)
+        .sort_index(axis=0)
+        .reset_index()
+    )
+
+    # Stable column ordering: ds first, then id columns.
+    id_cols_out = [c for c in wide.columns if c != ds_col_s]
+    if sort_ids:
+        id_cols_out = sorted(id_cols_out, key=lambda x: str(x).lower())
+    wide = wide.loc[:, [ds_col_s, *id_cols_out]]
+
+    from .prep import prepare_wide_df
+
+    return prepare_wide_df(
+        wide,
+        ds_col=ds_col_s,
+        freq=freq,
+        strict_freq=bool(strict_freq),
+        missing=str(missing),
+        target_cols=tuple(str(c) for c in id_cols_out),
+    )

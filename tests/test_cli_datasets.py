@@ -23,6 +23,15 @@ def test_datasets_list_outputs_store_sales():
     assert "store_sales" in (proc.stdout + proc.stderr)
 
 
+def test_root_list_datasets_shortcut_matches_datasets_list():
+    proc = _run_cli("--list-datasets")
+    baseline = _run_cli("datasets", "list")
+
+    assert proc.returncode == 0
+    assert baseline.returncode == 0
+    assert proc.stdout == baseline.stdout
+
+
 def test_datasets_preview_outputs_columns():
     proc = _run_cli("datasets", "preview", "store_sales", "--nrows", "50")
     assert proc.returncode == 0

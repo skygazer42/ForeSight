@@ -77,8 +77,14 @@ from .intermittent import (
     tsb_forecast,
 )
 from .kalman import kalman_local_level_forecast, kalman_local_linear_trend_forecast
-from .multivariate import torch_stid_forecast, var_forecast
-from .naive import naive_last, seasonal_naive
+from .multivariate import (
+    torch_graphwavenet_forecast,
+    torch_stgcn_forecast,
+    torch_stid_forecast,
+    var_forecast,
+)
+from .hf_time_series import hf_timeseries_transformer_direct_forecast
+from .naive import naive_last, seasonal_naive, seasonal_naive_auto
 from .regression import (
     adaboost_lag_direct_forecast,
     bagging_lag_direct_forecast,
@@ -153,10 +159,13 @@ from .smoothing import (
     holt_forecast,
     holt_winters_additive_auto_forecast,
     holt_winters_additive_forecast,
+    holt_winters_multiplicative_auto_forecast,
+    holt_winters_multiplicative_forecast,
     ses_auto_forecast,
     ses_forecast,
 )
 from .spectral import fft_topk_forecast
+from .ssa import ssa_forecast
 from .statsmodels_wrap import (
     arima_forecast,
     auto_arima_forecast,
@@ -222,6 +231,7 @@ from .torch_global import (
     torch_nonstationary_transformer_global_forecaster,
     torch_patchtst_global_forecaster,
     torch_pyraformer_global_forecaster,
+    torch_retnet_global_forecaster,
     torch_resnet1d_global_forecaster,
     torch_rnn_global_forecaster,
     torch_rwkv_global_forecaster,
@@ -275,6 +285,8 @@ from .torch_nn import (
     torch_patchtst_direct_forecast,
     torch_pyraformer_direct_forecast,
     torch_qrnn_recursive_forecast,
+    torch_retnet_direct_forecast,
+    torch_retnet_recursive_forecast,
     torch_resnet1d_direct_forecast,
     torch_rwkv_direct_forecast,
     torch_samformer_direct_forecast,
@@ -438,6 +450,32 @@ def _factory_seasonal_naive(*, season_length: int = 12, **_params: Any) -> Forec
     return _f
 
 
+def _factory_seasonal_naive_auto(
+    *,
+    min_season_length: int = 2,
+    max_season_length: int = 24,
+    detrend: bool = True,
+    min_corr: float = 0.2,
+    **_params: Any,
+) -> ForecasterFn:
+    min_season_length_int = int(min_season_length)
+    max_season_length_int = int(max_season_length)
+    detrend_bool = bool(detrend)
+    min_corr_f = float(min_corr)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return seasonal_naive_auto(
+            train,
+            horizon,
+            min_season_length=min_season_length_int,
+            max_season_length=max_season_length_int,
+            detrend=detrend_bool,
+            min_corr=min_corr_f,
+        )
+
+    return _f
+
+
 def _factory_mean(**_params: Any) -> ForecasterFn:
     return mean_forecast
 
@@ -546,6 +584,32 @@ def _factory_holt_winters_add(
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return holt_winters_additive_forecast(
+            train,
+            horizon,
+            season_length=season_length_int,
+            alpha=alpha_f,
+            beta=beta_f,
+            gamma=gamma_f,
+        )
+
+    return _f
+
+
+def _factory_holt_winters_mul(
+    *,
+    season_length: int = 12,
+    alpha: float = 0.2,
+    beta: float = 0.1,
+    gamma: float = 0.1,
+    **_params: Any,
+) -> ForecasterFn:
+    season_length_int = int(season_length)
+    alpha_f = float(alpha)
+    beta_f = float(beta)
+    gamma_f = float(gamma)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return holt_winters_multiplicative_forecast(
             train,
             horizon,
             season_length=season_length_int,
@@ -5952,6 +6016,172 @@ def _factory_torch_samformer_direct(
     return _f
 
 
+def _factory_torch_retnet_direct(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    ffn_dim_int = int(ffn_dim)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_retnet_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            ffn_dim=ffn_dim_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_retnet_recursive(
+    *,
+    lags: int = 96,
+    d_model: int = 64,
+    nhead: int = 4,
+    num_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    num_layers_int = int(num_layers)
+    ffn_dim_int = int(ffn_dim)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_retnet_recursive_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            num_layers=num_layers_int,
+            ffn_dim=ffn_dim_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
 def _factory_torch_timexer_direct(
     *,
     x_cols: Any = (),
@@ -9386,6 +9616,23 @@ def _factory_holt_winters_add_auto(
     return _f
 
 
+def _factory_holt_winters_mul_auto(
+    *, season_length: int = 12, grid_size: int = 7, **_params: Any
+) -> ForecasterFn:
+    season_length_int = int(season_length)
+    grid_size_int = int(grid_size)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return holt_winters_multiplicative_auto_forecast(
+            train,
+            horizon,
+            season_length=season_length_int,
+            grid_size=grid_size_int,
+        )
+
+    return _f
+
+
 def _factory_croston(*, alpha: float = 0.1, **_params: Any) -> ForecasterFn:
     alpha_f = float(alpha)
 
@@ -9547,6 +9794,26 @@ def _factory_fft(*, top_k: int = 3, include_trend: bool = True, **_params: Any) 
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return fft_topk_forecast(train, horizon, top_k=top_k_int, include_trend=include_trend_bool)
+
+    return _f
+
+
+def _factory_ssa(
+    *,
+    window_length: int = 24,
+    rank: int = 5,
+    **_params: Any,
+) -> ForecasterFn:
+    window_length_int = int(window_length)
+    rank_int = int(rank)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return ssa_forecast(
+            train,
+            horizon,
+            window_length=window_length_int,
+            rank=rank_int,
+        )
 
     return _f
 
@@ -9755,23 +10022,24 @@ def _factory_auto_arima(
         train_exog: Any | None = None,
         future_exog: Any | None = None,
     ) -> np.ndarray:
-        return auto_arima_forecast(
-            train,
-            horizon,
-            max_p=max_p_int,
-            max_d=max_d_int,
-            max_q=max_q_int,
-            max_P=max_P_int,
-            max_D=max_D_int,
-            max_Q=max_Q_int,
-            seasonal_period=seasonal_period_int,
-            trend=trend_s,
-            enforce_stationarity=enforce_stationarity_bool,
-            enforce_invertibility=enforce_invertibility_bool,
-            train_exog=train_exog,
-            future_exog=future_exog,
-            information_criterion=ic_s,
-        )
+        kwargs: dict[str, Any] = {
+            "max_p": max_p_int,
+            "max_d": max_d_int,
+            "max_q": max_q_int,
+            "max_P": max_P_int,
+            "max_D": max_D_int,
+            "max_Q": max_Q_int,
+            "seasonal_period": seasonal_period_int,
+            "trend": trend_s,
+            "enforce_stationarity": enforce_stationarity_bool,
+            "enforce_invertibility": enforce_invertibility_bool,
+            "information_criterion": ic_s,
+        }
+        if train_exog is not None or future_exog is not None:
+            kwargs["train_exog"] = train_exog
+            kwargs["future_exog"] = future_exog
+
+        return auto_arima_forecast(train, horizon, **kwargs)
 
     return _f
 
@@ -10795,6 +11063,255 @@ def _factory_torch_stid_multivariate(
     return _f
 
 
+def _factory_torch_stgcn_multivariate(
+    *,
+    lags: int = 24,
+    d_model: int = 64,
+    num_blocks: int = 2,
+    kernel_size: int = 3,
+    dropout: float = 0.1,
+    adj: Any = "corr",
+    adj_path: str = "",
+    adj_top_k: int = 8,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> MultivariateForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_blocks_int = int(num_blocks)
+    kernel_size_int = int(kernel_size)
+    dropout_f = float(dropout)
+    adj_value = adj
+    adj_path_s = str(adj_path)
+    adj_top_k_int = int(adj_top_k)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_stgcn_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_blocks=num_blocks_int,
+            kernel_size=kernel_size_int,
+            dropout=dropout_f,
+            adj=adj_value,
+            adj_path=adj_path_s,
+            adj_top_k=adj_top_k_int,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_torch_graphwavenet_multivariate(
+    *,
+    lags: int = 24,
+    d_model: int = 64,
+    num_blocks: int = 4,
+    kernel_size: int = 2,
+    dilation_base: int = 2,
+    dropout: float = 0.1,
+    adj: Any = "corr",
+    adj_path: str = "",
+    adj_top_k: int = 8,
+    adaptive_adj: bool = True,
+    adj_emb_dim: int = 8,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    restore_best: bool = True,
+    **_params: Any,
+) -> MultivariateForecasterFn:
+    lags_int = int(lags)
+    d_model_int = int(d_model)
+    num_blocks_int = int(num_blocks)
+    kernel_size_int = int(kernel_size)
+    dilation_base_int = int(dilation_base)
+    dropout_f = float(dropout)
+    adj_value = adj
+    adj_path_s = str(adj_path)
+    adj_top_k_int = int(adj_top_k)
+    adaptive_adj_bool = bool(adaptive_adj)
+    adj_emb_dim_int = int(adj_emb_dim)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_graphwavenet_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            d_model=d_model_int,
+            num_blocks=num_blocks_int,
+            kernel_size=kernel_size_int,
+            dilation_base=dilation_base_int,
+            dropout=dropout_f,
+            adj=adj_value,
+            adj_path=adj_path_s,
+            adj_top_k=adj_top_k_int,
+            adaptive_adj=adaptive_adj_bool,
+            adj_emb_dim=adj_emb_dim_int,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            restore_best=restore_best_bool,
+        )
+
+    return _f
+
+
+def _factory_hf_timeseries_transformer_direct(
+    *,
+    context_length: int = 48,
+    lags_sequence: Any = (1, 2, 3, 4, 5, 6, 7),
+    d_model: int = 64,
+    nhead: int = 2,
+    encoder_layers: int = 2,
+    decoder_layers: int = 2,
+    ffn_dim: int = 128,
+    dropout: float = 0.1,
+    num_time_features: int = 0,
+    num_samples: int = 100,
+    pretrained_model: str = "",
+    local_files_only: bool = True,
+    normalize: bool = True,
+    device: str = "cpu",
+    seed: int = 0,
+    epochs: int = 0,
+    **_params: Any,
+) -> ForecasterFn:
+    context_length_int = int(context_length)
+    lags_sequence_value = lags_sequence
+    d_model_int = int(d_model)
+    nhead_int = int(nhead)
+    encoder_layers_int = int(encoder_layers)
+    decoder_layers_int = int(decoder_layers)
+    ffn_dim_int = int(ffn_dim)
+    dropout_f = float(dropout)
+    num_time_features_int = int(num_time_features)
+    num_samples_int = int(num_samples)
+    pretrained_model_s = str(pretrained_model)
+    local_files_only_bool = bool(local_files_only)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    seed_int = int(seed)
+    epochs_int = int(epochs)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return hf_timeseries_transformer_direct_forecast(
+            train,
+            horizon,
+            context_length=context_length_int,
+            lags_sequence=lags_sequence_value,
+            d_model=d_model_int,
+            nhead=nhead_int,
+            encoder_layers=encoder_layers_int,
+            decoder_layers=decoder_layers_int,
+            ffn_dim=ffn_dim_int,
+            dropout=dropout_f,
+            num_time_features=num_time_features_int,
+            num_samples=num_samples_int,
+            pretrained_model=pretrained_model_s,
+            local_files_only=local_files_only_bool,
+            normalize=normalize_bool,
+            device=device_s,
+            seed=seed_int,
+            epochs=epochs_int,
+        )
+
+    return _f
+
+
 _REGISTRY: dict[str, ModelSpec] = {
     "naive-last": ModelSpec(
         key="naive-last",
@@ -10807,6 +11324,23 @@ _REGISTRY: dict[str, ModelSpec] = {
         factory=_factory_seasonal_naive,
         default_params={"season_length": 12},
         param_help={"season_length": "Season length for repeating the last season"},
+    ),
+    "seasonal-naive-auto": ModelSpec(
+        key="seasonal-naive-auto",
+        description="Auto seasonal-naive baseline (infer season length via ACF scan).",
+        factory=_factory_seasonal_naive_auto,
+        default_params={
+            "min_season_length": 2,
+            "max_season_length": 24,
+            "detrend": True,
+            "min_corr": 0.2,
+        },
+        param_help={
+            "min_season_length": "Minimum season length to consider (default: 2)",
+            "max_season_length": "Maximum season length to consider (default: 24)",
+            "detrend": "Use first differences when scanning ACF (true/false)",
+            "min_corr": "Minimum correlation threshold to accept seasonality (default: 0.2)",
+        },
     ),
     "mean": ModelSpec(
         key="mean",
@@ -10912,10 +11446,32 @@ _REGISTRY: dict[str, ModelSpec] = {
             "gamma": "Seasonal smoothing in [0, 1]",
         },
     ),
+    "holt-winters-mul": ModelSpec(
+        key="holt-winters-mul",
+        description="Holt-Winters multiplicative seasonality + additive trend (positive series only).",
+        factory=_factory_holt_winters_mul,
+        default_params={"season_length": 12, "alpha": 0.2, "beta": 0.1, "gamma": 0.1},
+        param_help={
+            "season_length": "Season length",
+            "alpha": "Level smoothing in [0, 1]",
+            "beta": "Trend smoothing in [0, 1]",
+            "gamma": "Seasonal smoothing in [0, 1]",
+        },
+    ),
     "holt-winters-add-auto": ModelSpec(
         key="holt-winters-add-auto",
         description="Auto-tuned Holt-Winters additive (small grid search).",
         factory=_factory_holt_winters_add_auto,
+        default_params={"season_length": 12, "grid_size": 7},
+        param_help={
+            "season_length": "Season length",
+            "grid_size": "Grid size per parameter (default: 7)",
+        },
+    ),
+    "holt-winters-mul-auto": ModelSpec(
+        key="holt-winters-mul-auto",
+        description="Auto-tuned Holt-Winters multiplicative (small grid search).",
+        factory=_factory_holt_winters_mul_auto,
         default_params={"season_length": 12, "grid_size": 7},
         param_help={
             "season_length": "Season length",
@@ -11064,6 +11620,16 @@ _REGISTRY: dict[str, ModelSpec] = {
         param_help={
             "top_k": "Number of dominant frequencies to keep",
             "include_trend": "Detrend with linear regression before FFT (true/false)",
+        },
+    ),
+    "ssa": ModelSpec(
+        key="ssa",
+        description="Singular Spectrum Analysis (SSA) recurrent forecast (rank-truncated SVD).",
+        factory=_factory_ssa,
+        default_params={"window_length": 24, "rank": 5},
+        param_help={
+            "window_length": "SSA embedding window length L (2 <= L <= n-1)",
+            "rank": "Truncated SVD rank r (>=1)",
         },
     ),
     "analog-knn": ModelSpec(
@@ -14100,6 +14666,54 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
     ),
+    "torch-retnet-direct": ModelSpec(
+        key="torch-retnet-direct",
+        description="Torch RetNet-style retention network (lite) (direct multi-horizon). Requires PyTorch.",
+        factory=_factory_torch_retnet_direct,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "ffn_dim": 128,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "nhead": "Number of retention heads",
+            "num_layers": "Number of stacked retention blocks",
+            "ffn_dim": "Feed-forward hidden width inside each retention block",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
+    "torch-retnet-recursive": ModelSpec(
+        key="torch-retnet-recursive",
+        description="Torch RetNet-style retention network (one-step trained, recursive forecast). Requires PyTorch.",
+        factory=_factory_torch_retnet_recursive,
+        default_params={
+            "lags": 96,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "ffn_dim": 128,
+            "dropout": 0.1,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Model dimension",
+            "nhead": "Number of retention heads",
+            "num_layers": "Number of stacked retention blocks",
+            "ffn_dim": "Feed-forward hidden width inside each retention block",
+            "dropout": "Dropout probability in [0,1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+    ),
     "torch-mamba-direct": ModelSpec(
         key="torch-mamba-direct",
         description="Torch Mamba-style selective SSM (lite) (direct multi-horizon). Requires PyTorch.",
@@ -16547,6 +17161,46 @@ _REGISTRY: dict[str, ModelSpec] = {
         interface="global",
         capability_overrides={"requires_future_covariates": True},
     ),
+    "torch-retnet-global": ModelSpec(
+        key="torch-retnet-global",
+        description="Torch RetNet-style retention network (lite) trained globally across panel series. Requires PyTorch.",
+        factory=torch_retnet_global_forecaster,
+        default_params={
+            "context_length": 96,
+            "x_cols": (),
+            "add_time_features": True,
+            "sample_step": 1,
+            "d_model": 64,
+            "nhead": 4,
+            "num_layers": 2,
+            "ffn_dim": 256,
+            "id_emb_dim": 8,
+            "dropout": 0.1,
+            "quantiles": (),
+            "max_train_size": None,
+            **_TORCH_COMMON_DEFAULTS,
+            "epochs": 30,
+            "batch_size": 64,
+            "val_split": 0.1,
+        },
+        param_help={
+            "context_length": "Context window length (encoder length)",
+            "x_cols": "Optional covariate columns from long_df (comma-separated)",
+            "add_time_features": "Add built-in time features from ds (true/false)",
+            "sample_step": "Stride when generating training windows (>=1)",
+            "d_model": "Model dimension",
+            "nhead": "Number of retention heads",
+            "num_layers": "Number of stacked retention blocks",
+            "ffn_dim": "Feed-forward hidden width inside each retention block",
+            "id_emb_dim": "Series-id embedding dim (panel/global models)",
+            "dropout": "Dropout probability in [0,1)",
+            "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
+            "max_train_size": "Optional per-series rolling training window length (None for expanding)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="global",
+    ),
     "torch-informer-global": ModelSpec(
         key="torch-informer-global",
         description="Torch Informer (lite) trained globally across panel series. Requires PyTorch.",
@@ -18125,6 +18779,113 @@ _REGISTRY: dict[str, ModelSpec] = {
         },
         requires=("torch",),
         interface="multivariate",
+    ),
+    "torch-stgcn-multivariate": ModelSpec(
+        key="torch-stgcn-multivariate",
+        description="Torch STGCN-style spatiotemporal baseline (lite) on a wide target matrix. Requires PyTorch.",
+        factory=_factory_torch_stgcn_multivariate,
+        default_params={
+            "lags": 24,
+            "d_model": 64,
+            "num_blocks": 2,
+            "kernel_size": 3,
+            "dropout": 0.1,
+            "adj": "corr",
+            "adj_path": "",
+            "adj_top_k": 8,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden dimension",
+            "num_blocks": "Number of spatiotemporal blocks",
+            "kernel_size": "Temporal convolution kernel size (>=1)",
+            "dropout": "Dropout probability in [0,1)",
+            "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
+            "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
+            "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="multivariate",
+    ),
+    "torch-graphwavenet-multivariate": ModelSpec(
+        key="torch-graphwavenet-multivariate",
+        description="Torch Graph WaveNet-style baseline (lite) on a wide target matrix. Requires PyTorch.",
+        factory=_factory_torch_graphwavenet_multivariate,
+        default_params={
+            "lags": 24,
+            "d_model": 64,
+            "num_blocks": 4,
+            "kernel_size": 2,
+            "dilation_base": 2,
+            "dropout": 0.1,
+            "adj": "corr",
+            "adj_path": "",
+            "adj_top_k": 8,
+            "adaptive_adj": True,
+            "adj_emb_dim": 8,
+            **_TORCH_COMMON_DEFAULTS,
+        },
+        param_help={
+            "lags": "Lag window length",
+            "d_model": "Hidden dimension",
+            "num_blocks": "Number of dilated temporal graph blocks",
+            "kernel_size": "Temporal convolution kernel size (>=1)",
+            "dilation_base": "Dilation growth base (>=1). Each block uses dilation=base**i",
+            "dropout": "Dropout probability in [0,1)",
+            "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
+            "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
+            "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
+            "adaptive_adj": "Learn an additional adaptive adjacency (true/false)",
+            "adj_emb_dim": "Adaptive adjacency embedding dimension (>=1)",
+            **_TORCH_COMMON_PARAM_HELP,
+        },
+        requires=("torch",),
+        interface="multivariate",
+    ),
+    "hf-timeseries-transformer-direct": ModelSpec(
+        key="hf-timeseries-transformer-direct",
+        description="Hugging Face TimeSeriesTransformer wrapper (lite) (direct local). Requires transformers + PyTorch.",
+        factory=_factory_hf_timeseries_transformer_direct,
+        default_params={
+            "context_length": 48,
+            "lags_sequence": (1, 2, 3, 4, 5, 6, 7),
+            "d_model": 64,
+            "nhead": 2,
+            "encoder_layers": 2,
+            "decoder_layers": 2,
+            "ffn_dim": 128,
+            "dropout": 0.1,
+            "num_time_features": 0,
+            "num_samples": 100,
+            "pretrained_model": "",
+            "local_files_only": True,
+            "normalize": True,
+            "device": "cpu",
+            "seed": 0,
+            "epochs": 0,
+        },
+        param_help={
+            "context_length": "Context length used by the model",
+            "lags_sequence": "Comma-separated lags sequence (default: 1,2,3,4,5,6,7)",
+            "d_model": "Transformer model dimension (ignored for pretrained_model)",
+            "nhead": "Attention heads (ignored for pretrained_model)",
+            "encoder_layers": "Encoder layers (ignored for pretrained_model)",
+            "decoder_layers": "Decoder layers (ignored for pretrained_model)",
+            "ffn_dim": "FFN hidden width (ignored for pretrained_model)",
+            "dropout": "Dropout probability in [0,1) (ignored for pretrained_model)",
+            "num_time_features": "Number of provided time features (0 disables time features)",
+            "num_samples": "Number of parallel samples to generate; output is sample-mean",
+            "pretrained_model": "Optional Hugging Face model name/path to load via from_pretrained()",
+            "local_files_only": "If true, disallow downloads in from_pretrained() (true/false)",
+            "normalize": "Z-score normalize the series before inference (true/false)",
+            "device": "Torch device (cpu or cuda)",
+            "seed": "Random seed (controls sampling)",
+            "epochs": "Ignored (reserved for future fine-tuning support)",
+        },
+        requires=("transformers", "torch"),
+        interface="local",
     ),
     "auto-arima": ModelSpec(
         key="auto-arima",

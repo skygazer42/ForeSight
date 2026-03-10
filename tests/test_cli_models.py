@@ -27,6 +27,24 @@ def test_models_list_contains_naive_last():
     assert "seasonal-drift" in proc.stdout
 
 
+def test_root_list_shortcut_matches_models_list():
+    proc = _run_cli("--list")
+    baseline = _run_cli("models", "list")
+
+    assert proc.returncode == 0
+    assert baseline.returncode == 0
+    assert proc.stdout == baseline.stdout
+
+
+def test_root_list_models_shortcut_matches_models_list():
+    proc = _run_cli("--list-models")
+    baseline = _run_cli("models", "list")
+
+    assert proc.returncode == 0
+    assert baseline.returncode == 0
+    assert proc.stdout == baseline.stdout
+
+
 def test_models_info_outputs_json():
     proc = _run_cli("models", "info", "naive-last")
     assert proc.returncode == 0

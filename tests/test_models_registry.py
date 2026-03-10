@@ -29,6 +29,12 @@ WAVE1B_TORCH_LOCAL_KEYS = (
     "torch-samformer-direct",
 )
 
+RETENTION_TORCH_LOCAL_KEYS = (
+    "torch-retnet-direct",
+    "torch-retnet-recursive",
+)
+RETENTION_TORCH_GLOBAL_KEYS = ("torch-retnet-global",)
+
 TIME_XER_TORCH_KEYS = (
     "torch-timexer-direct",
     "torch-timexer-global",
@@ -59,7 +65,13 @@ RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
     "torch-hawk-direct",
 )
 
-TORCH_MULTIVARIATE_KEYS = ("torch-stid-multivariate",)
+TORCH_MULTIVARIATE_KEYS = (
+    "torch-stid-multivariate",
+    "torch-stgcn-multivariate",
+    "torch-graphwavenet-multivariate",
+)
+
+TRANSFORMERS_LOCAL_KEYS = ("hf-timeseries-transformer-direct",)
 
 
 def test_list_models_contains_expected_keys():
@@ -92,6 +104,18 @@ def test_decomposition_torch_local_models_are_registered():
 def test_wave1b_torch_local_models_are_registered():
     keys = set(list_models())
     for key in WAVE1B_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_retnet_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in RETENTION_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_retnet_torch_global_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in RETENTION_TORCH_GLOBAL_KEYS:
         assert key in keys
 
 
@@ -134,6 +158,12 @@ def test_recurrent_revival_torch_local_models_are_registered() -> None:
 def test_torch_multivariate_models_are_registered() -> None:
     keys = set(list_models())
     for key in TORCH_MULTIVARIATE_KEYS:
+        assert key in keys
+
+
+def test_transformers_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in TRANSFORMERS_LOCAL_KEYS:
         assert key in keys
 
 

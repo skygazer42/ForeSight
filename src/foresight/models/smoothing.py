@@ -324,3 +324,169 @@ def holt_winters_additive_auto_forecast(
         beta=b_best,
         gamma=g_best,
     )
+
+
+def holt_winters_multiplicative_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    season_length: int,
+    alpha: float,
+    beta: float,
+    gamma: float,
+) -> np.ndarray:
+    """
+    Holt-Winters multiplicative seasonality + additive trend.
+
+    This variant is useful when seasonal amplitude scales with the series level.
+
+    Notes:
+      - Requires strictly positive values (division-based seasonality).
+      - This is a lightweight baseline implementation (not a full stats package replacement).
+    """
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if season_length <= 0:
+        raise ValueError("season_length must be >= 1")
+    if x.size < 2 * int(season_length):
+        raise ValueError(
+            "holt_winters_multiplicative_forecast requires at least "
+            f"2*season_length={2 * int(season_length)} points, got {x.size}"
+        )
+    if np.any(x <= 0.0):
+        raise ValueError("holt_winters_multiplicative_forecast requires strictly positive values")
+
+    a = _require_01("alpha", alpha)
+    b = _require_01("beta", beta)
+    g = _require_01("gamma", gamma)
+    m = int(season_length)
+    eps = 1e-12
+
+    # Initialization using two seasons.
+    season1 = x[:m]
+    season2 = x[m : 2 * m]
+    level = float(np.mean(season1))
+    if abs(level) < eps:
+        level = eps
+    trend = (float(np.mean(season2)) - float(np.mean(season1))) / float(m)
+    seasonals = (season1 / level).astype(float, copy=True)  # length m
+    seasonals = np.where(np.abs(seasonals) < eps, eps, seasonals)
+
+    for t in range(x.size):
+        idx = t % m
+        prev_level = level
+        prev_season = float(seasonals[idx])
+        denom_season = prev_season if abs(prev_season) >= eps else eps
+
+        level = a * (float(x[t]) / denom_season) + (1.0 - a) * (level + trend)
+        if abs(level) < eps:
+            level = eps
+        trend = b * (level - prev_level) + (1.0 - b) * trend
+        seasonals[idx] = g * (float(x[t]) / level) + (1.0 - g) * prev_season
+        if abs(float(seasonals[idx])) < eps:
+            seasonals[idx] = eps
+
+    steps = np.arange(1, horizon + 1, dtype=float)
+    seasonal_idx = (np.arange(horizon) + x.size) % m
+    return (level + trend * steps) * seasonals[seasonal_idx]
+
+
+def _hw_multiplicative_sse(
+    x: np.ndarray,
+    *,
+    season_length: int,
+    alpha: float,
+    beta: float,
+    gamma: float,
+) -> float:
+    a = _require_01("alpha", alpha)
+    b = _require_01("beta", beta)
+    g = _require_01("gamma", gamma)
+
+    m = int(season_length)
+    if x.size < 2 * m:
+        raise ValueError("Need at least 2 full seasons for Holt-Winters initialization.")
+    if np.any(x <= 0.0):
+        raise ValueError("Holt-Winters multiplicative requires strictly positive values.")
+
+    eps = 1e-12
+    season1 = x[:m]
+    season2 = x[m : 2 * m]
+    level = float(np.mean(season1))
+    if abs(level) < eps:
+        level = eps
+    trend = (float(np.mean(season2)) - float(np.mean(season1))) / float(m)
+    seasonals = (season1 / level).astype(float, copy=True)
+    seasonals = np.where(np.abs(seasonals) < eps, eps, seasonals)
+
+    sse = 0.0
+    for t in range(x.size):
+        idx = t % m
+        yhat = (level + trend) * float(seasonals[idx])
+        err = float(x[t]) - yhat
+        sse += err * err
+
+        prev_level = level
+        prev_season = float(seasonals[idx])
+        denom_season = prev_season if abs(prev_season) >= eps else eps
+
+        level = a * (float(x[t]) / denom_season) + (1.0 - a) * (level + trend)
+        if abs(level) < eps:
+            level = eps
+        trend = b * (level - prev_level) + (1.0 - b) * trend
+        seasonals[idx] = g * (float(x[t]) / level) + (1.0 - g) * prev_season
+        if abs(float(seasonals[idx])) < eps:
+            seasonals[idx] = eps
+
+    return float(sse)
+
+
+def holt_winters_multiplicative_auto_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    season_length: int,
+    grid_size: int = 7,
+) -> np.ndarray:
+    """
+    Auto-tuned Holt-Winters multiplicative via a small grid search over (alpha,beta,gamma).
+    """
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if season_length <= 0:
+        raise ValueError("season_length must be >= 1")
+    if x.size < 2 * int(season_length):
+        raise ValueError(
+            "holt_winters_multiplicative_auto_forecast requires at least 2 full seasons of data"
+        )
+    if grid_size <= 1:
+        raise ValueError("grid_size must be >= 2")
+
+    grid = np.linspace(0.1, 0.9, int(grid_size), dtype=float)
+    best = (float(grid[0]), float(grid[0]), float(grid[0]))
+    best_sse = float("inf")
+    for a in grid:
+        for b in grid:
+            for g in grid:
+                sse = _hw_multiplicative_sse(
+                    x,
+                    season_length=int(season_length),
+                    alpha=float(a),
+                    beta=float(b),
+                    gamma=float(g),
+                )
+                if sse < best_sse:
+                    best_sse = sse
+                    best = (float(a), float(b), float(g))
+
+    a_best, b_best, g_best = best
+    return holt_winters_multiplicative_forecast(
+        x,
+        horizon,
+        season_length=int(season_length),
+        alpha=a_best,
+        beta=b_best,
+        gamma=g_best,
+    )

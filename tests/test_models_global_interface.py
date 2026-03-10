@@ -2,7 +2,12 @@ import pytest
 
 from foresight.models.registry import get_model_spec, make_forecaster, make_global_forecaster
 
-GLOBAL_TORCH_MODELS = ["torch-tft-global", "torch-informer-global", "torch-autoformer-global"]
+GLOBAL_TORCH_MODELS = [
+    "torch-tft-global",
+    "torch-informer-global",
+    "torch-autoformer-global",
+    "torch-retnet-global",
+]
 
 GLOBAL_ML_MODELS: dict[str, str] = {
     "xgb-gamma-step-lag-global": "xgb",
@@ -66,6 +71,15 @@ def test_make_forecaster_rejects_global_models():
     for key in GLOBAL_ML_MODELS:
         with pytest.raises(ValueError):
             make_forecaster(key)
+
+
+def test_retnet_global_interface_contract() -> None:
+    spec = get_model_spec("torch-retnet-global")
+    assert spec.interface == "global"
+    assert "torch" in spec.requires
+
+    with pytest.raises(ValueError):
+        make_forecaster("torch-retnet-global")
 
 
 def test_make_global_forecaster_rejects_local_models():

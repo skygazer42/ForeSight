@@ -196,6 +196,35 @@ WAVE1B_TORCH_LOCAL_SMOKE_CASES = [
     ),
 ]
 
+RETENTION_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-retnet-direct",
+        {
+            "lags": 32,
+            "d_model": 24,
+            "nhead": 4,
+            "num_layers": 1,
+            "ffn_dim": 48,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-retnet-recursive",
+        {
+            "lags": 32,
+            "d_model": 24,
+            "nhead": 4,
+            "num_layers": 1,
+            "ffn_dim": 48,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
 TIMEXER_LOCAL_SMOKE_CASE = (
     "torch-timexer-direct",
     {
@@ -510,6 +539,16 @@ def test_decomposition_torch_local_smoke(key: str, params: dict[str, object]):
 @pytest.mark.parametrize(("key", "params"), WAVE1B_TORCH_LOCAL_SMOKE_CASES)
 def test_wave1b_torch_local_smoke(key: str, params: dict[str, object]):
     y = np.sin(np.arange(150, dtype=float) / 8.0) + 0.02 * np.arange(150, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), RETENTION_TORCH_LOCAL_SMOKE_CASES)
+def test_retnet_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(150, dtype=float) / 8.5) + 0.02 * np.arange(150, dtype=float)
     f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
     yhat = f(y, 5)
     assert yhat.shape == (5,)
@@ -1593,6 +1632,40 @@ def test_timexer_global_smoke():
         val_split=0.0,
         batch_size=32,
         patience=2,
+        device="cpu",
+        seed=0,
+    )
+    pred = g(long_df, cutoff, 5)
+    assert set(pred.columns) >= {"unique_id", "ds", "yhat"}
+    assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+def test_retnet_global_smoke():
+    rng = np.random.default_rng(0)
+    ds = pd.date_range("2020-01-01", periods=72, freq="D")
+    rows = []
+    for uid, bias in [("s0", 0.0), ("s1", 0.5)]:
+        promo = (rng.random(ds.size) < 0.2).astype(float)
+        y = bias + np.sin(np.arange(ds.size, dtype=float) / 7.0) + 1.5 * promo
+        for t, yv, pv in zip(ds, y, promo, strict=True):
+            rows.append({"unique_id": uid, "ds": t, "y": float(yv), "promo": float(pv)})
+    long_df = pd.DataFrame(rows)
+
+    cutoff = ds[-6]
+    g = make_global_forecaster(
+        "torch-retnet-global",
+        context_length=32,
+        d_model=24,
+        nhead=4,
+        num_layers=1,
+        ffn_dim=48,
+        sample_step=4,
+        epochs=1,
+        val_split=0.0,
+        batch_size=32,
+        patience=2,
+        x_cols=("promo",),
         device="cpu",
         seed=0,
     )
