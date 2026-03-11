@@ -176,6 +176,13 @@ def test_transformers_local_models_are_registered() -> None:
         assert key in keys
 
 
+def test_catalog_shards_preserve_cross_family_lookup() -> None:
+    keys = ["naive-last", "ridge-lag", "arima", "torch-dlinear-direct", "var"]
+
+    for key in keys:
+        assert get_model_spec(key).key == key
+
+
 def test_model_spec_has_description():
     spec = get_model_spec("naive-last")
     assert isinstance(spec.description, str)

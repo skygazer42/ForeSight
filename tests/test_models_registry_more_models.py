@@ -25,3 +25,15 @@ def test_new_core_models_smoke():
         yhat = f(y, 3)
         assert yhat.shape == (3,)
         assert np.all(np.isfinite(yhat))
+
+
+def test_foundation_wrapper_catalog_models_smoke(tmp_path):
+    checkpoint = tmp_path / "foundation-fixture.json"
+    checkpoint.write_text('{"bias": 1.5, "scale": 1.0, "use_trend": true}', encoding="utf-8")
+    y = np.array([1.0, 2.0, 4.0], dtype=float)
+
+    for key in ("lag-llama", "moirai"):
+        f = make_forecaster(key, backend="fixture-json", checkpoint_path=str(checkpoint))
+        yhat = f(y, 2)
+        assert yhat.shape == (2,)
+        assert np.all(np.isfinite(yhat))
