@@ -50,3 +50,14 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "python benchmarks/run_benchmarks.py --smoke" in release_doc
     assert "mkdocs build --strict" in release_doc
     assert ".github/workflows/docs.yml" in release_doc
+
+
+def test_architecture_import_check_passes() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "tools/check_architecture_imports.py"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
