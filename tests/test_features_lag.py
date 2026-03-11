@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
 
-from foresight.features.lag import make_lagged_xy
-from foresight.features.lag import make_lagged_xy_multi
+from foresight.features.lag import make_lagged_xy, make_lagged_xy_multi
 from foresight.features.tabular import build_column_lag_features
 
 

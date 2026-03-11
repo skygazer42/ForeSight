@@ -1,7 +1,8 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
-import warnings
 
 from foresight.features.time import build_fourier_features, build_time_features
 

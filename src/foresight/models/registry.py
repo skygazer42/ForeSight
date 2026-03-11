@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 from __future__ import annotations
 
 import sys
@@ -11,7 +12,7 @@ from ..base import (
     BaseGlobalForecaster,
 )
 from ..transforms import fit_transform, inverse_forecast, normalize_transform_list
-from .catalog import build_catalog
+from . import specs as _specs
 from .analog import analog_knn_forecast
 from .ar import ar_ols_auto_forecast, ar_ols_forecast, ar_ols_lags_forecast, sar_ols_forecast
 from .baselines import (
@@ -24,6 +25,7 @@ from .baselines import (
     seasonal_mean_forecast,
     weighted_moving_average_forecast,
 )
+from .catalog import build_catalog
 from .factories import (
     build_global_forecaster,
     build_global_forecaster_object,
@@ -169,7 +171,6 @@ from .smoothing import (
     ses_auto_forecast,
     ses_forecast,
 )
-from . import specs as _specs
 from .specs import ForecasterFn, GlobalForecasterFn, ModelSpec, MultivariateForecasterFn
 from .spectral import fft_topk_forecast
 from .ssa import ssa_forecast

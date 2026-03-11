@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 
 from foresight.forecast import forecast_model, forecast_model_long_df
-from foresight.services.forecasting import forecast_long_df
 from foresight.models import registry as registry_mod
+from foresight.services.forecasting import forecast_long_df
 
 
 def _small_panel_long_df() -> pd.DataFrame:

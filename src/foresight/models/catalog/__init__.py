@@ -10,7 +10,6 @@ from .stats import build_stats_catalog
 from .torch_global import build_torch_global_catalog
 from .torch_local import build_torch_local_catalog
 
-
 _SHARD_BUILDERS = (
     ("classical", build_classical_catalog),
     ("ml", build_ml_catalog),

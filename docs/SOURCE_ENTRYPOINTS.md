@@ -41,44 +41,57 @@ If you are tracing a Python API call, begin at `src/foresight/__init__.py` and t
 
 ## 3. Model resolution path
 
-Most runtime behavior eventually flows through the registry:
+Most runtime behavior eventually flows through the model facade, but the implementation is now split across multiple layers:
 
 1. public API or CLI handler requests a model key
 2. `src/foresight/models/registry.py`
-3. `get_model_spec()` resolves metadata such as:
+3. `registry.py` delegates metadata assembly to `src/foresight/models/catalog/`
+4. `get_model_spec()` resolves metadata such as:
    - description
    - interface type (`local`, `global`, `multivariate`)
    - optional dependency requirements
    - parameter help and capability flags
-4. `make_forecaster()` / `make_global_forecaster()` / `make_multivariate_forecaster()` return a callable
-5. object-style calls use `make_forecaster_object()` or `make_global_forecaster_object()` in combination with `src/foresight/base.py`
+5. runtime construction flows through `src/foresight/models/factories.py`
+6. object-style calls still combine factory output with `src/foresight/base.py`
 
-If you add a new model family, the registry is the first file to inspect.
+Read these files in this order when working on model registration:
+
+- `src/foresight/models/registry.py`
+- `src/foresight/models/catalog/__init__.py`
+- the relevant shard under `src/foresight/models/catalog/`
+- `src/foresight/models/factories.py`
+
+If you add a new model family, start with the appropriate catalog shard rather than stuffing more declarations back into `registry.py`.
 
 ## 4. Forecast and evaluation path
 
 There are two main runtime paths after a model is resolved.
 
+The public modules stay stable, but they are now thin facades over `src/foresight/services/`.
+
 ### Forecast path
 
 1. CLI `forecast ...` or Python `forecast_model(...)`
 2. `src/foresight/forecast.py`
-3. input validation and long-format preparation
-4. registry lookup and callable/object creation
-5. prediction frame assembly, optional interval generation, optional artifact save/load
+3. `forecast.py` forwards to `src/foresight/services/forecasting.py`
+4. service-level validation reuses `src/foresight/contracts/`
+5. registry lookup and callable/object creation happen through the model facade and factories
+6. prediction frame assembly, optional interval generation, optional artifact save/load happen inside the forecasting service
 
 ### Evaluation path
 
 1. CLI `eval ...` / `cv ...` / `leaderboard ...` or Python `eval_model(...)`
 2. `src/foresight/eval_forecast.py`
-3. dataset loading or DataFrame validation
-4. rolling split generation via `src/foresight/splits.py`
-5. walk-forward execution via `src/foresight/backtesting.py`
-6. metric aggregation via `src/foresight/metrics.py`
+3. `eval_forecast.py` forwards to `src/foresight/services/evaluation.py`
+4. dataset loading or DataFrame validation happens in the evaluation service, with shared rules from `src/foresight/contracts/`
+5. rolling split generation still uses `src/foresight/splits.py`
+6. walk-forward execution still uses `src/foresight/backtesting.py`
+7. metric aggregation still uses `src/foresight/metrics.py`
 
 For debugging metric regressions or shape mismatches, start with:
 
 - `src/foresight/eval_forecast.py`
+- `src/foresight/services/evaluation.py`
 - `src/foresight/backtesting.py`
 - `src/foresight/metrics.py`
 
@@ -109,8 +122,10 @@ For most contributors, the most efficient top-down reading order is:
 5. `src/foresight/models/registry.py`
 6. `src/foresight/base.py`
 7. `src/foresight/forecast.py`
-8. `src/foresight/eval_forecast.py`
-9. `src/foresight/backtesting.py`
-10. `src/foresight/datasets/registry.py`
+8. `src/foresight/services/forecasting.py`
+9. `src/foresight/eval_forecast.py`
+10. `src/foresight/services/evaluation.py`
+11. `src/foresight/backtesting.py`
+12. `src/foresight/datasets/registry.py`
 
-That sequence gets you from the public entrypoints to the model registry and then into the forecast/evaluation core without reading the entire model zoo first.
+That sequence gets you from the public entrypoints to the facades, then into the service and model layers, without reading the entire model zoo first.

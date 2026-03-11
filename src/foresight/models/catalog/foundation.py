@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..specs import ForecasterFn, ModelSpec
 
 
 def build_foundation_catalog(context: Any) -> dict[str, Any]:
@@ -55,7 +58,6 @@ def build_foundation_catalog(context: Any) -> dict[str, Any]:
 
 def _make_wave1_foundation_wrapper_a_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 07 ownership: Lag-Llama / Chronos / TimesFM wrapper families."""
-    ForecasterFn = context.ForecasterFn
     ModelSpec = context.ModelSpec
     np = context.np
 
@@ -160,7 +162,6 @@ def _make_wave1_foundation_wrapper_a_specs(context: Any) -> dict[str, ModelSpec]
 
 def _make_wave1_foundation_wrapper_b_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 08 ownership: Moirai / MOMENT / Time-MoE / Timer-S1 wrapper families."""
-    ForecasterFn = context.ForecasterFn
     ModelSpec = context.ModelSpec
     np = context.np
 

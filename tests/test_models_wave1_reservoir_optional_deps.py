@@ -1,6 +1,7 @@
 import importlib.util
 
 import pytest
+
 from foresight.models.registry import make_forecaster
 
 RESERVOIR_KEYS = (

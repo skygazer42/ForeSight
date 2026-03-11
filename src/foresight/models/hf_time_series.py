@@ -27,7 +27,7 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
 def _parse_lags_sequence(value: Any) -> list[int]:
     if value is None:
         return [1, 2, 3, 4, 5, 6, 7]
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         out = [int(v) for v in value]
     else:
         s = str(value).strip()
@@ -168,4 +168,3 @@ def hf_timeseries_transformer_direct_forecast(
     if bool(normalize):
         yhat = yhat * std + mean
     return np.asarray(yhat, dtype=float)
-

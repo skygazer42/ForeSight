@@ -2,6 +2,7 @@ import importlib.util
 
 import numpy as np
 import pytest
+
 from foresight.models.registry import make_multivariate_forecaster
 
 GRAPH_STRUCTURE_KEYS = (

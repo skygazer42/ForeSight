@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..specs import ModelSpec, MultivariateForecasterFn
 
 
 def build_multivariate_catalog(context: Any) -> dict[str, Any]:
@@ -116,7 +119,6 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
 def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 03 ownership: ASTGCN / GMAN style multivariate graph lite families."""
     ModelSpec = context.ModelSpec
-    MultivariateForecasterFn = context.MultivariateForecasterFn
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -275,7 +277,6 @@ def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
 def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 04 ownership: AGCRN / MTGNN style graph-structure lite families."""
     ModelSpec = context.ModelSpec
-    MultivariateForecasterFn = context.MultivariateForecasterFn
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -458,7 +459,6 @@ def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
 def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 05 ownership: StemGNN / FourierGNN style graph spectral lite families."""
     ModelSpec = context.ModelSpec
-    MultivariateForecasterFn = context.MultivariateForecasterFn
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np

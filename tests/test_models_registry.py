@@ -2,11 +2,15 @@ from pathlib import Path
 
 from foresight.base import (
     RegistryForecaster as BaseRegistryForecaster,
+)
+from foresight.base import (
     RegistryGlobalForecaster as BaseRegistryGlobalForecaster,
 )
 from foresight.models.registry import ModelSpec, get_model_spec, list_models
 from foresight.models.specs import (
     LocalForecasterFn as RuntimeLocalForecasterFn,
+)
+from foresight.models.specs import (
     ModelFactory as RuntimeModelFactory,
 )
 from foresight.models.specs import ModelSpec as RuntimeModelSpec

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..specs import ForecasterFn, ModelSpec
 
 
 def build_torch_local_catalog(context: Any) -> dict[str, Any]:
@@ -2124,7 +2127,6 @@ def _make_torch_rnnzoo_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_reservoir_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 01 ownership: ESN / reservoir / liquid-state lite families."""
-    ForecasterFn = context.ForecasterFn
     ModelSpec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
@@ -2268,7 +2270,6 @@ def _make_wave1_reservoir_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_structured_rnn_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 02 ownership: structured / grid recurrent lite families."""
-    ForecasterFn = context.ForecasterFn
     ModelSpec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
@@ -2402,7 +2403,6 @@ def _make_wave1_structured_rnn_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_probabilistic_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 06 ownership: TimeGrad / TACTiS style probabilistic lite families."""
-    ForecasterFn = context.ForecasterFn
     ModelSpec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
