@@ -6,21 +6,14 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 
+from ..contracts.frames import require_long_df as _contracts_require_long_df
 from .format import resolve_covariate_roles
 
 _MISSING_POLICIES = {"error", "drop", "ffill", "zero", "interpolate"}
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
-    if not isinstance(long_df, pd.DataFrame):
-        raise TypeError("long_df must be a pandas DataFrame")
-    required = {"unique_id", "ds", "y"}
-    missing = required.difference(long_df.columns)
-    if missing:
-        raise KeyError(f"long_df missing required columns: {sorted(missing)}")
-    if long_df.empty:
-        raise ValueError("long_df is empty")
-    return long_df
+    return _contracts_require_long_df(long_df, require_non_empty=True)
 
 
 def _coerce_datetime_index(ds: Any) -> pd.DatetimeIndex:

@@ -8,6 +8,14 @@ import pandas as pd
 
 from .backtesting import walk_forward
 from .conformal import summarize_conformal_predictions
+from .contracts.capabilities import require_x_cols_if_needed as _contracts_require_x_cols_if_needed
+from .contracts.frames import require_long_df as _contracts_require_long_df
+from .contracts.params import (
+    normalize_covariate_roles as _contracts_normalize_covariate_roles,
+)
+from .contracts.params import (
+    normalize_x_cols as _contracts_normalize_x_cols,
+)
 from .data.format import to_long
 from .datasets.loaders import load_dataset
 from .datasets.registry import get_dataset_spec
@@ -18,13 +26,7 @@ from .splits import rolling_origin_splits
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
-    if not isinstance(long_df, pd.DataFrame):
-        raise TypeError("long_df must be a pandas DataFrame")
-    required = {"unique_id", "ds", "y"}
-    missing = required.difference(long_df.columns)
-    if missing:
-        raise KeyError(f"long_df missing required columns: {sorted(missing)}")
-    return long_df
+    return _contracts_require_long_df(long_df, require_non_empty=False)
 
 
 def _parse_levels(levels: Any) -> tuple[float, ...]:
@@ -51,40 +53,13 @@ def _parse_levels(levels: Any) -> tuple[float, ...]:
 
 
 def _normalize_x_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
-    raw = (model_params or {}).get("x_cols")
-    if raw is None:
-        return ()
-    if isinstance(raw, str):
-        s = raw.strip()
-        return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
-    if isinstance(raw, list | tuple):
-        return tuple([str(v).strip() for v in raw if str(v).strip()])
-    s = str(raw).strip()
-    return (s,) if s else ()
+    return _contracts_normalize_x_cols(model_params or {})
 
 
 def _normalize_covariate_roles(
     model_params: dict[str, Any] | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    params = dict(model_params or {})
-
-    def _normalize(raw: Any) -> tuple[str, ...]:
-        if raw is None:
-            return ()
-        if isinstance(raw, str):
-            s = raw.strip()
-            return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
-        if isinstance(raw, list | tuple):
-            return tuple([str(v).strip() for v in raw if str(v).strip()])
-        s = str(raw).strip()
-        return (s,) if s else ()
-
-    future = _normalize(params.get("future_x_cols"))
-    legacy = _normalize_x_cols(params)
-    if legacy:
-        future = tuple([*future, *[c for c in legacy if c not in future]])
-    historic = _normalize(params.get("historic_x_cols"))
-    return historic, future
+    return _contracts_normalize_covariate_roles(model_params)
 
 
 def _require_x_cols_if_needed(
@@ -94,8 +69,12 @@ def _require_x_cols_if_needed(
     x_cols: tuple[str, ...],
     context: str,
 ) -> None:
-    if bool(capabilities.get("requires_future_covariates", False)) and not x_cols:
-        raise ValueError(f"Model {model!r} requires future covariates via x_cols in {context}")
+    _contracts_require_x_cols_if_needed(
+        model=model,
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context=context,
+    )
 
 
 def _call_local_xreg_forecaster(

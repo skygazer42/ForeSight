@@ -5,6 +5,37 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .contracts.capabilities import require_x_cols_if_needed as _contracts_require_x_cols_if_needed
+from .contracts.frames import (
+    merge_history_and_future_df as _contracts_merge_history_and_future_df,
+)
+from .contracts.frames import (
+    require_future_df as _contracts_require_future_df,
+)
+from .contracts.frames import (
+    require_long_df as _contracts_require_long_df,
+)
+from .contracts.frames import (
+    require_observed_history_only as _contracts_require_observed_history_only,
+)
+from .contracts.params import (
+    normalize_covariate_roles as _contracts_normalize_covariate_roles,
+)
+from .contracts.params import (
+    normalize_model_params as _contracts_normalize_model_params,
+)
+from .contracts.params import (
+    normalize_x_cols as _contracts_normalize_x_cols,
+)
+from .contracts.params import (
+    parse_interval_levels as _contracts_parse_interval_levels,
+)
+from .contracts.params import (
+    parse_quantiles as _contracts_parse_quantiles,
+)
+from .contracts.params import (
+    required_quantiles_for_interval_levels as _contracts_required_quantiles_for_interval_levels,
+)
 from .intervals import bootstrap_intervals
 from .models.registry import (
     get_model_spec,
@@ -15,106 +46,33 @@ from .models.registry import (
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
-    if not isinstance(long_df, pd.DataFrame):
-        raise TypeError("long_df must be a pandas DataFrame")
-    required = {"unique_id", "ds", "y"}
-    missing = required.difference(long_df.columns)
-    if missing:
-        raise KeyError(f"long_df missing required columns: {sorted(missing)}")
-    if long_df.empty:
-        raise ValueError("long_df is empty")
-    return long_df
+    return _contracts_require_long_df(long_df, require_non_empty=True)
 
 
 def _require_future_df(future_df: Any) -> pd.DataFrame:
-    if not isinstance(future_df, pd.DataFrame):
-        raise TypeError("future_df must be a pandas DataFrame")
-    required = {"unique_id", "ds"}
-    missing = required.difference(future_df.columns)
-    if missing:
-        raise KeyError(f"future_df missing required columns: {sorted(missing)}")
-    if future_df.empty:
-        raise ValueError("future_df is empty")
-
-    out = future_df.copy()
-    if "y" not in out.columns:
-        out["y"] = np.nan
-    elif out["y"].notna().any():
-        raise ValueError("future_df must not contain observed y values")
-    return out
+    return _contracts_require_future_df(future_df, require_non_empty=True)
 
 
 def _merge_history_and_future_df(long_df: pd.DataFrame, future_df: pd.DataFrame) -> pd.DataFrame:
-    overlap = (
-        long_df.loc[:, ["unique_id", "ds"]]
-        .merge(future_df.loc[:, ["unique_id", "ds"]], on=["unique_id", "ds"], how="inner")
-        .drop_duplicates()
-    )
-    if not overlap.empty:
-        raise ValueError("future_df overlaps with long_df on unique_id/ds")
-
-    cols = list(long_df.columns)
-    for col in future_df.columns:
-        if col not in cols:
-            cols.append(col)
-
-    left = long_df.copy()
-    right = future_df.copy()
-    for col in cols:
-        if col not in left.columns:
-            left[col] = np.nan
-        if col not in right.columns:
-            right[col] = np.nan
-
-    merged = pd.concat(
-        [left.loc[:, cols], right.loc[:, cols]], axis=0, ignore_index=True, sort=False
-    )
-    return merged.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    return _contracts_merge_history_and_future_df(long_df, future_df)
 
 
 def _require_observed_history_only(df: pd.DataFrame) -> pd.DataFrame:
-    if df["y"].isna().any():
-        raise ValueError("long_df contains missing y values; provide observed history only")
-    return df
+    return _contracts_require_observed_history_only(df)
 
 
 def _normalize_model_params(model_params: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(model_params or {})
+    return _contracts_normalize_model_params(model_params)
 
 
 def _normalize_x_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
-    raw = model_params.get("x_cols")
-    if raw is None:
-        return ()
-    if isinstance(raw, str):
-        s = raw.strip()
-        return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
-    if isinstance(raw, list | tuple):
-        return tuple([str(v).strip() for v in raw if str(v).strip()])
-    s = str(raw).strip()
-    return (s,) if s else ()
+    return _contracts_normalize_x_cols(model_params)
 
 
 def _normalize_covariate_roles(
     model_params: dict[str, Any],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    def _normalize(raw: Any) -> tuple[str, ...]:
-        if raw is None:
-            return ()
-        if isinstance(raw, str):
-            s = raw.strip()
-            return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
-        if isinstance(raw, list | tuple):
-            return tuple([str(v).strip() for v in raw if str(v).strip()])
-        s = str(raw).strip()
-        return (s,) if s else ()
-
-    future = _normalize(model_params.get("future_x_cols"))
-    legacy = _normalize_x_cols(model_params)
-    if legacy:
-        future = tuple([*future, *[c for c in legacy if c not in future]])
-    historic = _normalize(model_params.get("historic_x_cols"))
-    return historic, future
+    return _contracts_normalize_covariate_roles(model_params)
 
 
 def _require_x_cols_if_needed(
@@ -124,31 +82,16 @@ def _require_x_cols_if_needed(
     x_cols: tuple[str, ...],
     context: str,
 ) -> None:
-    if bool(capabilities.get("requires_future_covariates", False)) and not x_cols:
-        raise ValueError(f"Model {model!r} requires future covariates via x_cols in {context}")
+    _contracts_require_x_cols_if_needed(
+        model=model,
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context=context,
+    )
 
 
 def _parse_interval_levels(levels: Any) -> tuple[float, ...]:
-    if levels is None:
-        return ()
-
-    if isinstance(levels, list | tuple):
-        items = list(levels)
-    elif isinstance(levels, str):
-        s = levels.strip()
-        items = [] if not s else [p.strip() for p in s.split(",") if p.strip()]
-    else:
-        items = [levels]
-
-    out: list[float] = []
-    for it in items:
-        level = float(it)
-        if level >= 1.0:
-            level = level / 100.0
-        if not (0.0 < level < 1.0):
-            raise ValueError("interval_levels must be in (0,1) or percentages like 80,90")
-        out.append(level)
-    return tuple(sorted(set(out)))
+    return _contracts_parse_interval_levels(levels)
 
 
 def _interval_level_label(level: float) -> str:
@@ -184,44 +127,11 @@ def _interval_column_names(levels: tuple[float, ...]) -> list[str]:
 
 
 def _parse_quantiles(quantiles: Any) -> tuple[float, ...]:
-    if quantiles is None:
-        return ()
-
-    if isinstance(quantiles, list | tuple):
-        items = list(quantiles)
-    elif isinstance(quantiles, str):
-        s = quantiles.strip()
-        items = [] if not s else [p.strip() for p in s.split(",") if p.strip()]
-    else:
-        items = [quantiles]
-
-    out: list[float] = []
-    for item in items:
-        q = float(item)
-        if q >= 1.0:
-            q = q / 100.0
-        if not (0.0 < q < 1.0):
-            raise ValueError("quantiles must be in (0,1) or percentages like 10,50,90")
-        pct = q * 100.0
-        if abs(pct - round(pct)) > 1e-9:
-            raise ValueError("quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)")
-        out.append(q)
-    return tuple(sorted(set(out)))
+    return _contracts_parse_quantiles(quantiles)
 
 
 def _required_quantiles_for_interval_levels(levels: tuple[float, ...]) -> tuple[float, ...]:
-    out: set[float] = {0.5}
-    for level in levels:
-        q_lo = (1.0 - float(level)) / 2.0
-        q_hi = 1.0 - q_lo
-        for q in (q_lo, q_hi):
-            pct = q * 100.0
-            if abs(pct - round(pct)) > 1e-9:
-                raise ValueError(
-                    "interval_levels for quantile global models must align to integer percentiles"
-                )
-            out.add(float(q))
-    return tuple(sorted(out))
+    return _contracts_required_quantiles_for_interval_levels(levels)
 
 
 def _merge_quantiles_for_interval_levels(

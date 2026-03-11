@@ -1,6 +1,15 @@
 from pathlib import Path
 
+from foresight.base import (
+    RegistryForecaster as BaseRegistryForecaster,
+    RegistryGlobalForecaster as BaseRegistryGlobalForecaster,
+)
 from foresight.models.registry import ModelSpec, get_model_spec, list_models
+from foresight.models.specs import (
+    LocalForecasterFn as RuntimeLocalForecasterFn,
+    ModelFactory as RuntimeModelFactory,
+)
+from foresight.models.specs import ModelSpec as RuntimeModelSpec
 
 WAVE1A_TORCH_LOCAL_KEYS = (
     "torch-informer-direct",
@@ -171,6 +180,28 @@ def test_model_spec_has_description():
     spec = get_model_spec("naive-last")
     assert isinstance(spec.description, str)
     assert spec.description
+
+
+def test_registry_returns_modelspec_instances() -> None:
+    spec = get_model_spec("naive-last")
+
+    assert isinstance(spec, RuntimeModelSpec)
+    assert spec.interface == "local"
+
+
+def test_registry_supports_historical_compatibility_imports() -> None:
+    namespace: dict[str, object] = {}
+
+    exec(
+        "from foresight.models.registry import "
+        "RegistryForecaster, RegistryGlobalForecaster, LocalForecasterFn, ModelFactory",
+        namespace,
+    )
+
+    assert namespace["RegistryForecaster"] is BaseRegistryForecaster
+    assert namespace["RegistryGlobalForecaster"] is BaseRegistryGlobalForecaster
+    assert namespace["LocalForecasterFn"] is RuntimeLocalForecasterFn
+    assert namespace["ModelFactory"] is RuntimeModelFactory
 
 
 def test_model_spec_exposes_normalized_capabilities():

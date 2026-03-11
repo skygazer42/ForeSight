@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
+from .. import base as _base
 from ..base import (
     BaseForecaster,
     BaseGlobalForecaster,
-    RegistryForecaster,
-    RegistryGlobalForecaster,
 )
 from ..transforms import fit_transform, inverse_forecast, normalize_transform_list
 from .analog import analog_knn_forecast
@@ -25,6 +21,13 @@ from .baselines import (
     seasonal_drift_forecast,
     seasonal_mean_forecast,
     weighted_moving_average_forecast,
+)
+from .factories import (
+    build_global_forecaster,
+    build_global_forecaster_object,
+    build_local_forecaster,
+    build_local_forecaster_object,
+    build_multivariate_forecaster,
 )
 from .fourier import fourier_multi_regression_forecast, fourier_regression_forecast
 from .global_regression import (
@@ -164,6 +167,8 @@ from .smoothing import (
     ses_auto_forecast,
     ses_forecast,
 )
+from . import specs as _specs
+from .specs import ForecasterFn, GlobalForecasterFn, ModelSpec, MultivariateForecasterFn
 from .spectral import fft_topk_forecast
 from .ssa import ssa_forecast
 from .statsmodels_wrap import (
@@ -314,11 +319,11 @@ from .torch_ssm import (
 from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
 
-LocalForecasterFn = Callable[[Any, int], np.ndarray]
-GlobalForecasterFn = Callable[[pd.DataFrame, Any, int], pd.DataFrame]
-MultivariateForecasterFn = Callable[[Any, int], np.ndarray]
-ModelFactory = Callable[..., Any]
-ForecasterFn = LocalForecasterFn
+# Compatibility re-exports for downstream imports that historically used this module.
+RegistryForecaster = _base.RegistryForecaster
+RegistryGlobalForecaster = _base.RegistryGlobalForecaster
+LocalForecasterFn = _specs.LocalForecasterFn
+ModelFactory = _specs.ModelFactory
 
 
 def _normalize_bool_like(value: Any) -> bool:
@@ -329,41 +334,6 @@ def _normalize_bool_like(value: Any) -> bool:
         if lower in {"false", "0", "no", "n", "off"}:
             return False
     return bool(value)
-
-
-@dataclass(frozen=True)
-class ModelSpec:
-    key: str
-    description: str
-    factory: ModelFactory
-    default_params: dict[str, Any] = field(default_factory=dict)
-    param_help: dict[str, str] = field(default_factory=dict)
-    requires: tuple[str, ...] = ()
-    interface: str = "local"  # local: (train_1d, horizon)->yhat ; global: (long_df, cutoff, horizon)->pred_df ; multivariate: (train_2d, horizon)->yhat_matrix
-    capability_overrides: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def capabilities(self) -> dict[str, Any]:
-        supports_x_cols = "x_cols" in self.param_help
-        supports_quantiles = "quantiles" in self.param_help
-        supports_interval_forecast = str(self.interface) == "local" or supports_quantiles
-        supports_interval_forecast_with_x_cols = supports_x_cols and supports_quantiles
-        supports_artifact_save = str(self.interface) in {"local", "global"} and not (
-            str(self.interface) == "local" and supports_x_cols
-        )
-        requires_future_covariates = False
-
-        capabilities = {
-            "supports_x_cols": supports_x_cols,
-            "supports_quantiles": supports_quantiles,
-            "supports_interval_forecast": supports_interval_forecast,
-            "supports_interval_forecast_with_x_cols": supports_interval_forecast_with_x_cols,
-            "supports_artifact_save": supports_artifact_save,
-            "requires_future_covariates": requires_future_covariates,
-        }
-        capabilities.update(dict(self.capability_overrides))
-        return capabilities
-
 
 _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
     "epochs": 50,
@@ -21511,14 +21481,7 @@ def make_forecaster(key: str, **params: Any) -> ForecasterFn:
     The returned callable is suitable for `foresight.backtesting.walk_forward`.
     """
     spec = get_model_spec(key)
-    if str(spec.interface).lower().strip() != "local":
-        raise ValueError(
-            f"Model {key!r} uses interface={spec.interface!r} (not 'local'). "
-            "Use `make_global_forecaster()` instead."
-        )
-    merged = dict(spec.default_params)
-    merged.update(params)
-    return spec.factory(**merged)
+    return build_local_forecaster(key=key, spec=spec, params=params)
 
 
 def make_global_forecaster(key: str, **params: Any) -> GlobalForecasterFn:
@@ -21528,17 +21491,7 @@ def make_global_forecaster(key: str, **params: Any) -> GlobalForecasterFn:
     Global models are trained across all series in a long-format (panel) DataFrame.
     """
     spec = get_model_spec(key)
-    if str(spec.interface).lower().strip() != "global":
-        raise ValueError(
-            f"Model {key!r} uses interface={spec.interface!r} (not 'global'). "
-            "Use `make_forecaster()` instead."
-        )
-    merged = dict(spec.default_params)
-    merged.update(params)
-    out = spec.factory(**merged)
-    if not callable(out):
-        raise TypeError(f"Global model factory must return a callable, got: {type(out).__name__}")
-    return out
+    return build_global_forecaster(key=key, spec=spec, params=params)
 
 
 def make_multivariate_forecaster(key: str, **params: Any) -> MultivariateForecasterFn:
@@ -21548,19 +21501,7 @@ def make_multivariate_forecaster(key: str, **params: Any) -> MultivariateForecas
     Multivariate models consume a 2D target matrix rather than a single series or long-format panel.
     """
     spec = get_model_spec(key)
-    if str(spec.interface).lower().strip() != "multivariate":
-        raise ValueError(
-            f"Model {key!r} uses interface={spec.interface!r} (not 'multivariate'). "
-            "Use `make_forecaster()` or `make_global_forecaster()` instead."
-        )
-    merged = dict(spec.default_params)
-    merged.update(params)
-    out = spec.factory(**merged)
-    if not callable(out):
-        raise TypeError(
-            f"Multivariate model factory must return a callable, got: {type(out).__name__}"
-        )
-    return out
+    return build_multivariate_forecaster(key=key, spec=spec, params=params)
 
 
 def make_forecaster_object(key: str, **params: Any) -> BaseForecaster:
@@ -21571,18 +21512,7 @@ def make_forecaster_object(key: str, **params: Any) -> BaseForecaster:
     the underlying registry-based forecasting logic.
     """
     spec = get_model_spec(key)
-    if str(spec.interface).lower().strip() != "local":
-        raise ValueError(
-            f"Model {key!r} uses interface={spec.interface!r} (not 'local'). "
-            "Use `make_global_forecaster_object()` instead."
-        )
-    merged = dict(spec.default_params)
-    merged.update(params)
-    return RegistryForecaster(
-        model_key=str(key),
-        model_params=merged,
-        factory=lambda: spec.factory(**dict(merged)),
-    )
+    return build_local_forecaster_object(key=key, spec=spec, params=params)
 
 
 def make_global_forecaster_object(key: str, **params: Any) -> BaseGlobalForecaster:
@@ -21592,15 +21522,4 @@ def make_global_forecaster_object(key: str, **params: Any) -> BaseGlobalForecast
     The returned object supports `fit(long_df)` and `predict(cutoff, horizon)`.
     """
     spec = get_model_spec(key)
-    if str(spec.interface).lower().strip() != "global":
-        raise ValueError(
-            f"Model {key!r} uses interface={spec.interface!r} (not 'global'). "
-            "Use `make_forecaster_object()` instead."
-        )
-    merged = dict(spec.default_params)
-    merged.update(params)
-    return RegistryGlobalForecaster(
-        model_key=str(key),
-        model_params=merged,
-        factory=lambda: spec.factory(**dict(merged)),
-    )
+    return build_global_forecaster_object(key=key, spec=spec, params=params)

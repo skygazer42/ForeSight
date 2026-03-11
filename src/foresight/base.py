@@ -7,6 +7,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .contracts.frames import require_long_df as _contracts_require_long_df
+
 
 def _as_1d_float_array(y: Any) -> np.ndarray:
     arr = np.asarray(y, dtype=float)
@@ -16,13 +18,7 @@ def _as_1d_float_array(y: Any) -> np.ndarray:
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
-    if not isinstance(long_df, pd.DataFrame):
-        raise TypeError("long_df must be a pandas DataFrame")
-    required = {"unique_id", "ds", "y"}
-    missing = required.difference(long_df.columns)
-    if missing:
-        raise KeyError(f"long_df missing required columns: {sorted(missing)}")
-    return long_df
+    return _contracts_require_long_df(long_df, require_non_empty=False)
 
 
 def _unavailable_local_factory() -> Callable[[Any, int], np.ndarray]:
@@ -93,9 +89,12 @@ class RegistryForecaster(BaseForecaster):
         self._train_y: np.ndarray | None = None
 
     def _rebuild_runtime(self) -> None:
-        from .models.registry import make_forecaster
+        from .models.factories import rebuild_local_forecaster_runtime
 
-        self._factory = lambda: make_forecaster(self.model_key, **dict(self.model_params))
+        self._factory = lambda: rebuild_local_forecaster_runtime(
+            self.model_key,
+            dict(self.model_params),
+        )
         self._forecaster = self._factory() if self.is_fitted else None
 
     def fit(self, y: Any) -> RegistryForecaster:
@@ -148,9 +147,12 @@ class RegistryGlobalForecaster(BaseGlobalForecaster):
         self._train_df: pd.DataFrame | None = None
 
     def _rebuild_runtime(self) -> None:
-        from .models.registry import make_global_forecaster
+        from .models.factories import rebuild_global_forecaster_runtime
 
-        self._factory = lambda: make_global_forecaster(self.model_key, **dict(self.model_params))
+        self._factory = lambda: rebuild_global_forecaster_runtime(
+            self.model_key,
+            dict(self.model_params),
+        )
         self._forecaster = self._factory() if self.is_fitted else None
 
     def fit(self, long_df: Any) -> RegistryGlobalForecaster:
