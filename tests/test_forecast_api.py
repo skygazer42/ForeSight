@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from foresight.forecast import forecast_model, forecast_model_long_df
+from foresight.services.forecasting import forecast_long_df
 from foresight.models import registry as registry_mod
 
 
@@ -102,6 +103,20 @@ def test_forecast_model_returns_future_rows_for_single_series() -> None:
     assert pred["step"].tolist() == [1, 2, 3]
     assert np.allclose(pred["yhat"].to_numpy(dtype=float), np.array([5.0, 5.0, 5.0]))
     assert pred["model"].tolist() == ["naive-last", "naive-last", "naive-last"]
+
+
+def test_forecast_service_runs_naive_last_on_long_df() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a", "a"],
+            "ds": [1, 2, 3],
+            "y": [10.0, 11.0, 12.0],
+        }
+    )
+
+    pred = forecast_long_df(model="naive-last", long_df=long_df, horizon=2)
+
+    assert list(pred["yhat"]) == [12.0, 12.0]
 
 
 def test_forecast_model_long_df_supports_generic_local_xreg_models(
