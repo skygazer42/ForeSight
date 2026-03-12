@@ -74,6 +74,54 @@ RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
     "torch-hawk-direct",
 )
 
+LATENT_TORCH_LOCAL_KEYS = (
+    "torch-perceiver-direct",
+    "torch-perceiver-deep-direct",
+    "torch-perceiver-wide-direct",
+)
+
+SEGMENTED_TORCH_LOCAL_KEYS = (
+    "torch-segrnn-direct",
+    "torch-segrnn-deep-direct",
+    "torch-segrnn-wide-direct",
+)
+
+MODERN_CONV_TORCH_LOCAL_KEYS = (
+    "torch-moderntcn-direct",
+    "torch-moderntcn-deep-direct",
+    "torch-moderntcn-wide-direct",
+)
+
+BASIS_TORCH_LOCAL_KEYS = (
+    "torch-basisformer-direct",
+    "torch-basisformer-deep-direct",
+    "torch-basisformer-wide-direct",
+)
+
+GRID_RECURRENT_TORCH_LOCAL_KEYS = (
+    "torch-witran-direct",
+    "torch-witran-deep-direct",
+    "torch-witran-wide-direct",
+)
+
+LAG_GRAPH_TORCH_LOCAL_KEYS = (
+    "torch-crossgnn-direct",
+    "torch-crossgnn-deep-direct",
+    "torch-crossgnn-wide-direct",
+)
+
+MULTISCALE_ROUTING_TORCH_LOCAL_KEYS = (
+    "torch-pathformer-direct",
+    "torch-pathformer-deep-direct",
+    "torch-pathformer-wide-direct",
+)
+
+PATCH_SSM_TORCH_LOCAL_KEYS = (
+    "torch-timesmamba-direct",
+    "torch-timesmamba-deep-direct",
+    "torch-timesmamba-wide-direct",
+)
+
 TORCH_MULTIVARIATE_KEYS = (
     "torch-stid-multivariate",
     "torch-stgcn-multivariate",
@@ -172,6 +220,54 @@ def test_ssm_torch_local_models_are_covered_by_optional_dep_paths():
 def test_recurrent_revival_torch_local_models_are_covered_by_optional_dep_paths():
     keys = set(_torch_local_model_keys())
     for key in RECURRENT_REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_latent_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in LATENT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_segmented_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in SEGMENTED_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_modern_conv_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in MODERN_CONV_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_basis_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in BASIS_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_grid_recurrent_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in GRID_RECURRENT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_lag_graph_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in LAG_GRAPH_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_multiscale_routing_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in MULTISCALE_ROUTING_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_patch_ssm_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in PATCH_SSM_TORCH_LOCAL_KEYS:
         assert key in keys
 
 
@@ -310,6 +406,112 @@ def test_torch_models_smoke_when_installed():
                 "d_model": 16,
                 "num_layers": 1,
                 "dim_feedforward": 32,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-perceiver-direct",
+            {
+                "lags": 64,
+                "d_model": 32,
+                "latent_len": 16,
+                "nhead": 4,
+                "num_layers": 1,
+                "dim_feedforward": 64,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-segrnn-direct",
+            {
+                "lags": 72,
+                "segment_len": 12,
+                "d_model": 32,
+                "hidden_size": 32,
+                "num_layers": 1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-moderntcn-direct",
+            {
+                "lags": 96,
+                "patch_len": 8,
+                "d_model": 32,
+                "num_blocks": 2,
+                "expansion_factor": 2.0,
+                "kernel_size": 9,
+                "dropout": 0.1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-basisformer-direct",
+            {
+                "lags": 96,
+                "patch_len": 8,
+                "d_model": 32,
+                "num_bases": 16,
+                "nhead": 4,
+                "num_layers": 1,
+                "dim_feedforward": 64,
+                "dropout": 0.1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-witran-direct",
+            {
+                "lags": 96,
+                "grid_cols": 12,
+                "d_model": 32,
+                "hidden_size": 32,
+                "nhead": 4,
+                "num_layers": 1,
+                "dropout": 0.1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-crossgnn-direct",
+            {
+                "lags": 96,
+                "d_model": 32,
+                "num_blocks": 2,
+                "top_k": 8,
+                "dropout": 0.1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-pathformer-direct",
+            {
+                "lags": 96,
+                "d_model": 32,
+                "expert_patch_lens": (4, 8, 16),
+                "num_blocks": 2,
+                "top_k": 2,
+                "dropout": 0.1,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-timesmamba-direct",
+            {
+                "lags": 96,
+                "patch_len": 8,
+                "d_model": 32,
+                "state_size": 32,
+                "num_blocks": 2,
+                "dropout": 0.1,
                 "epochs": 4,
                 "batch_size": 16,
             },

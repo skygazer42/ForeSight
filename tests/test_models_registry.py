@@ -78,6 +78,54 @@ RECURRENT_REVIVAL_TORCH_LOCAL_KEYS = (
     "torch-hawk-direct",
 )
 
+LATENT_TORCH_LOCAL_KEYS = (
+    "torch-perceiver-direct",
+    "torch-perceiver-deep-direct",
+    "torch-perceiver-wide-direct",
+)
+
+SEGMENTED_TORCH_LOCAL_KEYS = (
+    "torch-segrnn-direct",
+    "torch-segrnn-deep-direct",
+    "torch-segrnn-wide-direct",
+)
+
+MODERN_CONV_TORCH_LOCAL_KEYS = (
+    "torch-moderntcn-direct",
+    "torch-moderntcn-deep-direct",
+    "torch-moderntcn-wide-direct",
+)
+
+BASIS_TORCH_LOCAL_KEYS = (
+    "torch-basisformer-direct",
+    "torch-basisformer-deep-direct",
+    "torch-basisformer-wide-direct",
+)
+
+GRID_RECURRENT_TORCH_LOCAL_KEYS = (
+    "torch-witran-direct",
+    "torch-witran-deep-direct",
+    "torch-witran-wide-direct",
+)
+
+LAG_GRAPH_TORCH_LOCAL_KEYS = (
+    "torch-crossgnn-direct",
+    "torch-crossgnn-deep-direct",
+    "torch-crossgnn-wide-direct",
+)
+
+MULTISCALE_ROUTING_TORCH_LOCAL_KEYS = (
+    "torch-pathformer-direct",
+    "torch-pathformer-deep-direct",
+    "torch-pathformer-wide-direct",
+)
+
+PATCH_SSM_TORCH_LOCAL_KEYS = (
+    "torch-timesmamba-direct",
+    "torch-timesmamba-deep-direct",
+    "torch-timesmamba-wide-direct",
+)
+
 TORCH_MULTIVARIATE_KEYS = (
     "torch-stid-multivariate",
     "torch-stgcn-multivariate",
@@ -165,6 +213,54 @@ def test_ssm_torch_local_models_are_registered() -> None:
 def test_recurrent_revival_torch_local_models_are_registered() -> None:
     keys = set(list_models())
     for key in RECURRENT_REVIVAL_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_latent_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in LATENT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_segmented_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in SEGMENTED_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_modern_conv_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in MODERN_CONV_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_basis_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in BASIS_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_grid_recurrent_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in GRID_RECURRENT_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_lag_graph_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in LAG_GRAPH_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_multiscale_routing_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in MULTISCALE_ROUTING_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_patch_ssm_torch_local_models_are_registered() -> None:
+    keys = set(list_models())
+    for key in PATCH_SSM_TORCH_LOCAL_KEYS:
         assert key in keys
 
 

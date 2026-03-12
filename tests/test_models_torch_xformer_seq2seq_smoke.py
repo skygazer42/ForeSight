@@ -373,6 +373,246 @@ RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES = [
     ),
 ]
 
+LATENT_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-perceiver-direct",
+        {
+            "lags": 64,
+            "d_model": 32,
+            "latent_len": 16,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-perceiver-deep-direct",
+        {
+            "lags": 64,
+            "d_model": 32,
+            "latent_len": 16,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 64,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+SEGMENTED_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-segrnn-direct",
+        {
+            "lags": 72,
+            "segment_len": 12,
+            "d_model": 32,
+            "hidden_size": 32,
+            "num_layers": 1,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-segrnn-deep-direct",
+        {
+            "lags": 72,
+            "segment_len": 12,
+            "d_model": 32,
+            "hidden_size": 32,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+MODERN_CONV_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-moderntcn-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "num_blocks": 2,
+            "expansion_factor": 2.0,
+            "kernel_size": 9,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-moderntcn-deep-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "num_blocks": 4,
+            "expansion_factor": 2.0,
+            "kernel_size": 9,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+BASIS_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-basisformer-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "num_bases": 16,
+            "nhead": 4,
+            "num_layers": 1,
+            "dim_feedforward": 64,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-basisformer-deep-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "num_bases": 16,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 64,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+GRID_RECURRENT_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-witran-direct",
+        {
+            "lags": 96,
+            "grid_cols": 12,
+            "d_model": 32,
+            "hidden_size": 32,
+            "nhead": 4,
+            "num_layers": 1,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-witran-deep-direct",
+        {
+            "lags": 96,
+            "grid_cols": 12,
+            "d_model": 32,
+            "hidden_size": 32,
+            "nhead": 4,
+            "num_layers": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+LAG_GRAPH_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-crossgnn-direct",
+        {
+            "lags": 96,
+            "d_model": 32,
+            "num_blocks": 2,
+            "top_k": 8,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-crossgnn-deep-direct",
+        {
+            "lags": 96,
+            "d_model": 32,
+            "num_blocks": 4,
+            "top_k": 8,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+MULTISCALE_ROUTING_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-pathformer-direct",
+        {
+            "lags": 96,
+            "d_model": 32,
+            "expert_patch_lens": (4, 8, 16),
+            "num_blocks": 2,
+            "top_k": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-pathformer-deep-direct",
+        {
+            "lags": 96,
+            "d_model": 32,
+            "expert_patch_lens": (4, 8, 16),
+            "num_blocks": 4,
+            "top_k": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
+PATCH_SSM_TORCH_LOCAL_SMOKE_CASES = [
+    (
+        "torch-timesmamba-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "state_size": 32,
+            "num_blocks": 2,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+    (
+        "torch-timesmamba-deep-direct",
+        {
+            "lags": 96,
+            "patch_len": 8,
+            "d_model": 32,
+            "state_size": 32,
+            "num_blocks": 4,
+            "dropout": 0.1,
+            "epochs": 2,
+            "batch_size": 16,
+        },
+    ),
+]
+
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 def test_torch_xformer_local_smoke():
@@ -611,6 +851,86 @@ def test_ssm_torch_local_smoke(key: str, params: dict[str, object]):
 @pytest.mark.parametrize(("key", "params"), RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES)
 def test_recurrent_revival_torch_local_smoke(key: str, params: dict[str, object]):
     y = np.sin(np.arange(128, dtype=float) / 9.0) + 0.02 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), LATENT_TORCH_LOCAL_SMOKE_CASES)
+def test_latent_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(160, dtype=float) / 9.5) + 0.02 * np.arange(160, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), SEGMENTED_TORCH_LOCAL_SMOKE_CASES)
+def test_segmented_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(168, dtype=float) / 10.0) + 0.015 * np.arange(168, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), MODERN_CONV_TORCH_LOCAL_SMOKE_CASES)
+def test_modern_conv_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 10.5) + 0.015 * np.arange(192, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), BASIS_TORCH_LOCAL_SMOKE_CASES)
+def test_basis_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 11.0) + 0.02 * np.arange(192, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), GRID_RECURRENT_TORCH_LOCAL_SMOKE_CASES)
+def test_grid_recurrent_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 11.5) + 0.018 * np.arange(192, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), LAG_GRAPH_TORCH_LOCAL_SMOKE_CASES)
+def test_lag_graph_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 12.0) + 0.016 * np.arange(192, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), MULTISCALE_ROUTING_TORCH_LOCAL_SMOKE_CASES)
+def test_multiscale_routing_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 12.5) + 0.015 * np.arange(192, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
+    yhat = f(y, 5)
+    assert yhat.shape == (5,)
+    assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), PATCH_SSM_TORCH_LOCAL_SMOKE_CASES)
+def test_patch_ssm_torch_local_smoke(key: str, params: dict[str, object]):
+    y = np.sin(np.arange(192, dtype=float) / 13.0) + 0.014 * np.arange(192, dtype=float)
     f = make_forecaster(key, **params, patience=2, device="cpu", seed=0)
     yhat = f(y, 5)
     assert yhat.shape == (5,)
