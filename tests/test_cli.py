@@ -81,3 +81,21 @@ def test_cli_facade_does_not_bind_shared_cli_helpers() -> None:
     }
 
     assert cli_names.isdisjoint(shared_helpers)
+
+
+def test_cli_facade_does_not_bind_catalog_cli_helpers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    cli_names = _top_level_bound_names(repo_root / "src" / "foresight" / "cli.py")
+
+    catalog_helpers = {
+        "_load_rnn_paper_metadata",
+        "_cmd_models_list",
+        "_cmd_models_info",
+        "_cmd_models_search",
+        "_cmd_papers_list",
+        "_cmd_papers_info",
+        "_cmd_papers_models",
+        "_cmd_docs_rnn",
+    }
+
+    assert cli_names.isdisjoint(catalog_helpers)

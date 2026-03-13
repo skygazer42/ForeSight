@@ -1,0 +1,949 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from . import cli_shared as _cli_shared
+
+_RNN_PAPER_METADATA_CACHE: dict[str, dict[str, Any]] | None = None
+
+
+def register_catalog_subparsers(sub: Any) -> None:
+    _register_models_parser(sub)
+    _register_papers_parser(sub)
+    _register_docs_parser(sub)
+
+
+def _register_models_parser(sub: Any) -> None:
+    models = sub.add_parser("models", help="Model registry utilities")
+    models_sub = models.add_subparsers(dest="models_command", required=True)
+
+    models_list = models_sub.add_parser("list", help="List available models")
+    models_list.add_argument(
+        "--format",
+        choices=["tsv", "json"],
+        default="tsv",
+        help="Output format (default: tsv)",
+    )
+    models_list.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    models_list.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help="Optional model key prefix filter (e.g. torch-rnnpaper)",
+    )
+    models_list.add_argument(
+        "--interface",
+        choices=["any", "local", "global"],
+        default="any",
+        help="Filter by interface (default: any)",
+    )
+    models_list.add_argument(
+        "--requires",
+        type=str,
+        default="",
+        help="Filter by requires (comma-separated). Example: torch or core,torch",
+    )
+    models_list.add_argument(
+        "--exclude-requires",
+        type=str,
+        default="",
+        help="Exclude requires (comma-separated). Example: stats or core",
+    )
+    models_list.add_argument(
+        "--columns",
+        type=str,
+        default="",
+        help="Optional TSV columns (comma-separated). Example: key,requires,paper_id,paper_year",
+    )
+    models_list.add_argument(
+        "--header",
+        action="store_true",
+        help="Include a header row for TSV output",
+    )
+    models_list.add_argument(
+        "--sort",
+        type=str,
+        default="key",
+        help="Sort key. Example: key, paper_year",
+    )
+    models_list.add_argument(
+        "--desc",
+        action="store_true",
+        help="Sort descending (equivalent to --sort=-<key>)",
+    )
+    models_list.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Max number of results (0 means no limit)",
+    )
+    models_list.set_defaults(_handler=_cmd_models_list)
+
+    models_info = models_sub.add_parser("info", help="Show details about a model")
+    models_info.add_argument("key", help="Model key (see: `foresight models list`)")
+    models_info.add_argument(
+        "--format",
+        choices=["json"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    models_info.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    models_info.set_defaults(_handler=_cmd_models_info)
+
+    models_search = models_sub.add_parser(
+        "search", help="Search models by key/description/paper metadata"
+    )
+    models_search.add_argument("query", help="Search query (space-separated tokens)")
+    models_search.add_argument(
+        "--format",
+        choices=["tsv", "json"],
+        default="tsv",
+        help="Output format (default: tsv)",
+    )
+    models_search.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    models_search.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help="Optional model key prefix filter (e.g. torch-rnnpaper)",
+    )
+    models_search.add_argument(
+        "--interface",
+        choices=["any", "local", "global"],
+        default="any",
+        help="Filter by interface (default: any)",
+    )
+    models_search.add_argument(
+        "--requires",
+        type=str,
+        default="",
+        help="Filter by requires (comma-separated). Example: torch or core,torch",
+    )
+    models_search.add_argument(
+        "--exclude-requires",
+        type=str,
+        default="",
+        help="Exclude requires (comma-separated). Example: stats or core",
+    )
+    models_search.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Max number of results (default: 20)",
+    )
+    models_search.add_argument(
+        "--any",
+        action="store_true",
+        help="Match any token (OR) instead of all tokens (AND)",
+    )
+    models_search.set_defaults(_handler=_cmd_models_search)
+
+
+def _register_papers_parser(sub: Any) -> None:
+    papers = sub.add_parser("papers", help="Paper metadata utilities")
+    papers_sub = papers.add_subparsers(dest="papers_command", required=True)
+
+    papers_list = papers_sub.add_parser("list", help="List known paper metadata entries")
+    papers_list.add_argument(
+        "--format",
+        choices=["tsv", "json"],
+        default="tsv",
+        help="Output format (default: tsv)",
+    )
+    papers_list.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    papers_list.add_argument(
+        "--query",
+        type=str,
+        default="",
+        help="Optional substring filter (paper_id/title)",
+    )
+    papers_list.set_defaults(_handler=_cmd_papers_list)
+
+    papers_info = papers_sub.add_parser("info", help="Show metadata about a paper_id")
+    papers_info.add_argument("paper_id", help="Paper id (see: `foresight papers list`)")
+    papers_info.add_argument(
+        "--format",
+        choices=["json"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    papers_info.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    papers_info.set_defaults(_handler=_cmd_papers_info)
+
+    papers_models = papers_sub.add_parser(
+        "models", help="List models that reference a given paper_id"
+    )
+    papers_models.add_argument("paper_id", help="Paper id (see: `foresight papers list`)")
+    papers_models.add_argument(
+        "--format",
+        choices=["tsv", "json"],
+        default="tsv",
+        help="Output format (default: tsv)",
+    )
+    papers_models.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help="Optional path to write output",
+    )
+    papers_models.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help="Optional model key prefix filter (e.g. torch-rnn)",
+    )
+    papers_models.add_argument(
+        "--role",
+        choices=["any", "base", "wrapper"],
+        default="any",
+        help="Match role: base architecture, wrapper, or both (default: any)",
+    )
+    papers_models.set_defaults(_handler=_cmd_papers_models)
+
+
+def _register_docs_parser(sub: Any) -> None:
+    docs = sub.add_parser("docs", help="Documentation utilities")
+    docs_sub = docs.add_subparsers(dest="docs_command", required=True)
+
+    docs_rnn = docs_sub.add_parser("rnn", help="Generate RNN zoo docs (paper zoo + rnn zoo)")
+    docs_rnn.add_argument(
+        "--output-dir",
+        type=str,
+        default="docs",
+        help="Output directory (default: ./docs)",
+    )
+    docs_rnn.add_argument(
+        "--check",
+        action="store_true",
+        help="Check that docs are up to date instead of writing files",
+    )
+    docs_rnn.set_defaults(_handler=_cmd_docs_rnn)
+
+
+def _load_rnn_paper_metadata() -> dict[str, dict[str, Any]]:
+    """
+    Best-effort loader for `docs/rnn_paper_metadata.json` (used by the RNN Paper Zoo docs).
+
+    This is intentionally dependency-free and safe to call when optional ML deps are missing.
+    """
+
+    global _RNN_PAPER_METADATA_CACHE
+    if _RNN_PAPER_METADATA_CACHE is not None:
+        return _RNN_PAPER_METADATA_CACHE
+
+    env_path = str(os.environ.get("FORESIGHT_RNN_PAPER_METADATA", "")).strip()
+
+    candidates: list[Path] = []
+    if env_path:
+        candidates.append(Path(env_path))
+    try:
+        candidates.append(Path(__file__).resolve().parent / "data" / "rnn_paper_metadata.json")
+    except Exception:  # noqa: BLE001
+        pass
+    candidates.append(Path.cwd() / "docs" / "rnn_paper_metadata.json")
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        candidates.append(repo_root / "docs" / "rnn_paper_metadata.json")
+    except Exception:  # noqa: BLE001
+        pass
+
+    raw: object | None = None
+    for path in candidates:
+        try:
+            if path.exists() and path.is_file():
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                break
+        except Exception:  # noqa: BLE001
+            continue
+
+    if not isinstance(raw, dict):
+        _RNN_PAPER_METADATA_CACHE = {}
+        return _RNN_PAPER_METADATA_CACHE
+
+    out: dict[str, dict[str, Any]] = {}
+    for k, v in raw.items():
+        if isinstance(k, str) and isinstance(v, dict):
+            out[k] = v
+
+    _RNN_PAPER_METADATA_CACHE = out
+    return out
+
+
+def _rnnpaper_id_from_model_key(key: str) -> str | None:
+    k = str(key).strip()
+    prefix = "torch-rnnpaper-"
+    suffix = "-direct"
+    if not (k.startswith(prefix) and k.endswith(suffix)):
+        return None
+    pid = k[len(prefix) : -len(suffix)]
+    pid = pid.strip("-").strip()
+    return pid or None
+
+
+def _rnnzoo_base_from_model_key(key: str) -> str | None:
+    base, _variant = _rnnzoo_base_and_variant_from_model_key(key)
+    return base
+
+
+def _rnnzoo_base_and_variant_from_model_key(key: str) -> tuple[str | None, str | None]:
+    k = str(key).strip()
+    prefix = "torch-rnnzoo-"
+    suffix = "-direct"
+    if not (k.startswith(prefix) and k.endswith(suffix)):
+        return (None, None)
+    body = k[len(prefix) : -len(suffix)]
+    body = body.strip("-").strip()
+    if not body:
+        return (None, None)
+
+    parts = body.split("-")
+    if parts[-1] in {"bidir", "ln", "attn", "proj"} and len(parts) >= 2:
+        base = "-".join(parts[:-1]).strip("-").strip()
+        return (base or None, parts[-1])
+    return (body, "direct")
+
+
+def _rnnzoo_paper_id_from_model_key(key: str) -> str | None:
+    base = _rnnzoo_base_from_model_key(key)
+    if not base:
+        return None
+    base_s = str(base).strip().lower()
+    base_to_paper_id = {
+        "elman": "elman-srn",
+        "clockwork": "clockwork-rnn",
+        "fastrnn": "fast-rnn",
+        "fastgrnn": "fast-grnn",
+    }
+    return base_to_paper_id.get(base_s, base_s)
+
+
+def _rnnzoo_wrapper_paper_id_from_model_key(key: str) -> str | None:
+    _base, variant = _rnnzoo_base_and_variant_from_model_key(key)
+    if not variant or variant == "direct":
+        return None
+    variant_to_paper_id = {
+        "bidir": "bidirectional-rnn",
+        "ln": "layer-normalization",
+        "attn": "bahdanau-attention",
+        "proj": "lstm-projection",
+    }
+    return variant_to_paper_id.get(str(variant).strip().lower(), None)
+
+
+def _paper_payload_for_paper_id(paper_id: str) -> dict[str, Any] | None:
+    pid = str(paper_id).strip()
+    if not pid:
+        return None
+    meta = _load_rnn_paper_metadata()
+    entry = meta.get(pid, {})
+    if not isinstance(entry, dict):
+        entry = {}
+
+    title = str(entry.get("title", "")).strip()
+    doi = str(entry.get("doi", "")).strip()
+    arxiv_id = str(entry.get("arxiv_id", "")).strip()
+    url = str(entry.get("url", "")).strip()
+
+    year_raw = entry.get("year", None)
+    year = int(year_raw) if isinstance(year_raw, int) else None
+    if not (title or doi or arxiv_id or url or year is not None):
+        return None
+
+    return {
+        "paper_id": pid,
+        "title": title,
+        "year": year,
+        "doi": doi,
+        "arxiv_id": arxiv_id,
+        "url": url,
+    }
+
+
+def _paper_payload_for_model_key(key: str) -> dict[str, Any] | None:
+    paper_id = _rnnpaper_id_from_model_key(key)
+    if paper_id:
+        return _paper_payload_for_paper_id(paper_id)
+
+    paper_id = _rnnzoo_paper_id_from_model_key(key)
+    if paper_id:
+        return _paper_payload_for_paper_id(paper_id)
+
+    return None
+
+
+def _cmd_models_list(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec, list_models
+
+    interface_filter = str(getattr(args, "interface", "any")).strip().lower()
+    if interface_filter not in {"any", "local", "global"}:
+        raise ValueError("--interface must be one of: any, local, global")
+
+    req_set, include_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "requires", ""))
+    )
+    exc_set, exclude_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "exclude_requires", ""))
+    )
+
+    rows: list[dict[str, Any]] = []
+    prefix = str(args.prefix).strip()
+    for key in list_models():
+        if prefix and not str(key).startswith(prefix):
+            continue
+        spec = get_model_spec(key)
+
+        if interface_filter != "any" and str(spec.interface) != interface_filter:
+            continue
+
+        reqs = set(spec.requires)
+        if req_set or include_core:
+            ok = False
+            if include_core and not reqs:
+                ok = True
+            if req_set and reqs.intersection(req_set):
+                ok = True
+            if not ok:
+                continue
+
+        if exc_set or exclude_core:
+            if exclude_core and not reqs:
+                continue
+            if exc_set and reqs.intersection(exc_set):
+                continue
+
+        row: dict[str, Any] = {
+            "key": spec.key,
+            "interface": str(spec.interface),
+            "requires": ",".join(spec.requires),
+            "description": spec.description,
+            "default_params": dict(spec.default_params),
+            "capabilities": dict(spec.capabilities),
+        }
+        paper = _paper_payload_for_model_key(spec.key)
+        if paper:
+            row["paper"] = paper
+        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+        if wrapper_pid:
+            wrapper = _paper_payload_for_paper_id(wrapper_pid)
+            if wrapper:
+                row["wrapper_paper"] = wrapper
+        rows.append(row)
+
+    sort = str(args.sort).strip() or "key"
+    descending = bool(getattr(args, "desc", False))
+    if sort.startswith("-"):
+        descending = True
+        sort = sort[1:]
+    sort_key = sort.strip() or "key"
+
+    def _sort_value(r: dict[str, Any]) -> object | None:
+        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
+        wrapper = r.get("wrapper_paper") if isinstance(r.get("wrapper_paper"), dict) else {}
+
+        if sort_key == "key":
+            return str(r.get("key", "")).lower()
+        if sort_key == "interface":
+            return str(r.get("interface", "")).lower()
+        if sort_key == "requires":
+            return str(r.get("requires", "")).lower()
+        if sort_key == "description":
+            return str(r.get("description", "")).lower()
+        if sort_key == "paper_id":
+            return str(paper.get("paper_id", "")).lower()
+        if sort_key == "paper_year":
+            year = paper.get("year", None)
+            return int(year) if isinstance(year, int) else None
+        if sort_key == "wrapper_paper_id":
+            return str(wrapper.get("paper_id", "")).lower()
+        if sort_key == "wrapper_year":
+            year = wrapper.get("year", None)
+            return int(year) if isinstance(year, int) else None
+        raise ValueError(
+            "--sort must be one of: key, interface, requires, description, paper_id, paper_year, wrapper_paper_id, wrapper_year"
+        )
+
+    if sort_key in {"paper_year", "wrapper_year"}:
+        present = []
+        missing = []
+        for r in rows:
+            if _sort_value(r) is None:
+                missing.append(r)
+            else:
+                present.append(r)
+        present.sort(key=lambda r: int(_sort_value(r)), reverse=descending)  # type: ignore[arg-type]
+        rows = present + missing
+    else:
+        rows.sort(key=lambda r: str(_sort_value(r)), reverse=descending)  # type: ignore[arg-type]
+
+    limit = int(args.limit)
+    if limit < 0:
+        raise ValueError("--limit must be >= 0")
+    if limit:
+        rows = rows[: min(limit, 100000)]
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        return 0
+
+    columns_raw = str(getattr(args, "columns", "")).strip()
+    if columns_raw:
+        columns = [c.strip() for c in columns_raw.split(",") if c.strip()]
+    else:
+        columns = ["key", "requires", "description"]
+
+    def _col_value(r: dict[str, Any], col: str) -> object:
+        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
+        wrapper = r.get("wrapper_paper") if isinstance(r.get("wrapper_paper"), dict) else {}
+
+        if col == "key":
+            return r.get("key", "")
+        if col == "interface":
+            return r.get("interface", "")
+        if col == "requires":
+            return r.get("requires", "")
+        if col == "description":
+            return r.get("description", "")
+        if col == "paper_id":
+            return paper.get("paper_id", "")
+        if col == "paper_year":
+            return paper.get("year", "")
+        if col == "paper_title":
+            return paper.get("title", "")
+        if col == "wrapper_paper_id":
+            return wrapper.get("paper_id", "")
+        if col == "wrapper_year":
+            return wrapper.get("year", "")
+        if col == "wrapper_title":
+            return wrapper.get("title", "")
+        raise ValueError(
+            "--columns must be a comma-separated list of: key, interface, requires, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
+        )
+
+    lines: list[str] = []
+    if bool(getattr(args, "header", False)):
+        lines.append("\t".join(columns))
+    for r in rows:
+        lines.append(
+            "\t".join(_cli_shared._sanitize_tsv_cell(_col_value(r, c)) for c in columns)
+        )
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    return 0
+
+
+def _cmd_models_info(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec
+
+    spec = get_model_spec(str(args.key))
+    payload = {
+        "key": spec.key,
+        "interface": str(spec.interface),
+        "description": spec.description,
+        "requires": list(spec.requires),
+        "default_params": dict(spec.default_params),
+        "param_help": dict(spec.param_help),
+        "capabilities": dict(spec.capabilities),
+    }
+    paper = _paper_payload_for_model_key(spec.key)
+    if paper:
+        payload["paper"] = paper
+    wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+    if wrapper_pid:
+        wrapper = _paper_payload_for_paper_id(wrapper_pid)
+        if wrapper:
+            payload["wrapper_paper"] = wrapper
+    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+    return 0
+
+
+def _cmd_models_search(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec, list_models
+
+    q = str(args.query).strip()
+    if not q:
+        raise ValueError("query must be non-empty")
+
+    tokens = [t.strip().lower() for t in q.split() if t.strip()]
+    any_mode = bool(args.any)
+    prefix = str(args.prefix).strip()
+
+    interface_filter = str(getattr(args, "interface", "any")).strip().lower()
+    if interface_filter not in {"any", "local", "global"}:
+        raise ValueError("--interface must be one of: any, local, global")
+
+    req_set, include_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "requires", ""))
+    )
+    exc_set, exclude_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "exclude_requires", ""))
+    )
+
+    limit = int(args.limit)
+    if limit <= 0:
+        raise ValueError("--limit must be >= 1")
+    limit = min(limit, 1000)
+
+    def _score_token(
+        token: str,
+        *,
+        key_l: str,
+        desc_l: str,
+        requires_l: str,
+        paper_id_l: str,
+        paper_title_l: str,
+        paper_year: int | None,
+        wrapper_id_l: str,
+        wrapper_title_l: str,
+        wrapper_year: int | None,
+    ) -> int:
+        best = 0
+        if token in key_l:
+            best = max(best, 10)
+        if token in desc_l:
+            best = max(best, 4)
+        if token in requires_l:
+            best = max(best, 2)
+        if token in paper_id_l:
+            best = max(best, 8)
+        if token in paper_title_l:
+            best = max(best, 6)
+        if token in wrapper_id_l:
+            best = max(best, 7)
+        if token in wrapper_title_l:
+            best = max(best, 5)
+        if token.isdigit():
+            year = int(token)
+            if paper_year is not None and int(paper_year) == year:
+                best = max(best, 6)
+            if wrapper_year is not None and int(wrapper_year) == year:
+                best = max(best, 5)
+        return best
+
+    rows: list[dict[str, Any]] = []
+    for key in list_models():
+        if prefix and not str(key).startswith(prefix):
+            continue
+        spec = get_model_spec(key)
+
+        if interface_filter != "any" and str(spec.interface) != interface_filter:
+            continue
+
+        reqs = set(spec.requires)
+        if req_set or include_core:
+            ok = False
+            if include_core and not reqs:
+                ok = True
+            if req_set and reqs.intersection(req_set):
+                ok = True
+            if not ok:
+                continue
+
+        if exc_set or exclude_core:
+            if exclude_core and not reqs:
+                continue
+            if exc_set and reqs.intersection(exc_set):
+                continue
+
+        paper = _paper_payload_for_model_key(spec.key) or {}
+        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+        wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
+        wrapper = wrapper or {}
+
+        key_l = str(spec.key).lower()
+        desc_l = str(spec.description).lower()
+        requires_l = ",".join(spec.requires).lower()
+
+        paper_id_l = str(paper.get("paper_id", "")).lower()
+        paper_title_l = str(paper.get("title", "")).lower()
+        paper_year = paper.get("year", None)
+        paper_year_i = int(paper_year) if isinstance(paper_year, int) else None
+
+        wrapper_id_l = str(wrapper.get("paper_id", "")).lower()
+        wrapper_title_l = str(wrapper.get("title", "")).lower()
+        wrapper_year = wrapper.get("year", None)
+        wrapper_year_i = int(wrapper_year) if isinstance(wrapper_year, int) else None
+
+        token_scores = [
+            _score_token(
+                t,
+                key_l=key_l,
+                desc_l=desc_l,
+                requires_l=requires_l,
+                paper_id_l=paper_id_l,
+                paper_title_l=paper_title_l,
+                paper_year=paper_year_i,
+                wrapper_id_l=wrapper_id_l,
+                wrapper_title_l=wrapper_title_l,
+                wrapper_year=wrapper_year_i,
+            )
+            for t in tokens
+        ]
+
+        matched = any(s > 0 for s in token_scores) if any_mode else all(s > 0 for s in token_scores)
+        if not matched:
+            continue
+
+        score = int(sum(token_scores))
+        row: dict[str, Any] = {
+            "key": spec.key,
+            "score": score,
+            "requires": ",".join(spec.requires),
+            "description": spec.description,
+        }
+        if paper:
+            row["paper"] = paper
+        if wrapper and str(wrapper.get("paper_id", "")).strip():
+            row["wrapper_paper"] = wrapper
+        rows.append(row)
+
+    rows.sort(key=lambda r: (-int(r.get("score", 0)), str(r.get("key", ""))))
+    rows = rows[:limit]
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        return 0
+
+    lines: list[str] = []
+    for r in rows:
+        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
+        pid = str(paper.get("paper_id", "")).strip()
+        year = paper.get("year", None)
+        year_s = str(year) if isinstance(year, int) else ""
+
+        lines.append(
+            "\t".join(
+                [
+                    _cli_shared._sanitize_tsv_cell(r.get("key", "")),
+                    _cli_shared._sanitize_tsv_cell(r.get("score", "")),
+                    _cli_shared._sanitize_tsv_cell(pid),
+                    _cli_shared._sanitize_tsv_cell(year_s),
+                    _cli_shared._sanitize_tsv_cell(r.get("requires", "")),
+                    _cli_shared._sanitize_tsv_cell(r.get("description", "")),
+                ]
+            )
+        )
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    return 0
+
+
+def _cmd_papers_list(args: argparse.Namespace) -> int:
+    meta = _load_rnn_paper_metadata()
+    query = str(args.query).strip().lower()
+
+    rows: list[dict[str, Any]] = []
+    for paper_id in sorted(meta):
+        entry = meta.get(paper_id, {}) if isinstance(meta.get(paper_id, {}), dict) else {}
+        title = str(entry.get("title", "")).strip()
+        if query and query not in str(paper_id).lower() and query not in title.lower():
+            continue
+        year_raw = entry.get("year", None)
+        year = int(year_raw) if isinstance(year_raw, int) else None
+        rows.append(
+            {
+                "paper_id": str(paper_id),
+                "title": title,
+                "year": year,
+                "doi": str(entry.get("doi", "")).strip(),
+                "arxiv_id": str(entry.get("arxiv_id", "")).strip(),
+                "url": str(entry.get("url", "")).strip(),
+            }
+        )
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        return 0
+
+    lines = [
+        "\t".join(
+            [
+                _cli_shared._sanitize_tsv_cell(r.get("paper_id", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("year", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("title", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("url", "")),
+            ]
+        )
+        for r in rows
+    ]
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    return 0
+
+
+def _cmd_papers_info(args: argparse.Namespace) -> int:
+    pid = str(args.paper_id).strip()
+    if not pid:
+        raise ValueError("paper_id must be non-empty")
+
+    meta = _load_rnn_paper_metadata()
+    entry = meta.get(pid, None)
+    if not isinstance(entry, dict):
+        raise ValueError(f"Unknown paper_id: {pid!r}")
+
+    title = str(entry.get("title", "")).strip()
+    year_raw = entry.get("year", None)
+    year = int(year_raw) if isinstance(year_raw, int) else None
+    payload = {
+        "paper_id": pid,
+        "title": title,
+        "year": year,
+        "doi": str(entry.get("doi", "")).strip(),
+        "arxiv_id": str(entry.get("arxiv_id", "")).strip(),
+        "url": str(entry.get("url", "")).strip(),
+    }
+    _cli_shared._emit(payload, output=str(args.output), fmt="json")
+    return 0
+
+
+def _cmd_papers_models(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec, list_models
+
+    pid = str(args.paper_id).strip()
+    if not pid:
+        raise ValueError("paper_id must be non-empty")
+
+    meta = _load_rnn_paper_metadata()
+    if pid not in meta:
+        raise ValueError(f"Unknown paper_id: {pid!r}")
+
+    prefix = str(args.prefix).strip()
+    role = str(args.role).strip().lower()
+    if role not in {"any", "base", "wrapper"}:
+        raise ValueError("--role must be one of: any, base, wrapper")
+
+    rows: list[dict[str, Any]] = []
+    for key in list_models():
+        if prefix and not str(key).startswith(prefix):
+            continue
+        spec = get_model_spec(key)
+
+        base = _paper_payload_for_model_key(spec.key) or {}
+        base_pid = str(base.get("paper_id", "")).strip()
+
+        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+        wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
+        wrapper = wrapper or {}
+        wrap_pid = str(wrapper.get("paper_id", "")).strip()
+
+        hit_base = base_pid == pid
+        hit_wrap = wrap_pid == pid
+        if role == "base":
+            if not hit_base:
+                continue
+        elif role == "wrapper":
+            if not hit_wrap:
+                continue
+        elif not (hit_base or hit_wrap):
+            continue
+
+        if hit_base:
+            rows.append(
+                {
+                    "key": spec.key,
+                    "role": "base",
+                    "requires": ",".join(spec.requires),
+                    "description": spec.description,
+                }
+            )
+        if hit_wrap:
+            rows.append(
+                {
+                    "key": spec.key,
+                    "role": "wrapper",
+                    "requires": ",".join(spec.requires),
+                    "description": spec.description,
+                }
+            )
+
+    rows.sort(key=lambda r: (str(r.get("role", "")), str(r.get("key", ""))))
+
+    fmt = str(args.format)
+    if fmt == "json":
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        return 0
+
+    lines = [
+        "\t".join(
+            [
+                _cli_shared._sanitize_tsv_cell(r.get("key", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("role", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("requires", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("description", "")),
+            ]
+        )
+        for r in rows
+    ]
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    return 0
+
+
+def _cmd_docs_rnn(args: argparse.Namespace) -> int:
+    from .docsgen.rnn import render_rnn_paper_zoo_doc, render_rnn_zoo_doc, write_rnn_docs
+
+    out_dir = Path(str(args.output_dir)).expanduser().resolve()
+
+    if bool(args.check):
+        expected_paper = render_rnn_paper_zoo_doc()
+        expected_zoo = render_rnn_zoo_doc()
+        paper_path = out_dir / "rnn_paper_zoo.md"
+        zoo_path = out_dir / "rnn_zoo.md"
+
+        failures: list[str] = []
+        if not paper_path.exists():
+            failures.append(str(paper_path))
+        else:
+            actual = paper_path.read_text(encoding="utf-8")
+            if actual != expected_paper:
+                failures.append(str(paper_path))
+
+        if not zoo_path.exists():
+            failures.append(str(zoo_path))
+        else:
+            actual = zoo_path.read_text(encoding="utf-8")
+            if actual != expected_zoo:
+                failures.append(str(zoo_path))
+
+        if failures:
+            print("Docs out of date (or missing):", file=sys.stderr)
+            for path in failures:
+                print(f"- {path}", file=sys.stderr)
+            return 1
+
+        print("OK: RNN docs are up to date.")
+        return 0
+
+    write_rnn_docs(output_dir=out_dir)
+    print("Wrote:")
+    print(f"- {(out_dir / 'rnn_paper_zoo.md').as_posix()}")
+    print(f"- {(out_dir / 'rnn_zoo.md').as_posix()}")
+    return 0
