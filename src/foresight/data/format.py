@@ -5,25 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-
-def _normalize_covariate_arg(values: Iterable[str] | str | None) -> tuple[str, ...]:
-    if values is None:
-        return ()
-    if isinstance(values, str):
-        s = values.strip()
-        return tuple([p.strip() for p in s.split(",") if p.strip()]) if s else ()
-    return tuple([str(v).strip() for v in values if str(v).strip()])
-
-
-def _merge_unique_columns(*groups: tuple[str, ...]) -> tuple[str, ...]:
-    out: list[str] = []
-    seen: set[str] = set()
-    for group in groups:
-        for col in group:
-            if col not in seen:
-                seen.add(col)
-                out.append(col)
-    return tuple(out)
+from ..contracts.covariates import resolve_covariate_roles as _contracts_resolve_covariate_roles
 
 
 def resolve_covariate_roles(
@@ -32,18 +14,12 @@ def resolve_covariate_roles(
     historic_x_cols: Iterable[str] | str | None = (),
     future_x_cols: Iterable[str] | str | None = (),
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    """
-    Normalize covariate-role arguments.
-
-    `x_cols` is kept as a compatibility alias and is merged into `future_x_cols`.
-    """
-    historic = _normalize_covariate_arg(historic_x_cols)
-    future = _merge_unique_columns(
-        _normalize_covariate_arg(future_x_cols),
-        _normalize_covariate_arg(x_cols),
+    spec = _contracts_resolve_covariate_roles(
+        x_cols=x_cols,
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
     )
-    all_x = _merge_unique_columns(historic, future)
-    return historic, future, all_x
+    return spec.historic_x_cols, spec.future_x_cols, spec.all_x_cols
 
 
 def _build_unique_id(df: pd.DataFrame, *, id_cols: tuple[str, ...]) -> pd.Series:

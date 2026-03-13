@@ -1,12 +1,19 @@
 from pathlib import Path
 
 from foresight.base import (
+    BaseForecaster as RuntimeBaseForecaster,
+)
+from foresight.base import (
+    BaseGlobalForecaster as RuntimeBaseGlobalForecaster,
+)
+from foresight.base import (
     RegistryForecaster as BaseRegistryForecaster,
 )
 from foresight.base import (
     RegistryGlobalForecaster as BaseRegistryGlobalForecaster,
 )
 from foresight.models.registry import ModelSpec, get_model_spec, list_models
+from foresight.models.factories import build_local_forecaster
 from foresight.models.specs import (
     LocalForecasterFn as RuntimeLocalForecasterFn,
 )
@@ -133,6 +140,29 @@ TORCH_MULTIVARIATE_KEYS = (
 )
 
 TRANSFORMERS_LOCAL_KEYS = ("hf-timeseries-transformer-direct",)
+
+
+def test_resolution_module_preserves_registry_lookup_surface() -> None:
+    from foresight.models import resolution as model_resolution
+
+    spec = model_resolution.get_model_spec("naive-last")
+    assert spec.key == get_model_spec("naive-last").key
+    assert model_resolution.list_models() == list_models()
+    forecaster = build_local_forecaster(key=spec.key, spec=spec, params={})
+    assert forecaster([1.0, 2.0, 3.0], 1).shape == (1,)
+
+
+def test_registry_module_re_exports_registry_storage_for_compatibility() -> None:
+    from foresight.models import registry as model_registry
+    from foresight.models import resolution as model_resolution
+
+    assert model_registry._REGISTRY is model_resolution._REGISTRY
+
+
+def test_runtime_module_exposes_catalog_factory_context() -> None:
+    from foresight.models import runtime as model_runtime
+
+    assert callable(model_runtime._factory_naive_last)
 
 
 def test_list_models_contains_expected_keys():
@@ -301,10 +331,13 @@ def test_registry_supports_historical_compatibility_imports() -> None:
 
     exec(
         "from foresight.models.registry import "
+        "BaseForecaster, BaseGlobalForecaster, "
         "RegistryForecaster, RegistryGlobalForecaster, LocalForecasterFn, ModelFactory",
         namespace,
     )
 
+    assert namespace["BaseForecaster"] is RuntimeBaseForecaster
+    assert namespace["BaseGlobalForecaster"] is RuntimeBaseGlobalForecaster
     assert namespace["RegistryForecaster"] is BaseRegistryForecaster
     assert namespace["RegistryGlobalForecaster"] is BaseRegistryGlobalForecaster
     assert namespace["LocalForecasterFn"] is RuntimeLocalForecasterFn

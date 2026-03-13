@@ -9,8 +9,8 @@ import pandas as pd
 from .data.format import to_long
 from .datasets.loaders import load_dataset
 from .datasets.registry import get_dataset_spec
-from .models.registry import get_model_spec, make_forecaster, make_global_forecaster
 from .splits import rolling_origin_splits
+from .services import model_execution as _model_execution
 
 
 def cross_validation_predictions(
@@ -42,7 +42,7 @@ def cross_validation_predictions(
 
     df = load_dataset(str(dataset), data_dir=data_dir)
 
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     x_cols: tuple[str, ...] = ()
     if model_spec.interface == "global" and model_params and "x_cols" in model_params:
         raw = model_params.get("x_cols")
@@ -101,13 +101,13 @@ def cross_validation_predictions_long_df(
     if long_df.empty:
         raise ValueError("long_df is empty")
 
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
 
     df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
 
     if interface == "local":
-        forecaster = make_forecaster(str(model), **(model_params or {}))
+        forecaster = _model_execution.make_local_forecaster_runner(str(model), model_params)
 
         rows: list[dict[str, Any]] = []
         n_series = 0
@@ -173,8 +173,11 @@ def cross_validation_predictions_long_df(
         return out
 
     if interface == "global":
-        global_forecaster = make_global_forecaster(
-            str(model), **(model_params or {}), max_train_size=max_train_size
+        global_params = dict(model_params or {})
+        global_params["max_train_size"] = max_train_size
+        global_forecaster = _model_execution.make_global_forecaster_runner(
+            str(model),
+            global_params,
         )
 
         # Choose global cutoffs from a reference series (first group). This matches many panel datasets

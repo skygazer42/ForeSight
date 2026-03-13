@@ -26,7 +26,8 @@ ForeSight now separates its package internals into a few stable layers so model 
 
 - `forecast.py` and `eval_forecast.py` remain import-stable public entrypoints.
 - They should stay thin and delegate implementation to `services`.
-- Private helper names that CLI or downstream tooling still import can be re-exported here during the transition, but new logic should not accumulate in these modules.
+- Temporary module-level compatibility shims are acceptable during migrations, but private helpers must not be part of the public export surface in `__all__`.
+- New logic should not accumulate in these modules.
 
 `cli.py`
 
@@ -39,6 +40,8 @@ ForeSight now separates its package internals into a few stable layers so model 
 - `base.py` must rebuild runtime state through `models.factories`, not through `models.registry`.
 - `cli.py` should not redefine long-frame validators or covariate normalization helpers.
 - `services` may call `models.registry`, but `models.registry` should not depend on `services`.
+- `services` must not import `foresight.forecast`, `foresight.eval_forecast`, or `foresight.cli`.
+- Once dedicated `models/resolution.py` and `models/runtime.py` modules exist, `models.registry` should remain a facade and stop defining private helper families that belong in those modules.
 
 ## Where New Code Belongs
 

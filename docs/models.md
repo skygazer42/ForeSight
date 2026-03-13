@@ -2,7 +2,7 @@
 
 This page is generated from the central model registry. Do not edit it by hand; run `python tools/generate_model_capability_docs.py`.
 
-ForeSight currently registers **620** models: **497** local, **113** global, and **10** multivariate.
+ForeSight currently registers **644** models: **521** local, **113** global, and **10** multivariate.
 
 ## Capability keys
 
@@ -34,7 +34,7 @@ print(len(list_models()))
 
 | requires extra | model_count |
 | --- | ---: |
-| `torch` | 427 |
+| `torch` | 451 |
 | `core` | 54 |
 | `ml` | 44 |
 | `xgb` | 43 |
@@ -195,12 +195,18 @@ print(len(list_models()))
 | `torch-attn-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-autoformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-autoformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-basisformer-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-basisformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-basisformer-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-bigru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-bilstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-cfc-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-cnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-crossformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-crossformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-crossgnn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-crossgnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-crossgnn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-deep-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-deepar-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-deepar-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -252,6 +258,9 @@ print(len(list_models()))
 | `torch-mamba2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-micn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-mlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-moderntcn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-moderntcn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-moderntcn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-mtgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
 | `torch-multidim-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-nbeats-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -264,6 +273,12 @@ print(len(list_models()))
 | `torch-nonstationary-transformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-patchtst-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-patchtst-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-pathformer-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-pathformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-pathformer-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-perceiver-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-perceiver-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-perceiver-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-pyraformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-pyraformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-qrnn-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -483,6 +498,9 @@ print(len(list_models()))
 | `torch-samformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-scinet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-scinet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-segrnn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-segrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-segrnn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-seq2seq-attn-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-seq2seq-attn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-seq2seq-attn-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
@@ -510,6 +528,9 @@ print(len(list_models()))
 | `torch-tide-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-timegrad-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timemixer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-timesmamba-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-timesmamba-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-timesmamba-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timesnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-timesnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-timexer-direct` | `local` | `torch` | yes | no | yes | no | no | yes |
@@ -520,6 +541,9 @@ print(len(list_models()))
 | `torch-tsmixer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-wavenet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-wavenet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
+| `torch-witran-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-witran-direct` | `local` | `torch` | no | no | yes | no | yes | no |
+| `torch-witran-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-xformer-autocorr-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
 | `torch-xformer-autocorr-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-xformer-autocorr-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
