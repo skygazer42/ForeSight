@@ -12,6 +12,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from . import cli_shared as _cli_shared
+
 _RNN_PAPER_METADATA_CACHE: dict[str, dict[str, Any]] | None = None
 
 
@@ -188,34 +190,6 @@ def _paper_payload_for_model_key(key: str) -> dict[str, Any] | None:
         return _paper_payload_for_paper_id(paper_id)
 
     return None
-
-
-def _sanitize_tsv_cell(value: object) -> str:
-    """
-    TSV output is used for CLI piping. Keep it single-line and tab-safe.
-    """
-
-    s = str(value) if value is not None else ""
-    return s.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
-
-
-_CORE_REQUIRES_ALIASES = {"core", "none", "empty", "no", "norequires", "no-requires"}
-
-
-def _parse_requires_filter(raw: str) -> tuple[set[str], bool]:
-    """
-    Parse `--requires` / `--exclude-requires` values.
-
-    - Tokens are comma-separated.
-    - Special tokens like "core"/"none" refer to models with no optional requires.
-    Returns: (requires_set, include_core_flag)
-    """
-
-    items = [p.strip().lower() for p in str(raw).split(",") if p.strip()]
-    tokens = set(items)
-    include_core = bool(tokens.intersection(_CORE_REQUIRES_ALIASES))
-    tokens.difference_update(_CORE_REQUIRES_ALIASES)
-    return (tokens, include_core)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1559,63 +1533,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
-def _coerce_model_param_value(raw: str) -> Any:
-    s = str(raw).strip()
-    lower = s.lower()
-
-    if lower in {"true", "false"}:
-        return lower == "true"
-    if lower in {"none", "null"}:
-        return None
-
-    if "," in s:
-        parts = [p.strip() for p in s.split(",") if p.strip()]
-        return tuple(_coerce_model_param_value(p) for p in parts)
-
-    try:
-        return int(s)
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        return float(s)
-    except Exception:  # noqa: BLE001
-        pass
-    return s
-
-
-def _parse_model_params(items: list[str]) -> dict[str, Any]:
-    params: dict[str, Any] = {}
-    for item in items:
-        if "=" not in str(item):
-            raise ValueError(f"--model-param must be key=value, got: {item!r}")
-        key, value = str(item).split("=", 1)
-        key = key.strip()
-        if not key:
-            raise ValueError(f"--model-param must be key=value, got: {item!r}")
-        params[key] = _coerce_model_param_value(value)
-    return params
-
-
-def _parse_grid_params(items: list[str]) -> dict[str, tuple[Any, ...]]:
-    params: dict[str, tuple[Any, ...]] = {}
-    for item in items:
-        if "=" not in str(item):
-            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
-        key, value = str(item).split("=", 1)
-        key = key.strip()
-        if not key:
-            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
-        parsed = _coerce_model_param_value(value)
-        if isinstance(parsed, tuple):
-            values = parsed
-        else:
-            values = (parsed,)
-        if not values:
-            raise ValueError(f"--grid-param must include at least one value, got: {item!r}")
-        params[key] = tuple(values)
-    return params
-
-
 def _root_shortcut_handler(args: argparse.Namespace) -> Any:
     wants_models = bool(getattr(args, "list", False) or getattr(args, "list_models", False))
     wants_datasets = bool(getattr(args, "list_datasets", False))
@@ -1649,26 +1566,6 @@ def _root_shortcut_handler(args: argparse.Namespace) -> Any:
     return None
 
 
-def _emit_text(text: str, *, output: str) -> None:
-    print(text)
-    if output:
-        out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
-
-
-def _emit_dataframe(df: Any, *, output: str, fmt: str) -> None:
-    if fmt == "csv":
-        text = df.to_csv(index=False).rstrip("\n")
-        _emit_text(text, output=output)
-        return
-    if fmt == "json":
-        text = df.to_json(orient="records", date_format="iso")
-        _emit_text(text, output=output)
-        return
-    raise ValueError(f"Unknown dataframe format: {fmt!r}")
-
-
 def _cmd_models_list(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
@@ -1676,8 +1573,12 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     if interface_filter not in {"any", "local", "global"}:
         raise ValueError("--interface must be one of: any, local, global")
 
-    req_set, include_core = _parse_requires_filter(str(getattr(args, "requires", "")))
-    exc_set, exclude_core = _parse_requires_filter(str(getattr(args, "exclude_requires", "")))
+    req_set, include_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "requires", ""))
+    )
+    exc_set, exclude_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "exclude_requires", ""))
+    )
 
     rows: list[dict[str, Any]] = []
     prefix = str(args.prefix).strip()
@@ -1777,7 +1678,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
 
     fmt = str(args.format)
     if fmt == "json":
-        _emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
         return 0
 
     columns_raw = str(getattr(args, "columns", "")).strip()
@@ -1818,8 +1719,10 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     if bool(getattr(args, "header", False)):
         lines.append("\t".join(columns))
     for r in rows:
-        lines.append("\t".join(_sanitize_tsv_cell(_col_value(r, c)) for c in columns))
-    _emit_text("\n".join(lines), output=str(args.output))
+        lines.append(
+            "\t".join(_cli_shared._sanitize_tsv_cell(_col_value(r, c)) for c in columns)
+        )
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
 
@@ -1844,7 +1747,7 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
         wrapper = _paper_payload_for_paper_id(wrapper_pid)
         if wrapper:
             payload["wrapper_paper"] = wrapper
-    _emit(payload, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -1863,8 +1766,12 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     if interface_filter not in {"any", "local", "global"}:
         raise ValueError("--interface must be one of: any, local, global")
 
-    req_set, include_core = _parse_requires_filter(str(getattr(args, "requires", "")))
-    exc_set, exclude_core = _parse_requires_filter(str(getattr(args, "exclude_requires", "")))
+    req_set, include_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "requires", ""))
+    )
+    exc_set, exclude_core = _cli_shared._parse_requires_filter(
+        str(getattr(args, "exclude_requires", ""))
+    )
 
     limit = int(args.limit)
     if limit <= 0:
@@ -1992,7 +1899,7 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
 
     fmt = str(args.format)
     if fmt == "json":
-        _emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
         return 0
 
     lines: list[str] = []
@@ -2005,16 +1912,16 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
         lines.append(
             "\t".join(
                 [
-                    _sanitize_tsv_cell(r.get("key", "")),
-                    _sanitize_tsv_cell(r.get("score", "")),
-                    _sanitize_tsv_cell(pid),
-                    _sanitize_tsv_cell(year_s),
-                    _sanitize_tsv_cell(r.get("requires", "")),
-                    _sanitize_tsv_cell(r.get("description", "")),
+                    _cli_shared._sanitize_tsv_cell(r.get("key", "")),
+                    _cli_shared._sanitize_tsv_cell(r.get("score", "")),
+                    _cli_shared._sanitize_tsv_cell(pid),
+                    _cli_shared._sanitize_tsv_cell(year_s),
+                    _cli_shared._sanitize_tsv_cell(r.get("requires", "")),
+                    _cli_shared._sanitize_tsv_cell(r.get("description", "")),
                 ]
             )
         )
-    _emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
 
@@ -2043,21 +1950,21 @@ def _cmd_papers_list(args: argparse.Namespace) -> int:
 
     fmt = str(args.format)
     if fmt == "json":
-        _emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
         return 0
 
     lines = [
         "\t".join(
             [
-                _sanitize_tsv_cell(r.get("paper_id", "")),
-                _sanitize_tsv_cell(r.get("year", "")),
-                _sanitize_tsv_cell(r.get("title", "")),
-                _sanitize_tsv_cell(r.get("url", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("paper_id", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("year", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("title", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("url", "")),
             ]
         )
         for r in rows
     ]
-    _emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
 
@@ -2082,7 +1989,7 @@ def _cmd_papers_info(args: argparse.Namespace) -> int:
         "arxiv_id": str(entry.get("arxiv_id", "")).strip(),
         "url": str(entry.get("url", "")).strip(),
     }
-    _emit(payload, output=str(args.output), fmt="json")
+    _cli_shared._emit(payload, output=str(args.output), fmt="json")
     return 0
 
 
@@ -2151,21 +2058,21 @@ def _cmd_papers_models(args: argparse.Namespace) -> int:
 
     fmt = str(args.format)
     if fmt == "json":
-        _emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=str(args.output), fmt="json")
         return 0
 
     lines = [
         "\t".join(
             [
-                _sanitize_tsv_cell(r.get("key", "")),
-                _sanitize_tsv_cell(r.get("role", "")),
-                _sanitize_tsv_cell(r.get("requires", "")),
-                _sanitize_tsv_cell(r.get("description", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("key", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("role", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("requires", "")),
+                _cli_shared._sanitize_tsv_cell(r.get("description", "")),
             ]
         )
         for r in rows
     ]
-    _emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
 
@@ -2214,7 +2121,7 @@ def _cmd_docs_rnn(args: argparse.Namespace) -> int:
 def _cmd_cv_run(args: argparse.Namespace) -> int:
     from .cv import cross_validation_predictions
 
-    model_params = _parse_model_params(list(args.model_param))
+    model_params = _cli_shared._parse_model_params(list(args.model_param))
     y_col = str(args.y_col).strip() or None
     df = cross_validation_predictions(
         model=str(args.model),
@@ -2228,7 +2135,7 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
         model_params=model_params,
         data_dir=str(args.data_dir),
     )
-    _emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -2236,7 +2143,7 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
     from .io import parse_id_cols
     from .services.cli_workflows import forecast_csv_workflow
 
-    model_params = _parse_model_params(list(args.model_param))
+    model_params = _cli_shared._parse_model_params(list(args.model_param))
     id_cols = parse_id_cols(str(args.id_cols))
     pred = forecast_csv_workflow(
         model=str(args.model),
@@ -2254,7 +2161,7 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
         interval_seed=getattr(args, "interval_seed", None),
         save_artifact_path=str(getattr(args, "save_artifact", "")).strip() or None,
     )
-    _emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -2270,15 +2177,15 @@ def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
         interval_seed=getattr(args, "interval_seed", None),
         cutoff=getattr(args, "cutoff", None),
     )
-    _emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
     return 0
 
 
 def _cmd_tuning_run(args: argparse.Namespace) -> int:
     from .tuning import tune_model
 
-    model_params = _parse_model_params(list(args.model_param))
-    grid_params = _parse_grid_params(list(args.grid_param))
+    model_params = _cli_shared._parse_model_params(list(args.model_param))
+    grid_params = _cli_shared._parse_grid_params(list(args.grid_param))
     y_col = str(args.y_col).strip() or None
 
     payload = tune_model(
@@ -2299,7 +2206,7 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
 
     fmt = str(args.format)
     if fmt == "json":
-        _emit(payload, output=str(args.output), fmt=fmt)
+        _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
         return 0
 
     row = {
@@ -2316,7 +2223,7 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
         "best_score": payload["best_score"],
         "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
     }
-    _emit_table(
+    _cli_shared._emit_table(
         [row],
         columns=[
             "model",
@@ -2460,7 +2367,7 @@ def _cmd_data_to_long(args: argparse.Namespace) -> int:
         future_x_missing=future_x_missing,
     )
 
-    _emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
     return 0
 
 
@@ -2491,7 +2398,7 @@ def _cmd_data_prepare_long(args: argparse.Namespace) -> int:
         future_x_missing=future_x_missing,
     )
 
-    _emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
     return 0
 
 
@@ -2547,7 +2454,7 @@ def _cmd_data_infer_freq(args: argparse.Namespace) -> int:
         )
 
     out = pd.DataFrame(rows)
-    _emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
     return 0
 
 
@@ -2575,7 +2482,7 @@ def _cmd_data_splits_rolling_origin(args: argparse.Namespace) -> int:
         )
 
     out = pd.DataFrame(rows)
-    _emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
     return 0
 
 
@@ -2591,7 +2498,7 @@ def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
         max_windows=args.max_windows,
         data_dir=str(args.data_dir),
     )
-    _emit(payload, output=args.output, fmt=str(args.format))
+    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
 
     return 0
 
@@ -2609,14 +2516,14 @@ def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
         max_windows=args.max_windows,
         data_dir=str(args.data_dir),
     )
-    _emit(payload, output=args.output, fmt=str(args.format))
+    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
     return 0
 
 
 def _cmd_eval_run(args: argparse.Namespace) -> int:
     from .eval_forecast import eval_model
 
-    model_params = _parse_model_params(list(args.model_param))
+    model_params = _cli_shared._parse_model_params(list(args.model_param))
     y_col = str(args.y_col).strip() or None
     payload = eval_model(
         model=str(args.model),
@@ -2632,7 +2539,7 @@ def _cmd_eval_run(args: argparse.Namespace) -> int:
         model_params=model_params,
         data_dir=str(args.data_dir),
     )
-    _emit(payload, output=args.output, fmt=str(args.format))
+    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
     return 0
 
 
@@ -2640,7 +2547,7 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     from .io import parse_id_cols
     from .services.cli_workflows import eval_csv_workflow
 
-    model_params = _parse_model_params(list(args.model_param))
+    model_params = _cli_shared._parse_model_params(list(args.model_param))
     id_cols = parse_id_cols(str(args.id_cols))
     payload = eval_csv_workflow(
         model=str(args.model),
@@ -2658,7 +2565,7 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
         conformal_levels=str(args.conformal_levels).strip() or None,
         conformal_per_step=(not bool(args.conformal_pooled)),
     )
-    _emit(payload, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -2686,7 +2593,7 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
             data_dir=str(args.data_dir),
         ),
     ]
-    _emit(rows, output=args.output, fmt=str(args.format))
+    _cli_shared._emit(rows, output=args.output, fmt=str(args.format))
     return 0
 
 
@@ -2722,7 +2629,7 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
         rows.append(slim)
 
     rows.sort(key=lambda r: float(r.get("mae", float("inf"))))
-    _emit(rows, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit(rows, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -2833,7 +2740,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
     if chunk_size < 0:
         raise ValueError("--chunk-size must be >= 0")
     strict = bool(getattr(args, "strict", False))
-    model_params = _parse_model_params(list(getattr(args, "model_param", [])))
+    model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
 
     resume_path = str(getattr(args, "resume", "")).strip()
     resume_rows: list[dict[str, Any]] = []
@@ -3059,7 +2966,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 min_datasets=summary_min_datasets,
             )
         )
-        text = _format_table(
+        text = _cli_shared._format_table(
             summary_rows,
             columns=_leaderboard_summary_columns(),
             fmt=summary_format,
@@ -3068,7 +2975,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text + "\n", encoding="utf-8")
 
-    _emit(final_rows, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
     return 0
 
 
@@ -3119,7 +3026,7 @@ def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
         limit=int(getattr(args, "limit", 0)),
         min_datasets=int(getattr(args, "min_datasets", 0)),
     )
-    _emit_table(
+    _cli_shared._emit_table(
         summary,
         columns=_leaderboard_summary_columns(),
         output=str(args.output),
@@ -3397,88 +3304,6 @@ def _summarize_leaderboard_rows(
     return out
 
 
-def _emit(payload: object, *, output: str, fmt: str) -> None:
-    text = _format_payload(payload, fmt=fmt)
-    print(text)
-
-    if output:
-        out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
-
-
-def _format_payload(payload: object, *, fmt: str) -> str:
-    if fmt == "json":
-        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    if fmt == "csv":
-        rows: list[dict]
-        if isinstance(payload, dict):
-            rows = [payload]
-        elif isinstance(payload, list):
-            rows = payload
-        else:
-            raise TypeError("csv format expects a dict row or list of dict rows")
-        return _format_csv(rows)
-    if fmt == "md":
-        rows_md: list[dict]
-        if isinstance(payload, dict):
-            rows_md = [payload]
-        elif isinstance(payload, list):
-            rows_md = payload
-        else:
-            raise TypeError("md format expects a dict row or list of dict rows")
-        return _format_markdown(rows_md)
-    raise ValueError(f"Unknown format: {fmt!r}")
-
-
-def _leaderboard_columns() -> list[str]:
-    # Stable output makes diffs and automation easier.
-    return [
-        "model",
-        "dataset",
-        "y_col",
-        "horizon",
-        "step",
-        "min_train_size",
-        "max_windows",
-        "season_length",
-        "n_series",
-        "n_series_skipped",
-        "n_windows",
-        "n_points",
-        "mae",
-        "rmse",
-        "mape",
-        "smape",
-    ]
-
-
-def _format_csv(rows: list[dict]) -> str:
-    cols = _leaderboard_columns()
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({k: row.get(k, "") for k in cols})
-    return buf.getvalue().rstrip("\n")
-
-
-def _format_markdown(rows: list[dict]) -> str:
-    cols = _leaderboard_columns()
-
-    def _fmt(v: object) -> str:
-        if v is None:
-            return ""
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
-
-    header = "| " + " | ".join(cols) + " |"
-    sep = "| " + " | ".join(["---"] * len(cols)) + " |"
-    body = ["| " + " | ".join(_fmt(row.get(k, "")) for k in cols) + " |" for row in rows]
-    return "\n".join([header, sep, *body])
-
-
 def _leaderboard_summary_columns() -> list[str]:
     return [
         "model",
@@ -3523,42 +3348,6 @@ def _leaderboard_summary_columns() -> list[str]:
         "smape_rank_mean",
         "smape_rank_wmean",
     ]
-
-
-def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
-    text = _format_table(rows, columns=columns, fmt=fmt)
-    print(text)
-
-    if output:
-        out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
-
-
-def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
-    if fmt == "json":
-        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
-    if fmt == "csv":
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({k: row.get(k, "") for k in columns})
-        return buf.getvalue().rstrip("\n")
-    if fmt == "md":
-        header = "| " + " | ".join(columns) + " |"
-        sep = "| " + " | ".join(["---"] * len(columns)) + " |"
-
-        def _fmt(v: object) -> str:
-            if v is None:
-                return ""
-            if isinstance(v, float):
-                return f"{v:.6g}"
-            return str(v)
-
-        body = ["| " + " | ".join(_fmt(row.get(k, "")) for k in columns) + " |" for row in rows]
-        return "\n".join([header, sep, *body])
-    raise ValueError(f"Unknown format: {fmt!r}")
 
 
 def _run_parallel_tasks(

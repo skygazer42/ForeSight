@@ -60,3 +60,24 @@ def test_public_facade_modules_only_bind_supported_entrypoints() -> None:
         "eval_model_long_df",
         "eval_multivariate_model_df",
     }
+
+
+def test_cli_facade_does_not_bind_shared_cli_helpers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    cli_names = _top_level_bound_names(repo_root / "src" / "foresight" / "cli.py")
+
+    shared_helpers = {
+        "_coerce_model_param_value",
+        "_parse_model_params",
+        "_parse_grid_params",
+        "_emit_text",
+        "_emit_dataframe",
+        "_emit",
+        "_emit_table",
+        "_format_payload",
+        "_format_csv",
+        "_format_markdown",
+        "_format_table",
+    }
+
+    assert cli_names.isdisjoint(shared_helpers)
