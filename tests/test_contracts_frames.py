@@ -18,3 +18,16 @@ def test_require_future_df_fills_nan_y_column() -> None:
 
     assert "y" in out.columns
     assert out["y"].isna().all()
+
+
+def test_require_long_df_rejects_duplicate_unique_id_ds_rows() -> None:
+    bad = pd.DataFrame(
+        {
+            "unique_id": ["a", "a"],
+            "ds": [1, 1],
+            "y": [10.0, 11.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="long_df contains duplicate unique_id/ds rows"):
+        require_long_df(bad)

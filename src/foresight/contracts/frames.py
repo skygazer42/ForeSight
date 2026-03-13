@@ -22,6 +22,9 @@ def require_long_df(
     if require_non_empty and long_df.empty:
         raise ValueError("long_df is empty")
 
+    if long_df.loc[:, ["unique_id", "ds"]].duplicated().any():
+        raise ValueError("long_df contains duplicate unique_id/ds rows")
+
     return long_df
 
 

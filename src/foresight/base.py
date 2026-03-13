@@ -16,11 +16,6 @@ def _as_1d_float_array(y: Any) -> np.ndarray:
         raise ValueError(f"Expected 1D series, got shape {arr.shape}")
     return arr
 
-
-def _require_long_df(long_df: Any) -> pd.DataFrame:
-    return _contracts_require_long_df(long_df, require_non_empty=False)
-
-
 def _unavailable_local_factory() -> Callable[[Any, int], np.ndarray]:
     raise RuntimeError("serialized local forecaster runtime factory was not rebuilt")
 
@@ -156,7 +151,7 @@ class RegistryGlobalForecaster(BaseGlobalForecaster):
         self._forecaster = self._factory() if self.is_fitted else None
 
     def fit(self, long_df: Any) -> RegistryGlobalForecaster:
-        df = _require_long_df(long_df)
+        df = _contracts_require_long_df(long_df, require_non_empty=False)
         self._train_df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(
             drop=True
         )
