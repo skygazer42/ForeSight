@@ -175,36 +175,36 @@ from .specs import ForecasterFn, GlobalForecasterFn, ModelSpec, MultivariateFore
 from .spectral import fft_topk_forecast
 from .ssa import ssa_forecast
 from .statsmodels_wrap import (
-    arima_forecast,
-    auto_arima_forecast,
-    autoreg_forecast,
-    ets_forecast,
-    fourier_arima_forecast,
-    fourier_auto_arima_forecast,
-    fourier_autoreg_forecast,
-    fourier_ets_forecast,
-    fourier_sarimax_forecast,
-    fourier_uc_forecast,
-    mstl_arima_forecast,
-    mstl_auto_arima_forecast,
-    mstl_autoreg_forecast,
-    mstl_ets_forecast,
-    mstl_sarimax_forecast,
-    mstl_uc_forecast,
-    sarimax_forecast,
-    stl_arima_forecast,
-    stl_auto_arima_forecast,
-    stl_autoreg_forecast,
-    stl_ets_forecast,
-    stl_sarimax_forecast,
-    stl_uc_forecast,
-    tbats_lite_auto_arima_forecast,
-    tbats_lite_autoreg_forecast,
-    tbats_lite_ets_forecast,
-    tbats_lite_forecast,
-    tbats_lite_sarimax_forecast,
-    tbats_lite_uc_forecast,
-    unobserved_components_forecast,
+    arima_forecast as _arima_forecast_impl,
+    auto_arima_forecast as _auto_arima_forecast_impl,
+    autoreg_forecast as _autoreg_forecast_impl,
+    ets_forecast as _ets_forecast_impl,
+    fourier_arima_forecast as _fourier_arima_forecast_impl,
+    fourier_auto_arima_forecast as _fourier_auto_arima_forecast_impl,
+    fourier_autoreg_forecast as _fourier_autoreg_forecast_impl,
+    fourier_ets_forecast as _fourier_ets_forecast_impl,
+    fourier_sarimax_forecast as _fourier_sarimax_forecast_impl,
+    fourier_uc_forecast as _fourier_uc_forecast_impl,
+    mstl_arima_forecast as _mstl_arima_forecast_impl,
+    mstl_auto_arima_forecast as _mstl_auto_arima_forecast_impl,
+    mstl_autoreg_forecast as _mstl_autoreg_forecast_impl,
+    mstl_ets_forecast as _mstl_ets_forecast_impl,
+    mstl_sarimax_forecast as _mstl_sarimax_forecast_impl,
+    mstl_uc_forecast as _mstl_uc_forecast_impl,
+    sarimax_forecast as _sarimax_forecast_impl,
+    stl_arima_forecast as _stl_arima_forecast_impl,
+    stl_auto_arima_forecast as _stl_auto_arima_forecast_impl,
+    stl_autoreg_forecast as _stl_autoreg_forecast_impl,
+    stl_ets_forecast as _stl_ets_forecast_impl,
+    stl_sarimax_forecast as _stl_sarimax_forecast_impl,
+    stl_uc_forecast as _stl_uc_forecast_impl,
+    tbats_lite_auto_arima_forecast as _tbats_lite_auto_arima_forecast_impl,
+    tbats_lite_autoreg_forecast as _tbats_lite_autoreg_forecast_impl,
+    tbats_lite_ets_forecast as _tbats_lite_ets_forecast_impl,
+    tbats_lite_forecast as _tbats_lite_forecast_impl,
+    tbats_lite_sarimax_forecast as _tbats_lite_sarimax_forecast_impl,
+    tbats_lite_uc_forecast as _tbats_lite_uc_forecast_impl,
+    unobserved_components_forecast as _unobserved_components_forecast_impl,
 )
 from .theta import theta_auto_forecast, theta_forecast
 from .torch_ct_rnn import (
@@ -317,6 +317,123 @@ from .torch_nn import (
     torch_tsmixer_direct_forecast,
     torch_witran_direct_forecast,
     torch_wavenet_direct_forecast,
+)
+
+
+def _registry_statsmodels_symbol(name: str, fallback: Any) -> Any:
+    def _call(*args: Any, **kwargs: Any) -> Any:
+        from . import registry as _registry
+
+        target = getattr(_registry, name, fallback)
+        if target is _call:
+            target = fallback
+        return target(*args, **kwargs)
+
+    _call.__name__ = name
+    return _call
+
+
+arima_forecast = _registry_statsmodels_symbol("arima_forecast", _arima_forecast_impl)
+auto_arima_forecast = _registry_statsmodels_symbol(
+    "auto_arima_forecast",
+    _auto_arima_forecast_impl,
+)
+autoreg_forecast = _registry_statsmodels_symbol("autoreg_forecast", _autoreg_forecast_impl)
+ets_forecast = _registry_statsmodels_symbol("ets_forecast", _ets_forecast_impl)
+fourier_arima_forecast = _registry_statsmodels_symbol(
+    "fourier_arima_forecast",
+    _fourier_arima_forecast_impl,
+)
+fourier_auto_arima_forecast = _registry_statsmodels_symbol(
+    "fourier_auto_arima_forecast",
+    _fourier_auto_arima_forecast_impl,
+)
+fourier_autoreg_forecast = _registry_statsmodels_symbol(
+    "fourier_autoreg_forecast",
+    _fourier_autoreg_forecast_impl,
+)
+fourier_ets_forecast = _registry_statsmodels_symbol(
+    "fourier_ets_forecast",
+    _fourier_ets_forecast_impl,
+)
+fourier_sarimax_forecast = _registry_statsmodels_symbol(
+    "fourier_sarimax_forecast",
+    _fourier_sarimax_forecast_impl,
+)
+fourier_uc_forecast = _registry_statsmodels_symbol(
+    "fourier_uc_forecast",
+    _fourier_uc_forecast_impl,
+)
+mstl_arima_forecast = _registry_statsmodels_symbol(
+    "mstl_arima_forecast",
+    _mstl_arima_forecast_impl,
+)
+mstl_auto_arima_forecast = _registry_statsmodels_symbol(
+    "mstl_auto_arima_forecast",
+    _mstl_auto_arima_forecast_impl,
+)
+mstl_autoreg_forecast = _registry_statsmodels_symbol(
+    "mstl_autoreg_forecast",
+    _mstl_autoreg_forecast_impl,
+)
+mstl_ets_forecast = _registry_statsmodels_symbol(
+    "mstl_ets_forecast",
+    _mstl_ets_forecast_impl,
+)
+mstl_sarimax_forecast = _registry_statsmodels_symbol(
+    "mstl_sarimax_forecast",
+    _mstl_sarimax_forecast_impl,
+)
+mstl_uc_forecast = _registry_statsmodels_symbol(
+    "mstl_uc_forecast",
+    _mstl_uc_forecast_impl,
+)
+sarimax_forecast = _registry_statsmodels_symbol("sarimax_forecast", _sarimax_forecast_impl)
+stl_arima_forecast = _registry_statsmodels_symbol(
+    "stl_arima_forecast",
+    _stl_arima_forecast_impl,
+)
+stl_auto_arima_forecast = _registry_statsmodels_symbol(
+    "stl_auto_arima_forecast",
+    _stl_auto_arima_forecast_impl,
+)
+stl_autoreg_forecast = _registry_statsmodels_symbol(
+    "stl_autoreg_forecast",
+    _stl_autoreg_forecast_impl,
+)
+stl_ets_forecast = _registry_statsmodels_symbol("stl_ets_forecast", _stl_ets_forecast_impl)
+stl_sarimax_forecast = _registry_statsmodels_symbol(
+    "stl_sarimax_forecast",
+    _stl_sarimax_forecast_impl,
+)
+stl_uc_forecast = _registry_statsmodels_symbol("stl_uc_forecast", _stl_uc_forecast_impl)
+tbats_lite_auto_arima_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_auto_arima_forecast",
+    _tbats_lite_auto_arima_forecast_impl,
+)
+tbats_lite_autoreg_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_autoreg_forecast",
+    _tbats_lite_autoreg_forecast_impl,
+)
+tbats_lite_ets_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_ets_forecast",
+    _tbats_lite_ets_forecast_impl,
+)
+tbats_lite_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_forecast",
+    _tbats_lite_forecast_impl,
+)
+tbats_lite_sarimax_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_sarimax_forecast",
+    _tbats_lite_sarimax_forecast_impl,
+)
+tbats_lite_uc_forecast = _registry_statsmodels_symbol(
+    "tbats_lite_uc_forecast",
+    _tbats_lite_uc_forecast_impl,
+)
+unobserved_components_forecast = _registry_statsmodels_symbol(
+    "unobserved_components_forecast",
+    _unobserved_components_forecast_impl,
 )
 from .torch_rnn_paper_zoo import list_rnnpaper_specs, torch_rnnpaper_direct_forecast
 from .torch_rnn_zoo import list_rnnzoo_specs, torch_rnnzoo_direct_forecast
@@ -12216,4 +12333,3 @@ def make_global_forecaster_object(key: str, **params: Any) -> BaseGlobalForecast
 
     spec = get_model_spec(key)
     return build_global_forecaster_object(key=key, spec=spec, params=params)
-
