@@ -99,3 +99,21 @@ def test_cli_facade_does_not_bind_catalog_cli_helpers() -> None:
     }
 
     assert cli_names.isdisjoint(catalog_helpers)
+
+
+def test_cli_facade_does_not_bind_data_cli_helpers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    cli_names = _top_level_bound_names(repo_root / "src" / "foresight" / "cli.py")
+
+    data_helpers = {
+        "_cmd_datasets_list",
+        "_cmd_datasets_preview",
+        "_cmd_datasets_path",
+        "_cmd_datasets_validate",
+        "_cmd_data_to_long",
+        "_cmd_data_prepare_long",
+        "_cmd_data_infer_freq",
+        "_cmd_data_splits_rolling_origin",
+    }
+
+    assert cli_names.isdisjoint(data_helpers)
