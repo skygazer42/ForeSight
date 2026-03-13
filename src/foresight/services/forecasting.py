@@ -37,12 +37,7 @@ from ..contracts.params import (
     required_quantiles_for_interval_levels as _contracts_required_quantiles_for_interval_levels,
 )
 from ..intervals import bootstrap_intervals
-from ..models.registry import (
-    get_model_spec,
-    make_forecaster,
-    make_forecaster_object,
-    make_global_forecaster_object,
-)
+from . import model_execution as _model_execution
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
@@ -191,7 +186,7 @@ def _local_interval_columns(
     if not interval_levels:
         return {}
 
-    base_forecaster = make_forecaster(str(model), **dict(model_params))
+    base_forecaster = _model_execution.make_local_forecaster_runner(str(model), model_params)
     min_train_size = _resolve_interval_min_train_size(int(train_y.size), interval_min_train_size)
 
     out: dict[str, np.ndarray] = {}
@@ -255,33 +250,7 @@ def _local_xreg_interval_payload(
     return out
 
 
-def _call_local_xreg_forecaster(
-    *,
-    model: str,
-    train_y: np.ndarray,
-    horizon: int,
-    train_exog: np.ndarray,
-    future_exog: np.ndarray,
-    model_params: dict[str, Any],
-) -> np.ndarray:
-    forecaster = make_forecaster(str(model), **dict(model_params))
-    try:
-        out = forecaster(
-            train_y,
-            int(horizon),
-            train_exog=train_exog,
-            future_exog=future_exog,
-        )
-    except TypeError as e:
-        raise ValueError(
-            f"Model {model!r} advertises x_cols support but its local callable does not accept "
-            "`train_exog` / `future_exog`."
-        ) from e
-
-    yhat = np.asarray(out, dtype=float)
-    if yhat.shape != (int(horizon),):
-        raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
-    return yhat
+_call_local_xreg_forecaster = _model_execution.call_local_xreg_forecaster
 
 
 def _as_datetime_index(ds: Any) -> pd.DatetimeIndex | None:
@@ -520,7 +489,7 @@ def forecast_model_long_df(
         df = _merge_history_and_future_df(df, _require_future_df(future_df))
 
     params = _normalize_model_params(model_params)
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     capabilities = dict(model_spec.capabilities)
     levels = _parse_interval_levels(interval_levels)
@@ -612,7 +581,10 @@ def forecast_model_long_df(
                 cutoff = g["ds"].iloc[-1]
                 future_ds = _infer_future_ds(g["ds"], int(horizon))
                 train_y = g["y"].to_numpy(dtype=float, copy=False)
-            forecaster = make_forecaster_object(str(model), **params).fit(train_y)
+            forecaster = _model_execution.make_local_forecaster_object_runner(
+                str(model),
+                params,
+            ).fit(train_y)
             yhat = np.asarray(forecaster.predict(int(horizon)), dtype=float)
             if yhat.shape != (int(horizon),):
                 raise ValueError(
@@ -671,7 +643,10 @@ def forecast_model_long_df(
             )
         augmented, cutoff = _prepare_global_forecast_input(df, horizon=int(horizon), x_cols=x_cols)
 
-        forecaster = make_global_forecaster_object(str(model), **params).fit(augmented)
+        forecaster = _model_execution.make_global_forecaster_object_runner(
+            str(model),
+            params,
+        ).fit(augmented)
         pred = forecaster.predict(cutoff, int(horizon))
         pred = _finalize_forecast_frame(pred, cutoff=cutoff, model=str(model))
         return _add_interval_columns_from_quantile_predictions(pred, interval_levels=levels)

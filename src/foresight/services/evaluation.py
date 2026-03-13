@@ -21,8 +21,8 @@ from ..datasets.loaders import load_dataset
 from ..datasets.registry import get_dataset_spec
 from ..hierarchical import check_hierarchical_consistency, reconcile_hierarchical_forecasts
 from ..metrics import mae, mape, rmse, smape
-from ..models.registry import get_model_spec, make_forecaster, make_multivariate_forecaster
 from ..splits import rolling_origin_splits
+from . import model_execution as _model_execution
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
@@ -77,33 +77,7 @@ def _require_x_cols_if_needed(
     )
 
 
-def _call_local_xreg_forecaster(
-    *,
-    model: str,
-    train_y: np.ndarray,
-    horizon: int,
-    train_exog: np.ndarray,
-    future_exog: np.ndarray,
-    model_params: dict[str, Any],
-) -> np.ndarray:
-    forecaster = make_forecaster(str(model), **dict(model_params))
-    try:
-        out = forecaster(
-            train_y,
-            int(horizon),
-            train_exog=train_exog,
-            future_exog=future_exog,
-        )
-    except TypeError as e:
-        raise ValueError(
-            f"Model {model!r} advertises x_cols support but its local callable does not accept "
-            "`train_exog` / `future_exog`."
-        ) from e
-
-    yhat = np.asarray(out, dtype=float)
-    if yhat.shape != (int(horizon),):
-        raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
-    return yhat
+_call_local_xreg_forecaster = _model_execution.call_local_xreg_forecaster
 
 
 def _require_multivariate_df(
@@ -205,7 +179,7 @@ def eval_multivariate_model_df(
     if wide_df.empty:
         raise ValueError("df is empty")
 
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     if interface != "multivariate":
         raise ValueError(
@@ -220,7 +194,10 @@ def eval_multivariate_model_df(
         min_train_size=int(min_train_size),
         max_train_size=max_train_size,
         max_windows=max_windows,
-        forecaster=make_multivariate_forecaster(str(model), **(model_params or {})),
+        forecaster=_model_execution.make_multivariate_forecaster_runner(
+            str(model),
+            model_params,
+        ),
     )
 
     yt = y_true.reshape(-1)
@@ -355,7 +332,7 @@ def eval_model_long_df(
         raise ValueError("long_df is empty")
 
     df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     params = dict(model_params or {})
     capabilities = dict(model_spec.capabilities)
@@ -489,7 +466,7 @@ def eval_model_long_df(
                 if max_windows is not None and windows_run >= int(max_windows):
                     break
     else:
-        forecaster = make_forecaster(str(model), **params)
+        forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
 
         for _uid, g in df.groupby("unique_id", sort=False):
             n_series += 1
@@ -610,7 +587,7 @@ def eval_model(
     per-series using walk-forward backtesting and aggregated across series.
     """
     spec = get_dataset_spec(str(dataset))
-    model_spec = get_model_spec(str(model))
+    model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     if interface == "multivariate":
         raise ValueError(

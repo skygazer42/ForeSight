@@ -152,6 +152,13 @@ def test_resolution_module_preserves_registry_lookup_surface() -> None:
     assert forecaster([1.0, 2.0, 3.0], 1).shape == (1,)
 
 
+def test_registry_module_re_exports_registry_storage_for_compatibility() -> None:
+    from foresight.models import registry as model_registry
+    from foresight.models import resolution as model_resolution
+
+    assert model_registry._REGISTRY is model_resolution._REGISTRY
+
+
 def test_runtime_module_exposes_catalog_factory_context() -> None:
     from foresight.models import runtime as model_runtime
 

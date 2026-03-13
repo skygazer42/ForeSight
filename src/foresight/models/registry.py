@@ -6,6 +6,7 @@ from ..base import (
     RegistryForecaster,
     RegistryGlobalForecaster,
 )
+from . import resolution as _resolution
 from .resolution import get_model_spec, list_models
 from .runtime import (
     make_forecaster,
@@ -22,6 +23,8 @@ from .specs import (
     ModelSpec,
     MultivariateForecasterFn,
 )
+
+_REGISTRY = _resolution._REGISTRY
 
 __all__ = [
     "BaseForecaster",
