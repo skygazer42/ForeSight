@@ -5,6 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
+
+def _load_workflow(path: Path) -> dict[str, object]:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
 
 def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     repo_root = Path(__file__).resolve().parents[1]
@@ -39,6 +45,54 @@ def test_docs_workflow_builds_and_deploys_mkdocs_site() -> None:
     assert "python tools/generate_model_capability_docs.py" in workflow
     assert "python tools/generate_rnn_docs.py" in workflow
     assert "mkdocs build --strict" in workflow
+
+
+def test_docs_workflow_scopes_write_permissions_to_jobs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = _load_workflow(repo_root / ".github" / "workflows" / "docs.yml")
+
+    top_permissions = workflow.get("permissions") or {}
+    build_permissions = workflow["jobs"]["build"].get("permissions") or {}
+    deploy_permissions = workflow["jobs"]["deploy"].get("permissions") or {}
+
+    assert top_permissions.get("pages") != "write"
+    assert top_permissions.get("id-token") != "write"
+    assert build_permissions.get("contents") == "read"
+    assert build_permissions.get("pages") != "write"
+    assert build_permissions.get("id-token") != "write"
+    assert deploy_permissions.get("pages") == "write"
+    assert deploy_permissions.get("id-token") == "write"
+
+
+def test_ci_workflow_includes_sonar_analysis_job() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = _load_workflow(repo_root / ".github" / "workflows" / "ci.yml")
+    sonar_job = workflow["jobs"]["sonar"]
+
+    steps = sonar_job["steps"]
+    checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v4")
+    test_step = next(step for step in steps if step.get("name") == "Tests")
+    scan_step = next(
+        step
+        for step in steps
+        if str(step.get("uses", "")).startswith("SonarSource/sonarqube-scan-action@")
+    )
+
+    assert checkout["with"]["fetch-depth"] == 0
+    assert "coverage.xml" in test_step["run"]
+    assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
+    assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+
+
+def test_sonar_project_configuration_targets_maintained_code() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config = (repo_root / "sonar-project.properties").read_text(encoding="utf-8")
+
+    assert "sonar.organization=skygazer42" in config
+    assert "sonar.projectKey=skygazer42_ForeSight" in config
+    assert "sonar.sources=src,tools,.github/workflows" in config
+    assert "sonar.tests=tests" in config
+    assert "sonar.python.coverage.reportPaths=coverage.xml" in config
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
