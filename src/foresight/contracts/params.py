@@ -2,46 +2,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from .covariates import (
+    resolve_covariate_roles as _resolve_covariate_roles,
+)
+from .covariates import (
+    resolve_model_param_covariates as _resolve_model_param_covariates,
+)
+
 
 def normalize_model_params(model_params: dict[str, Any] | None) -> dict[str, Any]:
     return dict(model_params or {})
 
 
-def _normalize_name_list(raw: Any) -> tuple[str, ...]:
-    if raw is None:
-        return ()
-
-    if isinstance(raw, str):
-        s = raw.strip()
-        return tuple(part.strip() for part in s.split(",") if part.strip()) if s else ()
-
-    if isinstance(raw, list | tuple):
-        return tuple(str(value).strip() for value in raw if str(value).strip())
-
-    s = str(raw).strip()
-    return (s,) if s else ()
-
-
 def normalize_x_cols(raw: Any) -> tuple[str, ...]:
     if isinstance(raw, dict):
-        future = _normalize_name_list(raw.get("future_x_cols"))
-        legacy = _normalize_name_list(raw.get("x_cols"))
-        if legacy:
-            future = tuple([*future, *[col for col in legacy if col not in future]])
-        return future
-    return _normalize_name_list(raw)
+        return _resolve_model_param_covariates(raw).future_x_cols
+    return _resolve_covariate_roles(x_cols=raw).future_x_cols
 
 
 def normalize_covariate_roles(
     model_params: dict[str, Any] | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    params = normalize_model_params(model_params)
-    future = _normalize_name_list(params.get("future_x_cols"))
-    legacy = normalize_x_cols(params)
-    if legacy:
-        future = tuple([*future, *[col for col in legacy if col not in future]])
-    historic = _normalize_name_list(params.get("historic_x_cols"))
-    return historic, future
+    spec = _resolve_model_param_covariates(model_params)
+    return spec.historic_x_cols, spec.future_x_cols
 
 
 def parse_interval_levels(levels: Any) -> tuple[float, ...]:

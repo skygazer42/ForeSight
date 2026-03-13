@@ -6,14 +6,10 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 
+from ..contracts.covariates import resolve_covariate_roles as _resolve_covariate_roles
 from ..contracts.frames import require_long_df as _contracts_require_long_df
-from .format import resolve_covariate_roles
 
 _MISSING_POLICIES = {"error", "drop", "ffill", "zero", "interpolate"}
-
-
-def _require_long_df(long_df: Any) -> pd.DataFrame:
-    return _contracts_require_long_df(long_df, require_non_empty=True)
 
 
 def _coerce_datetime_index(ds: Any) -> pd.DatetimeIndex:
@@ -124,15 +120,18 @@ def prepare_long_df(
     - Optionally enforces a single shared frequency across all series.
     - Fills or rejects missing ``y``/covariate values with configurable policies.
     """
-    df = _require_long_df(long_df).copy()
+    df = _contracts_require_long_df(long_df, require_non_empty=True).copy()
     df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
 
     hist_input = historic_x_cols or tuple(df.attrs.get("historic_x_cols", ()))
     fut_input = future_x_cols or tuple(df.attrs.get("future_x_cols", ()))
-    historic_x_cols_tup, future_x_cols_tup, all_x_cols = resolve_covariate_roles(
+    covariates = _resolve_covariate_roles(
         historic_x_cols=hist_input,
         future_x_cols=fut_input,
     )
+    historic_x_cols_tup = covariates.historic_x_cols
+    future_x_cols_tup = covariates.future_x_cols
+    all_x_cols = covariates.all_x_cols
     if not all_x_cols:
         historic_x_cols_tup = ()
         future_x_cols_tup = tuple(c for c in df.columns if c not in {"unique_id", "ds", "y"})
