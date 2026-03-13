@@ -113,7 +113,7 @@ def build_global_forecaster_object(
 
 
 def rebuild_local_forecaster_runtime(model_key: str, model_params: dict[str, Any]) -> ForecasterFn:
-    from .registry import get_model_spec
+    from .resolution import get_model_spec
 
     spec = get_model_spec(model_key)
     return build_local_forecaster(key=model_key, spec=spec, params=dict(model_params))
@@ -123,7 +123,7 @@ def rebuild_global_forecaster_runtime(
     model_key: str,
     model_params: dict[str, Any],
 ) -> GlobalForecasterFn:
-    from .registry import get_model_spec
+    from .resolution import get_model_spec
 
     spec = get_model_spec(model_key)
     return build_global_forecaster(key=model_key, spec=spec, params=dict(model_params))
