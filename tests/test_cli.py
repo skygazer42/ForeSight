@@ -117,3 +117,22 @@ def test_cli_facade_does_not_bind_data_cli_helpers() -> None:
     }
 
     assert cli_names.isdisjoint(data_helpers)
+
+
+def test_cli_facade_does_not_bind_leaderboard_cli_helpers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    cli_names = _top_level_bound_names(repo_root / "src" / "foresight" / "cli.py")
+
+    leaderboard_helpers = {
+        "_cmd_leaderboard_naive",
+        "_cmd_leaderboard_models",
+        "_leaderboard_sweep_worker",
+        "_cmd_leaderboard_sweep",
+        "_cmd_leaderboard_summarize",
+        "_summarize_leaderboard_rows",
+        "_leaderboard_summary_columns",
+        "_run_parallel_tasks",
+        "_SWEEP_LONG_DF_CACHE",
+    }
+
+    assert cli_names.isdisjoint(leaderboard_helpers)
