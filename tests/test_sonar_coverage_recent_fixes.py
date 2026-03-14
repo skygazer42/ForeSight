@@ -1128,6 +1128,30 @@ def test_torch_nn_source_extracts_repeated_validation_literals() -> None:
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_torch_global_source_extracts_repeated_validation_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "torch_global.py"
+    literals = [
+        "d_model must be >= 1",
+        "nhead must be >= 1",
+        "d_model must be divisible by nhead",
+        "num_layers must be >= 1",
+        "dropout must be in [0,1)",
+        "ffn_dim must be >= 1",
+        "dim_feedforward must be >= 1",
+        "stride must be >= 1",
+        "hidden_size must be >= 1",
+        "kernel_size must be >= 1",
+        "bhld,hdm->bhlm",
+        "bhld,bhmd->bhlm",
+        "num_blocks must be >= 1",
+        "channels must be >= 1",
+        "bhlm,bhmd->bhld",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
 def test_metrics_source_extracts_repeated_seasonality_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "metrics.py"
     literals = [
