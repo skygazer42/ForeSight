@@ -225,6 +225,8 @@ def test_augment_lag_feat_row_requires_history_for_seasonal_features() -> None:
         ({"n_estimators": 0}, "n_estimators must be >= 1"),
         ({"max_depth": 0}, "max_depth must be >= 1"),
         ({"learning_rate": 0.0}, "learning_rate must be > 0"),
+        ({"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
+        ({"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
     ],
 )
 def test_xgb_common_regressor_params_reject_invalid_scalars(

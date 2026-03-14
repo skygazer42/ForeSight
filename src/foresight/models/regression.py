@@ -3600,14 +3600,18 @@ def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
         and float(params["learning_rate"]) <= 0
     ):
         raise ValueError("learning_rate must be > 0")
-    if "subsample" in params and params["subsample"] is not None:
-        subsample = float(params["subsample"])
-        if not (0.0 < subsample <= 1.0):
-            raise ValueError("subsample must be in (0,1]")
-    if "colsample_bytree" in params and params["colsample_bytree"] is not None:
-        colsample_bytree = float(params["colsample_bytree"])
-        if not (0.0 < colsample_bytree <= 1.0):
-            raise ValueError("colsample_bytree must be in (0,1]")
+    if (
+        "subsample" in params
+        and params["subsample"] is not None
+        and not (0.0 < float(params["subsample"]) <= 1.0)
+    ):
+        raise ValueError("subsample must be in (0,1]")
+    if (
+        "colsample_bytree" in params
+        and params["colsample_bytree"] is not None
+        and not (0.0 < float(params["colsample_bytree"]) <= 1.0)
+    ):
+        raise ValueError("colsample_bytree must be in (0,1]")
     for key in ("reg_alpha", "reg_lambda", "min_child_weight", "gamma"):
         if key in params and params[key] is not None and float(params[key]) < 0:
             raise ValueError(f"{key} must be >= 0")
