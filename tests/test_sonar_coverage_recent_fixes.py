@@ -912,6 +912,17 @@ def test_statsmodels_wrap_source_extracts_repeated_validation_literals() -> None
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_metrics_source_extracts_repeated_seasonality_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "metrics.py"
+    literals = [
+        "seasonality must be >= 1",
+        "y_train too short for the requested seasonality",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
 def test_docsgen_rnn_source_extracts_repeated_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "docsgen" / "rnn.py"
     literals = [

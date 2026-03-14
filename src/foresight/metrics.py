@@ -4,6 +4,9 @@ from typing import Any
 
 import numpy as np
 
+SEASONALITY_MUST_BE_AT_LEAST_ONE = "seasonality must be >= 1"
+Y_TRAIN_TOO_SHORT_FOR_SEASONALITY = "y_train too short for the requested seasonality"
+
 
 def _as_float_array(x: Any) -> np.ndarray:
     arr = np.asarray(x, dtype=float)
@@ -74,6 +77,13 @@ def _as_1d_float_array(x: Any) -> np.ndarray:
     return arr
 
 
+def _validate_seasonal_training_window(train: np.ndarray, seasonality: int) -> None:
+    if seasonality <= 0:
+        raise ValueError(SEASONALITY_MUST_BE_AT_LEAST_ONE)
+    if train.size <= seasonality:
+        raise ValueError(Y_TRAIN_TOO_SHORT_FOR_SEASONALITY)
+
+
 def mase(
     y_true: Any,
     y_pred: Any,
@@ -92,10 +102,7 @@ def mase(
     _require_same_shape(yt, yp)
 
     train = _as_1d_float_array(y_train)
-    if seasonality <= 0:
-        raise ValueError("seasonality must be >= 1")
-    if train.size <= seasonality:
-        raise ValueError("y_train too short for the requested seasonality")
+    _validate_seasonal_training_window(train, seasonality)
 
     diffs = np.abs(train[seasonality:] - train[:-seasonality])
     scale = float(np.mean(diffs))
@@ -123,10 +130,7 @@ def rmsse(
     _require_same_shape(yt, yp)
 
     train = _as_1d_float_array(y_train)
-    if seasonality <= 0:
-        raise ValueError("seasonality must be >= 1")
-    if train.size <= seasonality:
-        raise ValueError("y_train too short for the requested seasonality")
+    _validate_seasonal_training_window(train, seasonality)
 
     diffs2 = (train[seasonality:] - train[:-seasonality]) ** 2
     scale = float(np.mean(diffs2))
@@ -280,10 +284,7 @@ def msis(
     seasonal naive MAE (same scale as MASE).
     """
     train = _as_1d_float_array(y_train)
-    if seasonality <= 0:
-        raise ValueError("seasonality must be >= 1")
-    if train.size <= seasonality:
-        raise ValueError("y_train too short for the requested seasonality")
+    _validate_seasonal_training_window(train, seasonality)
 
     diffs = np.abs(train[seasonality:] - train[:-seasonality])
     scale = float(np.mean(diffs))
