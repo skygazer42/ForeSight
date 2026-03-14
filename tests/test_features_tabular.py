@@ -73,3 +73,18 @@ def test_build_lag_derived_features_rejects_invalid_specs() -> None:
 
     with pytest.raises(ValueError):
         build_lag_derived_features(X, diff_lags=(3,))  # must be < lags (=3)
+
+
+def test_build_lag_derived_features_keeps_constant_moment_stats_finite() -> None:
+    X = np.asarray([[2.0, 2.0, 2.0, 2.0]], dtype=float)
+
+    F, names = build_lag_derived_features(
+        X,
+        roll_windows=(4,),
+        roll_stats=("skew", "kurt"),
+    )
+
+    assert names == ["roll_skew_4", "roll_kurt_4"]
+    assert np.all(np.isfinite(F))
+    assert F[0, 0] == pytest.approx(0.0)
+    assert F[0, 1] == pytest.approx(0.0)

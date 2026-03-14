@@ -4,6 +4,9 @@ from typing import Any
 
 import numpy as np
 
+_ROLL_STAT_ORDER = ("mean", "std", "min", "max", "median", "iqr", "mad", "skew", "kurt", "slope")
+_ALLOWED_ROLL_STATS = frozenset(_ROLL_STAT_ORDER)
+
 
 def _as_2d_float_array(X: Any) -> np.ndarray:
     arr = np.asarray(X, dtype=float)
@@ -110,6 +113,241 @@ def normalize_str_tuple(items: Any) -> tuple[str, ...]:
     return (s,) if s else ()
 
 
+def _prepare_lag_feature_inputs(values: Any, t: Any) -> tuple[np.ndarray, np.ndarray]:
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
+    if arr.ndim != 2:
+        raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
+    if arr.size > 0 and not np.all(np.isfinite(arr)):
+        raise ValueError("Non-finite values in lag feature source")
+
+    tt = np.asarray(t, dtype=int).reshape(-1)
+    if tt.size == 0:
+        return arr, tt
+    if np.any(tt < 0):
+        raise ValueError("t indices must be >= 0")
+    if int(np.max(tt)) >= int(arr.shape[0]):
+        raise ValueError("t indices must be < len(values)")
+    return arr, tt
+
+
+def _resolve_column_names(column_names: Any, *, width: int) -> list[str]:
+    names_in = normalize_str_tuple(column_names)
+    if names_in:
+        if len(names_in) != int(width):
+            raise ValueError("column_names must match values.shape[1]")
+        return list(names_in)
+    return [f"col{i}" for i in range(int(width))]
+
+
+def _build_lag_feature_blocks(
+    arr: np.ndarray,
+    tt: np.ndarray,
+    lag_steps: tuple[int, ...],
+    cols: list[str],
+    *,
+    prefix: str,
+) -> tuple[list[np.ndarray], list[str]]:
+    feats: list[np.ndarray] = []
+    names: list[str] = []
+    for lag in lag_steps:
+        idx = tt - int(lag)
+        if np.any(idx < 0):
+            raise ValueError(f"{prefix}_lags require t >= lag")
+        feats.append(arr[idx, :].astype(float, copy=False))
+        names.extend(f"{prefix}_{col}_lag{int(lag)}" for col in cols)
+    return feats, names
+
+
+def _normalize_roll_stat_names(roll_stats: Any) -> tuple[str, ...]:
+    stats = tuple(sorted({s.lower().strip() for s in normalize_str_tuple(roll_stats) if s}))
+    bad = sorted({s for s in stats if s not in _ALLOWED_ROLL_STATS})
+    if bad:
+        raise ValueError(
+            f"roll_stats contains unknown values: {bad}. Allowed: {sorted(_ALLOWED_ROLL_STATS)}"
+        )
+    return stats
+
+
+def _normalize_roll_feature_config(
+    roll_windows: Any,
+    roll_stats: Any,
+    diff_lags: Any,
+) -> tuple[tuple[int, ...], tuple[str, ...], tuple[int, ...]]:
+    windows = tuple(sorted(set(normalize_int_tuple(roll_windows))))
+    stats = _normalize_roll_stat_names(roll_stats)
+    diffs = tuple(sorted(set(normalize_int_tuple(diff_lags))))
+    return windows, stats, diffs
+
+
+def _validate_roll_window(window: int, *, lags: int) -> int:
+    ww = int(window)
+    if ww <= 0:
+        raise ValueError("roll_windows must be >= 1")
+    if ww > lags:
+        raise ValueError(f"roll_window {ww} exceeds lags={lags}")
+    return ww
+
+
+def _roll_mean_feature(tail: np.ndarray) -> np.ndarray:
+    return np.mean(tail, axis=1).reshape(-1, 1)
+
+
+def _roll_std_feature(tail: np.ndarray) -> np.ndarray:
+    return np.std(tail, axis=1).reshape(-1, 1)
+
+
+def _roll_min_feature(tail: np.ndarray) -> np.ndarray:
+    return np.min(tail, axis=1).reshape(-1, 1)
+
+
+def _roll_max_feature(tail: np.ndarray) -> np.ndarray:
+    return np.max(tail, axis=1).reshape(-1, 1)
+
+
+def _roll_median_feature(tail: np.ndarray) -> np.ndarray:
+    return np.median(tail, axis=1).reshape(-1, 1)
+
+
+def _roll_iqr_feature(tail: np.ndarray) -> np.ndarray:
+    q25, q75 = np.percentile(tail, [25.0, 75.0], axis=1)
+    return (q75 - q25).reshape(-1, 1)
+
+
+def _roll_mad_feature(tail: np.ndarray) -> np.ndarray:
+    med = np.median(tail, axis=1).reshape(-1, 1)
+    return np.median(np.abs(tail - med), axis=1).reshape(-1, 1)
+
+
+def _roll_slope_feature(tail: np.ndarray) -> np.ndarray:
+    width = int(tail.shape[1])
+    x = np.arange(width, dtype=float)
+    x = x - float(np.mean(x))
+    denom = float(np.sum(x * x))
+    if denom <= 0.0:
+        raise RuntimeError("Internal error: slope denom must be > 0")
+    slope = (tail @ x.reshape(-1, 1)).reshape(-1) / denom
+    return slope.reshape(-1, 1)
+
+
+def _roll_moment_context(tail: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    mu = np.mean(tail, axis=1, dtype=float).reshape(-1, 1)
+    centered = tail - mu
+    m2 = np.mean(centered * centered, axis=1, dtype=float).reshape(-1)
+    std = np.sqrt(np.maximum(m2, 0.0))
+    ok = std > 0.0
+    return centered, std, ok
+
+
+def _roll_skew_feature(
+    tail: np.ndarray,
+    moment_context: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+) -> np.ndarray:
+    if moment_context is None:
+        moment_context = _roll_moment_context(tail)
+    centered, std, ok = moment_context
+    rows = int(tail.shape[0])
+    m3 = np.mean(centered * centered * centered, axis=1, dtype=float).reshape(-1)
+    skew = np.zeros((rows,), dtype=float)
+    skew[ok] = m3[ok] / (std[ok] ** 3)
+    return skew.reshape(-1, 1)
+
+
+def _roll_kurt_feature(
+    tail: np.ndarray,
+    moment_context: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+) -> np.ndarray:
+    if moment_context is None:
+        moment_context = _roll_moment_context(tail)
+    centered, std, ok = moment_context
+    rows = int(tail.shape[0])
+    m4 = np.mean(centered**4, axis=1, dtype=float).reshape(-1)
+    kurt = np.zeros((rows,), dtype=float)
+    kurt[ok] = (m4[ok] / (std[ok] ** 4)) - 3.0
+    return kurt.reshape(-1, 1)
+
+
+_ROLL_STAT_BUILDERS = {
+    "mean": _roll_mean_feature,
+    "std": _roll_std_feature,
+    "min": _roll_min_feature,
+    "max": _roll_max_feature,
+    "median": _roll_median_feature,
+    "iqr": _roll_iqr_feature,
+    "mad": _roll_mad_feature,
+    "slope": _roll_slope_feature,
+}
+
+
+def _build_roll_stat_feature(
+    tail: np.ndarray,
+    stat_name: str,
+    moment_context: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+) -> np.ndarray:
+    if stat_name == "skew":
+        return _roll_skew_feature(tail, moment_context)
+    if stat_name == "kurt":
+        return _roll_kurt_feature(tail, moment_context)
+    return _ROLL_STAT_BUILDERS[stat_name](tail)
+
+
+def _append_roll_stat_features(
+    tail: np.ndarray,
+    ww: int,
+    stats: tuple[str, ...],
+    feats: list[np.ndarray],
+    names: list[str],
+) -> None:
+    if not stats:
+        return
+    stat_set = set(stats)
+    moment_context = None
+    if "skew" in stat_set or "kurt" in stat_set:
+        moment_context = _roll_moment_context(tail)
+    for stat_name in _ROLL_STAT_ORDER:
+        if stat_name not in stat_set:
+            continue
+        feats.append(_build_roll_stat_feature(tail, stat_name, moment_context))
+        names.append(f"roll_{stat_name}_{ww}")
+
+
+def _append_diff_features(
+    X: np.ndarray,
+    diffs: tuple[int, ...],
+    feats: list[np.ndarray],
+    names: list[str],
+    *,
+    lags: int,
+) -> None:
+    if not diffs:
+        return
+    last = X[:, -1]
+    for k in diffs:
+        kk = int(k)
+        if kk <= 0:
+            raise ValueError("diff_lags must be >= 1")
+        if kk >= lags:
+            raise ValueError(f"diff_lag {kk} must be < lags={lags}")
+        feats.append((last - X[:, -1 - kk]).reshape(-1, 1))
+        names.append(f"diff_{kk}")
+
+
+def _finalize_feature_matrix(
+    feats: list[np.ndarray],
+    names: list[str],
+    *,
+    rows: int,
+    error_message: str,
+) -> tuple[np.ndarray, list[str]]:
+    if not feats:
+        return np.empty((rows, 0), dtype=float), []
+    matrix = np.concatenate(feats, axis=1).astype(float, copy=False)
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError(error_message)
+    return matrix, names
+
+
 def build_column_lag_features(
     values: Any,
     *,
@@ -122,48 +360,22 @@ def build_column_lag_features(
     """
     Build lagged column features from a 1D/2D source for target indices `t`.
     """
-    arr = np.asarray(values, dtype=float)
-    if arr.ndim == 1:
-        arr = arr.reshape(-1, 1)
-    if arr.ndim != 2:
-        raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
-    if arr.size > 0 and not np.all(np.isfinite(arr)):
-        raise ValueError("Non-finite values in lag feature source")
-
-    tt = np.asarray(t, dtype=int).reshape(-1)
+    arr, tt = _prepare_lag_feature_inputs(values, t)
     if tt.size == 0:
         return np.empty((0, 0), dtype=float), []
-    if np.any(tt < 0):
-        raise ValueError("t indices must be >= 0")
-    if int(np.max(tt)) >= int(arr.shape[0]):
-        raise ValueError("t indices must be < len(values)")
 
     lag_steps = normalize_lag_steps(lags, allow_zero=allow_zero, name=f"{prefix}_lags")
     if not lag_steps:
         return np.empty((int(tt.size), 0), dtype=float), []
 
-    names_in = normalize_str_tuple(column_names)
-    if names_in:
-        if len(names_in) != int(arr.shape[1]):
-            raise ValueError("column_names must match values.shape[1]")
-        cols = list(names_in)
-    else:
-        cols = [f"col{i}" for i in range(int(arr.shape[1]))]
-
-    feats: list[np.ndarray] = []
-    names: list[str] = []
-    for lag in lag_steps:
-        idx = tt - int(lag)
-        if np.any(idx < 0):
-            raise ValueError(f"{prefix}_lags require t >= lag")
-        feats.append(arr[idx, :].astype(float, copy=False))
-        for col in cols:
-            names.append(f"{prefix}_{col}_lag{int(lag)}")
-
-    out = np.concatenate(feats, axis=1).astype(float, copy=False)
-    if not np.all(np.isfinite(out)):
-        raise ValueError("Non-finite values in generated lag features")
-    return out, names
+    cols = _resolve_column_names(column_names, width=int(arr.shape[1]))
+    feats, names = _build_lag_feature_blocks(arr, tt, lag_steps, cols, prefix=prefix)
+    return _finalize_feature_matrix(
+        feats,
+        names,
+        rows=int(tt.size),
+        error_message="Non-finite values in generated lag features",
+    )
 
 
 def build_lag_derived_features(
@@ -197,93 +409,19 @@ def build_lag_derived_features(
     if rows == 0 or lags == 0:
         return np.empty((rows, 0), dtype=float), []
 
-    windows = tuple(sorted(set(normalize_int_tuple(roll_windows))))
-    stats = tuple(sorted({s.lower().strip() for s in normalize_str_tuple(roll_stats) if s}))
-    diffs = tuple(sorted(set(normalize_int_tuple(diff_lags))))
-
-    allowed = {"mean", "std", "min", "max", "median", "slope", "iqr", "mad", "skew", "kurt"}
-    bad = sorted({s for s in stats if s not in allowed})
-    if bad:
-        raise ValueError(f"roll_stats contains unknown values: {bad}. Allowed: {sorted(allowed)}")
-
+    windows, stats, diffs = _normalize_roll_feature_config(roll_windows, roll_stats, diff_lags)
     feats: list[np.ndarray] = []
     names: list[str] = []
 
     for w in windows:
-        ww = int(w)
-        if ww <= 0:
-            raise ValueError("roll_windows must be >= 1")
-        if ww > lags:
-            raise ValueError(f"roll_window {ww} exceeds lags={lags}")
+        ww = _validate_roll_window(int(w), lags=lags)
         tail = X[:, -ww:]
+        _append_roll_stat_features(tail, ww, stats, feats, names)
 
-        if "mean" in stats:
-            feats.append(np.mean(tail, axis=1).reshape(-1, 1))
-            names.append(f"roll_mean_{ww}")
-        if "std" in stats:
-            feats.append(np.std(tail, axis=1).reshape(-1, 1))
-            names.append(f"roll_std_{ww}")
-        if "min" in stats:
-            feats.append(np.min(tail, axis=1).reshape(-1, 1))
-            names.append(f"roll_min_{ww}")
-        if "max" in stats:
-            feats.append(np.max(tail, axis=1).reshape(-1, 1))
-            names.append(f"roll_max_{ww}")
-        if "median" in stats:
-            feats.append(np.median(tail, axis=1).reshape(-1, 1))
-            names.append(f"roll_median_{ww}")
-        if "iqr" in stats:
-            q25, q75 = np.percentile(tail, [25.0, 75.0], axis=1)
-            feats.append((q75 - q25).reshape(-1, 1))
-            names.append(f"roll_iqr_{ww}")
-        if "mad" in stats:
-            med = np.median(tail, axis=1).reshape(-1, 1)
-            feats.append(np.median(np.abs(tail - med), axis=1).reshape(-1, 1))
-            names.append(f"roll_mad_{ww}")
-        if "skew" in stats or "kurt" in stats:
-            mu = np.mean(tail, axis=1, dtype=float).reshape(-1, 1)
-            centered = tail - mu
-            m2 = np.mean(centered * centered, axis=1, dtype=float).reshape(-1)
-            std = np.sqrt(np.maximum(m2, 0.0))
-            ok = std > 0.0
-            if "skew" in stats:
-                m3 = np.mean(centered * centered * centered, axis=1, dtype=float).reshape(-1)
-                skew = np.zeros((rows,), dtype=float)
-                skew[ok] = m3[ok] / (std[ok] ** 3)
-                feats.append(skew.reshape(-1, 1))
-                names.append(f"roll_skew_{ww}")
-            if "kurt" in stats:
-                m4 = np.mean(centered**4, axis=1, dtype=float).reshape(-1)
-                kurt = np.zeros((rows,), dtype=float)
-                kurt[ok] = (m4[ok] / (std[ok] ** 4)) - 3.0  # excess kurtosis
-                feats.append(kurt.reshape(-1, 1))
-                names.append(f"roll_kurt_{ww}")
-        if "slope" in stats:
-            x = np.arange(ww, dtype=float)
-            x = x - float(np.mean(x))
-            denom = float(np.sum(x * x))
-            if denom <= 0.0:
-                raise RuntimeError("Internal error: slope denom must be > 0")
-            # slope = cov(x,y) / var(x), computed along each row.
-            slope = (tail @ x.reshape(-1, 1)).reshape(-1) / denom
-            feats.append(slope.reshape(-1, 1))
-            names.append(f"roll_slope_{ww}")
-
-    if diffs:
-        last = X[:, -1]
-        for k in diffs:
-            kk = int(k)
-            if kk <= 0:
-                raise ValueError("diff_lags must be >= 1")
-            if kk >= lags:
-                raise ValueError(f"diff_lag {kk} must be < lags={lags}")
-            feats.append((last - X[:, -1 - kk]).reshape(-1, 1))
-            names.append(f"diff_{kk}")
-
-    if not feats:
-        return np.empty((rows, 0), dtype=float), []
-
-    F = np.concatenate(feats, axis=1).astype(float, copy=False)
-    if not np.all(np.isfinite(F)):
-        raise ValueError("Non-finite values in derived lag features")
-    return F, names
+    _append_diff_features(X, diffs, feats, names, lags=lags)
+    return _finalize_feature_matrix(
+        feats,
+        names,
+        rows=rows,
+        error_message="Non-finite values in derived lag features",
+    )

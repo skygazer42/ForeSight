@@ -21,11 +21,7 @@ def _function_uses_name(path: str, func_name: str, name: str) -> bool:
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == func_name:
             for sub in ast.walk(node):
-                if (
-                    isinstance(sub, ast.Name)
-                    and isinstance(sub.ctx, ast.Load)
-                    and sub.id == name
-                ):
+                if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) and sub.id == name:
                     return True
             return False
     raise AssertionError(f"Function {func_name!r} not found in {path}")
@@ -84,7 +80,9 @@ def _unused_shape_dims(path: str) -> list[tuple[int, str]]:
     class _Visitor(ast.NodeVisitor):
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
             loaded = {
-                sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+                sub.id
+                for sub in ast.walk(node)
+                if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
             }
             for sub in ast.walk(node):
                 if not isinstance(sub, ast.Assign):
@@ -114,11 +112,14 @@ def test_hf_time_series_forecast_uses_epochs_parameter() -> None:
 
 
 def test_hierarchical_merge_calls_specify_validate_keyword() -> None:
-    assert _call_lines_missing_keyword(
-        "src/foresight/hierarchical.py",
-        method_name="merge",
-        keyword="validate",
-    ) == []
+    assert (
+        _call_lines_missing_keyword(
+            "src/foresight/hierarchical.py",
+            method_name="merge",
+            keyword="validate",
+        )
+        == []
+    )
 
 
 def test_tuning_avoids_dict_comprehension_in_update_calls() -> None:
@@ -127,6 +128,64 @@ def test_tuning_avoids_dict_comprehension_in_update_calls() -> None:
 
 def test_tabular_avoids_set_constructor_with_generator() -> None:
     assert _set_generator_lines("src/foresight/features/tabular.py") == []
+
+
+def test_features_tabular_source_extracts_complexity_helpers() -> None:
+    source = _read_repo_file("src/foresight/features/tabular.py")
+
+    assert "def _prepare_lag_feature_inputs(" in source
+    assert "def _resolve_column_names(" in source
+    assert "def _append_roll_stat_features(" in source
+    assert "def _append_diff_features(" in source
+    assert _function_uses_name(
+        "src/foresight/features/tabular.py",
+        "build_column_lag_features",
+        "_prepare_lag_feature_inputs",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/tabular.py",
+        "build_column_lag_features",
+        "_resolve_column_names",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/tabular.py",
+        "build_lag_derived_features",
+        "_append_roll_stat_features",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/tabular.py",
+        "build_lag_derived_features",
+        "_append_diff_features",
+    )
+
+
+def test_features_time_source_extracts_complexity_helpers() -> None:
+    source = _read_repo_file("src/foresight/features/time.py")
+
+    assert "def _coerce_datetime_series(" in source
+    assert "def _append_cyclical_feature_pair(" in source
+    assert "def _normalize_fourier_periods(" in source
+    assert "def _normalize_fourier_orders(" in source
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "build_time_features",
+        "_coerce_datetime_series",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "build_time_features",
+        "_append_datetime_cyclical_feature_pairs",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "build_fourier_features",
+        "_normalize_fourier_periods",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "build_fourier_features",
+        "_normalize_fourier_orders",
+    )
 
 
 def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
@@ -150,4 +209,4 @@ def test_torch_rnn_paper_zoo_avoids_sonar_flagged_source_patterns() -> None:
 
     assert "_PAPER_DESC = {paper_id: desc for paper_id, desc in _PAPER_DEFS}" not in source
     assert "w = torch.zeros((int(B), self.M), device=xb.device, dtype=xb.dtype)" not in source
-    assert 'return self.head(last)  # (B,2) = (mu, raw_sigma)' not in source
+    assert "return self.head(last)  # (B,2) = (mu, raw_sigma)" not in source
