@@ -757,12 +757,13 @@ def _factory_ar_ols_lags(*, lags: Any = (1, 2, 3, 4, 5), **_params: Any) -> Fore
 def _factory_sar_ols(
     *,
     p: int = 1,
-    P: int = 1,
+    seasonal_ar_order: int = 1,
     season_length: int = 12,
     **_params: Any,
 ) -> ForecasterFn:
+    legacy_seasonal_ar_order = _params.pop("P", seasonal_ar_order)
     p_int = int(p)
-    P_int = int(P)
+    seasonal_ar_order_int = int(legacy_seasonal_ar_order)
     season_length_int = int(season_length)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
@@ -770,7 +771,7 @@ def _factory_sar_ols(
             train,
             horizon,
             p=p_int,
-            P=P_int,
+            P=seasonal_ar_order_int,
             season_length=season_length_int,
         )
 
@@ -1317,7 +1318,7 @@ def _factory_hgb_lag(
 def _factory_svr_lag(
     *,
     lags: int = 12,
-    C: float = 1.0,
+    c: float = 1.0,
     gamma: Any = "scale",
     epsilon: float = 0.1,
     roll_windows: Any = (),
@@ -1329,8 +1330,9 @@ def _factory_svr_lag(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
+    legacy_c = _params.pop("C", c)
     lags_int = int(lags)
-    C_f = float(C)
+    c_value = float(legacy_c)
     gamma_v: Any = gamma
     epsilon_f = float(epsilon)
 
@@ -1339,7 +1341,7 @@ def _factory_svr_lag(
             train,
             horizon,
             lags=lags_int,
-            C=C_f,
+            C=c_value,
             gamma=gamma_v,
             epsilon=epsilon_f,
             roll_windows=roll_windows,
@@ -1357,7 +1359,7 @@ def _factory_svr_lag(
 def _factory_linear_svr_lag(
     *,
     lags: int = 12,
-    C: float = 1.0,
+    c: float = 1.0,
     epsilon: float = 0.0,
     max_iter: int = 5000,
     random_state: int = 0,
@@ -1370,8 +1372,9 @@ def _factory_linear_svr_lag(
     fourier_orders: Any = 2,
     **_params: Any,
 ) -> ForecasterFn:
+    legacy_c = _params.pop("C", c)
     lags_int = int(lags)
-    C_f = float(C)
+    c_value = float(legacy_c)
     epsilon_f = float(epsilon)
     max_iter_int = int(max_iter)
     random_state_int = int(random_state)
@@ -1381,7 +1384,7 @@ def _factory_linear_svr_lag(
             train,
             horizon,
             lags=lags_int,
-            C=C_f,
+            C=c_value,
             epsilon=epsilon_f,
             max_iter=max_iter_int,
             random_state=random_state_int,
@@ -10763,9 +10766,9 @@ def _factory_auto_arima(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_P: int = 0,
-    max_D: int = 0,
-    max_Q: int = 0,
+    max_seasonal_p: int = 0,
+    max_seasonal_d: int = 0,
+    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
     trend: str | None = None,
     enforce_stationarity: bool = True,
@@ -10773,12 +10776,15 @@ def _factory_auto_arima(
     information_criterion: str = "aic",
     **_params: Any,
 ) -> ForecasterFn:
+    legacy_max_seasonal_p = _params.pop("max_P", max_seasonal_p)
+    legacy_max_seasonal_d = _params.pop("max_D", max_seasonal_d)
+    legacy_max_seasonal_q = _params.pop("max_Q", max_seasonal_q)
     max_p_int = int(max_p)
     max_d_int = int(max_d)
     max_q_int = int(max_q)
-    max_P_int = int(max_P)
-    max_D_int = int(max_D)
-    max_Q_int = int(max_Q)
+    max_seasonal_p_int = int(legacy_max_seasonal_p)
+    max_seasonal_d_int = int(legacy_max_seasonal_d)
+    max_seasonal_q_int = int(legacy_max_seasonal_q)
     seasonal_period_int = (
         None
         if seasonal_period is None or str(seasonal_period).strip().lower() in {"none", "null", ""}
@@ -10800,9 +10806,9 @@ def _factory_auto_arima(
             "max_p": max_p_int,
             "max_d": max_d_int,
             "max_q": max_q_int,
-            "max_P": max_P_int,
-            "max_D": max_D_int,
-            "max_Q": max_Q_int,
+            "max_P": max_seasonal_p_int,
+            "max_D": max_seasonal_d_int,
+            "max_Q": max_seasonal_q_int,
             "seasonal_period": seasonal_period_int,
             "trend": trend_s,
             "enforce_stationarity": enforce_stationarity_bool,

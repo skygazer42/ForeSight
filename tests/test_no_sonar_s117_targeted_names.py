@@ -115,6 +115,20 @@ TARGETED_BAD_NAMES: dict[str, set[str]] = {
     "src/foresight/models/trend.py": {"Xf"},
 }
 
+TARGETED_RUNTIME_FUNCTION_BAD_NAMES: dict[str, set[str]] = {
+    "_factory_sar_ols": {"P", "P_int"},
+    "_factory_svr_lag": {"C", "C_f"},
+    "_factory_linear_svr_lag": {"C", "C_f"},
+    "_factory_auto_arima": {
+        "max_P",
+        "max_D",
+        "max_Q",
+        "max_P_int",
+        "max_D_int",
+        "max_Q_int",
+    },
+}
+
 
 def _assigned_names_in_functions(path: str) -> list[str]:
     source = (_repo_root() / path).read_text(encoding="utf-8")
@@ -155,8 +169,55 @@ def _assigned_names_in_functions(path: str) -> list[str]:
     return names
 
 
+def _assigned_names_in_function(path: str, func_name: str) -> list[str]:
+    source = (_repo_root() / path).read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=path)
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != func_name:
+            continue
+        names: list[str] = []
+        arg_nodes = [
+            *node.args.posonlyargs,
+            *node.args.args,
+            *node.args.kwonlyargs,
+        ]
+        if node.args.vararg is not None:
+            arg_nodes.append(node.args.vararg)
+        if node.args.kwarg is not None:
+            arg_nodes.append(node.args.kwarg)
+        names.extend(arg.arg for arg in arg_nodes)
+        for sub in ast.walk(node):
+            targets: list[ast.AST] = []
+            if isinstance(sub, ast.Assign):
+                targets.extend(sub.targets)
+            elif isinstance(sub, ast.AnnAssign):
+                targets.append(sub.target)
+            elif isinstance(sub, ast.For):
+                targets.append(sub.target)
+            elif isinstance(sub, ast.With):
+                for item in sub.items:
+                    if item.optional_vars is not None:
+                        targets.append(item.optional_vars)
+            for target in targets:
+                for leaf in ast.walk(target):
+                    if isinstance(leaf, ast.Name):
+                        names.append(leaf.id)
+        return names
+
+    raise AssertionError(f"Function {func_name!r} not found in {path}")
+
+
 def test_targeted_files_do_not_keep_s117_local_names() -> None:
     for path, bad_names in TARGETED_BAD_NAMES.items():
         names = set(_assigned_names_in_functions(path))
         present = sorted(names.intersection(bad_names))
         assert present == [], f"{path} still contains Sonar S117 names: {present}"
+
+
+def test_runtime_targeted_factories_do_not_keep_s117_local_names() -> None:
+    path = "src/foresight/models/runtime.py"
+    for func_name, bad_names in TARGETED_RUNTIME_FUNCTION_BAD_NAMES.items():
+        names = set(_assigned_names_in_function(path, func_name))
+        present = sorted(names.intersection(bad_names))
+        assert present == [], f"{path}:{func_name} still contains Sonar S117 names: {present}"

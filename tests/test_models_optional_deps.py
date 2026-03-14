@@ -129,23 +129,21 @@ def test_auto_arima_factory_normalizes_trend_and_seasonal_search_params(
         max_p,
         max_d,
         max_q,
-        max_P,
-        max_D,
-        max_Q,
         seasonal_period,
         trend,
         enforce_stationarity,
         enforce_invertibility,
         information_criterion,
+        **kwargs,
     ):
         captured["train"] = list(train)
         captured["horizon"] = horizon
         captured["max_p"] = max_p
         captured["max_d"] = max_d
         captured["max_q"] = max_q
-        captured["max_P"] = max_P
-        captured["max_D"] = max_D
-        captured["max_Q"] = max_Q
+        captured["max_P"] = kwargs["max_P"]
+        captured["max_D"] = kwargs["max_D"]
+        captured["max_Q"] = kwargs["max_Q"]
         captured["seasonal_period"] = seasonal_period
         captured["trend"] = trend
         captured["enforce_stationarity"] = enforce_stationarity

@@ -76,7 +76,7 @@ def test_panel_step_lag_predict_x_supports_historic_and_future_x_lags() -> None:
         }
     )
 
-    X_pred, ds_out = _panel_step_lag_predict_X(
+    x_pred, ds_out = _panel_step_lag_predict_X(
         g,
         uid_val=0.0,
         cutoff=ds[7],
@@ -95,7 +95,7 @@ def test_panel_step_lag_predict_x_supports_historic_and_future_x_lags() -> None:
     )
 
     assert list(pd.to_datetime(ds_out)) == [ds[8], ds[9]]
-    assert X_pred.tolist() == [
+    assert x_pred.tolist() == [
         [5.0, 7.0, 1.0, 106.0, 107.0, 108.0],
         [5.0, 7.0, 2.0, 106.0, 108.0, 109.0],
     ]

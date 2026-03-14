@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from foresight import BaseForecaster, make_forecaster_object
+from foresight.models import runtime as runtime_mod
 from foresight.models.registry import make_forecaster
 
 
@@ -38,3 +39,99 @@ def test_local_forecaster_object_preserves_registry_defaults() -> None:
     expected = make_forecaster("naive-last")(y, 3)
 
     assert np.allclose(yhat, expected)
+
+
+def test_make_forecaster_sar_ols_accepts_legacy_uppercase_p_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, int] = {}
+
+    def _fake_sar_ols_forecast(
+        train: object,
+        horizon: int,
+        *,
+        p: int,
+        P: int,
+        season_length: int,
+    ) -> np.ndarray:
+        captured["p"] = p
+        captured["P"] = P
+        captured["season_length"] = season_length
+        return np.zeros(int(horizon), dtype=float)
+
+    monkeypatch.setattr(runtime_mod, "sar_ols_forecast", _fake_sar_ols_forecast)
+
+    yhat = make_forecaster("sar-ols", p=0, P="2", season_length="7")(
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        2,
+    )
+
+    assert yhat.shape == (2,)
+    assert captured == {"p": 0, "P": 2, "season_length": 7}
+
+
+def test_make_forecaster_svr_variants_accept_legacy_uppercase_c_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, dict[str, float]] = {}
+
+    def _fake_svr_lag_direct_forecast(
+        train: object,
+        horizon: int,
+        *,
+        lags: int,
+        C: float,
+        gamma: object,
+        epsilon: float,
+        **_kwargs: object,
+    ) -> np.ndarray:
+        captured["svr-lag"] = {"lags": float(lags), "C": float(C), "epsilon": float(epsilon)}
+        return np.zeros(int(horizon), dtype=float)
+
+    def _fake_linear_svr_lag_direct_forecast(
+        train: object,
+        horizon: int,
+        *,
+        lags: int,
+        C: float,
+        epsilon: float,
+        max_iter: int,
+        random_state: int,
+        **_kwargs: object,
+    ) -> np.ndarray:
+        captured["linear-svr-lag"] = {
+            "lags": float(lags),
+            "C": float(C),
+            "epsilon": float(epsilon),
+            "max_iter": float(max_iter),
+            "random_state": float(random_state),
+        }
+        return np.zeros(int(horizon), dtype=float)
+
+    monkeypatch.setattr(runtime_mod, "svr_lag_direct_forecast", _fake_svr_lag_direct_forecast)
+    monkeypatch.setattr(
+        runtime_mod,
+        "linear_svr_lag_direct_forecast",
+        _fake_linear_svr_lag_direct_forecast,
+    )
+
+    svr_yhat = make_forecaster("svr-lag", lags=3, C="1.5", epsilon="0.2")([1.0] * 12, 2)
+    linear_yhat = make_forecaster(
+        "linear-svr-lag",
+        lags=4,
+        C="2.5",
+        epsilon="0.1",
+        max_iter="123",
+        random_state="9",
+    )([1.0] * 12, 2)
+
+    assert svr_yhat.shape == (2,)
+    assert linear_yhat.shape == (2,)
+    assert captured["svr-lag"] == {"lags": 3.0, "C": 1.5, "epsilon": 0.2}
+    assert captured["linear-svr-lag"] == {
+        "lags": 4.0,
+        "C": 2.5,
+        "epsilon": 0.1,
+        "max_iter": 123.0,
+        "random_state": 9.0,
+    }
