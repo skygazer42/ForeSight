@@ -161,9 +161,8 @@ def _augment_lag_feat_row(
         seasonal_lags=seasonal_lags,
         seasonal_diff_lags=seasonal_diff_lags,
         fourier_periods=fourier_periods,
-    ):
-        if t_next is None or history is None:
-            raise ValueError("t_next and history are required for seasonal/fourier features")
+    ) and (t_next is None or history is None):
+        raise ValueError("t_next and history are required for seasonal/fourier features")
 
     if bool(seasonal_lags) or bool(seasonal_diff_lags):
         seasonal, _ = build_seasonal_lag_features(
@@ -1855,19 +1854,7 @@ def _xgb_lag_direct_forecast(
     if not obj:
         raise ValueError("objective must be non-empty")
 
-    # Objective-specific label constraints (defensive ergonomics).
-    if obj in {"count:poisson", "reg:tweedie"}:
-        if np.any(x < 0.0):
-            raise ValueError(f"{obj} requires non-negative series values")
-    if obj == "reg:squaredlogerror":
-        if np.any(x < 0.0):
-            raise ValueError("reg:squaredlogerror requires non-negative series values")
-    if obj == "reg:gamma":
-        if np.any(x <= 0.0):
-            raise ValueError("reg:gamma requires strictly positive series values")
-    if obj == "reg:logistic":
-        if np.any((x < 0.0) | (x > 1.0)):
-            raise ValueError("reg:logistic requires series values in [0,1]")
+    _xgb_validate_objective_label_constraints(obj, x)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -2019,19 +2006,7 @@ def _xgb_lag_recursive_forecast(
     if not obj:
         raise ValueError("objective must be non-empty")
 
-    # Objective-specific label constraints (defensive ergonomics).
-    if obj in {"count:poisson", "reg:tweedie"}:
-        if np.any(x < 0.0):
-            raise ValueError(f"{obj} requires non-negative series values")
-    if obj == "reg:squaredlogerror":
-        if np.any(x < 0.0):
-            raise ValueError("reg:squaredlogerror requires non-negative series values")
-    if obj == "reg:gamma":
-        if np.any(x <= 0.0):
-            raise ValueError("reg:gamma requires strictly positive series values")
-    if obj == "reg:logistic":
-        if np.any((x < 0.0) | (x > 1.0)):
-            raise ValueError("reg:logistic requires series values in [0,1]")
+    _xgb_validate_objective_label_constraints(obj, x)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -3611,15 +3586,20 @@ def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
 
 
 def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
-    if "n_estimators" in params and params["n_estimators"] is not None:
-        if int(params["n_estimators"]) <= 0:
-            raise ValueError("n_estimators must be >= 1")
-    if "max_depth" in params and params["max_depth"] is not None:
-        if int(params["max_depth"]) <= 0:
-            raise ValueError("max_depth must be >= 1")
-    if "learning_rate" in params and params["learning_rate"] is not None:
-        if float(params["learning_rate"]) <= 0:
-            raise ValueError("learning_rate must be > 0")
+    if (
+        "n_estimators" in params
+        and params["n_estimators"] is not None
+        and int(params["n_estimators"]) <= 0
+    ):
+        raise ValueError("n_estimators must be >= 1")
+    if "max_depth" in params and params["max_depth"] is not None and int(params["max_depth"]) <= 0:
+        raise ValueError("max_depth must be >= 1")
+    if (
+        "learning_rate" in params
+        and params["learning_rate"] is not None
+        and float(params["learning_rate"]) <= 0
+    ):
+        raise ValueError("learning_rate must be > 0")
     if "subsample" in params and params["subsample"] is not None:
         subsample = float(params["subsample"])
         if not (0.0 < subsample <= 1.0):
