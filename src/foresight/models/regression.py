@@ -242,10 +242,10 @@ def lr_lag_forecast(
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -256,8 +256,8 @@ def lr_lag_forecast(
         t_index=t_idx,
         series=x,
     )
-    X_aug = np.concatenate([np.ones((X.shape[0], 1), dtype=float), X], axis=1)
-    coef, *_ = np.linalg.lstsq(X_aug, y, rcond=None)
+    x_aug = np.concatenate([np.ones((X.shape[0], 1), dtype=float), X], axis=1)
+    coef, *_ = np.linalg.lstsq(x_aug, y, rcond=None)
 
     intercept = float(coef[0])
     w = coef[1:].astype(float, copy=False)
@@ -336,11 +336,11 @@ def lr_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(
+    x_base, Y, t_idx = _make_lagged_xy_multi(
         x, lags=target_lags, horizon=int(horizon), start_t=start_t
     )
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -351,8 +351,8 @@ def lr_lag_direct_forecast(
         t_index=t_idx,
         series=x,
     )
-    X_aug = np.concatenate([np.ones((X.shape[0], 1), dtype=float), X], axis=1)
-    coef, *_ = np.linalg.lstsq(X_aug, Y, rcond=None)  # (1+lags, horizon)
+    x_aug = np.concatenate([np.ones((X.shape[0], 1), dtype=float), X], axis=1)
+    coef, *_ = np.linalg.lstsq(x_aug, Y, rcond=None)  # (1+lags, horizon)
 
     intercept = coef[0, :].astype(float, copy=False)
     w = coef[1:, :].astype(float, copy=False)  # (n_features, horizon)
@@ -411,10 +411,10 @@ def ridge_lag_forecast(
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=target_lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -487,9 +487,9 @@ def rf_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -563,9 +563,9 @@ def lasso_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -635,9 +635,9 @@ def elasticnet_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -711,9 +711,9 @@ def knn_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -784,9 +784,9 @@ def gbrt_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -858,11 +858,11 @@ def ridge_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(
+    x_base, Y, t_idx = _make_lagged_xy_multi(
         x, lags=target_lags, horizon=int(horizon), start_t=start_t
     )
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -930,9 +930,9 @@ def decision_tree_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1006,9 +1006,9 @@ def extra_trees_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1081,9 +1081,9 @@ def adaboost_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1159,9 +1159,9 @@ def bagging_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1238,9 +1238,9 @@ def hgb_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1317,9 +1317,9 @@ def svr_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1394,9 +1394,9 @@ def linear_svr_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1470,9 +1470,9 @@ def kernel_ridge_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1546,9 +1546,9 @@ def mlp_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1627,9 +1627,9 @@ def huber_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1703,9 +1703,9 @@ def quantile_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1778,9 +1778,9 @@ def sgd_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1885,9 +1885,9 @@ def _xgb_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -1925,7 +1925,7 @@ def _xgb_lag_direct_forecast(
     out = np.empty((int(horizon),), dtype=float)
     for j in range(int(horizon)):
         if fourier_pred_all is None:
-            Xj = X_base_aug
+            x_j = x_base_aug
             feat = feat_base_aug
         else:
             fourier_train, _ = build_fourier_features(
@@ -1933,7 +1933,7 @@ def _xgb_lag_direct_forecast(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            Xj = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
             feat = np.concatenate(
                 [feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]],
                 axis=1,
@@ -1957,7 +1957,7 @@ def _xgb_lag_direct_forecast(
             verbosity=0,
             **extra,
         )
-        model.fit(Xj, Y[:, j])
+        model.fit(x_j, Y[:, j])
         out[j] = float(model.predict(feat)[0])
 
     return np.asarray(out, dtype=float)
@@ -2035,10 +2035,10 @@ def _xgb_lag_recursive_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -2374,9 +2374,9 @@ def xgbrf_lag_direct_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -2412,7 +2412,7 @@ def xgbrf_lag_direct_forecast(
     out = np.empty((h,), dtype=float)
     for j in range(h):
         if fourier_pred_all is None:
-            Xj = X_base_aug
+            x_j = x_base_aug
             feat = feat_base_aug
         else:
             fourier_train, _ = build_fourier_features(
@@ -2420,7 +2420,7 @@ def xgbrf_lag_direct_forecast(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            Xj = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
             feat = np.concatenate([feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]], axis=1)
 
         model = xgb.XGBRFRegressor(
@@ -2437,7 +2437,7 @@ def xgbrf_lag_direct_forecast(
             tree_method=str(tree_method),
             verbosity=0,
         )
-        model.fit(Xj, Y[:, j])
+        model.fit(x_j, Y[:, j])
         out[j] = float(model.predict(feat)[0])
 
     return np.asarray(out, dtype=float)
@@ -2503,10 +2503,10 @@ def xgbrf_lag_recursive_forecast(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -3674,9 +3674,9 @@ def _xgb_lag_direct_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -3712,7 +3712,7 @@ def _xgb_lag_direct_forecast_kwargs(
     out = np.empty((h,), dtype=float)
     for j in range(h):
         if fourier_pred_all is None:
-            Xj = X_base_aug
+            x_j = x_base_aug
             feat = feat_base_aug
         else:
             fourier_train, _ = build_fourier_features(
@@ -3720,11 +3720,11 @@ def _xgb_lag_direct_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            Xj = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
             feat = np.concatenate([feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]], axis=1)
 
         model = xgb.XGBRegressor(**params)
-        model.fit(Xj, Y[:, j])
+        model.fit(x_j, Y[:, j])
         out[j] = float(model.predict(feat)[0])
     return np.asarray(out, dtype=float)
 
@@ -3770,10 +3770,10 @@ def _xgb_lag_recursive_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -3854,10 +3854,10 @@ def _xgb_lag_step_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    rows = int(X_base.shape[0])
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    rows = int(x_base.shape[0])
     derived, _ = build_lag_derived_features(
-        X_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
+        x_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
     )
     seasonal, _ = build_seasonal_lag_features(
         x, t=t_idx, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -3874,7 +3874,7 @@ def _xgb_lag_step_forecast_kwargs(
         step = np.arange(1, h + 1, dtype=float)
 
     step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
-    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    x_rep = np.repeat(x_base, repeats=h, axis=0)  # (rows*h, lags)
     derived_rep = np.repeat(derived, repeats=h, axis=0)  # (rows*h, k)
     seasonal_rep = np.repeat(seasonal, repeats=h, axis=0)
 
@@ -3886,11 +3886,11 @@ def _xgb_lag_step_forecast_kwargs(
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
-    X_long = np.concatenate([X_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
+    x_long = np.concatenate([x_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
     y_long = Y.reshape(-1).astype(float, copy=False)
 
     model = xgb.XGBRegressor(**params)
-    model.fit(X_long, y_long)
+    model.fit(x_long, y_long)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
     derived_pred, _ = build_lag_derived_features(
@@ -3963,9 +3963,9 @@ def _xgb_lag_dirrec_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -3985,17 +3985,17 @@ def _xgb_lag_dirrec_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            X_step = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
         else:
-            X_step = X_base_aug
+            x_step = x_base_aug
 
         if j == 0:
-            Xj = X_step
+            x_j = x_step
         else:
-            Xj = np.concatenate([X_step, Y[:, :j]], axis=1)
+            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
         yj = Y[:, j]
         model = xgb.XGBRegressor(**params)
-        model.fit(Xj, yj)
+        model.fit(x_j, yj)
         models.append(model)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
@@ -4077,9 +4077,9 @@ def _xgb_lag_mimo_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -4375,9 +4375,9 @@ def _lgbm_lag_direct_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -4413,7 +4413,7 @@ def _lgbm_lag_direct_forecast_kwargs(
     out = np.empty((h,), dtype=float)
     for j in range(h):
         if fourier_pred_all is None:
-            Xj = X_base_aug
+            x_j = x_base_aug
             feat = feat_base_aug
         else:
             fourier_train, _ = build_fourier_features(
@@ -4421,13 +4421,13 @@ def _lgbm_lag_direct_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            Xj = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
             feat = np.concatenate(
                 [feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]],
                 axis=1,
             )
         model = lgb.LGBMRegressor(**params)
-        model.fit(Xj, Y[:, j])
+        model.fit(x_j, Y[:, j])
         out[j] = float(_lgbm_predict(model, feat)[0])
     return np.asarray(out, dtype=float)
 
@@ -4466,10 +4466,10 @@ def _lgbm_lag_recursive_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -4542,10 +4542,10 @@ def _lgbm_lag_step_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    rows = int(X_base.shape[0])
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    rows = int(x_base.shape[0])
     derived, _ = build_lag_derived_features(
-        X_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
+        x_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
     )
     seasonal, _ = build_seasonal_lag_features(
         x, t=t_idx, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -4562,7 +4562,7 @@ def _lgbm_lag_step_forecast_kwargs(
         step = np.arange(1, h + 1, dtype=float)
 
     step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
-    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    x_rep = np.repeat(x_base, repeats=h, axis=0)  # (rows*h, lags)
     derived_rep = np.repeat(derived, repeats=h, axis=0)
     seasonal_rep = np.repeat(seasonal, repeats=h, axis=0)
 
@@ -4574,11 +4574,11 @@ def _lgbm_lag_step_forecast_kwargs(
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
-    X_long = np.concatenate([X_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
+    x_long = np.concatenate([x_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
     y_long = Y.reshape(-1).astype(float, copy=False)
 
     model = lgb.LGBMRegressor(**params)
-    model.fit(X_long, y_long)
+    model.fit(x_long, y_long)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
     derived_pred, _ = build_lag_derived_features(
@@ -4644,9 +4644,9 @@ def _lgbm_lag_dirrec_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -4666,17 +4666,17 @@ def _lgbm_lag_dirrec_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            X_step = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
         else:
-            X_step = X_base_aug
+            x_step = x_base_aug
 
         if j == 0:
-            Xj = X_step
+            x_j = x_step
         else:
-            Xj = np.concatenate([X_step, Y[:, :j]], axis=1)
+            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
         yj = Y[:, j]
         model = lgb.LGBMRegressor(**params)
-        model.fit(Xj, yj)
+        model.fit(x_j, yj)
         models.append(model)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
@@ -5144,9 +5144,9 @@ def _catboost_lag_direct_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -5183,7 +5183,7 @@ def _catboost_lag_direct_forecast_kwargs(
     for j in range(h):
         model = cb.CatBoostRegressor(**params)
         if fourier_pred_all is None:
-            Xj = X_base_aug
+            x_j = x_base_aug
             feat = feat_base_aug
         else:
             fourier_train, _ = build_fourier_features(
@@ -5191,13 +5191,13 @@ def _catboost_lag_direct_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            Xj = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
             feat = np.concatenate(
                 [feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]],
                 axis=1,
             )
 
-        model.fit(Xj, Y[:, j])
+        model.fit(x_j, Y[:, j])
         out[j] = float(model.predict(feat)[0])
     return np.asarray(out, dtype=float)
 
@@ -5238,10 +5238,10 @@ def _catboost_lag_recursive_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
+    x_base, y = make_lagged_xy(x, lags=lags, start_t=start_t)
     t_idx = np.arange(int(start_t), int(x.size), dtype=int)
     X = _augment_lag_matrix(
-        X_base,
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -5316,10 +5316,10 @@ def _catboost_lag_step_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    rows = int(X_base.shape[0])
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    rows = int(x_base.shape[0])
     derived, _ = build_lag_derived_features(
-        X_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
+        x_base, roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
     )
     seasonal, _ = build_seasonal_lag_features(
         x, t=t_idx, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -5336,7 +5336,7 @@ def _catboost_lag_step_forecast_kwargs(
         step = np.arange(1, h + 1, dtype=float)
 
     step_idx = np.tile(step, rows).reshape(-1, 1)  # (rows*h, 1)
-    X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+    x_rep = np.repeat(x_base, repeats=h, axis=0)  # (rows*h, lags)
     derived_rep = np.repeat(derived, repeats=h, axis=0)
     seasonal_rep = np.repeat(seasonal, repeats=h, axis=0)
 
@@ -5348,11 +5348,11 @@ def _catboost_lag_step_forecast_kwargs(
     else:
         fourier_long = np.empty((rows * h, 0), dtype=float)
 
-    X_long = np.concatenate([X_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
+    x_long = np.concatenate([x_rep, derived_rep, seasonal_rep, fourier_long, step_idx], axis=1)
     y_long = Y.reshape(-1).astype(float, copy=False)
 
     model = cb.CatBoostRegressor(**params)
-    model.fit(X_long, y_long)
+    model.fit(x_long, y_long)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)
     derived_pred, _ = build_lag_derived_features(
@@ -5420,9 +5420,9 @@ def _catboost_lag_dirrec_forecast_kwargs(
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
     )
-    X_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
-    X_base_aug = _augment_lag_matrix(
-        X_base,
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=h, start_t=start_t)
+    x_base_aug = _augment_lag_matrix(
+        x_base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
@@ -5442,17 +5442,17 @@ def _catboost_lag_dirrec_forecast_kwargs(
                 periods=fourier_periods,
                 orders=fourier_orders,
             )
-            X_step = np.concatenate([X_base_aug, fourier_train], axis=1)
+            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
         else:
-            X_step = X_base_aug
+            x_step = x_base_aug
 
         if j == 0:
-            Xj = X_step
+            x_j = x_step
         else:
-            Xj = np.concatenate([X_step, Y[:, :j]], axis=1)
+            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
         yj = Y[:, j]
         model = cb.CatBoostRegressor(**params)
-        model.fit(Xj, yj)
+        model.fit(x_j, yj)
         models.append(model)
 
     base_feat = x[-lags:].astype(float, copy=False).reshape(1, -1)

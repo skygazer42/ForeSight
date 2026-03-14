@@ -208,7 +208,7 @@ def _panel_step_lag_train_xy(
     uid_to_val: dict[str, float] = {}
     next_uid = 0
 
-    Xs: list[np.ndarray] = []
+    x_blocks: list[np.ndarray] = []
     ys: list[np.ndarray] = []
 
     for uid, g in df.groupby("unique_id", sort=False):
@@ -241,29 +241,29 @@ def _panel_step_lag_train_xy(
         if y_train.size < min_required_t + h:
             continue
 
-        X_base, Y, t_idx = _make_lagged_xy_multi(
+        x_base, Y, t_idx = _make_lagged_xy_multi(
             y_train,
             lags=target_lag_steps,
             horizon=h,
             start_t=min_required_t,
         )
-        if X_base.size == 0:
+        if x_base.size == 0:
             continue
 
         if int(sample_step) > 1:
-            X_base = X_base[:: int(sample_step), :]
+            x_base = x_base[:: int(sample_step), :]
             Y = Y[:: int(sample_step), :]
             t_idx = t_idx[:: int(sample_step)]
 
-        rows = int(X_base.shape[0])
+        rows = int(x_base.shape[0])
         derived, _derived_names = build_lag_derived_features(
-            X_base,
+            x_base,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
         )
         # Expanded dataset across steps.
-        X_rep = np.repeat(X_base, repeats=h, axis=0)  # (rows*h, lags)
+        x_rep = np.repeat(x_base, repeats=h, axis=0)  # (rows*h, lags)
         derived_rep = np.repeat(derived, repeats=h, axis=0)  # (rows*h, k)
         step_rep = np.tile(step, (rows, 1))  # (rows*h, 1)
 
@@ -305,29 +305,29 @@ def _panel_step_lag_train_xy(
                 )
                 extra_parts.append(futr_block)
 
-        X_core = np.concatenate([X_rep, derived_rep, step_rep], axis=1)
+        x_core = np.concatenate([x_rep, derived_rep, step_rep], axis=1)
         if extra_parts:
             extra_mat = np.concatenate(extra_parts, axis=1)
-            X_long = np.concatenate([X_core, extra_mat], axis=1)
+            x_long = np.concatenate([x_core, extra_mat], axis=1)
         else:
-            X_long = X_core
+            x_long = x_core
 
         y_long = Y.reshape(-1).astype(float, copy=False)
-        if X_long.shape[0] != y_long.shape[0]:
+        if x_long.shape[0] != y_long.shape[0]:
             raise RuntimeError("Internal error: X/y row mismatch")
 
-        if not np.all(np.isfinite(X_long)):
+        if not np.all(np.isfinite(x_long)):
             raise ValueError("Non-finite values in generated features")
         if not np.all(np.isfinite(y_long)):
             raise ValueError("Non-finite values in training targets")
 
-        Xs.append(X_long)
+        x_blocks.append(x_long)
         ys.append(y_long)
 
-    if not Xs:
+    if not x_blocks:
         raise ValueError("No series had enough data to build a global training set at this cutoff")
 
-    X_all = np.concatenate(Xs, axis=0)
+    x_all = np.concatenate(x_blocks, axis=0)
     y_all = np.concatenate(ys, axis=0)
 
     # Feature dimension bookkeeping for factories that want to sanity-check.
@@ -340,7 +340,7 @@ def _panel_step_lag_train_xy(
     exog_dim = int(len(x_cols)) * (int(len(historic_lag_steps)) + int(len(future_lag_steps)))
     id_dim = 1 if str(id_feature).lower().strip() == "ordinal" else 0
 
-    return X_all, y_all, uid_to_val, id_dim, time_dim, exog_dim
+    return x_all, y_all, uid_to_val, id_dim, time_dim, exog_dim
 
 
 def _panel_step_lag_predict_x(
@@ -389,7 +389,7 @@ def _panel_step_lag_predict_x(
         return np.empty((0, 0), dtype=float), np.empty((0,), dtype=object)
 
     base = np.asarray([[y_arr[pred_start - lag] for lag in target_lag_steps]], dtype=float)
-    X_rep = np.repeat(base, repeats=h, axis=0)
+    x_rep = np.repeat(base, repeats=h, axis=0)
     derived, _derived_names = build_lag_derived_features(
         base,
         roll_windows=roll_windows,
@@ -431,18 +431,18 @@ def _panel_step_lag_predict_x(
             )
             extra_parts.append(futr_block)
 
-    X_core = np.concatenate([X_rep, derived_rep, step], axis=1)
+    x_core = np.concatenate([x_rep, derived_rep, step], axis=1)
     if extra_parts:
         extra_mat = np.concatenate(extra_parts, axis=1)
-        X_pred = np.concatenate([X_core, extra_mat], axis=1)
+        x_pred = np.concatenate([x_core, extra_mat], axis=1)
     else:
-        X_pred = X_core
+        x_pred = x_core
 
-    if not np.all(np.isfinite(X_pred)):
+    if not np.all(np.isfinite(x_pred)):
         raise ValueError("Non-finite values in prediction features")
 
     ds_out = ds_arr[target_idx]
-    return X_pred.astype(float, copy=False), ds_out
+    return x_pred.astype(float, copy=False), ds_out
 
 
 _panel_step_lag_predict_X = _panel_step_lag_predict_x
@@ -496,7 +496,7 @@ def _run_point_global_model(
     for uid, g in df.groupby("unique_id", sort=False):
         uid_s = str(uid)
         uid_val = float(uid_to_val.get(uid_s, 0.0))
-        X_pred, ds_out = _panel_step_lag_predict_X(
+        x_pred, ds_out = _panel_step_lag_predict_X(
             g,
             uid_val=uid_val,
             cutoff=cutoff,
@@ -513,9 +513,9 @@ def _run_point_global_model(
             id_feature=str(id_feature),
             step_scale=str(step_scale),
         )
-        if X_pred.size == 0:
+        if x_pred.size == 0:
             continue
-        pred = np.asarray(model.predict(X_pred), dtype=float).reshape(-1)
+        pred = np.asarray(model.predict(x_pred), dtype=float).reshape(-1)
         if pred.shape[0] != int(horizon):
             raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
         for i in range(int(horizon)):
@@ -1236,7 +1236,7 @@ def svr_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    C_f = float(C)
+    c_value = float(C)
     epsilon_f = float(epsilon)
     if isinstance(gamma, str):
         gamma_s = gamma.strip().lower()
@@ -1251,13 +1251,13 @@ def svr_step_lag_global_forecaster(
     sample_step_int = int(sample_step)
     lag_role_params = _extract_step_lag_role_params(_params)
 
-    if C_f <= 0.0:
+    if c_value <= 0.0:
         raise ValueError(SVR_C_ERROR)
     if epsilon_f < 0.0:
         raise ValueError(SVR_EPSILON_ERROR)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
-        model = SVR(C=C_f, gamma=gamma_v, epsilon=epsilon_f, kernel="rbf")
+        model = SVR(C=c_value, gamma=gamma_v, epsilon=epsilon_f, kernel="rbf")
         model.fit(X_train, y_train)
         return model
 
@@ -1310,7 +1310,7 @@ def linear_svr_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    C_f = float(C)
+    c_value = float(C)
     epsilon_f = float(epsilon)
     max_iter_int = int(max_iter)
     random_state_int = int(random_state)
@@ -1319,7 +1319,7 @@ def linear_svr_step_lag_global_forecaster(
     sample_step_int = int(sample_step)
     lag_role_params = _extract_step_lag_role_params(_params)
 
-    if C_f <= 0.0:
+    if c_value <= 0.0:
         raise ValueError(SVR_C_ERROR)
     if epsilon_f < 0.0:
         raise ValueError(SVR_EPSILON_ERROR)
@@ -1328,7 +1328,7 @@ def linear_svr_step_lag_global_forecaster(
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = LinearSVR(
-            C=C_f,
+            C=c_value,
             epsilon=epsilon_f,
             max_iter=max_iter_int,
             random_state=random_state_int,
@@ -1685,7 +1685,7 @@ def passive_aggressive_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    C_f = float(C)
+    c_value = float(C)
     loss_s = str(loss).strip().lower()
     epsilon_f = float(epsilon)
     max_iter_int = int(max_iter)
@@ -1695,7 +1695,7 @@ def passive_aggressive_step_lag_global_forecaster(
     sample_step_int = int(sample_step)
     lag_role_params = _extract_step_lag_role_params(_params)
 
-    if C_f <= 0.0:
+    if c_value <= 0.0:
         raise ValueError(SVR_C_ERROR)
     if loss_s not in {"epsilon_insensitive", "squared_epsilon_insensitive"}:
         raise ValueError("loss must be one of: epsilon_insensitive, squared_epsilon_insensitive")
@@ -1706,7 +1706,7 @@ def passive_aggressive_step_lag_global_forecaster(
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = PassiveAggressiveRegressor(
-            C=C_f,
+            C=c_value,
             loss=loss_s,
             epsilon=epsilon_f,
             max_iter=max_iter_int,
@@ -2306,7 +2306,7 @@ def hgb_step_lag_global_forecaster(
         for uid, g in df.groupby("unique_id", sort=False):
             uid_s = str(uid)
             uid_val = float(uid_to_val.get(uid_s, 0.0))
-            X_pred, ds_out = _panel_step_lag_predict_X(
+            x_pred, ds_out = _panel_step_lag_predict_X(
                 g,
                 uid_val=uid_val,
                 cutoff=cutoff,
@@ -2321,9 +2321,9 @@ def hgb_step_lag_global_forecaster(
                 step_scale=str(step_scale),
                 **lag_role_params,
             )
-            if X_pred.size == 0:
+            if x_pred.size == 0:
                 continue
-            pred = model.predict(X_pred)
+            pred = model.predict(x_pred)
             pred = np.asarray(pred, dtype=float).reshape(-1)
             if pred.shape[0] != int(horizon):
                 raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
@@ -2507,7 +2507,7 @@ def _xgb_step_lag_global_forecaster_impl(
         for uid, g in df.groupby("unique_id", sort=False):
             uid_s = str(uid)
             uid_val = float(uid_to_val.get(uid_s, 0.0))
-            X_pred, ds_out = _panel_step_lag_predict_X(
+            x_pred, ds_out = _panel_step_lag_predict_X(
                 g,
                 uid_val=uid_val,
                 cutoff=cutoff,
@@ -2522,14 +2522,14 @@ def _xgb_step_lag_global_forecaster_impl(
                 step_scale=step_scale_s,
                 **lag_role_params,
             )
-            if X_pred.size == 0:
+            if x_pred.size == 0:
                 continue
 
             out_row: dict[str, Any]
             if q_vals:
                 preds_q: dict[float, np.ndarray] = {}
                 for q, m in models_by_q.items():
-                    p = np.asarray(m.predict(X_pred), dtype=float).reshape(-1)
+                    p = np.asarray(m.predict(x_pred), dtype=float).reshape(-1)
                     if p.shape[0] != int(horizon):
                         raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
@@ -2545,7 +2545,7 @@ def _xgb_step_lag_global_forecaster_impl(
                     rows.append(out_row)
             else:
                 assert point_model is not None
-                pred = np.asarray(point_model.predict(X_pred), dtype=float).reshape(-1)
+                pred = np.asarray(point_model.predict(x_pred), dtype=float).reshape(-1)
                 if pred.shape[0] != int(horizon):
                     raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):
@@ -3379,7 +3379,7 @@ def lgbm_step_lag_global_forecaster(
         for uid, g in df.groupby("unique_id", sort=False):
             uid_s = str(uid)
             uid_val = float(uid_to_val.get(uid_s, 0.0))
-            X_pred, ds_out = _panel_step_lag_predict_X(
+            x_pred, ds_out = _panel_step_lag_predict_X(
                 g,
                 uid_val=uid_val,
                 cutoff=cutoff,
@@ -3394,14 +3394,14 @@ def lgbm_step_lag_global_forecaster(
                 step_scale=step_scale_s,
                 **lag_role_params,
             )
-            if X_pred.size == 0:
+            if x_pred.size == 0:
                 continue
 
             out_row: dict[str, Any]
             if q_vals:
                 preds_q: dict[float, np.ndarray] = {}
                 for q, m in models_by_q.items():
-                    p = _predict(m, X_pred)
+                    p = _predict(m, x_pred)
                     if p.shape[0] != int(horizon):
                         raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
@@ -3417,7 +3417,7 @@ def lgbm_step_lag_global_forecaster(
                     rows.append(out_row)
             else:
                 assert point_model is not None
-                pred = _predict(point_model, X_pred)
+                pred = _predict(point_model, x_pred)
                 if pred.shape[0] != int(horizon):
                     raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):
@@ -3549,7 +3549,7 @@ def catboost_step_lag_global_forecaster(
         for uid, g in df.groupby("unique_id", sort=False):
             uid_s = str(uid)
             uid_val = float(uid_to_val.get(uid_s, 0.0))
-            X_pred, ds_out = _panel_step_lag_predict_X(
+            x_pred, ds_out = _panel_step_lag_predict_X(
                 g,
                 uid_val=uid_val,
                 cutoff=cutoff,
@@ -3564,14 +3564,14 @@ def catboost_step_lag_global_forecaster(
                 step_scale=step_scale_s,
                 **lag_role_params,
             )
-            if X_pred.size == 0:
+            if x_pred.size == 0:
                 continue
 
             out_row: dict[str, Any]
             if q_vals:
                 preds_q: dict[float, np.ndarray] = {}
                 for q, m in models_by_q.items():
-                    p = np.asarray(m.predict(X_pred), dtype=float).reshape(-1)
+                    p = np.asarray(m.predict(x_pred), dtype=float).reshape(-1)
                     if p.shape[0] != int(horizon):
                         raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
@@ -3587,7 +3587,7 @@ def catboost_step_lag_global_forecaster(
                     rows.append(out_row)
             else:
                 assert point_model is not None
-                pred = np.asarray(point_model.predict(X_pred), dtype=float).reshape(-1)
+                pred = np.asarray(point_model.predict(x_pred), dtype=float).reshape(-1)
                 if pred.shape[0] != int(horizon):
                     raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):

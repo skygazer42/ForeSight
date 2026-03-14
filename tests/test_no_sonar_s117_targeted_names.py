@@ -9,6 +9,26 @@ def _repo_root() -> Path:
 
 
 TARGETED_BAD_NAMES: dict[str, set[str]] = {
+    "src/foresight/models/global_regression.py": {
+        "C_f",
+        "X_all",
+        "X_base",
+        "X_core",
+        "X_long",
+        "X_pred",
+        "X_rep",
+        "Xs",
+    },
+    "src/foresight/models/regression.py": {
+        "X_aug",
+        "X_base",
+        "X_base_aug",
+        "X_long",
+        "X_rep",
+        "X_step",
+        "Xj",
+    },
+    "src/foresight/models/statsmodels_wrap.py": {"X_cols", "Xf", "Xf_cols"},
     "src/foresight/models/catalog/classical.py": {"ModelSpec"},
     "src/foresight/models/catalog/foundation.py": {"ModelSpec"},
     "src/foresight/models/catalog/ml.py": {"ModelSpec"},

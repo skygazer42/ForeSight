@@ -1146,10 +1146,10 @@ def fourier_ets_forecast(
         orders=orders_tup,
     )
 
-    X_cols: list[np.ndarray] = [np.ones((int(x.size),), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((int(x.size),), dtype=float)]
     if train_exog is not None:
-        X_cols.extend([train_exog[:, j] for j in range(train_exog.shape[1])])
-    X = np.stack(X_cols, axis=1)
+        x_cols.extend([train_exog[:, j] for j in range(train_exog.shape[1])])
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x, rcond=None)
     fitted = X @ coef
     resid = x - fitted
@@ -1164,11 +1164,11 @@ def fourier_ets_forecast(
     resid_res = resid_model.fit()
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if future_exog is not None:
-        Xf_cols.extend([future_exog[:, j] for j in range(future_exog.shape[1])])
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+        x_future_cols.extend([future_exog[:, j] for j in range(future_exog.shape[1])])
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     return np.asarray(base_fc + resid_fc, dtype=float)
 
 
@@ -1207,10 +1207,10 @@ def fourier_uc_forecast(
         orders=orders_tup,
     )
 
-    X_cols: list[np.ndarray] = [np.ones((int(x.size),), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((int(x.size),), dtype=float)]
     if train_exog is not None:
-        X_cols.extend([train_exog[:, j] for j in range(train_exog.shape[1])])
-    X = np.stack(X_cols, axis=1)
+        x_cols.extend([train_exog[:, j] for j in range(train_exog.shape[1])])
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x, rcond=None)
     fitted = X @ coef
     resid = x - fitted
@@ -1222,11 +1222,11 @@ def fourier_uc_forecast(
         seasonal=None,
     )
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if future_exog is not None:
-        Xf_cols.extend([future_exog[:, j] for j in range(future_exog.shape[1])])
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+        x_future_cols.extend([future_exog[:, j] for j in range(future_exog.shape[1])])
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     return np.asarray(base_fc + resid_fc, dtype=float)
 
 
@@ -1776,8 +1776,8 @@ def tbats_lite_forecast(
             cols_f.append(np.sin(w * float(k) * tf))
             cols_f.append(np.cos(w * float(k) * tf))
 
-    Xf = np.stack(cols_f, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(cols_f, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
@@ -1827,9 +1827,9 @@ def tbats_lite_autoreg_forecast(
     )
 
     n = int(x_work.size)
-    X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
     if bool(include_trend):
-        X_cols.append(np.arange(n, dtype=float))
+        x_cols.append(np.arange(n, dtype=float))
     fourier_train = _build_fourier_exog(
         start=0,
         steps=n,
@@ -1837,9 +1837,9 @@ def tbats_lite_autoreg_forecast(
         orders=orders_tup,
     )
     if fourier_train is not None:
-        X_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
+        x_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
 
-    X = np.stack(X_cols, axis=1)
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x_work, rcond=None)
     fitted = X @ coef
     resid = x_work - fitted
@@ -1854,9 +1854,9 @@ def tbats_lite_autoreg_forecast(
     resid_res = resid_model.fit()
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if bool(include_trend):
-        Xf_cols.append(np.arange(n, n + int(horizon), dtype=float))
+        x_future_cols.append(np.arange(n, n + int(horizon), dtype=float))
     fourier_future = _build_fourier_exog(
         start=n,
         steps=int(horizon),
@@ -1864,10 +1864,10 @@ def tbats_lite_autoreg_forecast(
         orders=orders_tup,
     )
     if fourier_future is not None:
-        Xf_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
+        x_future_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
 
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
@@ -1916,9 +1916,9 @@ def tbats_lite_ets_forecast(
     )
 
     n = int(x_work.size)
-    X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
     if bool(include_trend):
-        X_cols.append(np.arange(n, dtype=float))
+        x_cols.append(np.arange(n, dtype=float))
     fourier_train = _build_fourier_exog(
         start=0,
         steps=n,
@@ -1926,9 +1926,9 @@ def tbats_lite_ets_forecast(
         orders=orders_tup,
     )
     if fourier_train is not None:
-        X_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
+        x_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
 
-    X = np.stack(X_cols, axis=1)
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x_work, rcond=None)
     fitted = X @ coef
     resid = x_work - fitted
@@ -1943,9 +1943,9 @@ def tbats_lite_ets_forecast(
     resid_res = resid_model.fit()
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if bool(include_trend):
-        Xf_cols.append(np.arange(n, n + int(horizon), dtype=float))
+        x_future_cols.append(np.arange(n, n + int(horizon), dtype=float))
     fourier_future = _build_fourier_exog(
         start=n,
         steps=int(horizon),
@@ -1953,10 +1953,10 @@ def tbats_lite_ets_forecast(
         orders=orders_tup,
     )
     if fourier_future is not None:
-        Xf_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
+        x_future_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
 
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
@@ -2001,9 +2001,9 @@ def tbats_lite_sarimax_forecast(
     )
 
     n = int(x_work.size)
-    X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
     if bool(include_trend):
-        X_cols.append(np.arange(n, dtype=float))
+        x_cols.append(np.arange(n, dtype=float))
     fourier_train = _build_fourier_exog(
         start=0,
         steps=n,
@@ -2011,9 +2011,9 @@ def tbats_lite_sarimax_forecast(
         orders=orders_tup,
     )
     if fourier_train is not None:
-        X_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
+        x_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
 
-    X = np.stack(X_cols, axis=1)
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x_work, rcond=None)
     fitted = X @ coef
     resid = x_work - fitted
@@ -2028,9 +2028,9 @@ def tbats_lite_sarimax_forecast(
         enforce_invertibility=bool(enforce_invertibility),
     )
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if bool(include_trend):
-        Xf_cols.append(np.arange(n, n + int(horizon), dtype=float))
+        x_future_cols.append(np.arange(n, n + int(horizon), dtype=float))
     fourier_future = _build_fourier_exog(
         start=n,
         steps=int(horizon),
@@ -2038,10 +2038,10 @@ def tbats_lite_sarimax_forecast(
         orders=orders_tup,
     )
     if fourier_future is not None:
-        Xf_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
+        x_future_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
 
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
@@ -2088,9 +2088,9 @@ def tbats_lite_auto_arima_forecast(
     )
 
     n = int(x_work.size)
-    X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
     if bool(include_trend):
-        X_cols.append(np.arange(n, dtype=float))
+        x_cols.append(np.arange(n, dtype=float))
     fourier_train = _build_fourier_exog(
         start=0,
         steps=n,
@@ -2098,9 +2098,9 @@ def tbats_lite_auto_arima_forecast(
         orders=orders_tup,
     )
     if fourier_train is not None:
-        X_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
+        x_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
 
-    X = np.stack(X_cols, axis=1)
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x_work, rcond=None)
     fitted = X @ coef
     resid = x_work - fitted
@@ -2117,9 +2117,9 @@ def tbats_lite_auto_arima_forecast(
         information_criterion=str(information_criterion),
     )
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if bool(include_trend):
-        Xf_cols.append(np.arange(n, n + int(horizon), dtype=float))
+        x_future_cols.append(np.arange(n, n + int(horizon), dtype=float))
     fourier_future = _build_fourier_exog(
         start=n,
         steps=int(horizon),
@@ -2127,10 +2127,10 @@ def tbats_lite_auto_arima_forecast(
         orders=orders_tup,
     )
     if fourier_future is not None:
-        Xf_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
+        x_future_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
 
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
@@ -2171,9 +2171,9 @@ def tbats_lite_uc_forecast(
     )
 
     n = int(x_work.size)
-    X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    x_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
     if bool(include_trend):
-        X_cols.append(np.arange(n, dtype=float))
+        x_cols.append(np.arange(n, dtype=float))
     fourier_train = _build_fourier_exog(
         start=0,
         steps=n,
@@ -2181,9 +2181,9 @@ def tbats_lite_uc_forecast(
         orders=orders_tup,
     )
     if fourier_train is not None:
-        X_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
+        x_cols.extend([fourier_train[:, j] for j in range(fourier_train.shape[1])])
 
-    X = np.stack(X_cols, axis=1)
+    X = np.stack(x_cols, axis=1)
     coef, *_ = np.linalg.lstsq(X, x_work, rcond=None)
     fitted = X @ coef
     resid = x_work - fitted
@@ -2195,9 +2195,9 @@ def tbats_lite_uc_forecast(
         seasonal=None,
     )
 
-    Xf_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
+    x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
     if bool(include_trend):
-        Xf_cols.append(np.arange(n, n + int(horizon), dtype=float))
+        x_future_cols.append(np.arange(n, n + int(horizon), dtype=float))
     fourier_future = _build_fourier_exog(
         start=n,
         steps=int(horizon),
@@ -2205,10 +2205,10 @@ def tbats_lite_uc_forecast(
         orders=orders_tup,
     )
     if fourier_future is not None:
-        Xf_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
+        x_future_cols.extend([fourier_future[:, j] for j in range(fourier_future.shape[1])])
 
-    Xf = np.stack(Xf_cols, axis=1)
-    base_fc = Xf @ coef
+    x_future = np.stack(x_future_cols, axis=1)
+    base_fc = x_future @ coef
     yhat_work = np.asarray(base_fc + resid_fc, dtype=float)
 
     if boxcox_lambda is not None:
