@@ -11,6 +11,11 @@ from typing import Any
 from . import cli_shared as _cli_shared
 
 _SWEEP_LONG_DF_CACHE: dict[tuple[str, str, str], Any] = {}
+_FORECAST_HORIZON_HELP = "Forecast horizon"
+_WALK_FORWARD_STEP_HELP = "Walk-forward step size"
+_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
+_MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
+_OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
 
 
 def register_leaderboard_subparsers(sub: Any) -> None:
@@ -20,19 +25,21 @@ def register_leaderboard_subparsers(sub: Any) -> None:
     leaderboard_naive = leaderboard_sub.add_parser("naive", help="Run naive baselines leaderboard")
     leaderboard_naive.add_argument("--dataset", required=True, help="Dataset key")
     leaderboard_naive.add_argument("--y-col", required=True, help="Target column name")
-    leaderboard_naive.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    leaderboard_naive.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    leaderboard_naive.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
+    leaderboard_naive.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     leaderboard_naive.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     leaderboard_naive.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     leaderboard_naive.add_argument(
         "--season-length",
@@ -50,7 +57,7 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     leaderboard_naive.set_defaults(_handler=_cmd_leaderboard_naive)
 
@@ -64,19 +71,23 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         default="",
         help="Optional target column name (default: use dataset spec default_y).",
     )
-    leaderboard_models.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    leaderboard_models.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    leaderboard_models.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
+    leaderboard_models.add_argument(
+        "--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP
+    )
     leaderboard_models.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     leaderboard_models.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     leaderboard_models.add_argument(
         "--models",
@@ -99,7 +110,7 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     leaderboard_models.set_defaults(_handler=_cmd_leaderboard_models)
 
@@ -117,19 +128,21 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         default="",
         help="Optional target column name (default: use dataset spec default_y per dataset).",
     )
-    leaderboard_sweep.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    leaderboard_sweep.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    leaderboard_sweep.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
+    leaderboard_sweep.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     leaderboard_sweep.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     leaderboard_sweep.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     leaderboard_sweep.add_argument(
         "--models",
@@ -208,7 +221,7 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     leaderboard_sweep.add_argument(
         "--jobs",
@@ -269,7 +282,7 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     leaderboard_summarize.add_argument(
         "--sort",

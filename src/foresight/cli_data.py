@@ -8,6 +8,9 @@ import pandas as pd
 
 from . import cli_shared as _cli_shared
 
+_OUTPUT_PATH_HELP = "Optional path to write output"
+_OUTPUT_CSV_FORMAT_HELP = "Output format (default: csv)"
+
 
 def register_data_subparsers(sub: Any) -> None:
     _register_datasets_parser(sub)
@@ -144,13 +147,13 @@ def _register_data_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     data_to_long.add_argument(
         "--format",
         choices=["csv", "json"],
         default="csv",
-        help="Output format (default: csv)",
+        help=_OUTPUT_CSV_FORMAT_HELP,
     )
     data_to_long.set_defaults(_handler=_cmd_data_to_long)
 
@@ -214,13 +217,13 @@ def _register_data_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     data_prepare_long.add_argument(
         "--format",
         choices=["csv", "json"],
         default="csv",
-        help="Output format (default: csv)",
+        help=_OUTPUT_CSV_FORMAT_HELP,
     )
     data_prepare_long.set_defaults(_handler=_cmd_data_prepare_long)
 
@@ -249,13 +252,13 @@ def _register_data_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     data_infer_freq.add_argument(
         "--format",
         choices=["csv", "json"],
         default="csv",
-        help="Output format (default: csv)",
+        help=_OUTPUT_CSV_FORMAT_HELP,
     )
     data_infer_freq.set_defaults(_handler=_cmd_data_infer_freq)
 
@@ -286,13 +289,13 @@ def _register_data_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     data_splits_rolling.add_argument(
         "--format",
         choices=["csv", "json"],
         default="csv",
-        help="Output format (default: csv)",
+        help=_OUTPUT_CSV_FORMAT_HELP,
     )
     data_splits_rolling.set_defaults(_handler=_cmd_data_splits_rolling_origin)
 

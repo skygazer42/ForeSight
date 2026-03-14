@@ -17,6 +17,14 @@ from . import cli_data as _cli_data
 from . import cli_leaderboard as _cli_leaderboard
 from . import cli_shared as _cli_shared
 
+_MODEL_KEY_HELP = "Model key (see: `foresight models list`)"
+_FORECAST_HORIZON_HELP = "Forecast horizon"
+_WALK_FORWARD_STEP_HELP = "Walk-forward step size"
+_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
+_MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
+_OUTPUT_PATH_HELP = "Optional path to write output"
+_OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -58,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     cv_sub = cv.add_subparsers(dest="cv_command", required=True)
 
     cv_run = cv_sub.add_parser("run", help="Run rolling-origin CV and output predictions")
-    cv_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    cv_run.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     cv_run.add_argument("--dataset", required=True, help="Dataset key")
     cv_run.add_argument(
         "--y-col",
@@ -66,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional target column name (default: use dataset spec default_y).",
     )
-    cv_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    cv_run.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
     cv_run.add_argument("--step-size", type=int, default=1, help="CV step size (default: 1)")
     cv_run.add_argument("--min-train-size", type=int, required=True, help="Minimum train size")
     cv_run.add_argument(
@@ -91,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     cv_run.add_argument(
         "--format",
@@ -106,7 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     forecast_csv = forecast_sub.add_parser("csv", help="Forecast a model on an arbitrary CSV file")
     forecast_csv.add_argument(
-        "--model", required=True, help="Model key (see: `foresight models list`)"
+        "--model", required=True, help=_MODEL_KEY_HELP
     )
     forecast_csv.add_argument("--path", required=True, help="Path to a CSV file")
     forecast_csv.add_argument(
@@ -128,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Parse time_col with pandas.to_datetime before forecasting",
     )
-    forecast_csv.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    forecast_csv.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
     forecast_csv.add_argument(
         "--interval-levels",
         type=str,
@@ -163,7 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     forecast_csv.add_argument(
         "--format",
@@ -183,7 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
         "artifact", help="Forecast from a previously saved artifact"
     )
     forecast_artifact.add_argument("--artifact", required=True, help="Path to a saved artifact")
-    forecast_artifact.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
+    forecast_artifact.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
     forecast_artifact.add_argument(
         "--interval-levels",
         type=str,
@@ -218,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     forecast_artifact.add_argument(
         "--format",
@@ -233,7 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     tuning_run = tuning_sub.add_parser("run", help="Run deterministic grid search on a dataset")
     tuning_run.add_argument(
-        "--model", required=True, help="Model key (see: `foresight models list`)"
+        "--model", required=True, help=_MODEL_KEY_HELP
     )
     tuning_run.add_argument("--dataset", required=True, help="Dataset key")
     tuning_run.add_argument(
@@ -242,8 +252,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional target column name (default: use dataset spec default_y).",
     )
-    tuning_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    tuning_run.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    tuning_run.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
+    tuning_run.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     tuning_run.add_argument(
         "--min-train-size",
         type=int,
@@ -290,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OUTPUT_PATH_HELP,
     )
     tuning_run.add_argument(
         "--format",
@@ -308,19 +318,21 @@ def build_parser() -> argparse.ArgumentParser:
     eval_naive_last = eval_sub.add_parser("naive-last", help="Evaluate naive-last baseline")
     eval_naive_last.add_argument("--dataset", required=True, help="Dataset key")
     eval_naive_last.add_argument("--y-col", required=True, help="Target column name")
-    eval_naive_last.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    eval_naive_last.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_naive_last.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
+    eval_naive_last.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     eval_naive_last.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     eval_naive_last.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     eval_naive_last.add_argument(
         "--output",
@@ -332,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     eval_naive_last.set_defaults(_handler=_cmd_eval_naive_last)
 
@@ -341,19 +353,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_seasonal_naive.add_argument("--dataset", required=True, help="Dataset key")
     eval_seasonal_naive.add_argument("--y-col", required=True, help="Target column name")
-    eval_seasonal_naive.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    eval_seasonal_naive.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_seasonal_naive.add_argument(
+        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
+    )
+    eval_seasonal_naive.add_argument(
+        "--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP
+    )
     eval_seasonal_naive.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     eval_seasonal_naive.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     eval_seasonal_naive.add_argument(
         "--season-length",
@@ -371,12 +387,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     eval_seasonal_naive.set_defaults(_handler=_cmd_eval_seasonal_naive)
 
     eval_run = eval_sub.add_parser("run", help="Evaluate any registered model")
-    eval_run.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    eval_run.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     eval_run.add_argument("--dataset", required=True, help="Dataset key")
     eval_run.add_argument(
         "--y-col",
@@ -384,19 +400,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional target column name (default: use dataset spec default_y).",
     )
-    eval_run.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    eval_run.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_run.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
+    eval_run.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     eval_run.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     eval_run.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     eval_run.add_argument(
         "--max-train-size",
@@ -431,12 +447,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     eval_run.set_defaults(_handler=_cmd_eval_run)
 
     eval_csv = eval_sub.add_parser("csv", help="Evaluate a model on an arbitrary CSV file")
-    eval_csv.add_argument("--model", required=True, help="Model key (see: `foresight models list`)")
+    eval_csv.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     eval_csv.add_argument("--path", required=True, help="Path to a CSV file")
     eval_csv.add_argument("--time-col", required=True, help="Time column name")
     eval_csv.add_argument("--y-col", required=True, help="Target column name")
@@ -451,19 +467,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Parse the time column as datetime.",
     )
-    eval_csv.add_argument("--horizon", type=int, required=True, help="Forecast horizon")
-    eval_csv.add_argument("--step", type=int, default=1, help="Walk-forward step size")
+    eval_csv.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
+    eval_csv.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     eval_csv.add_argument(
         "--min-train-size",
         type=int,
         required=True,
-        help="Minimum training size for first window",
+        help=_MIN_TRAIN_SIZE_FIRST_WINDOW_HELP,
     )
     eval_csv.add_argument(
         "--max-windows",
         type=int,
         default=None,
-        help="Optional limit on the number of walk-forward windows",
+        help=_MAX_WINDOWS_LIMIT_HELP,
     )
     eval_csv.add_argument(
         "--max-train-size",
@@ -498,7 +514,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["json", "csv", "md"],
         default="json",
-        help="Output format (default: json)",
+        help=_OUTPUT_JSON_FORMAT_HELP,
     )
     eval_csv.set_defaults(_handler=_cmd_eval_csv)
 
