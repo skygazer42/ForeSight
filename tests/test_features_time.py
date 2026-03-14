@@ -4,7 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from foresight.features.time import build_fourier_features, build_time_features
+from foresight.features.time import (
+    _finalize_feature_matrix,
+    _normalize_fourier_orders,
+    _normalize_fourier_periods,
+    _split_csv_values,
+    build_fourier_features,
+    build_time_features,
+)
 
 
 def test_build_fourier_features_basic_values() -> None:
@@ -116,3 +123,37 @@ def test_build_time_features_normalizes_timezone_aware_inputs() -> None:
             np.sin(2.0 * 2.0 * np.pi / 24.0),
         ]
     )
+
+
+def test_build_fourier_helpers_cover_empty_and_validation_paths() -> None:
+    assert _split_csv_values(" ") == []
+    assert _normalize_fourier_periods(None) == ()
+    assert _normalize_fourier_orders(None, n_periods=2) == (2, 2)
+    assert _normalize_fourier_orders(3, n_periods=2) == (3, 3)
+    assert _normalize_fourier_orders("1,2", n_periods=2) == (1, 2)
+    assert _normalize_fourier_orders("", n_periods=2) == (2, 2)
+    assert _normalize_fourier_orders((3,), n_periods=2) == (3, 3)
+    assert _normalize_fourier_orders(np.int64(4), n_periods=2) == (4, 4)
+
+    with pytest.raises(ValueError, match="fourier orders must be an int or match periods length"):
+        _normalize_fourier_orders("1,2,3", n_periods=2)
+
+    with pytest.raises(ValueError, match="fourier orders must be an int or match periods length"):
+        _normalize_fourier_orders((1, 2, 3), n_periods=2)
+
+    with pytest.raises(ValueError, match="non-finite fourier"):
+        _finalize_feature_matrix(
+            [np.array([[np.nan]])],
+            ["bad"],
+            rows=1,
+            error_message="non-finite fourier",
+        )
+
+
+def test_build_fourier_features_covers_empty_and_non_finite_time_index_paths() -> None:
+    X, names = build_fourier_features([], periods=4)
+    assert X.shape == (0, 0)
+    assert names == []
+
+    with pytest.raises(ValueError, match="Non-finite values in time index"):
+        build_fourier_features([0.0, np.nan], periods=4)

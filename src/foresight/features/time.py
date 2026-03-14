@@ -136,35 +136,46 @@ def _broadcast_fourier_order(value: Any, *, count: int) -> tuple[int, ...]:
     return tuple([int(float(value))] * int(count))
 
 
+def _coerce_fourier_order_values(values: Any, *, n_periods: int) -> tuple[int, ...]:
+    if len(values) != n_periods:
+        raise ValueError("fourier orders must be an int or match periods length")
+    return tuple(int(float(value)) for value in values)
+
+
+def _normalize_string_fourier_orders(orders: str, *, n_periods: int) -> tuple[int, ...]:
+    parts = _split_csv_values(orders)
+    if not parts:
+        return _broadcast_fourier_order(2, count=n_periods)
+    if len(parts) == 1 and n_periods > 1:
+        return _broadcast_fourier_order(parts[0], count=n_periods)
+    return _coerce_fourier_order_values(parts, n_periods=n_periods)
+
+
+def _normalize_sequence_fourier_orders(orders: list | tuple, *, n_periods: int) -> tuple[int, ...]:
+    if len(orders) == 1 and n_periods > 1:
+        return _broadcast_fourier_order(orders[0], count=n_periods)
+    return _coerce_fourier_order_values(orders, n_periods=n_periods)
+
+
+def _validate_fourier_orders(orders: tuple[int, ...]) -> tuple[int, ...]:
+    normalized = tuple(int(order) for order in orders)
+    if any(order <= 0 for order in normalized):
+        raise ValueError("fourier orders must be >= 1")
+    return normalized
+
+
 def _normalize_fourier_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]:
     if orders is None:
         orders_tup = _broadcast_fourier_order(2, count=n_periods)
     elif isinstance(orders, int | float):
         orders_tup = _broadcast_fourier_order(orders, count=n_periods)
     elif isinstance(orders, str):
-        parts = _split_csv_values(orders)
-        if not parts:
-            orders_tup = _broadcast_fourier_order(2, count=n_periods)
-        elif len(parts) == 1 and n_periods > 1:
-            orders_tup = _broadcast_fourier_order(parts[0], count=n_periods)
-        else:
-            if len(parts) != n_periods:
-                raise ValueError("fourier orders must be an int or match periods length")
-            orders_tup = tuple(int(float(part)) for part in parts)
+        orders_tup = _normalize_string_fourier_orders(orders, n_periods=n_periods)
     elif isinstance(orders, list | tuple):
-        if len(orders) == 1 and n_periods > 1:
-            orders_tup = _broadcast_fourier_order(orders[0], count=n_periods)
-        else:
-            if len(orders) != n_periods:
-                raise ValueError("fourier orders must be an int or match periods length")
-            orders_tup = tuple(int(float(order)) for order in orders)
+        orders_tup = _normalize_sequence_fourier_orders(orders, n_periods=n_periods)
     else:
         orders_tup = _broadcast_fourier_order(orders, count=n_periods)
-
-    normalized = tuple(int(order) for order in orders_tup)
-    if any(order <= 0 for order in normalized):
-        raise ValueError("fourier orders must be >= 1")
-    return normalized
+    return _validate_fourier_orders(orders_tup)
 
 
 def _append_fourier_period_features(

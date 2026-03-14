@@ -166,6 +166,8 @@ def test_features_time_source_extracts_complexity_helpers() -> None:
     assert "def _append_cyclical_feature_pair(" in source
     assert "def _normalize_fourier_periods(" in source
     assert "def _normalize_fourier_orders(" in source
+    assert "def _normalize_string_fourier_orders(" in source
+    assert "def _normalize_sequence_fourier_orders(" in source
     assert _function_uses_name(
         "src/foresight/features/time.py",
         "build_time_features",
@@ -185,6 +187,16 @@ def test_features_time_source_extracts_complexity_helpers() -> None:
         "src/foresight/features/time.py",
         "build_fourier_features",
         "_normalize_fourier_orders",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "_normalize_fourier_orders",
+        "_normalize_string_fourier_orders",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/time.py",
+        "_normalize_fourier_orders",
+        "_normalize_sequence_fourier_orders",
     )
 
 
