@@ -10,9 +10,20 @@ _DROPOUT_HELP = "Dropout probability in [0,1)"
 _RNN_DROPOUT_HELP = "Dropout probability in [0,1) (only if num_layers>1)"
 _SEG_RNN_DROPOUT_HELP = "Dropout probability in [0,1) (only if num_layers>1 inside GRU)"
 _LAG_WINDOW_HELP = "Lag window length"
+_GRU_HIDDEN_HELP = "GRU hidden size"
+_GRU_LAYERS_HELP = "Number of GRU layers"
+_CONV_KERNEL_SIZE_HELP = "Conv kernel size"
+_RESIDUAL_BLOCKS_HELP = "Number of residual blocks"
+_MA_WINDOW_HELP = "Moving average window size for decomposition"
 _ATTENTION_HEADS_HELP = "Number of attention heads"
 _ENCODER_LAYERS_HELP = "Number of encoder layers"
 _ENCODER_FF_DIM_HELP = "Feed-forward dimension in the encoder"
+_TRANSFORMER_EMBED_DIM_HELP = "Transformer embedding dimension"
+_TRANSFORMER_ENCODER_LAYERS_HELP = "Number of Transformer encoder layers"
+_FEED_FORWARD_DIM_HELP = "Feed-forward dimension"
+_MODEL_DIMENSION_HELP = "Model dimension"
+_HIDDEN_MODEL_DIM_HELP = "Hidden model dimension"
+_RECURRENT_HIDDEN_SIZE_HELP = "Recurrent hidden size"
 _PATCH_LEN_HELP = "Number of timesteps per patch token"
 _PATCH_EMBED_DIM_HELP = "Patch embedding dimension"
 _PATCH_OR_LATENT_DIM_HELP = "Patch embedding / latent dimension"
@@ -173,8 +184,8 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "GRU hidden size",
-                "num_layers": "Number of GRU layers",
+                "hidden_size": _GRU_HIDDEN_HELP,
+                "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -194,7 +205,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "channels": "Conv channel sizes (e.g. 16,16,16)",
-                "kernel_size": "Conv kernel size",
+                "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -214,7 +225,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "num_blocks": "Number of residual blocks",
+                "num_blocks": _RESIDUAL_BLOCKS_HELP,
                 "num_layers": "Hidden layers per block",
                 "layer_width": "Hidden width per layer",
                 "dropout": _DROPOUT_HELP,
@@ -247,7 +258,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
             requires=("torch",),
@@ -267,10 +278,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
-                "num_layers": "Number of Transformer encoder layers",
-                "dim_feedforward": "Feed-forward dimension",
+                "num_layers": _TRANSFORMER_ENCODER_LAYERS_HELP,
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -291,10 +302,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": _ENCODER_LAYERS_HELP,
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -316,12 +327,12 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": _ENCODER_LAYERS_HELP,
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
             requires=("torch",),
@@ -341,10 +352,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": _ENCODER_LAYERS_HELP,
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -366,11 +377,11 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_layers": "Number of frequency-mixing blocks",
-                "ffn_dim": "Feed-forward dimension",
+                "ffn_dim": _FEED_FORWARD_DIM_HELP,
                 "modes": "Number of retained low-frequency Fourier modes",
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -391,10 +402,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": _ENCODER_LAYERS_HELP,
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -414,7 +425,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_layers": "Number of TimesBlocks",
                 "top_k": "Number of dominant periods to mix",
                 "dropout": _DROPOUT_HELP,
@@ -436,7 +447,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "lstm_layers": "Number of stacked LSTM layers",
                 "dropout": _DROPOUT_HELP,
@@ -504,7 +515,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "x_cols": "Required future covariate columns for forecast_model_long_df / forecast csv",
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": "Number of encoder / cross-attention blocks",
                 "dropout": _DROPOUT_HELP,
@@ -527,7 +538,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Hidden model dimension",
+                "d_model": _HIDDEN_MODEL_DIM_HELP,
                 "memory_dim": "Continuous-time memory state dimension",
                 "num_layers": "Number of stacked LMU blocks",
                 "dropout": _DROPOUT_HELP,
@@ -548,7 +559,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "Recurrent hidden size",
+                "hidden_size": _RECURRENT_HIDDEN_SIZE_HELP,
                 "num_layers": "Number of stacked LTC blocks",
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
@@ -569,7 +580,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "Recurrent hidden size",
+                "hidden_size": _RECURRENT_HIDDEN_SIZE_HELP,
                 "num_layers": "Number of stacked CfC blocks",
                 "backbone_hidden": "Closed-form backbone hidden size",
                 "dropout": _DROPOUT_HELP,
@@ -591,7 +602,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "Recurrent hidden size",
+                "hidden_size": _RECURRENT_HIDDEN_SIZE_HELP,
                 "num_layers": "Number of stacked xLSTM blocks",
                 "proj_factor": "Expansion factor for the gated inner projection",
                 "dropout": _DROPOUT_HELP,
@@ -613,7 +624,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "Recurrent hidden size",
+                "hidden_size": _RECURRENT_HIDDEN_SIZE_HELP,
                 "num_layers": "Number of stacked Griffin blocks",
                 "conv_kernel": "Depthwise convolution kernel size (>=1)",
                 "dropout": _DROPOUT_HELP,
@@ -635,7 +646,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "Recurrent hidden size",
+                "hidden_size": _RECURRENT_HIDDEN_SIZE_HELP,
                 "num_layers": "Number of stacked Hawk blocks",
                 "expansion_factor": "Expansion factor for the recurrent mixer",
                 "dropout": _DROPOUT_HELP,
@@ -788,9 +799,9 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Hidden model dimension",
+                "d_model": _HIDDEN_MODEL_DIM_HELP,
                 "num_layers": "Number of long-filter mixer blocks",
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 "kernel_size": "Odd depthwise filter width for the seasonal mixer",
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
@@ -812,10 +823,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Hidden model dimension",
+                "d_model": _HIDDEN_MODEL_DIM_HELP,
                 "num_layers": "Number of multiscale convolution blocks",
                 "kernel_sizes": "Odd multiscale Conv1D kernel sizes, e.g. 3,5,7",
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -839,7 +850,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "d_model": "Hidden token dimension",
                 "latent_dim": "Latent Koopman state dimension",
                 "num_blocks": "Number of seasonal encoder blocks",
-                "ma_window": "Moving average window size for decomposition",
+                "ma_window": _MA_WINDOW_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -859,7 +870,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
                 "num_layers": "Number of linear-attention mixer blocks",
                 "dropout": _DROPOUT_HELP,
@@ -882,7 +893,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "nhead": "Number of retention heads",
                 "num_layers": "Number of stacked retention blocks",
                 "ffn_dim": "Feed-forward hidden width inside each retention block",
@@ -906,7 +917,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "nhead": "Number of retention heads",
                 "num_layers": "Number of stacked retention blocks",
                 "ffn_dim": "Feed-forward hidden width inside each retention block",
@@ -929,7 +940,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_layers": "Number of stacked Mamba blocks",
                 "dropout": _DROPOUT_HELP,
                 "conv_kernel": "Causal depthwise conv kernel size (>=1)",
@@ -951,7 +962,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_layers": "Number of stacked RWKV blocks",
                 "ffn_dim": "Channel-mix hidden size",
                 "dropout": _DROPOUT_HELP,
@@ -974,7 +985,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_layers": "Number of Hyena blocks",
                 "ffn_dim": "Channel-mixing FFN hidden size",
                 "kernel_size": "Depthwise causal conv kernel size (>=1)",
@@ -1048,7 +1059,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Model dimension",
+                "d_model": _MODEL_DIMENSION_HELP,
                 "num_stages": "Number of SCINet interaction stages",
                 "conv_kernel": "Conv1D kernel size (>=1) inside interaction blocks",
                 "ffn_dim": "FFN hidden size inside blocks",
@@ -1074,9 +1085,9 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
-                "num_layers": "Number of Transformer encoder layers",
+                "num_layers": _TRANSFORMER_ENCODER_LAYERS_HELP,
                 "dim_feedforward": "Transformer FFN dimension",
                 "dropout": _DROPOUT_HELP,
                 "alpha_init": "Initial smoothing alpha in (0,1) (learned during training)",
@@ -1130,10 +1141,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "lags": _LAG_WINDOW_HELP,
                 "patch_len": "Patch length",
                 "stride": "Patch stride",
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
-                "num_layers": "Number of Transformer encoder layers",
-                "dim_feedforward": "Feed-forward dimension",
+                "num_layers": _TRANSFORMER_ENCODER_LAYERS_HELP,
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1160,10 +1171,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "segment_len": "Base segment length (scale i uses segment_len * 2^i)",
                 "stride": "Base segment stride (scale i uses stride * 2^i)",
                 "num_scales": "Number of scales (>=1)",
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
-                "num_layers": "Number of Transformer encoder layers",
-                "dim_feedforward": "Feed-forward dimension",
+                "num_layers": _TRANSFORMER_ENCODER_LAYERS_HELP,
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1190,10 +1201,10 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "segment_len": "Segment length at level-0",
                 "stride": "Segment stride at level-0 (>=1)",
                 "num_levels": "Number of pyramid levels (>=1)",
-                "d_model": "Transformer embedding dimension",
+                "d_model": _TRANSFORMER_EMBED_DIM_HELP,
                 "nhead": _ATTENTION_HEADS_HELP,
-                "num_layers": "Number of Transformer encoder layers",
-                "dim_feedforward": "Feed-forward dimension",
+                "num_layers": _TRANSFORMER_ENCODER_LAYERS_HELP,
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1316,7 +1327,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "channels": "Conv channel sizes (e.g. 32,32,32)",
-                "kernel_size": "Conv kernel size",
+                "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
                 "pool": "Pooling: last, mean, max",
                 **_TORCH_COMMON_PARAM_HELP,
@@ -1339,8 +1350,8 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "channels": "ResNet hidden channels",
-                "num_blocks": "Number of residual blocks",
-                "kernel_size": "Conv kernel size",
+                "num_blocks": _RESIDUAL_BLOCKS_HELP,
+                "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
                 "pool": "Pooling: last, mean, max",
                 **_TORCH_COMMON_PARAM_HELP,
@@ -1363,7 +1374,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "lags": _LAG_WINDOW_HELP,
                 "channels": "Hidden channels",
                 "num_layers": "Number of dilated gated layers",
-                "kernel_size": "Conv kernel size",
+                "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1422,8 +1433,8 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "GRU hidden size",
-                "num_layers": "Number of GRU layers",
+                "hidden_size": _GRU_HIDDEN_HELP,
+                "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1967,7 +1978,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "lags": _LAG_WINDOW_HELP,
                 "d_model": "Embedding dimension",
                 "num_layers": "Number of FNet layers",
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -1989,7 +2000,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "lags": _LAG_WINDOW_HELP,
                 "d_model": "Embedding dimension",
                 "num_layers": _ENCODER_LAYERS_HELP,
-                "dim_feedforward": "Feed-forward dimension",
+                "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
@@ -2059,7 +2070,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "pool_sizes": "Comma-separated pooling sizes (e.g. 1,2,4)",
-                "num_blocks": "Number of residual blocks",
+                "num_blocks": _RESIDUAL_BLOCKS_HELP,
                 "num_layers": "Hidden layers per block",
                 "layer_width": "Hidden width per layer",
                 "dropout": _DROPOUT_HELP,
@@ -2101,7 +2112,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "hidden_size": "RNN hidden size",
-                "num_layers": "Number of GRU layers",
+                "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
                 "loss": "Ignored (DeepAR uses Gaussian NLL)",
@@ -2124,7 +2135,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "lags": _LAG_WINDOW_HELP,
                 "q": "Quantile in (0,1) for pinball loss",
                 "hidden_size": "RNN hidden size",
-                "num_layers": "Number of GRU layers",
+                "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
                 "loss": "Ignored (QRNN uses pinball loss at quantile q)",
@@ -2132,7 +2143,6 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             requires=("torch",),
         ),
     }
-
 
 def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     ModelSpec = context.ModelSpec
@@ -2405,7 +2415,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
         "lags": _LAG_WINDOW_HELP,
         "cnn_channels": "CNN output channels",
         "kernel_size": "CNN kernel size",
-        "rnn_hidden": "GRU hidden size",
+        "rnn_hidden": _GRU_HIDDEN_HELP,
         "skip": "Skip period (0 disables)",
         "highway_window": "Highway window length (0 disables)",
         "dropout": _DROPOUT_HELP,
