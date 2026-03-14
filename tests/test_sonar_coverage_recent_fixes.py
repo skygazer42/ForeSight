@@ -10,10 +10,13 @@ import types
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from foresight.cli import build_parser
+from foresight.cv import cross_validation_predictions_long_df
 from foresight.metrics import _validate_seasonal_training_window, mase, msis, rmsse
+from foresight.models import intermittent as intermittent_mod
 from foresight.models import global_regression as global_regression_mod
 from foresight.models import regression as regression_mod
 from foresight.models import statsmodels_wrap as statsmodels_wrap_mod
@@ -266,6 +269,7 @@ def _install_fake_sklearn(
     kernel_ridge = types.ModuleType("sklearn.kernel_ridge")
     linear_model = types.ModuleType("sklearn.linear_model")
     multioutput = types.ModuleType("sklearn.multioutput")
+    neighbors = types.ModuleType("sklearn.neighbors")
     neural_network = types.ModuleType("sklearn.neural_network")
     svm = types.ModuleType("sklearn.svm")
     tree = types.ModuleType("sklearn.tree")
@@ -299,6 +303,9 @@ def _install_fake_sklearn(
         pass
 
     class HistGradientBoostingRegressor(_CapturedEstimator):
+        pass
+
+    class BaggingRegressor(_CapturedEstimator):
         pass
 
     class DecisionTreeRegressor(_CapturedEstimator):
@@ -340,6 +347,9 @@ def _install_fake_sklearn(
     class MLPRegressor(_CapturedEstimator):
         pass
 
+    class KNeighborsRegressor(_CapturedEstimator):
+        pass
+
     class SVR(_CapturedEstimator):
         pass
 
@@ -362,6 +372,7 @@ def _install_fake_sklearn(
             return np.zeros((int(X.shape[0]), int(self.n_outputs)), dtype=float)
 
     ensemble.AdaBoostRegressor = AdaBoostRegressor
+    ensemble.BaggingRegressor = BaggingRegressor
     ensemble.ExtraTreesRegressor = ExtraTreesRegressor
     ensemble.GradientBoostingRegressor = GradientBoostingRegressor
     ensemble.HistGradientBoostingRegressor = HistGradientBoostingRegressor
@@ -378,6 +389,7 @@ def _install_fake_sklearn(
     linear_model.SGDRegressor = SGDRegressor
     linear_model.TweedieRegressor = TweedieRegressor
     multioutput.MultiOutputRegressor = MultiOutputRegressor
+    neighbors.KNeighborsRegressor = KNeighborsRegressor
     neural_network.MLPRegressor = MLPRegressor
     svm.LinearSVR = LinearSVR
     svm.SVR = SVR
@@ -386,6 +398,7 @@ def _install_fake_sklearn(
     sklearn.kernel_ridge = kernel_ridge
     sklearn.linear_model = linear_model
     sklearn.multioutput = multioutput
+    sklearn.neighbors = neighbors
     sklearn.neural_network = neural_network
     sklearn.svm = svm
     sklearn.tree = tree
@@ -395,6 +408,7 @@ def _install_fake_sklearn(
     monkeypatch.setitem(sys.modules, "sklearn.kernel_ridge", kernel_ridge)
     monkeypatch.setitem(sys.modules, "sklearn.linear_model", linear_model)
     monkeypatch.setitem(sys.modules, "sklearn.multioutput", multioutput)
+    monkeypatch.setitem(sys.modules, "sklearn.neighbors", neighbors)
     monkeypatch.setitem(sys.modules, "sklearn.neural_network", neural_network)
     monkeypatch.setitem(sys.modules, "sklearn.svm", svm)
     monkeypatch.setitem(sys.modules, "sklearn.tree", tree)
@@ -568,6 +582,46 @@ def test_mut_rnnpaper_variants_smoke(paper: str) -> None:
 
     assert out.shape == (2,)
     assert np.all(np.isfinite(out))
+
+
+@pytest.mark.parametrize(
+    ("func_name", "kwargs"),
+    [
+        ("croston_classic_forecast", {"alpha": 0.1}),
+        ("croston_optimized_forecast", {"grid_size": 5}),
+        ("les_forecast", {"alpha": 0.1, "beta": 0.1}),
+        ("tsb_forecast", {"alpha": 0.1, "beta": 0.1}),
+        ("adida_forecast", {"agg_period": 2, "base": "ses", "alpha": 0.1}),
+    ],
+)
+def test_intermittent_forecasters_reuse_horizon_min_error(
+    func_name: str,
+    kwargs: dict[str, object],
+) -> None:
+    func = getattr(intermittent_mod, func_name)
+
+    with pytest.raises(ValueError, match="horizon must be >= 1"):
+        func([0.0, 1.0, 0.0, 2.0, 0.0], 0, **kwargs)
+
+
+def test_cross_validation_predictions_long_df_reuses_n_windows_min_error() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s1"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": np.arange(6, dtype=float),
+        }
+    )
+
+    with pytest.raises(ValueError, match="n_windows must be >= 1"):
+        cross_validation_predictions_long_df(
+            model="naive-last",
+            long_df=long_df,
+            horizon=2,
+            step_size=1,
+            min_train_size=3,
+            n_windows=0,
+        )
 
 
 def test_augment_lag_feat_row_requires_history_for_seasonal_features() -> None:
@@ -896,6 +950,47 @@ def test_regression_svr_family_reuses_shared_validation_messages(
 
     with pytest.raises(ValueError, match=message):
         factory([1.0, 2.0, 3.0, 4.0, 5.0], 1, lags=2, **kwargs)
+
+
+def test_make_lagged_xy_multi_reuses_horizon_min_error() -> None:
+    with pytest.raises(ValueError, match="horizon must be >= 1"):
+        regression_mod._make_lagged_xy_multi(np.arange(8, dtype=float), lags=2, horizon=0)
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "horizon", "kwargs", "message"),
+    [
+        ("lr_lag_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
+        ("lr_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
+        ("ridge_lag_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
+        ("elasticnet_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("elasticnet_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("knn_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("gbrt_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        ("ridge_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
+        ("bagging_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        ("svr_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("linear_svr_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("linear_svr_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("kernel_ridge_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("kernel_ridge_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
+        ("mlp_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
+        ("mlp_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("quantile_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+    ],
+)
+def test_regression_additional_forecasters_cover_recent_literal_refactors(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    horizon: int,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=message):
+        factory([1.0, 2.0, 3.0, 4.0, 5.0], horizon, **kwargs)
 
 
 @pytest.mark.parametrize(
