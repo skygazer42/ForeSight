@@ -11,6 +11,15 @@ _HIDDEN_SIZE_MIN_MSG = "hidden_size must be >= 1"
 _NUM_LAYERS_MIN_MSG = "num_layers must be >= 1"
 _DROPOUT_RANGE_MSG = "dropout must be in [0, 1)"
 _HORIZON_MIN_MSG = "horizon must be >= 1"
+_LAGS_MIN_MSG = "lags must be >= 1"
+_NUM_BLOCKS_MIN_MSG = "num_blocks must be >= 1"
+_D_MODEL_MIN_MSG = "d_model must be >= 1"
+_NHEAD_MIN_MSG = "nhead must be >= 1"
+_D_MODEL_HEAD_DIVISIBILITY_MSG = "d_model must be divisible by nhead"
+_DIM_FEEDFORWARD_MIN_MSG = "dim_feedforward must be >= 1"
+_PATCH_LEN_MIN_MSG = "patch_len must be >= 1"
+_SEGMENT_LEN_MIN_MSG = "segment_len must be >= 1"
+_SEGMENT_LEN_MAX_LAGS_MSG = "segment_len must be <= lags"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -385,7 +394,7 @@ def _make_lagged_xy_multi(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if n < lag_count + h:
         raise ValueError(f"Need >= lags+horizon points (lags={lag_count}, horizon={h}), got {n}")
 
@@ -696,7 +705,7 @@ def _fit_encoder_direct_model(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -1141,7 +1150,7 @@ def torch_tcn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if int(lags) <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(kernel_size) <= 0:
         raise ValueError("kernel_size must be >= 1")
 
@@ -1281,9 +1290,9 @@ def torch_nbeats_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(num_blocks) <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(layer_width) <= 0:
@@ -1403,7 +1412,7 @@ def torch_nlinear_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -1492,7 +1501,7 @@ def torch_dlinear_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(ma_window) <= 1:
         raise ValueError("ma_window must be >= 2")
 
@@ -1593,20 +1602,20 @@ def torch_transformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -1715,15 +1724,15 @@ def torch_informer_direct_forecast(
     ff_dim = int(dim_feedforward)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -1825,15 +1834,15 @@ def torch_autoformer_direct_forecast(
     ma = int(ma_window)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if not (0.0 <= drop < 1.0):
@@ -1942,15 +1951,15 @@ def torch_nonstationary_transformer_direct_forecast(
     ff_dim = int(dim_feedforward)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -2114,7 +2123,7 @@ def torch_fedformer_direct_forecast(
     ma = int(ma_window)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
@@ -2254,15 +2263,15 @@ def torch_itransformer_direct_forecast(
     ff_dim = int(dim_feedforward)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -2359,7 +2368,7 @@ def torch_timesnet_direct_forecast(
     k = int(top_k)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if k <= 0:
@@ -2520,11 +2529,11 @@ def torch_tft_direct_forecast(
     rnn_layers = int(lstm_layers)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if rnn_layers <= 0:
         raise ValueError("lstm_layers must be >= 1")
     if not (0.0 <= drop < 1.0):
@@ -2630,9 +2639,9 @@ def torch_timemixer_direct_forecast(
     scales = _parse_int_tuple(multiscale_factors, name="multiscale_factors")
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if token_hidden <= 0:
         raise ValueError("token_mixing_hidden must be >= 1")
     if channel_hidden <= 0:
@@ -2765,11 +2774,11 @@ def torch_sparsetsf_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if period <= 0:
         raise ValueError("period_len must be >= 1")
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -2866,11 +2875,11 @@ def torch_lightts_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if chunk <= 0:
         raise ValueError("chunk_len must be >= 1")
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -2978,9 +2987,9 @@ def torch_frets_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if k <= 0:
@@ -3109,7 +3118,7 @@ def torch_film_direct_forecast(
     k = int(kernel_size)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
@@ -3235,7 +3244,7 @@ def torch_micn_direct_forecast(
     ks = _parse_int_tuple(kernel_sizes, name="kernel_sizes")
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
@@ -3362,11 +3371,11 @@ def torch_koopa_direct_forecast(
     ma = int(ma_window)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if latent <= 0:
         raise ValueError("latent_dim must be >= 1")
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if not (0.0 <= drop < 1.0):
@@ -3488,11 +3497,11 @@ def torch_samformer_direct_forecast(
     layers = int(num_layers)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
@@ -3625,11 +3634,11 @@ def torch_retnet_direct_forecast(
     hidden = int(ffn_dim)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
@@ -3783,7 +3792,7 @@ def torch_retnet_recursive_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     heads = int(nhead)
@@ -3791,11 +3800,11 @@ def torch_retnet_recursive_forecast(
     hidden = int(ffn_dim)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
@@ -3971,13 +3980,13 @@ def torch_timexer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
@@ -4136,12 +4145,12 @@ def torch_patchtst_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     p = int(patch_len)
     s = int(stride)
     if p <= 0:
-        raise ValueError("patch_len must be >= 1")
+        raise ValueError(_PATCH_LEN_MIN_MSG)
     if s <= 0:
         raise ValueError("stride must be >= 1")
     if p > lag_count:
@@ -4154,11 +4163,11 @@ def torch_patchtst_direct_forecast(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -4277,32 +4286,32 @@ def torch_crossformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     base_seg = int(segment_len)
     base_stride = int(stride)
     n_scales_req = int(num_scales)
     if base_seg <= 0:
-        raise ValueError("segment_len must be >= 1")
+        raise ValueError(_SEGMENT_LEN_MIN_MSG)
     if base_stride <= 0:
         raise ValueError("stride must be >= 1")
     if n_scales_req <= 0:
         raise ValueError("num_scales must be >= 1")
     if base_seg > lag_count:
-        raise ValueError("segment_len must be <= lags")
+        raise ValueError(_SEGMENT_LEN_MAX_LAGS_MSG)
 
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -4455,19 +4464,19 @@ def torch_pyraformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     seg = int(segment_len)
     step = int(stride)
     levels_req = int(num_levels)
     if seg <= 0:
-        raise ValueError("segment_len must be >= 1")
+        raise ValueError(_SEGMENT_LEN_MIN_MSG)
     if step <= 0:
         raise ValueError("stride must be >= 1")
     if levels_req <= 0:
         raise ValueError("num_levels must be >= 1")
     if seg > lag_count:
-        raise ValueError("segment_len must be <= lags")
+        raise ValueError(_SEGMENT_LEN_MAX_LAGS_MSG)
 
     n0 = 1 + (lag_count - seg) // step
     if n0 <= 0:
@@ -4476,15 +4485,15 @@ def torch_pyraformer_direct_forecast(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -4643,11 +4652,11 @@ def torch_perceiver_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
 
     lat = int(latent_len)
     if lat <= 0:
@@ -4655,13 +4664,13 @@ def torch_perceiver_direct_forecast(
 
     heads = int(nhead)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -4794,11 +4803,11 @@ def torch_tsmixer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(d_model) <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_blocks) <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(token_mixing_hidden) <= 0:
         raise ValueError("token_mixing_hidden must be >= 1")
     if int(channel_mixing_hidden) <= 0:
@@ -4933,7 +4942,7 @@ def torch_cnn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(kernel_size) <= 0:
         raise ValueError("kernel_size must be >= 1")
 
@@ -5076,11 +5085,11 @@ def torch_resnet1d_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
         raise ValueError("channels must be >= 1")
     if int(num_blocks) <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(kernel_size) <= 0:
         raise ValueError("kernel_size must be >= 1")
 
@@ -5212,7 +5221,7 @@ def torch_wavenet_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
         raise ValueError("channels must be >= 1")
     if int(num_layers) <= 0:
@@ -5562,7 +5571,7 @@ def torch_attn_gru_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(hidden_size) <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
@@ -5681,13 +5690,13 @@ def torch_segrnn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if seg_len <= 0:
-        raise ValueError("segment_len must be >= 1")
+        raise ValueError(_SEGMENT_LEN_MIN_MSG)
     if seg_len > lag_count:
-        raise ValueError("segment_len must be <= lags")
+        raise ValueError(_SEGMENT_LEN_MAX_LAGS_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if hidden <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
@@ -5826,13 +5835,13 @@ def torch_moderntcn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if patch <= 0:
-        raise ValueError("patch_len must be >= 1")
+        raise ValueError(_PATCH_LEN_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if expand <= 0.0:
         raise ValueError("expansion_factor must be > 0")
     if k <= 0 or k % 2 == 0:
@@ -5988,21 +5997,21 @@ def torch_basisformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if patch <= 0:
-        raise ValueError("patch_len must be >= 1")
+        raise ValueError(_PATCH_LEN_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if bases <= 0:
         raise ValueError("num_bases must be >= 1")
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -6152,17 +6161,17 @@ def torch_witran_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if cols <= 0:
         raise ValueError("grid_cols must be >= 1")
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if hidden <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
@@ -6333,11 +6342,11 @@ def torch_crossgnn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if k <= 0:
         raise ValueError("top_k must be >= 1")
     if not (0.0 <= drop < 1.0):
@@ -6488,11 +6497,11 @@ def torch_pathformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if k <= 0:
         raise ValueError("top_k must be >= 1")
     if not (0.0 <= drop < 1.0):
@@ -6670,15 +6679,15 @@ def torch_timesmamba_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if patch <= 0:
-        raise ValueError("patch_len must be >= 1")
+        raise ValueError(_PATCH_LEN_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if state <= 0:
         raise ValueError("state_size must be >= 1")
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -6821,13 +6830,13 @@ def torch_fnet_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(d_model) <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -6951,9 +6960,9 @@ def torch_gmlp_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(ffn_dim) <= 0:
@@ -7095,9 +7104,9 @@ def torch_nhits_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(num_blocks) <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(layer_width) <= 0:
@@ -7257,9 +7266,9 @@ def torch_tide_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(hidden_size) <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
@@ -7370,7 +7379,7 @@ def torch_deepar_recursive_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(hidden_size) <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
@@ -7499,7 +7508,7 @@ def torch_qrnn_recursive_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if int(hidden_size) <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
@@ -7625,13 +7634,13 @@ def torch_linear_attention_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -7780,11 +7789,11 @@ def torch_inception_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
         raise ValueError("channels must be >= 1")
     if int(num_blocks) <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(bottleneck_channels) <= 0:
         raise ValueError("bottleneck_channels must be >= 1")
 
@@ -7937,11 +7946,11 @@ def torch_mamba_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     drop = float(dropout)
@@ -8093,11 +8102,11 @@ def torch_rwkv_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     ffn = int(ffn_dim)
@@ -8306,11 +8315,11 @@ def torch_hyena_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     hidden = int(ffn_dim)
@@ -8456,7 +8465,7 @@ def torch_dilated_rnn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"gru", "lstm"}:
@@ -8624,11 +8633,11 @@ def torch_kan_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     L = int(num_layers)
     if L <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
@@ -8769,11 +8778,11 @@ def torch_scinet_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     stages = int(num_stages)
     if stages <= 0:
         raise ValueError("num_stages must be >= 1")
@@ -8954,20 +8963,20 @@ def torch_etsformer_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(_D_MODEL_MIN_MSG)
     if heads <= 0:
-        raise ValueError("nhead must be >= 1")
+        raise ValueError(_NHEAD_MIN_MSG)
     if d % heads != 0:
-        raise ValueError("d_model must be divisible by nhead")
+        raise ValueError(_D_MODEL_HEAD_DIVISIBILITY_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
-        raise ValueError("dim_feedforward must be >= 1")
+        raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
@@ -9134,7 +9143,7 @@ def torch_esrnn_direct_forecast(
     if h <= 0:
         raise ValueError(_HORIZON_MIN_MSG)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(_LAGS_MIN_MSG)
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"gru", "lstm"}:
