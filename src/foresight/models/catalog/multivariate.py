@@ -6,6 +6,11 @@ if TYPE_CHECKING:
     from ..specs import ModelSpec, MultivariateForecasterFn
 
 
+LAG_WINDOW_PARAM_HELP = "Lag window length"
+DROPOUT_PROBABILITY_PARAM_HELP = "Dropout probability in [0,1)"
+DROPOUT_RANGE_PARAM_HELP = "Dropout in [0,1)"
+
+
 def build_multivariate_catalog(context: Any) -> dict[str, Any]:
     ModelSpec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
@@ -40,10 +45,10 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
             **_TORCH_COMMON_DEFAULTS,
         },
         param_help={
-            "lags": "Lag window length",
+            "lags": LAG_WINDOW_PARAM_HELP,
             "d_model": "Node embedding / hidden dimension",
             "num_blocks": "Number of identity-style mixing blocks",
-            "dropout": "Dropout probability in [0,1)",
+            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
             **_TORCH_COMMON_PARAM_HELP,
         },
         requires=("torch",),
@@ -65,11 +70,11 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
             **_TORCH_COMMON_DEFAULTS,
         },
         param_help={
-            "lags": "Lag window length",
+            "lags": LAG_WINDOW_PARAM_HELP,
             "d_model": "Hidden dimension",
             "num_blocks": "Number of spatiotemporal blocks",
             "kernel_size": "Temporal convolution kernel size (>=1)",
-            "dropout": "Dropout probability in [0,1)",
+            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
             "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
             "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
             "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
@@ -97,12 +102,12 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
             **_TORCH_COMMON_DEFAULTS,
         },
         param_help={
-            "lags": "Lag window length",
+            "lags": LAG_WINDOW_PARAM_HELP,
             "d_model": "Hidden dimension",
             "num_blocks": "Number of dilated temporal graph blocks",
             "kernel_size": "Temporal convolution kernel size (>=1)",
             "dilation_base": "Dilation growth base (>=1). Each block uses dilation=base**i",
-            "dropout": "Dropout probability in [0,1)",
+            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
             "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
             "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
             "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
@@ -127,11 +132,11 @@ def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
 
     help_map = {
         "variant": "Graph-attention lite family variant: astgcn or gman",
-        "lags": "Lag window length",
+        "lags": LAG_WINDOW_PARAM_HELP,
         "d_model": "Latent width for the attention backbone",
         "num_blocks": "Number of stacked attention blocks",
         "num_heads": "Multi-head attention heads",
-        "dropout": "Dropout in [0,1)",
+        "dropout": DROPOUT_RANGE_PARAM_HELP,
         "adj": "Adjacency source: identity, ring, fully-connected, corr, or matrix",
         "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
         "adj_top_k": "Top-k neighbors kept for correlation adjacency",
@@ -285,12 +290,12 @@ def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
 
     help_map = {
         "variant": "Graph-structure lite family variant: agcrn or mtgnn",
-        "lags": "Lag window length",
+        "lags": LAG_WINDOW_PARAM_HELP,
         "d_model": "Latent width for the adaptive graph backbone",
         "num_blocks": "Number of temporal graph blocks",
         "kernel_size": "Temporal convolution kernel width",
         "dilation_base": "Temporal dilation growth factor",
-        "dropout": "Dropout in [0,1)",
+        "dropout": DROPOUT_RANGE_PARAM_HELP,
         "adj": "Adjacency seed: identity, ring, fully-connected, corr, or matrix",
         "adj_path": "Optional adjacency file path (.npy or .csv/.txt)",
         "adj_top_k": "Top-k neighbors kept for correlation adjacency",
@@ -467,11 +472,11 @@ def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
 
     help_map = {
         "variant": "Graph-spectral lite family variant: stemgnn or fouriergnn",
-        "lags": "Lag window length",
+        "lags": LAG_WINDOW_PARAM_HELP,
         "d_model": "Latent width for the spectral backbone",
         "num_blocks": "Number of spectral mixer blocks",
         "top_k_freq": "Number of FFT bins kept per node",
-        "dropout": "Dropout in [0,1)",
+        "dropout": DROPOUT_RANGE_PARAM_HELP,
         **_TORCH_COMMON_PARAM_HELP,
     }
 

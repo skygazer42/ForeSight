@@ -35,6 +35,13 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
     _factory_tbats_lite_sarimax = context._factory_tbats_lite_sarimax
     _factory_tbats_lite_uc = context._factory_tbats_lite_uc
     _factory_unobserved_components = context._factory_unobserved_components
+    CANDIDATE_STATIONARITY_PARAM_HELP = (
+        "Enforce stationarity for candidate models (true/false)"
+    )
+    CANDIDATE_INVERTIBILITY_PARAM_HELP = (
+        "Enforce invertibility for candidate models (true/false)"
+    )
+    MODEL_SELECTION_CRITERION_PARAM_HELP = "Model selection criterion: aic or bic"
     return {
     "ets": ModelSpec(
         key="ets",
@@ -102,9 +109,9 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
             "seasonal_period": "Optional seasonal period s for SARIMA-style search",
             "trend": "Trend term (e.g. n, c, t, ct) or none",
             "x_cols": "Optional future covariate columns for forecast_model_long_df / forecast csv",
-            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
-            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
-            "information_criterion": "Model selection criterion: aic or bic",
+            "enforce_stationarity": CANDIDATE_STATIONARITY_PARAM_HELP,
+            "enforce_invertibility": CANDIDATE_INVERTIBILITY_PARAM_HELP,
+            "information_criterion": MODEL_SELECTION_CRITERION_PARAM_HELP,
         },
         requires=("stats",),
         capability_overrides={"supports_interval_forecast_with_x_cols": True},
@@ -131,9 +138,9 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
             "max_d": "Max differencing order d to consider for the residual model",
             "max_q": "Max MA order q to consider for the residual model",
             "trend": "Trend term for the residual ARIMA search (e.g. n, c, t, ct) or none",
-            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
-            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
-            "information_criterion": "Model selection criterion: aic or bic",
+            "enforce_stationarity": CANDIDATE_STATIONARITY_PARAM_HELP,
+            "enforce_invertibility": CANDIDATE_INVERTIBILITY_PARAM_HELP,
+            "information_criterion": MODEL_SELECTION_CRITERION_PARAM_HELP,
         },
         requires=("stats",),
     ),
@@ -522,9 +529,9 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
             "max_d": "Max differencing order d to consider",
             "max_q": "Max MA order q to consider",
             "trend": "Trend term for the adjusted-series ARIMA search (e.g. n, c, t, ct) or none",
-            "enforce_stationarity": "Enforce stationarity for candidate models (true/false)",
-            "enforce_invertibility": "Enforce invertibility for candidate models (true/false)",
-            "information_criterion": "Model selection criterion: aic or bic",
+            "enforce_stationarity": CANDIDATE_STATIONARITY_PARAM_HELP,
+            "enforce_invertibility": CANDIDATE_INVERTIBILITY_PARAM_HELP,
+            "information_criterion": MODEL_SELECTION_CRITERION_PARAM_HELP,
         },
         requires=("stats",),
     ),
@@ -647,7 +654,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
             "trend": "Residual AutoARIMA trend term (e.g. c, t, ct) or none",
             "enforce_stationarity": "Enforce stationarity for residual AutoARIMA candidates (true/false)",
             "enforce_invertibility": "Enforce invertibility for residual AutoARIMA candidates (true/false)",
-            "information_criterion": "Model selection criterion: aic or bic",
+            "information_criterion": MODEL_SELECTION_CRITERION_PARAM_HELP,
             "boxcox_lambda": "Optional Box-Cox lambda (float); requires y > 0",
         },
         requires=("stats",),
