@@ -721,41 +721,40 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
     fmt = str(args.format)
     if fmt == "json":
         _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
-        return 0
-
-    row = {
-        "model": payload["model"],
-        "dataset": payload["dataset"],
-        "metric": payload["metric"],
-        "mode": payload["mode"],
-        "horizon": payload["horizon"],
-        "step": payload["step"],
-        "min_train_size": payload["min_train_size"],
-        "max_windows": payload["max_windows"],
-        "max_train_size": payload["max_train_size"],
-        "n_trials": payload["n_trials"],
-        "best_score": payload["best_score"],
-        "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
-    }
-    _cli_shared._emit_table(
-        [row],
-        columns=[
-            "model",
-            "dataset",
-            "metric",
-            "mode",
-            "horizon",
-            "step",
-            "min_train_size",
-            "max_windows",
-            "max_train_size",
-            "n_trials",
-            "best_score",
-            "best_params",
-        ],
-        output=str(args.output),
-        fmt=fmt,
-    )
+    else:
+        row = {
+            "model": payload["model"],
+            "dataset": payload["dataset"],
+            "metric": payload["metric"],
+            "mode": payload["mode"],
+            "horizon": payload["horizon"],
+            "step": payload["step"],
+            "min_train_size": payload["min_train_size"],
+            "max_windows": payload["max_windows"],
+            "max_train_size": payload["max_train_size"],
+            "n_trials": payload["n_trials"],
+            "best_score": payload["best_score"],
+            "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
+        }
+        _cli_shared._emit_table(
+            [row],
+            columns=[
+                "model",
+                "dataset",
+                "metric",
+                "mode",
+                "horizon",
+                "step",
+                "min_train_size",
+                "max_windows",
+                "max_train_size",
+                "n_trials",
+                "best_score",
+                "best_params",
+            ],
+            output=str(args.output),
+            fmt=fmt,
+        )
     return 0
 
 

@@ -105,15 +105,14 @@ def main() -> int:
 
     if not notebooks:
         print("No .ipynb files found.")
-        return 0
-
-    for nb_path in notebooks:
-        if out_dir is None:
-            out_path = nb_path.with_suffix(".py")
-        else:
-            out_path = out_dir / nb_path.with_suffix(".py")
-        wrote = convert_one(nb_path, out_path=out_path)
-        print(f"Wrote: {wrote}")
+    else:
+        for nb_path in notebooks:
+            if out_dir is None:
+                out_path = nb_path.with_suffix(".py")
+            else:
+                out_path = out_dir / nb_path.with_suffix(".py")
+            wrote = convert_one(nb_path, out_path=out_path)
+            print(f"Wrote: {wrote}")
 
     return 0
 

@@ -93,30 +93,29 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 flush=True,
             )
-        return 0
+    else:
+        for cmd in quality_cmds:
+            _run(cmd, cwd=root, env=env)
 
-    for cmd in quality_cmds:
-        _run(cmd, cwd=root, env=env)
+        # Build in a clean temp dir (avoids `rm -rf dist/` patterns).
+        with tempfile.TemporaryDirectory(prefix="foresight_release_build_") as tmp:
+            dist_dir = Path(tmp) / "dist"
+            _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root, env=env)
 
-    # Build in a clean temp dir (avoids `rm -rf dist/` patterns).
-    with tempfile.TemporaryDirectory(prefix="foresight_release_build_") as tmp:
-        dist_dir = Path(tmp) / "dist"
-        _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root, env=env)
+            # Optional: validate artifacts if twine is installed.
+            if importlib.util.find_spec("twine") is not None:
+                artifacts = sorted(dist_dir.glob("*.whl")) + sorted(dist_dir.glob("*.tar.gz"))
+                if not artifacts:
+                    raise RuntimeError(f"No artifacts found under: {dist_dir}")
+                _run(
+                    [sys.executable, "-m", "twine", "check", *[str(p) for p in artifacts]],
+                    cwd=root,
+                    env=env,
+                )
+            else:
+                print("NOTE: twine not installed; skipping `twine check`.", flush=True)
 
-        # Optional: validate artifacts if twine is installed.
-        if importlib.util.find_spec("twine") is not None:
-            artifacts = sorted(dist_dir.glob("*.whl")) + sorted(dist_dir.glob("*.tar.gz"))
-            if not artifacts:
-                raise RuntimeError(f"No artifacts found under: {dist_dir}")
-            _run(
-                [sys.executable, "-m", "twine", "check", *[str(p) for p in artifacts]],
-                cwd=root,
-                env=env,
-            )
-        else:
-            print("NOTE: twine not installed; skipping `twine check`.", flush=True)
-
-    print("OK: release checks passed.", flush=True)
+        print("OK: release checks passed.", flush=True)
     return 0
 
 
