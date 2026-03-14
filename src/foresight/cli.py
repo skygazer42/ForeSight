@@ -24,6 +24,7 @@ _MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
 _MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
 _OUTPUT_PATH_HELP = "Optional path to write output"
 _OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
+_TARGET_COLUMN_HELP = "Target column name"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -124,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional path to a CSV file containing future timestamps/covariates only",
     )
     forecast_csv.add_argument("--time-col", required=True, help="Time column name")
-    forecast_csv.add_argument("--y-col", required=True, help="Target column name")
+    forecast_csv.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
     forecast_csv.add_argument(
         "--id-cols",
         type=str,
@@ -317,7 +318,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     eval_naive_last = eval_sub.add_parser("naive-last", help="Evaluate naive-last baseline")
     eval_naive_last.add_argument("--dataset", required=True, help="Dataset key")
-    eval_naive_last.add_argument("--y-col", required=True, help="Target column name")
+    eval_naive_last.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
     eval_naive_last.add_argument(
         "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
     )
@@ -352,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
         "seasonal-naive", help="Evaluate seasonal naive baseline"
     )
     eval_seasonal_naive.add_argument("--dataset", required=True, help="Dataset key")
-    eval_seasonal_naive.add_argument("--y-col", required=True, help="Target column name")
+    eval_seasonal_naive.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
     eval_seasonal_naive.add_argument(
         "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
     )
@@ -455,7 +456,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_csv.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     eval_csv.add_argument("--path", required=True, help="Path to a CSV file")
     eval_csv.add_argument("--time-col", required=True, help="Time column name")
-    eval_csv.add_argument("--y-col", required=True, help="Target column name")
+    eval_csv.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
     eval_csv.add_argument(
         "--id-cols",
         type=str,

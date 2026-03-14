@@ -24,6 +24,11 @@ _FEED_FORWARD_DIM_HELP = "Feed-forward dimension"
 _MODEL_DIMENSION_HELP = "Model dimension"
 _HIDDEN_MODEL_DIM_HELP = "Hidden model dimension"
 _RECURRENT_HIDDEN_SIZE_HELP = "Recurrent hidden size"
+_STATE_SPACE_MODEL_DIM_HELP = "State-space model dimension"
+_RNN_HIDDEN_SIZE_HELP = "RNN hidden size"
+_STACKED_RNN_LAYERS_HELP = "Number of stacked RNN layers"
+_POOLING_HELP = "Pooling: last, mean, max"
+_EMBEDDING_DIM_HELP = "Embedding dimension"
 _PATCH_LEN_HELP = "Number of timesteps per patch token"
 _PATCH_EMBED_DIM_HELP = "Patch embedding dimension"
 _PATCH_OR_LATENT_DIM_HELP = "Patch embedding / latent dimension"
@@ -667,7 +672,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "State-space model dimension",
+                "d_model": _STATE_SPACE_MODEL_DIM_HELP,
                 "num_layers": "Number of stacked diagonal SSM blocks",
                 "dropout": _DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
@@ -688,7 +693,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "State-space model dimension",
+                "d_model": _STATE_SPACE_MODEL_DIM_HELP,
                 "num_layers": "Number of stacked structured SSM blocks",
                 "state_dim": "Latent state dimension per block",
                 "dropout": _DROPOUT_HELP,
@@ -711,7 +716,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "State-space model dimension",
+                "d_model": _STATE_SPACE_MODEL_DIM_HELP,
                 "num_layers": "Number of stacked multi-state SSM blocks",
                 "state_dim": "Latent state dimension per head",
                 "heads": "Number of state-space heads",
@@ -734,7 +739,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "State-space model dimension",
+                "d_model": _STATE_SPACE_MODEL_DIM_HELP,
                 "num_layers": "Number of stacked Mamba-2 refinement blocks",
                 "conv_kernel": "Causal depthwise conv kernel size (>=1)",
                 "dropout": _DROPOUT_HELP,
@@ -1113,8 +1118,8 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "cell": "RNN cell: gru or lstm",
-                "hidden_size": "RNN hidden size",
-                "num_layers": "Number of stacked RNN layers",
+                "hidden_size": _RNN_HIDDEN_SIZE_HELP,
+                "num_layers": _STACKED_RNN_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 "alpha_init": "Initial smoothing alpha in (0,1) (learned during training)",
                 "beta_init": "Initial smoothing beta in (0,1) (learned during training)",
@@ -1329,7 +1334,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "channels": "Conv channel sizes (e.g. 32,32,32)",
                 "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
-                "pool": "Pooling: last, mean, max",
+                "pool": _POOLING_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
             requires=("torch",),
@@ -1353,7 +1358,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "num_blocks": _RESIDUAL_BLOCKS_HELP,
                 "kernel_size": _CONV_KERNEL_SIZE_HELP,
                 "dropout": _DROPOUT_HELP,
-                "pool": "Pooling: last, mean, max",
+                "pool": _POOLING_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
             requires=("torch",),
@@ -1976,7 +1981,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Embedding dimension",
+                "d_model": _EMBEDDING_DIM_HELP,
                 "num_layers": "Number of FNet layers",
                 "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
@@ -1998,7 +2003,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Embedding dimension",
+                "d_model": _EMBEDDING_DIM_HELP,
                 "num_layers": _ENCODER_LAYERS_HELP,
                 "dim_feedforward": _FEED_FORWARD_DIM_HELP,
                 "dropout": _DROPOUT_HELP,
@@ -2027,7 +2032,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
                 "kernel_sizes": "Comma-separated kernel sizes (e.g. 3,5,7)",
                 "bottleneck_channels": "Bottleneck (1x1) conv channels",
                 "dropout": _DROPOUT_HELP,
-                "pool": "Pooling: last, mean, max",
+                "pool": _POOLING_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
             },
             requires=("torch",),
@@ -2046,7 +2051,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "d_model": "Embedding dimension",
+                "d_model": _EMBEDDING_DIM_HELP,
                 "num_layers": "Number of gMLP layers",
                 "ffn_dim": "gMLP feed-forward dimension",
                 "dropout": _DROPOUT_HELP,
@@ -2111,7 +2116,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             param_help={
                 "lags": _LAG_WINDOW_HELP,
-                "hidden_size": "RNN hidden size",
+                "hidden_size": _RNN_HIDDEN_SIZE_HELP,
                 "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
@@ -2134,7 +2139,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             param_help={
                 "lags": _LAG_WINDOW_HELP,
                 "q": "Quantile in (0,1) for pinball loss",
-                "hidden_size": "RNN hidden size",
+                "hidden_size": _RNN_HIDDEN_SIZE_HELP,
                 "num_layers": _GRU_LAYERS_HELP,
                 "dropout": _RNN_DROPOUT_HELP,
                 **_TORCH_COMMON_PARAM_HELP,
@@ -2326,8 +2331,8 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
         "lags": "Lag window length (encoder length)",
         "cell": "RNN cell: lstm, gru",
         "attention": "Attention: none, bahdanau",
-        "hidden_size": "RNN hidden size",
-        "num_layers": "Number of stacked RNN layers",
+        "hidden_size": _RNN_HIDDEN_SIZE_HELP,
+        "num_layers": _STACKED_RNN_LAYERS_HELP,
         "dropout": _RNN_DROPOUT_HELP,
         "teacher_forcing": "Teacher forcing ratio at the start of training",
         "teacher_forcing_final": "Teacher forcing ratio at the end of training (None keeps it constant)",
@@ -2618,8 +2623,8 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
         "max_train_size": "Optional per-series rolling training window length (None for expanding)",
         "sample_step": "Stride when generating training windows (>=1)",
         "cell": "RNN cell: lstm, gru",
-        "hidden_size": "RNN hidden size",
-        "num_layers": "Number of stacked RNN layers",
+        "hidden_size": _RNN_HIDDEN_SIZE_HELP,
+        "num_layers": _STACKED_RNN_LAYERS_HELP,
         "dropout": _RNN_DROPOUT_HELP,
         "id_emb_dim": "Series-id embedding dim (panel/global models)",
         "quantiles": "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)",
