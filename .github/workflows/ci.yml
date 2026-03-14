@@ -82,9 +82,16 @@ jobs:
           pytest -q \
             tests/test_fetch_rnn_paper_metadata.py \
             tests/test_forecasting_internals.py \
+            tests/test_models_adida.py \
+            tests/test_models_global_regression_validation.py \
+            tests/test_models_intermittent.py \
+            tests/test_models_intermittent_more.py \
             tests/test_release_tooling.py \
             tests/test_model_validation_messages.py \
             tests/test_models_registry.py \
+            tests/test_models_theta.py \
+            tests/test_models_theta_auto.py \
+            tests/test_no_float_literal_comparisons.py \
             tests/test_root_import.py \
             tests/test_torch_global_validation_messages.py \
             --cov=foresight \

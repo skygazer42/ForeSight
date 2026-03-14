@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -12,6 +13,23 @@ from ..features.tabular import (
     normalize_lag_steps,
 )
 from ..features.time import build_time_features
+
+
+def _is_effectively_one(value: float) -> bool:
+    return math.isclose(float(value), 1.0, rel_tol=0.0, abs_tol=1e-12)
+
+
+def _validate_tweedie_targets(*, power: float, y_train: np.ndarray) -> None:
+    power_f = float(power)
+    power_is_one = _is_effectively_one(power_f)
+    if power_is_one and np.any(y_train < 0.0):
+        raise ValueError(
+            "tweedie-step-lag-global with power=1 requires non-negative training targets"
+        )
+    if (power_f > 1.0) and (not power_is_one) and np.any(y_train <= 0.0):
+        raise ValueError(
+            "tweedie-step-lag-global with power>1 requires strictly positive training targets"
+        )
 
 
 def _normalize_x_cols(x_cols: Any) -> tuple[str, ...]:
@@ -1870,14 +1888,7 @@ def tweedie_step_lag_global_forecaster(
         raise ValueError("max_iter must be >= 1")
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
-        if power_f == 1.0 and np.any(y_train < 0.0):
-            raise ValueError(
-                "tweedie-step-lag-global with power=1 requires non-negative training targets"
-            )
-        if power_f > 1.0 and np.any(y_train <= 0.0):
-            raise ValueError(
-                "tweedie-step-lag-global with power>1 requires strictly positive training targets"
-            )
+        _validate_tweedie_targets(power=power_f, y_train=y_train)
         model = TweedieRegressor(power=power_f, alpha=alpha_f, max_iter=max_iter_int)
         model.fit(X_train, y_train)
         return model

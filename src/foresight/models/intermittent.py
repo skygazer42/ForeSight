@@ -21,6 +21,10 @@ def _require_01(name: str, v: float) -> float:
     return vf
 
 
+def _all_zero(x: np.ndarray) -> bool:
+    return not np.any(x)
+
+
 def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.ndarray:
     """
     Croston's classic method for intermittent demand.
@@ -39,7 +43,7 @@ def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) ->
     a = _require_01("alpha", alpha)
 
     # If all demands are zero, forecast zeros.
-    if np.all(x == 0.0):
+    if _all_zero(x):
         return np.zeros((int(horizon),), dtype=float)
 
     # Initialize with first non-zero demand.
@@ -90,7 +94,7 @@ def croston_sbj_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.
 
 def _croston_sse(x: np.ndarray, *, alpha: float) -> float:
     a = _require_01("alpha", alpha)
-    if x.size < 2 or np.all(x == 0.0):
+    if x.size < 2 or _all_zero(x):
         return 0.0
 
     nz_idx = np.flatnonzero(x > 0.0)
@@ -136,7 +140,7 @@ def croston_optimized_forecast(
     if grid_size <= 1:
         raise ValueError("grid_size must be >= 2")
 
-    if np.all(x == 0.0):
+    if _all_zero(x):
         return np.zeros((int(horizon),), dtype=float)
 
     grid = np.linspace(0.05, 0.95, int(grid_size), dtype=float)
@@ -172,7 +176,7 @@ def les_forecast(
     a = _require_01("alpha", alpha)
     b = _require_01("beta", beta)
 
-    if np.all(x == 0.0):
+    if _all_zero(x):
         return np.zeros((int(horizon),), dtype=float)
 
     nz_idx = np.flatnonzero(x > 0.0)
@@ -188,7 +192,7 @@ def les_forecast(
 
     for t in range(first + 1, x.size):
         y = float(x[t])
-        if y != 0.0:
+        if y:
             y_hat = a * y + (1.0 - a) * y_hat
             tau_hat = b * tau + (1.0 - b) * tau_hat
             f = 0.0 if tau_hat <= 0.0 else y_hat / tau_hat
@@ -239,7 +243,7 @@ def tsb_forecast(
     a = _require_01("alpha", alpha)
     b = _require_01("beta", beta)
 
-    if np.all(x == 0.0):
+    if _all_zero(x):
         return np.zeros((int(horizon),), dtype=float)
 
     # Initialize
@@ -279,7 +283,7 @@ def adida_forecast(
     if x.size == 0:
         raise ValueError("adida_forecast requires at least 1 training point")
 
-    if np.all(x == 0.0):
+    if _all_zero(x):
         return np.zeros((int(horizon),), dtype=float)
 
     m = int(agg_period)

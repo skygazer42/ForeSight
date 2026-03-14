@@ -31,12 +31,12 @@ def _linear_slope_ols(x: np.ndarray) -> float:
     OLS slope of y ~ a + b*t where t = 1..n.
     """
     n = int(x.size)
+    if n <= 1:
+        return 0.0
     t = np.arange(1.0, n + 1.0, dtype=float)
     t_mean = float(np.mean(t))
     y_mean = float(np.mean(x))
     denom = float(np.sum((t - t_mean) ** 2))
-    if denom == 0.0:
-        return 0.0
     return float(np.sum((t - t_mean) * (x - y_mean)) / denom)
 
 
