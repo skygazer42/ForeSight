@@ -15,6 +15,9 @@ LOCAL_LEVEL = "local level"
 PERIOD_MUST_BE_AT_LEAST_TWO = "period must be >= 2"
 FOURIER_ORDERS_MUST_MATCH_PERIODS = "orders must be an int or have the same length as periods"
 FOURIER_PERIODS_MUST_BE_VALID = "periods must contain integers >= 2"
+FOURIER_ORDERS_MUST_BE_NON_NEGATIVE = "orders must contain integers >= 0"
+UNEXPECTED_MSTL_SEASONAL_SHAPE = "Unexpected MSTL seasonal shape"
+UNEXPECTED_MSTL_COMPONENT_COUNT = "MSTL returned unexpected number of seasonal components"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -903,6 +906,26 @@ def _normalize_fourier_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]
     return tuple([int(orders)] * int(n_periods))
 
 
+def _validate_non_negative_fourier_orders(orders: tuple[int, ...]) -> tuple[int, ...]:
+    orders_tup = tuple(int(o) for o in orders)
+    if any(o < 0 for o in orders_tup):
+        raise ValueError(FOURIER_ORDERS_MUST_BE_NON_NEGATIVE)
+    return orders_tup
+
+
+def _validate_mstl_seasonal_array(
+    seasonal: np.ndarray, *, train_size: int, n_periods: int
+) -> np.ndarray:
+    seasonal_arr = np.asarray(seasonal, dtype=float)
+    if seasonal_arr.ndim == 1:
+        seasonal_arr = seasonal_arr.reshape(-1, 1)
+    if seasonal_arr.shape[0] != int(train_size):
+        raise ValueError(UNEXPECTED_MSTL_SEASONAL_SHAPE)
+    if seasonal_arr.shape[1] != int(n_periods):
+        raise ValueError(UNEXPECTED_MSTL_COMPONENT_COUNT)
+    return seasonal_arr
+
+
 def _build_fourier_exog(
     *,
     start: int,
@@ -946,10 +969,9 @@ def fourier_auto_arima_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1000,10 +1022,9 @@ def fourier_arima_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1052,10 +1073,9 @@ def fourier_sarimax_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1109,10 +1129,9 @@ def fourier_ets_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1171,10 +1190,9 @@ def fourier_uc_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1231,10 +1249,9 @@ def fourier_autoreg_forecast(
 
     periods_tup = _normalize_valid_periods(periods)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
-    orders_tup = tuple(int(o) for o in orders_tup)
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     train_exog = _build_fourier_exog(
         start=0,
@@ -1312,13 +1329,11 @@ def mstl_arima_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[0] != x.size:
-        raise ValueError("Unexpected MSTL seasonal shape")
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1376,13 +1391,11 @@ def mstl_autoreg_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[0] != x.size:
-        raise ValueError("Unexpected MSTL seasonal shape")
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1444,13 +1457,11 @@ def mstl_ets_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[0] != x.size:
-        raise ValueError("Unexpected MSTL seasonal shape")
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1512,13 +1523,11 @@ def mstl_uc_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[0] != x.size:
-        raise ValueError("Unexpected MSTL seasonal shape")
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1581,13 +1590,11 @@ def mstl_sarimax_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[0] != x.size:
-        raise ValueError("Unexpected MSTL seasonal shape")
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1653,11 +1660,11 @@ def mstl_auto_arima_forecast(
         lmbda=lmbda,
     ).fit()
 
-    seasonal = np.asarray(decomp.seasonal, dtype=float)
-    if seasonal.ndim == 1:
-        seasonal = seasonal.reshape(-1, 1)
-    if seasonal.shape[1] != len(periods_tup):
-        raise ValueError("MSTL returned unexpected number of seasonal components")
+    seasonal = _validate_mstl_seasonal_array(
+        np.asarray(decomp.seasonal, dtype=float),
+        train_size=int(x.size),
+        n_periods=len(periods_tup),
+    )
 
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
@@ -1735,8 +1742,7 @@ def tbats_lite_forecast(
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
 
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("All orders must be >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(orders_tup)
 
     n = int(x_work.size)
     t = np.arange(n, dtype=float)
@@ -1816,9 +1822,9 @@ def tbats_lite_autoreg_forecast(
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
         raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     n = int(x_work.size)
     X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
@@ -1905,9 +1911,9 @@ def tbats_lite_ets_forecast(
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
         raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     n = int(x_work.size)
     X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
@@ -1990,9 +1996,9 @@ def tbats_lite_sarimax_forecast(
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
         raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     n = int(x_work.size)
     X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
@@ -2077,9 +2083,9 @@ def tbats_lite_auto_arima_forecast(
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
         raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     n = int(x_work.size)
     X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
@@ -2160,9 +2166,9 @@ def tbats_lite_uc_forecast(
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
         raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
-    if any(int(o) < 0 for o in orders_tup):
-        raise ValueError("orders must contain integers >= 0")
+    orders_tup = _validate_non_negative_fourier_orders(
+        _normalize_fourier_orders(orders, n_periods=len(periods_tup))
+    )
 
     n = int(x_work.size)
     X_cols: list[np.ndarray] = [np.ones((n,), dtype=float)]

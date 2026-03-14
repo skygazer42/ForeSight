@@ -37,7 +37,9 @@ from foresight.models.regression import (
 from foresight.models.statsmodels_wrap import (
     _normalize_fourier_orders,
     _normalize_valid_periods,
+    _validate_mstl_seasonal_array,
     _validate_exog_pair,
+    _validate_non_negative_fourier_orders,
     _validate_non_negative_lags,
     _validate_period_at_least_two,
     _validate_positive_horizon,
@@ -1055,6 +1057,9 @@ def test_statsmodels_wrap_source_extracts_repeated_validation_literals() -> None
         "period must be >= 2",
         "orders must be an int or have the same length as periods",
         "periods must contain integers >= 2",
+        "orders must contain integers >= 0",
+        "Unexpected MSTL seasonal shape",
+        "MSTL returned unexpected number of seasonal components",
     ]
 
     for literal in literals:
@@ -1125,6 +1130,9 @@ def test_statsmodels_fourier_normalizers_cover_recent_refactor_branches() -> Non
         _normalize_valid_periods((1, 7))
 
     assert _normalize_fourier_orders("2", n_periods=2) == (2, 2)
+    assert _validate_non_negative_fourier_orders((0, 2)) == (0, 2)
+    with pytest.raises(ValueError, match="orders must contain integers >= 0"):
+        _validate_non_negative_fourier_orders((2, -1))
     with pytest.raises(ValueError, match="same length as periods"):
         _normalize_fourier_orders("1,2,3", n_periods=2)
     with pytest.raises(ValueError, match="same length as periods"):
@@ -1155,6 +1163,19 @@ def test_metrics_scaled_error_helpers_cover_recent_refactor_branches() -> None:
         )
         > 0.0
     )
+
+
+def test_statsmodels_mstl_shape_helper_covers_recent_refactor_branches() -> None:
+    seasonal = _validate_mstl_seasonal_array(np.zeros((5, 2)), train_size=5, n_periods=2)
+    assert seasonal.shape == (5, 2)
+
+    seasonal_1d = _validate_mstl_seasonal_array(np.zeros((5,)), train_size=5, n_periods=1)
+    assert seasonal_1d.shape == (5, 1)
+
+    with pytest.raises(ValueError, match="Unexpected MSTL seasonal shape"):
+        _validate_mstl_seasonal_array(np.zeros((4, 2)), train_size=5, n_periods=2)
+    with pytest.raises(ValueError, match="unexpected number of seasonal components"):
+        _validate_mstl_seasonal_array(np.zeros((5, 1)), train_size=5, n_periods=2)
 
 
 def test_statsmodels_refactor_wrappers_cover_core_horizon_and_exog_paths(
