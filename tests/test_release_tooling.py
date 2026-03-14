@@ -80,6 +80,10 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
 
     assert checkout["with"]["fetch-depth"] == 0
     assert "coverage.xml" in test_step["run"]
+    assert (
+        scan_step["uses"]
+        == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
+    )
     assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
     assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
 
@@ -93,6 +97,11 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "sonar.sources=src,tools,.github/workflows" in config
     assert "sonar.tests=tests" in config
     assert "sonar.python.coverage.reportPaths=coverage.xml" in config
+    assert "sonar.cpd.exclusions=" in config
+    assert "src/foresight/cli.py" in config
+    assert "src/foresight/cli_leaderboard.py" in config
+    assert "src/foresight/models/runtime.py" in config
+    assert "src/foresight/models/catalog/**" in config
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:

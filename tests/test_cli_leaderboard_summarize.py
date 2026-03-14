@@ -114,6 +114,43 @@ def test_leaderboard_summarize_from_stdin_csv() -> None:
     assert "naive-last" in proc.stdout
 
 
+def test_leaderboard_summarize_treats_near_zero_best_metric_as_zero(tmp_path: Path) -> None:
+    rows = [
+        {
+            "model": "best",
+            "dataset": "d1",
+            "mae": 1e-15,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+            "n_points": 10,
+        },
+        {
+            "model": "other",
+            "dataset": "d1",
+            "mae": 1e-6,
+            "rmse": 2.0,
+            "mape": 0.2,
+            "smape": 0.4,
+            "n_points": 10,
+        },
+    ]
+    inp = tmp_path / "sweep.json"
+    inp.write_text(json.dumps(rows), encoding="utf-8")
+
+    proc = _run_cli("leaderboard", "summarize", "--input", str(inp), "--format", "json")
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+
+    best_row = next(r for r in payload if r["model"] == "best")
+    other_row = next(r for r in payload if r["model"] == "other")
+
+    assert best_row["mae_rel_mean"] == 1.0
+    assert best_row["mae_rel_wmean"] == 1.0
+    assert other_row["mae_rel_mean"] == float("inf")
+    assert other_row["mae_rel_wmean"] == float("inf")
+
+
 def test_leaderboard_summarize_min_datasets_filters_models(tmp_path: Path) -> None:
     rows = [
         {
