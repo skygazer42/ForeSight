@@ -14,6 +14,13 @@ from ..features.tabular import (
 )
 from ..features.time import build_time_features
 
+SVR_C_ERROR = "C must be > 0"
+SVR_EPSILON_ERROR = "epsilon must be >= 0"
+QUANTILES_RANGE_ERROR = "quantiles must be in (0,1)"
+QUANTILES_ALIGN_ERROR = "quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)"
+QUANTILES_STRICT_ERROR = "quantiles must be strictly between 0 and 1"
+POINT_OBJECTIVE_SQUAREDERROR = "reg:squarederror"
+
 
 def _is_effectively_one(value: float) -> bool:
     return math.isclose(float(value), 1.0, rel_tol=0.0, abs_tol=1e-12)
@@ -1235,9 +1242,9 @@ def svr_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
-        raise ValueError("C must be > 0")
+        raise ValueError(SVR_C_ERROR)
     if epsilon_f < 0.0:
-        raise ValueError("epsilon must be >= 0")
+        raise ValueError(SVR_EPSILON_ERROR)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = SVR(C=C_f, gamma=gamma_v, epsilon=epsilon_f, kernel="rbf")
@@ -1303,9 +1310,9 @@ def linear_svr_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
-        raise ValueError("C must be > 0")
+        raise ValueError(SVR_C_ERROR)
     if epsilon_f < 0.0:
-        raise ValueError("epsilon must be >= 0")
+        raise ValueError(SVR_EPSILON_ERROR)
     if max_iter_int <= 0:
         raise ValueError("max_iter must be >= 1")
 
@@ -1679,11 +1686,11 @@ def passive_aggressive_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if C_f <= 0.0:
-        raise ValueError("C must be > 0")
+        raise ValueError(SVR_C_ERROR)
     if loss_s not in {"epsilon_insensitive", "squared_epsilon_insensitive"}:
         raise ValueError("loss must be one of: epsilon_insensitive, squared_epsilon_insensitive")
     if epsilon_f < 0.0:
-        raise ValueError("epsilon must be >= 0")
+        raise ValueError(SVR_EPSILON_ERROR)
     if max_iter_int <= 0:
         raise ValueError("max_iter must be >= 1")
 
@@ -2326,7 +2333,7 @@ def _xgb_step_lag_global_forecaster_impl(
     estimator_kind: str,
     booster: str = "gbtree",
     allow_quantiles: bool = False,
-    point_objective: str = "reg:squarederror",
+    point_objective: str = POINT_OBJECTIVE_SQUAREDERROR,
     point_objective_params: dict[str, Any] | None = None,
     lags: int = 24,
     n_estimators: int = 500,
@@ -2380,13 +2387,13 @@ def _xgb_step_lag_global_forecaster_impl(
     q_pcts: list[int] = []
     for q in q_items:
         if not (0.0 < float(q) < 1.0):
-            raise ValueError("quantiles must be in (0,1)")
+            raise ValueError(QUANTILES_RANGE_ERROR)
         pct_f = float(q) * 100.0
         pct = int(round(pct_f))
         if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError("quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)")
+            raise ValueError(QUANTILES_ALIGN_ERROR)
         if pct <= 0 or pct >= 100:
-            raise ValueError("quantiles must be strictly between 0 and 1")
+            raise ValueError(QUANTILES_STRICT_ERROR)
         q_pcts.append(int(pct))
 
     q_pcts = sorted(set(q_pcts))
@@ -2574,7 +2581,7 @@ def xgb_step_lag_global_forecaster(
         estimator_kind="xgb",
         booster="gbtree",
         allow_quantiles=True,
-        point_objective="reg:squarederror",
+        point_objective=POINT_OBJECTIVE_SQUAREDERROR,
         lags=lags,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
@@ -2635,7 +2642,7 @@ def xgb_dart_step_lag_global_forecaster(
         estimator_kind="xgb",
         booster="dart",
         allow_quantiles=False,
-        point_objective="reg:squarederror",
+        point_objective=POINT_OBJECTIVE_SQUAREDERROR,
         lags=lags,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
@@ -2693,7 +2700,7 @@ def xgb_linear_step_lag_global_forecaster(
         estimator_kind="xgb",
         booster="gblinear",
         allow_quantiles=False,
-        point_objective="reg:squarederror",
+        point_objective=POINT_OBJECTIVE_SQUAREDERROR,
         lags=lags,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
@@ -2751,7 +2758,7 @@ def xgbrf_step_lag_global_forecaster(
         model_key="xgbrf-step-lag-global",
         estimator_kind="xgbrf",
         allow_quantiles=False,
-        point_objective="reg:squarederror",
+        point_objective=POINT_OBJECTIVE_SQUAREDERROR,
         lags=lags,
         n_estimators=n_estimators,
         max_depth=max_depth,
@@ -3270,13 +3277,13 @@ def lgbm_step_lag_global_forecaster(
     q_pcts: list[int] = []
     for q in q_items:
         if not (0.0 < float(q) < 1.0):
-            raise ValueError("quantiles must be in (0,1)")
+            raise ValueError(QUANTILES_RANGE_ERROR)
         pct_f = float(q) * 100.0
         pct = int(round(pct_f))
         if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError("quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)")
+            raise ValueError(QUANTILES_ALIGN_ERROR)
         if pct <= 0 or pct >= 100:
-            raise ValueError("quantiles must be strictly between 0 and 1")
+            raise ValueError(QUANTILES_STRICT_ERROR)
         q_pcts.append(int(pct))
     q_pcts = sorted(set(q_pcts))
     q_vals = tuple(p / 100.0 for p in q_pcts)
@@ -3462,13 +3469,13 @@ def catboost_step_lag_global_forecaster(
     q_pcts: list[int] = []
     for q in q_items:
         if not (0.0 < float(q) < 1.0):
-            raise ValueError("quantiles must be in (0,1)")
+            raise ValueError(QUANTILES_RANGE_ERROR)
         pct_f = float(q) * 100.0
         pct = int(round(pct_f))
         if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError("quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)")
+            raise ValueError(QUANTILES_ALIGN_ERROR)
         if pct <= 0 or pct >= 100:
-            raise ValueError("quantiles must be strictly between 0 and 1")
+            raise ValueError(QUANTILES_STRICT_ERROR)
         q_pcts.append(int(pct))
     q_pcts = sorted(set(q_pcts))
     q_vals = tuple(p / 100.0 for p in q_pcts)

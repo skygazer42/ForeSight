@@ -9,6 +9,16 @@ from ..features.tabular import build_lag_derived_features, normalize_int_tuple, 
 from ..features.time import build_fourier_features
 
 TARGET_LAGS_MIN_ERROR = "target_lags must be >= 1"
+SVR_C_ERROR = "C must be > 0"
+SVR_EPSILON_ERROR = "epsilon must be >= 0"
+XGB_INSTALL_ERROR = 'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+XGB_OBJECTIVE_EMPTY_ERROR = "objective must be non-empty"
+XGB_OBJECTIVE_SQUAREDERROR = "reg:squarederror"
+XGB_OBJECTIVE_SQUAREDLOGERROR = "reg:squaredlogerror"
+XGB_OBJECTIVE_LOGISTIC = "reg:logistic"
+XGB_OBJECTIVE_POISSON = "count:poisson"
+XGB_OBJECTIVE_GAMMA = "reg:gamma"
+XGB_OBJECTIVE_TWEEDIE = "reg:tweedie"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -1285,9 +1295,9 @@ def svr_lag_direct_forecast(
     if lags <= 0:
         raise ValueError("lags must be >= 1")
     if float(C) <= 0:
-        raise ValueError("C must be > 0")
+        raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
-        raise ValueError("epsilon must be >= 0")
+        raise ValueError(SVR_EPSILON_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1360,9 +1370,9 @@ def linear_svr_lag_direct_forecast(
     if lags <= 0:
         raise ValueError("lags must be >= 1")
     if float(C) <= 0:
-        raise ValueError("C must be > 0")
+        raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
-        raise ValueError("epsilon must be >= 0")
+        raise ValueError(SVR_EPSILON_ERROR)
     if max_iter <= 0:
         raise ValueError("max_iter must be >= 1")
 
@@ -1823,9 +1833,7 @@ def _xgb_lag_direct_forecast(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1855,7 +1863,7 @@ def _xgb_lag_direct_forecast(
 
     obj = str(objective).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
 
@@ -1971,9 +1979,7 @@ def _xgb_lag_recursive_forecast(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2007,7 +2013,7 @@ def _xgb_lag_recursive_forecast(
 
     obj = str(objective).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
 
@@ -2105,7 +2111,7 @@ def xgb_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2161,7 +2167,7 @@ def xgb_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2217,7 +2223,7 @@ def xgb_dart_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="dart",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2273,7 +2279,7 @@ def xgb_dart_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="dart",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2325,9 +2331,7 @@ def xgbrf_lag_direct_forecast(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2405,7 +2409,7 @@ def xgbrf_lag_direct_forecast(
             feat = np.concatenate([feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]], axis=1)
 
         model = xgb.XGBRFRegressor(
-            objective="reg:squarederror",
+            objective=XGB_OBJECTIVE_SQUAREDERROR,
             n_estimators=int(n_estimators),
             max_depth=int(max_depth),
             subsample=float(subsample),
@@ -2453,9 +2457,7 @@ def xgbrf_lag_recursive_forecast(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2501,7 +2503,7 @@ def xgbrf_lag_recursive_forecast(
         series=x,
     )
     model = xgb.XGBRFRegressor(
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=int(n_estimators),
         max_depth=int(max_depth),
         subsample=float(subsample),
@@ -2569,7 +2571,7 @@ def xgb_linear_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gblinear",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         # gblinear ignores tree-specific params like max_depth, but they are accepted by the API.
@@ -2623,7 +2625,7 @@ def xgb_linear_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gblinear",
-        objective="reg:squarederror",
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         # gblinear ignores tree-specific params like max_depth, but they are accepted by the API.
@@ -2680,7 +2682,7 @@ def xgb_msle_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:squaredlogerror",
+        objective=XGB_OBJECTIVE_SQUAREDLOGERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2736,7 +2738,7 @@ def xgb_msle_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:squaredlogerror",
+        objective=XGB_OBJECTIVE_SQUAREDLOGERROR,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2792,7 +2794,7 @@ def xgb_logistic_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:logistic",
+        objective=XGB_OBJECTIVE_LOGISTIC,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -2848,7 +2850,7 @@ def xgb_logistic_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:logistic",
+        objective=XGB_OBJECTIVE_LOGISTIC,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3258,7 +3260,7 @@ def xgb_poisson_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="count:poisson",
+        objective=XGB_OBJECTIVE_POISSON,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3314,7 +3316,7 @@ def xgb_poisson_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="count:poisson",
+        objective=XGB_OBJECTIVE_POISSON,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3370,7 +3372,7 @@ def xgb_gamma_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:gamma",
+        objective=XGB_OBJECTIVE_GAMMA,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3426,7 +3428,7 @@ def xgb_gamma_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:gamma",
+        objective=XGB_OBJECTIVE_GAMMA,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3486,7 +3488,7 @@ def xgb_tweedie_lag_direct_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:tweedie",
+        objective=XGB_OBJECTIVE_TWEEDIE,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3547,7 +3549,7 @@ def xgb_tweedie_lag_recursive_forecast(
         horizon,
         lags=lags,
         booster="gbtree",
-        objective="reg:tweedie",
+        objective=XGB_OBJECTIVE_TWEEDIE,
         n_estimators=n_estimators,
         learning_rate=learning_rate,
         max_depth=max_depth,
@@ -3577,12 +3579,12 @@ def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
 
     We validate these early to surface a clearer error than the underlying trainer.
     """
-    if obj in {"count:poisson", "reg:tweedie", "reg:squaredlogerror"} and np.any(x < 0.0):
+    if obj in {XGB_OBJECTIVE_POISSON, XGB_OBJECTIVE_TWEEDIE, XGB_OBJECTIVE_SQUAREDLOGERROR} and np.any(x < 0.0):
         raise ValueError(f"{obj} requires non-negative series values")
-    if obj == "reg:gamma" and np.any(x <= 0.0):
-        raise ValueError("reg:gamma requires strictly positive series values")
-    if obj == "reg:logistic" and np.any((x < 0.0) | (x > 1.0)):
-        raise ValueError("reg:logistic requires series values in [0,1]")
+    if obj == XGB_OBJECTIVE_GAMMA and np.any(x <= 0.0):
+        raise ValueError(f"{XGB_OBJECTIVE_GAMMA} requires strictly positive series values")
+    if obj == XGB_OBJECTIVE_LOGISTIC and np.any((x < 0.0) | (x > 1.0)):
+        raise ValueError(f"{XGB_OBJECTIVE_LOGISTIC} requires series values in [0,1]")
 
 
 def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
@@ -3636,9 +3638,7 @@ def _xgb_lag_direct_forecast_kwargs(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -3650,7 +3650,7 @@ def _xgb_lag_direct_forecast_kwargs(
     params.setdefault("verbosity", 0)
     obj = str(params.get("objective", "")).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
     _xgb_validate_common_regressor_params(params)
@@ -3731,9 +3731,7 @@ def _xgb_lag_recursive_forecast_kwargs(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -3749,7 +3747,7 @@ def _xgb_lag_recursive_forecast_kwargs(
     params.setdefault("verbosity", 0)
     obj = str(params.get("objective", "")).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
     _xgb_validate_common_regressor_params(params)
@@ -3820,9 +3818,7 @@ def _xgb_lag_step_forecast_kwargs(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     h = int(horizon)
@@ -3835,7 +3831,7 @@ def _xgb_lag_step_forecast_kwargs(
     params.setdefault("verbosity", 0)
     obj = str(params.get("objective", "")).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
     _xgb_validate_common_regressor_params(params)
@@ -3931,9 +3927,7 @@ def _xgb_lag_dirrec_forecast_kwargs(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     h = int(horizon)
@@ -3946,7 +3940,7 @@ def _xgb_lag_dirrec_forecast_kwargs(
     params.setdefault("verbosity", 0)
     obj = str(params.get("objective", "")).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
     _xgb_validate_common_regressor_params(params)
@@ -4046,9 +4040,7 @@ def _xgb_lag_mimo_forecast_kwargs(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        raise ImportError(XGB_INSTALL_ERROR) from e
 
     x = _as_1d_float_array(train)
     h = int(horizon)
@@ -4062,7 +4054,7 @@ def _xgb_lag_mimo_forecast_kwargs(
     params.setdefault("multi_strategy", str(multi_strategy))
     obj = str(params.get("objective", "")).strip()
     if not obj:
-        raise ValueError("objective must be non-empty")
+        raise ValueError(XGB_OBJECTIVE_EMPTY_ERROR)
 
     _xgb_validate_objective_label_constraints(obj, x)
     _xgb_validate_common_regressor_params(params)

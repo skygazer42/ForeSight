@@ -145,6 +145,10 @@ def _install_fake_sklearn(
     monkeypatch.setitem(sys.modules, "sklearn.tree", tree)
 
 
+def _literal_occurrence_count(path: Path, literal: str) -> int:
+    return path.read_text(encoding="utf-8").count(literal)
+
+
 @pytest.mark.parametrize(
     ("url", "doi", "arxiv_id", "expected"),
     [
@@ -426,6 +430,42 @@ def test_svr_lag_direct_forecast_sets_explicit_kernel(
     assert out.shape == (2,)
     kwargs = captured["SVR"][0]
     assert kwargs["kernel"] == "rbf"
+
+
+def test_regression_source_extracts_repeated_xgb_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "regression.py"
+    literals = [
+        "reg:squarederror",
+        "reg:squaredlogerror",
+        "reg:logistic",
+        "count:poisson",
+        "reg:gamma",
+        "reg:tweedie",
+        'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"',
+        "objective must be non-empty",
+        "C must be > 0",
+        "epsilon must be >= 0",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_global_regression_source_extracts_repeated_quantile_and_svr_literals() -> None:
+    path = (
+        Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "global_regression.py"
+    )
+    literals = [
+        "reg:squarederror",
+        "C must be > 0",
+        "epsilon must be >= 0",
+        "quantiles must be in (0,1)",
+        "quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)",
+        "quantiles must be strictly between 0 and 1",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
 
 
 def test_xgb_lag_direct_forecast_validates_labels_before_training(
