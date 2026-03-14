@@ -50,6 +50,7 @@ from foresight.models.statsmodels_wrap import (
     ets_forecast,
 )
 from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
+from foresight.models.torch_xformer import torch_xformer_direct_forecast
 
 
 def _install_fake_statsmodels(
@@ -578,6 +579,46 @@ def test_mut_rnnpaper_variants_smoke(paper: str) -> None:
         patience=1,
         seed=0,
         device="cpu",
+    )
+
+    assert out.shape == (2,)
+    assert np.all(np.isfinite(out))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+@pytest.mark.parametrize(
+    ("attn", "extra_kwargs"),
+    [
+        ("performer", {"performer_features": 8}),
+        ("linformer", {"linformer_k": 4}),
+        ("reformer", {"reformer_bucket_size": 4, "reformer_n_hashes": 1}),
+        ("nystrom", {"nystrom_landmarks": 4}),
+        ("probsparse", {"probsparse_top_u": 4}),
+        ("full", {}),
+    ],
+)
+def test_torch_xformer_attention_variants_cover_recent_einsum_refactor(
+    attn: str,
+    extra_kwargs: dict[str, object],
+) -> None:
+    y = np.sin(np.arange(48, dtype=float) / 4.0) + 0.01 * np.arange(48, dtype=float)
+
+    out = torch_xformer_direct_forecast(
+        y,
+        2,
+        lags=12,
+        d_model=16,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=16,
+        dropout=0.0,
+        attn=attn,
+        epochs=1,
+        batch_size=8,
+        patience=1,
+        seed=0,
+        device="cpu",
+        **extra_kwargs,
     )
 
     assert out.shape == (2,)
