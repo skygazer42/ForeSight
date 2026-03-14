@@ -337,6 +337,38 @@ def _cmd_datasets_path(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_dataset_frame(df: pd.DataFrame, *, expected_columns: set[str]) -> None:
+    if len(df) <= 0:
+        raise ValueError("loaded 0 rows")
+    missing = sorted(expected_columns.difference(df.columns))
+    if missing:
+        raise ValueError(f"missing columns: {missing}")
+
+
+def _validate_dataset_parse_dates(df: pd.DataFrame, *, parse_dates: tuple[str, ...]) -> None:
+    for col in parse_dates:
+        if col not in df.columns:
+            raise ValueError(f"missing parse_dates column: {col!r}")
+        if not pd.api.types.is_datetime64_any_dtype(df[col]):
+            raise ValueError(f"parse_dates column is not datetime: {col!r}")
+        if df[col].isna().any():
+            raise ValueError(f"parse_dates column contains NaT/NA values: {col!r}")
+
+
+def _validate_dataset_time_contracts(df: pd.DataFrame, *, spec: Any) -> None:
+    from .data.format import to_long, validate_long_df
+
+    long_df = to_long(
+        df,
+        time_col=spec.time_col,
+        y_col=spec.default_y,
+        id_cols=tuple(spec.group_cols),
+        dropna=True,
+    )
+    long_df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+    validate_long_df(long_df, require_sorted=True, require_unique_ds=True)
+
+
 def _cmd_datasets_validate(args: argparse.Namespace) -> int:
     from .datasets.loaders import load_dataset
     from .datasets.registry import get_dataset_spec, list_datasets
@@ -348,33 +380,10 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
         try:
             spec = get_dataset_spec(key)
             df = load_dataset(key, nrows=nrows, data_dir=str(args.data_dir))
-            if len(df) <= 0:
-                raise ValueError("loaded 0 rows")
-            missing = sorted(spec.expected_columns.difference(df.columns))
-            if missing:
-                raise ValueError(f"missing columns: {missing}")
-
-            if spec.parse_dates:
-                for col in spec.parse_dates:
-                    if col not in df.columns:
-                        raise ValueError(f"missing parse_dates column: {col!r}")
-                    if not pd.api.types.is_datetime64_any_dtype(df[col]):
-                        raise ValueError(f"parse_dates column is not datetime: {col!r}")
-                    if df[col].isna().any():
-                        raise ValueError(f"parse_dates column contains NaT/NA values: {col!r}")
-
+            _validate_dataset_frame(df, expected_columns=set(spec.expected_columns))
+            _validate_dataset_parse_dates(df, parse_dates=tuple(spec.parse_dates))
             if bool(args.check_time):
-                from .data.format import to_long, validate_long_df
-
-                long_df = to_long(
-                    df,
-                    time_col=spec.time_col,
-                    y_col=spec.default_y,
-                    id_cols=tuple(spec.group_cols),
-                    dropna=True,
-                )
-                long_df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
-                validate_long_df(long_df, require_sorted=True, require_unique_ds=True)
+                _validate_dataset_time_contracts(df, spec=spec)
             print(f"OK {key} rows={len(df)} cols={len(df.columns)}")
         except Exception as e:  # noqa: BLE001
             failures += 1

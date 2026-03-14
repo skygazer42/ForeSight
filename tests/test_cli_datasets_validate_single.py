@@ -23,3 +23,11 @@ def test_datasets_validate_single_dataset():
     out = proc.stdout + proc.stderr
     assert "OK catfish" in out
     assert "store_sales" not in out
+
+
+def test_datasets_validate_unknown_dataset_reports_failure() -> None:
+    proc = _run_cli("datasets", "validate", "--dataset", "no_such_dataset", "--nrows", "5")
+
+    assert proc.returncode == 1
+    assert "FAIL no_such_dataset: KeyError: " in proc.stderr
+    assert "Unknown dataset key" in proc.stderr

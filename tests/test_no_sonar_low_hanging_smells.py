@@ -200,6 +200,65 @@ def test_features_time_source_extracts_complexity_helpers() -> None:
     )
 
 
+def test_cli_data_source_extracts_dataset_validate_helpers() -> None:
+    source = _read_repo_file("src/foresight/cli_data.py")
+
+    assert "def _validate_dataset_frame(" in source
+    assert "def _validate_dataset_parse_dates(" in source
+    assert "def _validate_dataset_time_contracts(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_data.py",
+        "_cmd_datasets_validate",
+        "_validate_dataset_frame",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_data.py",
+        "_cmd_datasets_validate",
+        "_validate_dataset_parse_dates",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_data.py",
+        "_cmd_datasets_validate",
+        "_validate_dataset_time_contracts",
+    )
+
+
+def test_cli_workflows_source_extracts_forecast_helpers() -> None:
+    source = _read_repo_file("src/foresight/services/cli_workflows.py")
+
+    assert "def _resolve_forecast_covariates(" in source
+    assert "def _build_forecast_long_frames(" in source
+    assert "def _save_local_forecast_artifact(" in source
+    assert "def _save_global_forecast_artifact(" in source
+    assert "def _forecast_local_artifact(" in source
+    assert "def _forecast_global_artifact(" in source
+    assert _function_uses_name(
+        "src/foresight/services/cli_workflows.py",
+        "forecast_csv_workflow",
+        "_build_forecast_long_frames",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/cli_workflows.py",
+        "forecast_csv_workflow",
+        "_save_local_forecast_artifact",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/cli_workflows.py",
+        "forecast_csv_workflow",
+        "_save_global_forecast_artifact",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/cli_workflows.py",
+        "forecast_artifact_workflow",
+        "_forecast_local_artifact",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/cli_workflows.py",
+        "forecast_artifact_workflow",
+        "_forecast_global_artifact",
+    )
+
+
 def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
     source = _read_repo_file("src/foresight/models/kalman.py")
     assert "if not (vf > 0.0):" not in source

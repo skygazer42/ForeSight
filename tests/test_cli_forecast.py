@@ -464,6 +464,51 @@ def test_forecast_cli_can_save_and_reuse_local_artifact(tmp_path: Path) -> None:
     assert json.loads(reuse_proc.stdout) == json.loads(fit_proc.stdout)
 
 
+def test_forecast_csv_rejects_local_artifact_save_for_multi_series_input(tmp_path: Path) -> None:
+    csv_path = tmp_path / "panel.csv"
+    artifact_path = tmp_path / "naive-last.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y",
+                "s0,2020-01-01,1",
+                "s0,2020-01-02,2",
+                "s0,2020-01-03,3",
+                "s1,2020-01-01,4",
+                "s1,2020-01-02,5",
+                "s1,2020-01-03,6",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "naive-last",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+
+    assert proc.returncode == 2
+    assert "Saving local forecast artifacts currently requires a single series" in proc.stderr
+
+
 def test_forecast_artifact_can_emit_interval_quantile_columns_for_local_artifact(
     tmp_path: Path,
 ) -> None:
@@ -823,3 +868,112 @@ def test_forecast_csv_saved_global_artifact_reuses_observed_cutoff_with_future_c
     )
     assert reuse_proc.returncode == 0
     assert json.loads(reuse_proc.stdout) == json.loads(fit_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_rejects_intervals_for_global_artifact(tmp_path: Path) -> None:
+    csv_path = tmp_path / "panel_future.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s0,2020-01-19,,1",
+                "s0,2020-01-20,,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "s1,2020-01-19,,1",
+                "s1,2020-01-20,,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--interval-levels",
+        "80",
+        "--format",
+        "json",
+    )
+
+    assert reuse_proc.returncode == 2
+    assert (
+        "Forecast intervals are not yet supported for artifact model 'ridge-step-lag-global'"
+        in (reuse_proc.stderr)
+    )
