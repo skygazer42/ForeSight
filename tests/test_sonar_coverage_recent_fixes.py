@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -83,6 +84,28 @@ def _install_fake_xgboost(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "xgboost", xgboost)
 
 
+def _install_fake_lightgbm(monkeypatch: pytest.MonkeyPatch) -> None:
+    lightgbm = types.ModuleType("lightgbm")
+
+    class _FakeLGBMRegressor:
+        def __init__(self, **_: object) -> None:
+            pass
+
+    lightgbm.LGBMRegressor = _FakeLGBMRegressor
+    monkeypatch.setitem(sys.modules, "lightgbm", lightgbm)
+
+
+def _install_fake_catboost(monkeypatch: pytest.MonkeyPatch) -> None:
+    catboost = types.ModuleType("catboost")
+
+    class _FakeCatBoostRegressor:
+        def __init__(self, **_: object) -> None:
+            pass
+
+    catboost.CatBoostRegressor = _FakeCatBoostRegressor
+    monkeypatch.setitem(sys.modules, "catboost", catboost)
+
+
 def _install_fake_sklearn(
     monkeypatch: pytest.MonkeyPatch, captured: dict[str, list[dict[str, object]]]
 ) -> None:
@@ -159,6 +182,9 @@ def _install_fake_sklearn(
     class SGDRegressor(_CapturedEstimator):
         pass
 
+    class PassiveAggressiveRegressor(_CapturedEstimator):
+        pass
+
     class MLPRegressor(_CapturedEstimator):
         pass
 
@@ -194,6 +220,7 @@ def _install_fake_sklearn(
     linear_model.HuberRegressor = HuberRegressor
     linear_model.Lasso = Lasso
     linear_model.PoissonRegressor = PoissonRegressor
+    linear_model.PassiveAggressiveRegressor = PassiveAggressiveRegressor
     linear_model.QuantileRegressor = QuantileRegressor
     linear_model.Ridge = Ridge
     linear_model.SGDRegressor = SGDRegressor
@@ -529,6 +556,115 @@ def test_global_regression_forecasters_validate_shared_scalar_constraints(
 
 
 @pytest.mark.parametrize(
+    ("factory_name", "kwargs", "message"),
+    [
+        ("svr_step_lag_global_forecaster", {"C": 0.0}, global_regression_mod.SVR_C_ERROR),
+        (
+            "svr_step_lag_global_forecaster",
+            {"epsilon": -0.1},
+            global_regression_mod.SVR_EPSILON_ERROR,
+        ),
+        ("linear_svr_step_lag_global_forecaster", {"C": 0.0}, global_regression_mod.SVR_C_ERROR),
+        (
+            "linear_svr_step_lag_global_forecaster",
+            {"epsilon": -0.1},
+            global_regression_mod.SVR_EPSILON_ERROR,
+        ),
+        (
+            "passive_aggressive_step_lag_global_forecaster",
+            {"C": 0.0},
+            global_regression_mod.SVR_C_ERROR,
+        ),
+        (
+            "passive_aggressive_step_lag_global_forecaster",
+            {"epsilon": -0.1},
+            global_regression_mod.SVR_EPSILON_ERROR,
+        ),
+    ],
+)
+def test_global_regression_svr_family_reuses_shared_validation_messages(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+    factory = getattr(global_regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=message):
+        factory(**kwargs)
+
+
+def test_tweedie_step_lag_global_forecaster_validates_targets_via_shared_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+
+    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+        assert callable(fit_model)
+        fit_model(np.ones((3, 2), dtype=float), np.array([1.0, 0.0, 2.0], dtype=float))
+        return {"ok": True}
+
+    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+
+    forecaster = global_regression_mod.tweedie_step_lag_global_forecaster(lags=2, power=1.5)
+
+    with pytest.raises(ValueError, match="requires strictly positive training targets"):
+        forecaster(None, None, 1)
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "installer"),
+    [
+        ("xgb_step_lag_global_forecaster", _install_fake_xgboost),
+        ("lgbm_step_lag_global_forecaster", _install_fake_lightgbm),
+        ("catboost_step_lag_global_forecaster", _install_fake_catboost),
+    ],
+)
+@pytest.mark.parametrize(
+    ("quantiles", "message"),
+    [
+        ([0.0], global_regression_mod.QUANTILES_RANGE_ERROR),
+        ([0.125], global_regression_mod.QUANTILES_ALIGN_ERROR),
+        ([1e-9], global_regression_mod.QUANTILES_STRICT_ERROR),
+    ],
+)
+def test_global_step_lag_quantile_factories_validate_quantiles_before_fit(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    installer: object,
+    quantiles: list[float],
+    message: str,
+) -> None:
+    installer(monkeypatch)
+    factory = getattr(global_regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=re.escape(message)):
+        factory(quantiles=quantiles)
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "installer"),
+    [
+        ("xgb_step_lag_global_forecaster", _install_fake_xgboost),
+        ("lgbm_step_lag_global_forecaster", _install_fake_lightgbm),
+        ("catboost_step_lag_global_forecaster", _install_fake_catboost),
+    ],
+)
+def test_global_step_lag_quantile_factories_normalize_valid_percentiles(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    installer: object,
+) -> None:
+    installer(monkeypatch)
+    factory = getattr(global_regression_mod, factory_name)
+
+    forecaster = factory(quantiles="0.1,0.9")
+
+    assert callable(forecaster)
+
+
+@pytest.mark.parametrize(
     ("factory_name", "horizon", "kwargs", "message"),
     [
         ("rf_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
@@ -559,6 +695,32 @@ def test_regression_forecasters_validate_shared_scalar_constraints(
 
     with pytest.raises(ValueError, match=message):
         factory([1.0, 2.0, 3.0, 4.0, 5.0], horizon, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "kwargs", "message"),
+    [
+        ("svr_lag_direct_forecast", {"C": 0.0}, regression_mod.SVR_C_ERROR),
+        ("svr_lag_direct_forecast", {"epsilon": -0.1}, regression_mod.SVR_EPSILON_ERROR),
+        ("linear_svr_lag_direct_forecast", {"C": 0.0}, regression_mod.SVR_C_ERROR),
+        (
+            "linear_svr_lag_direct_forecast",
+            {"epsilon": -0.1},
+            regression_mod.SVR_EPSILON_ERROR,
+        ),
+    ],
+)
+def test_regression_svr_family_reuses_shared_validation_messages(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=message):
+        factory([1.0, 2.0, 3.0, 4.0, 5.0], 1, lags=2, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -597,6 +759,61 @@ def test_regression_xgb_internal_forecasters_validate_shared_scalar_constraints(
             objective="reg:squarederror",
             **kwargs,
         )
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "extra_kwargs"),
+    [
+        ("_xgb_lag_direct_forecast", {"booster": "gbtree"}),
+        ("_xgb_lag_recursive_forecast", {"booster": "gbtree"}),
+    ],
+)
+def test_regression_xgb_internal_forecasters_reject_empty_objective(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    extra_kwargs: dict[str, object],
+) -> None:
+    _install_fake_xgboost(monkeypatch)
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=regression_mod.XGB_OBJECTIVE_EMPTY_ERROR):
+        factory([1.0, 2.0, 3.0, 4.0, 5.0], 1, lags=2, objective="", **extra_kwargs)
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    [
+        "_xgb_lag_direct_forecast_kwargs",
+        "_xgb_lag_recursive_forecast_kwargs",
+        "_xgb_lag_step_forecast_kwargs",
+        "_xgb_lag_dirrec_forecast_kwargs",
+        "_xgb_lag_mimo_forecast_kwargs",
+    ],
+)
+def test_regression_xgb_kwargs_forecasters_reject_empty_objective(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+) -> None:
+    _install_fake_xgboost(monkeypatch)
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=regression_mod.XGB_OBJECTIVE_EMPTY_ERROR):
+        factory([1.0, 2.0, 3.0, 4.0, 5.0], 1, lags=2, xgb_params={})
+
+
+@pytest.mark.parametrize(
+    "factory_name",
+    ["xgb_logistic_lag_direct_forecast", "xgb_logistic_lag_recursive_forecast"],
+)
+def test_regression_xgb_logistic_forecasters_validate_unit_interval_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+) -> None:
+    _install_fake_xgboost(monkeypatch)
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=r"reg:logistic requires series values in \[0,1\]"):
+        factory([-0.1, 0.2, 0.4, 0.8], 1, lags=2)
 
 
 def test_rf_lag_direct_forecast_sets_explicit_rf_defaults(
