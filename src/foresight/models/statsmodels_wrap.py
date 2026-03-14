@@ -2292,11 +2292,9 @@ def ets_forecast(
         if (seasonal is None or str(seasonal).lower() in {"none", "null", ""})
         else str(seasonal)
     )
-    seasonal_periods_final = (
-        None
-        if seasonal_final is None
-        else (None if seasonal_periods is None else int(seasonal_periods))
-    )
+    seasonal_periods_final = None
+    if seasonal_final is not None and seasonal_periods is not None:
+        seasonal_periods_final = int(seasonal_periods)
 
     model = ExponentialSmoothing(
         x,

@@ -1978,7 +1978,7 @@ def torch_rnnpaper_direct_forecast(
 
         encoder = _ATR()
     elif paper_id in {"mut1", "mut2", "mut3"}:
-        v = 1 if paper_id == "mut1" else 2 if paper_id == "mut2" else 3
+        v = {"mut1": 1, "mut2": 2, "mut3": 3}[paper_id]
         encoder = _ScanEncoder(_MUTCell(variant=int(v)))
     elif paper_id in {"fast-rnn"}:
         encoder = _ScanEncoder(_FastRNNCell())

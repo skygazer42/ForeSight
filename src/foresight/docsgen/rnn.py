@@ -181,6 +181,22 @@ def _arxiv_abs_url(arxiv_id: str) -> str:
     return "https://arxiv.org/abs/" + a
 
 
+def _metadata_primary_url(url: str, doi: str, arxiv_id: str) -> str:
+    direct_url = str(url).strip()
+    if direct_url:
+        return direct_url
+
+    doi_value = str(doi).strip()
+    if doi_value:
+        return _doi_url(doi_value)
+
+    arxiv_value = str(arxiv_id).strip()
+    if arxiv_value:
+        return _arxiv_abs_url(arxiv_value)
+
+    return "-"
+
+
 def _rnnzoo_base_impl_anchor(base: str) -> str:
     b = str(base).strip()
     if not b:
@@ -303,9 +319,8 @@ def render_rnn_paper_zoo_doc() -> str:
         ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
         doi_link = _doi_url(doi)
         cr = _crossref_search_url(desc)
-        if not url:
-            # Backward compatibility with older metadata dumps.
-            url = _doi_url(doi) if doi else (_arxiv_abs_url(arxiv_id) if arxiv_id else "-")
+        # Backward compatibility with older metadata dumps.
+        url = _metadata_primary_url(url, doi, arxiv_id)
         safe_desc = desc.replace("|", "\\|")
         safe_title = title.replace("|", "\\|") if title else ""
         lines.append(
@@ -376,9 +391,7 @@ def render_rnn_zoo_doc() -> str:
         year = str(m.get("year", "")).strip() if isinstance(m, dict) else ""
         doi = str(m.get("doi", "")).strip() if isinstance(m, dict) else ""
         arxiv_id = str(m.get("arxiv_id", "")).strip() if isinstance(m, dict) else ""
-        url = str(m.get("url", "")).strip() if isinstance(m, dict) else ""
-        if not url:
-            url = _doi_url(doi) if doi else (_arxiv_abs_url(arxiv_id) if arxiv_id else "-")
+        url = _metadata_primary_url(str(m.get("url", "")) if isinstance(m, dict) else "", doi, arxiv_id)
 
         impl = _rnnzoo_base_impl_anchor(base)
         doi_link = _doi_url(doi)
@@ -408,9 +421,7 @@ def render_rnn_zoo_doc() -> str:
         year = str(m.get("year", "")).strip() if isinstance(m, dict) else ""
         doi = str(m.get("doi", "")).strip() if isinstance(m, dict) else ""
         arxiv_id = str(m.get("arxiv_id", "")).strip() if isinstance(m, dict) else ""
-        url = str(m.get("url", "")).strip() if isinstance(m, dict) else ""
-        if not url:
-            url = _doi_url(doi) if doi else (_arxiv_abs_url(arxiv_id) if arxiv_id else "-")
+        url = _metadata_primary_url(str(m.get("url", "")) if isinstance(m, dict) else "", doi, arxiv_id)
 
         doi_link = _doi_url(doi)
         ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
