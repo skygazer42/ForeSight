@@ -45,7 +45,7 @@ def _normalize_x_cols(x_cols: Any) -> tuple[str, ...]:
         s = x_cols.strip()
         if not s:
             return ()
-        return tuple([p.strip() for p in s.split(",") if p.strip()])
+        return tuple(p.strip() for p in s.split(",") if p.strip())
     if isinstance(x_cols, list | tuple):
         out = [str(c).strip() for c in x_cols if str(c).strip()]
         return tuple(out)

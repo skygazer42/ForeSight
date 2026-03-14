@@ -39,7 +39,7 @@ def _normalize_x_cols(x_cols: Any) -> tuple[str, ...]:
         s = x_cols.strip()
         if not s:
             return ()
-        return tuple([p.strip() for p in s.split(",") if p.strip()])
+        return tuple(p.strip() for p in s.split(",") if p.strip())
     if isinstance(x_cols, list | tuple):
         out = [str(c).strip() for c in x_cols if str(c).strip()]
         return tuple(out)
@@ -2384,7 +2384,7 @@ def _xgb_step_lag_global_forecaster_impl(
         q_pcts.append(int(pct))
 
     q_pcts = sorted(set(q_pcts))
-    q_vals = tuple([p / 100.0 for p in q_pcts])
+    q_vals = tuple(p / 100.0 for p in q_pcts)
 
     if q_vals and not allow_quantiles:
         raise ValueError(f"{model_key} does not support quantiles")
@@ -3273,7 +3273,7 @@ def lgbm_step_lag_global_forecaster(
             raise ValueError("quantiles must be strictly between 0 and 1")
         q_pcts.append(int(pct))
     q_pcts = sorted(set(q_pcts))
-    q_vals = tuple([p / 100.0 for p in q_pcts])
+    q_vals = tuple(p / 100.0 for p in q_pcts)
 
     base_params: dict[str, Any] = {
         "n_estimators": int(n_estimators),
@@ -3465,7 +3465,7 @@ def catboost_step_lag_global_forecaster(
             raise ValueError("quantiles must be strictly between 0 and 1")
         q_pcts.append(int(pct))
     q_pcts = sorted(set(q_pcts))
-    q_vals = tuple([p / 100.0 for p in q_pcts])
+    q_vals = tuple(p / 100.0 for p in q_pcts)
 
     base_params: dict[str, Any] = {
         "iterations": int(iterations),

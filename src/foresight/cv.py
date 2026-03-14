@@ -48,9 +48,9 @@ def cross_validation_predictions(
         raw = model_params.get("x_cols")
         if raw is not None:
             if isinstance(raw, str):
-                x_cols = tuple([p.strip() for p in raw.split(",") if p.strip()])
+                x_cols = tuple(p.strip() for p in raw.split(",") if p.strip())
             elif isinstance(raw, list | tuple):
-                x_cols = tuple([str(p).strip() for p in raw if str(p).strip()])
+                x_cols = tuple(str(p).strip() for p in raw if str(p).strip())
             else:
                 s = str(raw).strip()
                 x_cols = (s,) if s else ()

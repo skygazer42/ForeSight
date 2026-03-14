@@ -31,7 +31,7 @@ def parse_cols(raw: Any) -> tuple[str, ...]:
         s = raw.strip()
         if not s:
             return ()
-        return tuple([p.strip() for p in s.split(",") if p.strip()])
+        return tuple(p.strip() for p in s.split(",") if p.strip())
     if isinstance(raw, list | tuple):
         out: list[str] = []
         for v in raw:
