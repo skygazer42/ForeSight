@@ -200,11 +200,11 @@ def _train_loop_global(
 
     model = model.to(dev)
 
-    X_t = torch.tensor(X, dtype=torch.float32, device=dev)
+    x_tensor = torch.tensor(X, dtype=torch.float32, device=dev)
     ids_t = torch.tensor(ids, dtype=torch.long, device=dev)
-    Y_t = torch.tensor(Y, dtype=torch.float32, device=dev)
+    y_tensor = torch.tensor(Y, dtype=torch.float32, device=dev)
 
-    n = int(X_t.shape[0])
+    n = int(x_tensor.shape[0])
     val_n = 0
     if float(cfg.val_split) > 0.0 and n >= 5:
         val_n = max(1, int(round(float(cfg.val_split) * n)))
@@ -212,22 +212,22 @@ def _train_loop_global(
 
     if val_n > 0:
         train_end = n - val_n
-        X_train, ids_train, Y_train = X_t[:train_end], ids_t[:train_end], Y_t[:train_end]
-        X_val, ids_val, Y_val = X_t[train_end:], ids_t[train_end:], Y_t[train_end:]
+        x_train, ids_train, y_train = x_tensor[:train_end], ids_t[:train_end], y_tensor[:train_end]
+        x_val, ids_val, y_val = x_tensor[train_end:], ids_t[train_end:], y_tensor[train_end:]
     else:
-        X_train, ids_train, Y_train = X_t, ids_t, Y_t
-        X_val, ids_val, Y_val = None, None, None
+        x_train, ids_train, y_train = x_tensor, ids_t, y_tensor
+        x_val, ids_val, y_val = None, None, None
 
     train_loader = torch.utils.data.DataLoader(
-        torch.utils.data.TensorDataset(X_train, ids_train, Y_train),
+        torch.utils.data.TensorDataset(x_train, ids_train, y_train),
         batch_size=int(cfg.batch_size),
         shuffle=True,
     )
     val_loader = (
         None
-        if X_val is None
+        if x_val is None
         else torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(X_val, ids_val, Y_val),
+            torch.utils.data.TensorDataset(x_val, ids_val, y_val),
             batch_size=int(cfg.batch_size),
             shuffle=False,
         )
@@ -406,8 +406,8 @@ def _build_panel_dataset(
 ]:
     """
     Returns:
-      X_train, ids_train, Y_train,
-      X_pred, ids_pred,
+      x_train, ids_train, y_train,
+      x_pred, ids_pred,
       pred_uids, pred_ds_list, pred_mean, pred_std,
       n_total_series
     """
@@ -441,11 +441,11 @@ def _build_panel_dataset(
 
     x_dim = int(len(x_cols))
 
-    X_chunks: list[np.ndarray] = []
+    x_chunks: list[np.ndarray] = []
     ids_chunks: list[np.ndarray] = []
-    Y_chunks: list[np.ndarray] = []
+    y_chunks: list[np.ndarray] = []
 
-    pred_X: list[np.ndarray] = []
+    pred_x: list[np.ndarray] = []
     pred_ids: list[int] = []
     pred_uids: list[str] = []
     pred_ds_list: list[np.ndarray] = []
@@ -508,8 +508,8 @@ def _build_panel_dataset(
         win_indices = list(range(0, n_windows, step))
         n_samples = int(len(win_indices))
 
-        X_series = np.empty((n_samples, seq_len, input_dim), dtype=float)
-        Y_series = np.empty((n_samples, h), dtype=float)
+        x_series = np.empty((n_samples, seq_len, input_dim), dtype=float)
+        y_series = np.empty((n_samples, h), dtype=float)
         ids_series = np.empty((n_samples,), dtype=int)
 
         for j, w0 in enumerate(win_indices):
@@ -525,13 +525,13 @@ def _build_panel_dataset(
             x_feat = np.concatenate([x_train_seg[past], x_train_seg[fut]], axis=0)
             time_feat = np.concatenate([time_train_seg[past], time_train_seg[fut]], axis=0)
 
-            X_series[j] = np.concatenate([y_feat, x_feat, time_feat], axis=1)
-            Y_series[j] = y_scaled_train[fut]
+            x_series[j] = np.concatenate([y_feat, x_feat, time_feat], axis=1)
+            y_series[j] = y_scaled_train[fut]
             ids_series[j] = int(uid_to_idx[uid_s])
 
-        X_chunks.append(X_series)
+        x_chunks.append(x_series)
         ids_chunks.append(ids_series)
-        Y_chunks.append(Y_series)
+        y_chunks.append(y_series)
 
         # Prediction sample for this series.
         if train_end + h > int(y_arr.size):
@@ -553,33 +553,33 @@ def _build_panel_dataset(
         time_fut = time_full[train_end : train_end + h]
         time_feat_pred = np.concatenate([time_ctx, time_fut], axis=0)
 
-        X_pred = np.concatenate([y_feat_pred, x_feat_pred, time_feat_pred], axis=1)
-        pred_X.append(X_pred.astype(float, copy=False))
+        x_pred = np.concatenate([y_feat_pred, x_feat_pred, time_feat_pred], axis=1)
+        pred_x.append(x_pred.astype(float, copy=False))
         pred_ids.append(int(uid_to_idx[uid_s]))
         pred_uids.append(uid_s)
         pred_ds_list.append(ds_arr[train_end : train_end + h])
         pred_mean.append(mean)
         pred_std.append(std)
 
-    if not X_chunks:
+    if not x_chunks:
         raise ValueError("No training windows could be constructed for the given cutoff.")
-    if not pred_X:
+    if not pred_x:
         raise ValueError("No prediction windows could be constructed for the given cutoff.")
 
-    X_train = np.concatenate(X_chunks, axis=0)
+    x_train = np.concatenate(x_chunks, axis=0)
     ids_train = np.concatenate(ids_chunks, axis=0)
-    Y_train = np.concatenate(Y_chunks, axis=0)
+    y_train = np.concatenate(y_chunks, axis=0)
 
-    X_pred_arr = np.stack(pred_X, axis=0)
+    x_pred_arr = np.stack(pred_x, axis=0)
     ids_pred_arr = np.asarray(pred_ids, dtype=int)
     mean_arr = np.asarray(pred_mean, dtype=float)
     std_arr = np.asarray(pred_std, dtype=float)
 
     return (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred_arr,
+        y_train,
+        x_pred_arr,
         ids_pred_arr,
         pred_uids,
         pred_ds_list,
@@ -637,10 +637,10 @@ def _predict_torch_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -662,7 +662,7 @@ def _predict_torch_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     class _BaseGlobalModel(nn.Module):
         def __init__(self) -> None:
@@ -806,19 +806,19 @@ def _predict_torch_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -1054,10 +1054,10 @@ def _predict_torch_timexer_global(
         raise ValueError("torch-timexer-global requires non-empty x_cols")
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -1078,7 +1078,7 @@ def _predict_torch_timexer_global(
 
     h = int(horizon)
     ctx = int(context_length)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
     query_dim = int(input_dim - 1)
     d = int(d_model)
     heads = int(nhead)
@@ -1175,18 +1175,18 @@ def _predict_torch_timexer_global(
     )
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=np.asarray(yhat_scaled, dtype=float),
@@ -1409,10 +1409,10 @@ def _predict_torch_fedformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -1434,7 +1434,7 @@ def _predict_torch_fedformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -1549,19 +1549,19 @@ def _predict_torch_fedformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -1708,10 +1708,10 @@ def _predict_torch_nonstationary_transformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -1733,7 +1733,7 @@ def _predict_torch_nonstationary_transformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -1877,19 +1877,19 @@ def _predict_torch_nonstationary_transformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -2051,10 +2051,10 @@ def _predict_torch_xformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -2076,7 +2076,7 @@ def _predict_torch_xformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -2623,19 +2623,19 @@ def _predict_torch_xformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -2822,10 +2822,10 @@ def _predict_torch_rnn_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -2845,7 +2845,7 @@ def _predict_torch_rnn_global(
     )
 
     h = int(horizon)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"lstm", "gru"}:
@@ -2915,19 +2915,19 @@ def _predict_torch_rnn_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -3082,10 +3082,10 @@ def _predict_torch_retnet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -3106,7 +3106,7 @@ def _predict_torch_retnet_global(
 
     h = int(horizon)
     seq_len = int(context_length) + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -3223,19 +3223,19 @@ def _predict_torch_retnet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=np.asarray(yhat_scaled, dtype=float),
@@ -3377,10 +3377,10 @@ def _predict_torch_patchtst_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -3402,7 +3402,7 @@ def _predict_torch_patchtst_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -3491,19 +3491,19 @@ def _predict_torch_patchtst_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -3675,10 +3675,10 @@ def _predict_torch_crossformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -3700,7 +3700,7 @@ def _predict_torch_crossformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -3826,19 +3826,19 @@ def _predict_torch_crossformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -3992,10 +3992,10 @@ def _predict_torch_pyraformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -4017,7 +4017,7 @@ def _predict_torch_pyraformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -4152,19 +4152,19 @@ def _predict_torch_pyraformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -4311,10 +4311,10 @@ def _predict_torch_tsmixer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -4336,7 +4336,7 @@ def _predict_torch_tsmixer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -4419,19 +4419,19 @@ def _predict_torch_tsmixer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -4594,10 +4594,10 @@ def _predict_torch_itransformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -4619,7 +4619,7 @@ def _predict_torch_itransformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -4692,19 +4692,19 @@ def _predict_torch_itransformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -4867,10 +4867,10 @@ def _predict_torch_timesnet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -4892,7 +4892,7 @@ def _predict_torch_timesnet_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -5028,19 +5028,19 @@ def _predict_torch_timesnet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
@@ -5250,10 +5250,10 @@ def _predict_torch_tcn_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -5275,7 +5275,7 @@ def _predict_torch_tcn_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     if isinstance(channels, int):
         chs = (int(channels),)
@@ -5383,19 +5383,19 @@ def _predict_torch_tcn_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -5533,10 +5533,10 @@ def _predict_torch_nbeats_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -5558,7 +5558,7 @@ def _predict_torch_nbeats_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     if int(num_blocks) <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
@@ -5638,19 +5638,19 @@ def _predict_torch_nbeats_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -5790,10 +5790,10 @@ def _predict_torch_nhits_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -5929,19 +5929,19 @@ def _predict_torch_nhits_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -6080,10 +6080,10 @@ def _predict_torch_tide_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -6103,7 +6103,7 @@ def _predict_torch_tide_global(
     )
 
     h = int(horizon)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -6172,19 +6172,19 @@ def _predict_torch_tide_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -6320,10 +6320,10 @@ def _predict_torch_wavenet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -6345,7 +6345,7 @@ def _predict_torch_wavenet_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     c = int(channels)
     if c <= 0:
@@ -6438,19 +6438,19 @@ def _predict_torch_wavenet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -6585,10 +6585,10 @@ def _predict_torch_resnet1d_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -6610,7 +6610,7 @@ def _predict_torch_resnet1d_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     c = int(channels)
     if c <= 0:
@@ -6685,19 +6685,19 @@ def _predict_torch_resnet1d_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -6833,10 +6833,10 @@ def _predict_torch_inception_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -6858,7 +6858,7 @@ def _predict_torch_inception_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     c = int(channels)
     if c <= 0:
@@ -6954,19 +6954,19 @@ def _predict_torch_inception_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -7108,10 +7108,10 @@ def _predict_torch_lstnet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -7132,7 +7132,7 @@ def _predict_torch_lstnet_global(
 
     h = int(horizon)
     ctx = int(context_length)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     c = int(cnn_channels)
     if c <= 0:
@@ -7246,19 +7246,19 @@ def _predict_torch_lstnet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -7397,10 +7397,10 @@ def _predict_torch_fnet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -7422,7 +7422,7 @@ def _predict_torch_fnet_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -7497,19 +7497,19 @@ def _predict_torch_fnet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -7644,10 +7644,10 @@ def _predict_torch_gmlp_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -7669,7 +7669,7 @@ def _predict_torch_gmlp_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -7758,19 +7758,19 @@ def _predict_torch_gmlp_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -7907,10 +7907,10 @@ def _predict_torch_ssm_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -7932,7 +7932,7 @@ def _predict_torch_ssm_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -8015,19 +8015,19 @@ def _predict_torch_ssm_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -8165,10 +8165,10 @@ def _predict_torch_mamba_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -8190,7 +8190,7 @@ def _predict_torch_mamba_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -8287,19 +8287,19 @@ def _predict_torch_mamba_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -8435,10 +8435,10 @@ def _predict_torch_rwkv_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -8460,7 +8460,7 @@ def _predict_torch_rwkv_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -8613,19 +8613,19 @@ def _predict_torch_rwkv_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -8765,10 +8765,10 @@ def _predict_torch_hyena_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -8790,7 +8790,7 @@ def _predict_torch_hyena_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -8881,19 +8881,19 @@ def _predict_torch_hyena_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -9035,10 +9035,10 @@ def _predict_torch_dilated_rnn_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -9060,7 +9060,7 @@ def _predict_torch_dilated_rnn_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"gru", "lstm"}:
@@ -9166,19 +9166,19 @@ def _predict_torch_dilated_rnn_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -9321,10 +9321,10 @@ def _predict_torch_kan_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -9346,7 +9346,7 @@ def _predict_torch_kan_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -9439,19 +9439,19 @@ def _predict_torch_kan_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -9595,10 +9595,10 @@ def _predict_torch_scinet_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -9620,7 +9620,7 @@ def _predict_torch_scinet_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     if d <= 0:
@@ -9741,19 +9741,19 @@ def _predict_torch_scinet_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -9897,10 +9897,10 @@ def _predict_torch_etsformer_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -9922,7 +9922,7 @@ def _predict_torch_etsformer_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = int(ctx + h)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -10051,19 +10051,19 @@ def _predict_torch_etsformer_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -10208,10 +10208,10 @@ def _predict_torch_esrnn_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -10232,7 +10232,7 @@ def _predict_torch_esrnn_global(
 
     h = int(horizon)
     ctx = int(context_length)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"gru", "lstm"}:
@@ -10369,19 +10369,19 @@ def _predict_torch_esrnn_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -10524,10 +10524,10 @@ def _predict_torch_transformer_encdec_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -10549,7 +10549,7 @@ def _predict_torch_transformer_encdec_global(
     h = int(horizon)
     ctx = int(context_length)
     seq_len = ctx + h
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     d = int(d_model)
     heads = int(nhead)
@@ -10681,19 +10681,19 @@ def _predict_torch_transformer_encdec_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -10830,10 +10830,10 @@ def _predict_torch_nlinear_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -10903,19 +10903,19 @@ def _predict_torch_nlinear_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -11043,10 +11043,10 @@ def _predict_torch_dlinear_global(
     out_dim = int(len(qs)) if qs else 1
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -11123,19 +11123,19 @@ def _predict_torch_dlinear_global(
     loss_fn_override = None if not qs else _make_pinball_loss(qs)
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=loss_fn_override,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     return _make_pred_df_from_scaled(
         yhat_scaled=yhat_scaled,
@@ -11268,10 +11268,10 @@ def _predict_torch_deepar_global(
     qs = _normalize_quantiles(quantiles)
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -11291,7 +11291,7 @@ def _predict_torch_deepar_global(
     )
 
     h = int(horizon)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     hidden = int(hidden_size)
     if hidden <= 0:
@@ -11356,19 +11356,19 @@ def _predict_torch_deepar_global(
 
     model = _train_loop_global(
         model,
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
+        y_train,
         cfg=cfg,
         device=str(device),
         loss_fn_override=_gaussian_nll,
     )
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        params_scaled = model(Xp, idp).detach().cpu().numpy()
+        params_scaled = model(x_pred_tensor, idp).detach().cpu().numpy()
 
     if params_scaled.shape != (int(len(pred_uids)), h, 2):
         raise ValueError(
@@ -11525,10 +11525,10 @@ def _predict_torch_seq2seq_global(
     point_idx = 0 if not qs else int(qs.index(q_point))
 
     (
-        X_train,
+        x_train,
         ids_train,
-        Y_train,
-        X_pred,
+        y_train,
+        x_pred,
         ids_pred,
         pred_uids,
         pred_ds_list,
@@ -11549,7 +11549,7 @@ def _predict_torch_seq2seq_global(
 
     h = int(horizon)
     ctx = int(context_length)
-    input_dim = int(X_train.shape[2])
+    input_dim = int(x_train.shape[2])
 
     cell_s = str(cell).lower().strip()
     if cell_s not in {"lstm", "gru"}:
@@ -11720,11 +11720,11 @@ def _predict_torch_seq2seq_global(
 
         model_in = model_in.to(dev)
 
-        X_t = torch.tensor(X_train, dtype=torch.float32, device=dev)
+        x_tensor = torch.tensor(x_train, dtype=torch.float32, device=dev)
         ids_t = torch.tensor(ids_train, dtype=torch.long, device=dev)
-        Y_t = torch.tensor(Y_train, dtype=torch.float32, device=dev)
+        y_tensor = torch.tensor(y_train, dtype=torch.float32, device=dev)
 
-        n = int(X_t.shape[0])
+        n = int(x_tensor.shape[0])
         val_n = 0
         if float(val_split) > 0.0 and n >= 5:
             val_n = max(1, int(round(float(val_split) * n)))
@@ -11732,22 +11732,22 @@ def _predict_torch_seq2seq_global(
 
         if val_n > 0:
             train_end = n - val_n
-            X_tr, ids_tr, Y_tr = X_t[:train_end], ids_t[:train_end], Y_t[:train_end]
-            X_va, ids_va, Y_va = X_t[train_end:], ids_t[train_end:], Y_t[train_end:]
+            x_tr, ids_tr, y_tr = x_tensor[:train_end], ids_t[:train_end], y_tensor[:train_end]
+            x_va, ids_va, y_va = x_tensor[train_end:], ids_t[train_end:], y_tensor[train_end:]
         else:
-            X_tr, ids_tr, Y_tr = X_t, ids_t, Y_t
-            X_va, ids_va, Y_va = None, None, None
+            x_tr, ids_tr, y_tr = x_tensor, ids_t, y_tensor
+            x_va, ids_va, y_va = None, None, None
 
         train_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(X_tr, ids_tr, Y_tr),
+            torch.utils.data.TensorDataset(x_tr, ids_tr, y_tr),
             batch_size=int(batch_size),
             shuffle=True,
         )
         val_loader = (
             None
-            if X_va is None
+            if x_va is None
             else torch.utils.data.DataLoader(
-                torch.utils.data.TensorDataset(X_va, ids_va, Y_va),
+                torch.utils.data.TensorDataset(x_va, ids_va, y_va),
                 batch_size=int(batch_size),
                 shuffle=False,
             )
@@ -11865,10 +11865,10 @@ def _predict_torch_seq2seq_global(
     model = _train_seq2seq(model)
 
     dev = torch.device(str(device))
-    Xp = torch.tensor(X_pred, dtype=torch.float32, device=dev)
+    x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(Xp, idp, y_true=None, teacher_forcing_ratio=0.0).detach().cpu().numpy()
+        yhat_scaled = model(x_pred_tensor, idp, y_true=None, teacher_forcing_ratio=0.0).detach().cpu().numpy()
 
     rows: list[dict[str, Any]] = []
     if qs:
