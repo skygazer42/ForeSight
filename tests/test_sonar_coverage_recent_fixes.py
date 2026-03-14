@@ -1152,6 +1152,38 @@ def test_torch_global_source_extracts_repeated_validation_literals() -> None:
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_torch_xformer_source_extracts_repeated_attention_einsum_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "torch_xformer.py"
+    literals = [
+        "bhld,hdm->bhlm",
+        "bhld,bhmd->bhlm",
+        "bhlm,bhmd->bhld",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_intermittent_source_extracts_repeated_horizon_literal() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "intermittent.py"
+
+    assert _literal_occurrence_count(path, "horizon must be >= 1") <= 1
+
+
+def test_cv_source_extracts_repeated_n_windows_literal() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "cv.py"
+
+    assert _literal_occurrence_count(path, "n_windows must be >= 1") <= 1
+
+
+def test_torch_rnn_paper_zoo_source_extracts_repeated_in_dim_literal() -> None:
+    path = (
+        Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "torch_rnn_paper_zoo.py"
+    )
+
+    assert _literal_occurrence_count(path, "in_dim must be >= 1") <= 1
+
+
 def test_metrics_source_extracts_repeated_seasonality_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "metrics.py"
     literals = [

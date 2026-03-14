@@ -12,6 +12,8 @@ from .datasets.registry import get_dataset_spec
 from .splits import rolling_origin_splits
 from .services import model_execution as _model_execution
 
+N_WINDOWS_MIN_ERROR = "n_windows must be >= 1"
+
 
 def cross_validation_predictions(
     *,
@@ -134,7 +136,7 @@ def cross_validation_predictions_long_df(
 
             if n_windows is not None:
                 if int(n_windows) <= 0:
-                    raise ValueError("n_windows must be >= 1")
+                    raise ValueError(N_WINDOWS_MIN_ERROR)
                 splits = splits[-int(n_windows) :]
 
             for split in splits:
@@ -195,7 +197,7 @@ def cross_validation_predictions_long_df(
         )
         if n_windows is not None:
             if int(n_windows) <= 0:
-                raise ValueError("n_windows must be >= 1")
+                raise ValueError(N_WINDOWS_MIN_ERROR)
             splits = splits[-int(n_windows) :]
 
         cutoffs = [ref_ds[sp.train_end - 1] for sp in splits]
@@ -280,7 +282,7 @@ def cross_validation_predictions_long_df(
 
         if n_windows is not None:
             if int(n_windows) <= 0:
-                raise ValueError("n_windows must be >= 1")
+                raise ValueError(N_WINDOWS_MIN_ERROR)
             splits = splits[-int(n_windows) :]
 
         for split in splits:

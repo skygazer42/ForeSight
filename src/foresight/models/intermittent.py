@@ -6,6 +6,8 @@ import numpy as np
 
 from .smoothing import ses_forecast
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -37,7 +39,7 @@ def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) ->
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("croston_classic_forecast requires at least 1 training point")
     a = _require_01("alpha", alpha)
@@ -134,7 +136,7 @@ def croston_optimized_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("croston_optimized_forecast requires at least 1 training point")
     if grid_size <= 1:
@@ -169,7 +171,7 @@ def les_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("les_forecast requires at least 1 training point")
 
@@ -236,7 +238,7 @@ def tsb_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("tsb_forecast requires at least 1 training point")
 
@@ -277,7 +279,7 @@ def adida_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if agg_period <= 0:
         raise ValueError("agg_period must be >= 1")
     if x.size == 0:

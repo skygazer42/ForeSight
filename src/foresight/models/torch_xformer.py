@@ -15,6 +15,10 @@ from .torch_nn import (
     _train_loop,
 )
 
+_EINSUM_QK_PROJ = "bhld,hdm->bhlm"
+_EINSUM_QK_SCORES = "bhld,bhmd->bhlm"
+_EINSUM_ATTN_OUT = "bhlm,bhmd->bhld"
+
 
 def _positional_encoding_sincos(seq_len: int, d_model: int) -> np.ndarray:
     pe = np.zeros((int(seq_len), int(d_model)), dtype=float)
@@ -381,14 +385,14 @@ def torch_xformer_direct_forecast(
                 # Random-feature (positive) map; stable and fast.
                 W = self.W  # (H,dh,m)
                 # (B,H,L,m)
-                qf = torch.einsum("bhld,hdm->bhlm", q * scale, W)
-                kf = torch.einsum("bhld,hdm->bhlm", k, W)
+                qf = torch.einsum(_EINSUM_QK_PROJ, q * scale, W)
+                kf = torch.einsum(_EINSUM_QK_PROJ, k, W)
                 qf = F.elu(qf) + 1.0
                 kf = F.elu(kf) + 1.0
 
                 kv = torch.einsum("bhlm,bhld->bhmd", kf, v)  # (B,H,m,dh)
                 z = torch.einsum("bhlm,bhm->bhl", qf, torch.sum(kf, dim=2) + 1e-8)
-                out = torch.einsum("bhlm,bhmd->bhld", qf, kv) / (z.unsqueeze(-1) + 1e-8)
+                out = torch.einsum(_EINSUM_ATTN_OUT, qf, kv) / (z.unsqueeze(-1) + 1e-8)
                 return self.out(self._merge_heads(out))
 
             if attn_s == "linformer":
@@ -396,9 +400,9 @@ def torch_xformer_direct_forecast(
                 Fp = self.F
                 k_proj = torch.einsum("hml,bhld->bhmd", E, k)
                 v_proj = torch.einsum("hml,bhld->bhmd", Fp, v)
-                scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k_proj)
+                scores = torch.einsum(_EINSUM_QK_SCORES, q * scale, k_proj)
                 w = torch.softmax(scores, dim=-1)
-                out = torch.einsum("bhlm,bhmd->bhld", w, v_proj)
+                out = torch.einsum(_EINSUM_ATTN_OUT, w, v_proj)
                 return self.out(self._merge_heads(out))
 
             if attn_s == "reformer":
@@ -415,7 +419,7 @@ def torch_xformer_direct_forecast(
 
                 for r in range(n_hash):
                     R = self.R[r]  # (H,dh,n_buckets)
-                    proj = torch.einsum("bhld,hdm->bhlm", q, R)  # (B,H,L,n_buckets)
+                    proj = torch.einsum(_EINSUM_QK_PROJ, q, R)  # (B,H,L,n_buckets)
                     buckets = proj.argmax(dim=-1)  # (B,H,L)
 
                     sort_idx = buckets.argsort(dim=-1)  # (B,H,L)
@@ -466,7 +470,7 @@ def torch_xformer_direct_forecast(
                 q_lm = q_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
                 k_lm = k_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
 
-                A = torch.softmax(torch.einsum("bhld,bhmd->bhlm", q * scale, k_lm), dim=-1)
+                A = torch.softmax(torch.einsum(_EINSUM_QK_SCORES, q * scale, k_lm), dim=-1)
                 Bmat = torch.softmax(torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm), dim=-1)
                 C = torch.softmax(torch.einsum("bhmd,bhld->bhml", q_lm * scale, k), dim=-1)
                 B_inv = torch.linalg.pinv(Bmat)
@@ -499,7 +503,7 @@ def torch_xformer_direct_forecast(
             if attn_s == "probsparse":
                 # Informer ProbSparse-style attention (lite): compute attention for top-u queries,
                 # use mean(V) for the rest.
-                scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k)  # (B,H,L,L)
+                scores = torch.einsum(_EINSUM_QK_SCORES, q * scale, k)  # (B,H,L,L)
                 importance = scores.max(dim=-1).values - scores.mean(dim=-1)  # (B,H,L)
                 u = int(min(L, probs_u))
                 top_q = importance.topk(k=u, dim=-1).indices  # (B,H,u)
@@ -518,7 +522,7 @@ def torch_xformer_direct_forecast(
                 )
                 return self.out(self._merge_heads(out))
 
-            scores = torch.einsum("bhld,bhmd->bhlm", q * scale, k)  # (B,H,L,L)
+            scores = torch.einsum(_EINSUM_QK_SCORES, q * scale, k)  # (B,H,L,L)
             if attn_s == "local":
                 w = int(local_window)
                 idx = torch.arange(L, device=xb.device)
@@ -579,7 +583,7 @@ def torch_xformer_direct_forecast(
                     allowed = allowed | self.bigbird_rand.to(device=xb.device)
                 scores = scores.masked_fill((~allowed).reshape(1, 1, int(L), int(L)), float("-inf"))
             w = torch.softmax(scores, dim=-1)
-            out = torch.einsum("bhlm,bhmd->bhld", w, v)
+            out = torch.einsum(_EINSUM_ATTN_OUT, w, v)
             return self.out(self._merge_heads(out))
 
     class _XFormerBlock(nn.Module):

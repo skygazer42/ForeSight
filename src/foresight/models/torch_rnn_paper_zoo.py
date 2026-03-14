@@ -15,6 +15,8 @@ from .torch_nn import (
     _train_loop,
 )
 
+_IN_DIM_MIN_MSG = "in_dim must be >= 1"
+
 
 @dataclass(frozen=True)
 class RNNPaperModelSpec:
@@ -30,7 +32,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("multi-dimensional-rnn", "Multi-Dimensional RNN (Graves et al., 2007)"),
     ("gated-feedback-rnn", "Gated Feedback RNN (Chung et al., 2015)"),
     ("hierarchical-multiscale-rnn", "Hierarchical Multiscale RNN (Chung et al., 2016)"),
-    ("clockwork-rnn", "Clockwork RNN (Koutník et al., 2014)"),
+    ("clockwork-rnn", "Clockwork RNN (Koutn铆k et al., 2014)"),
     ("dilated-rnn", "Dilated RNN (Chang et al., 2017)"),
     ("skip-rnn", "Skip RNN (Campos et al., 2017)"),
     ("sliced-rnn", "Sliced RNN (Yu & Liu, 2018)"),
@@ -64,9 +66,9 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("cfn", "Chaos-Free Network (Laurent & von Brecht, 2016)"),
     ("ran", "Recurrent Additive Network / RAN (Lee et al., 2017)"),
     ("atr", "Addition-Subtraction Twin-Gated RNN / ATR (Zhang et al., 2018)"),
-    ("mut1", "MUT1 cell (Józefowicz et al., 2015)"),
-    ("mut2", "MUT2 cell (Józefowicz et al., 2015)"),
-    ("mut3", "MUT3 cell (Józefowicz et al., 2015)"),
+    ("mut1", "MUT1 cell (J贸zefowicz et al., 2015)"),
+    ("mut2", "MUT2 cell (J贸zefowicz et al., 2015)"),
+    ("mut3", "MUT3 cell (J贸zefowicz et al., 2015)"),
     ("fast-rnn", "FastRNN (Kusupati et al., 2018)"),
     ("fast-grnn", "FastGRNN (Kusupati et al., 2018)"),
     ("fru", "Fourier Recurrent Unit / FRU (Zhang et al., 2018)"),
@@ -77,7 +79,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("cornn", "Coupled Oscillatory RNN / coRNN (Rusch & Mishra, 2020)"),
     ("unicornn", "UnICORNN (Rusch & Mishra, 2021)"),
     ("lem", "Long Expressive Memory / LEM (Rusch et al., 2021)"),
-    ("tau-gru", "Weighted time-delay feedback GRU / τ-GRU (Erichson et al., 2022)"),
+    ("tau-gru", "Weighted time-delay feedback GRU / 蟿-GRU (Erichson et al., 2022)"),
     ("dg-rnn", "Dynamic Gated RNN (Cheng et al., 2024)"),
     ("star", "Stackable recurrent cell / STAR (Turkoglu et al., 2019)"),
     ("strongly-typed-rnn", "Strongly-Typed RNN (Balduzzi & Ghifary, 2016)"),
@@ -113,7 +115,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("copynet", "CopyNet (Gu et al., 2016)"),
     ("rnn-transducer", "RNN Transducer / RNN-T (Graves, 2012)"),
     ("seq2seq", "Seq2Seq (Sutskever et al., 2014)"),
-    ("rnn-encoder-decoder", "RNN Encoder–Decoder (Cho et al., 2014)"),
+    ("rnn-encoder-decoder", "RNN Encoder鈥揇ecoder (Cho et al., 2014)"),
     ("bahdanau-attention", "Additive (Bahdanau) attention (Bahdanau et al., 2015)"),
     ("luong-attention", "Multiplicative (Luong) attention (Luong et al., 2015)"),
     ("neural-stack", "Neural Stack (Grefenstette et al., 2015)"),
@@ -292,7 +294,7 @@ def torch_rnnpaper_direct_forecast(
             super().__init__()
             d = int(in_dim)
             if d <= 0:
-                raise ValueError("in_dim must be >= 1")
+                raise ValueError(_IN_DIM_MIN_MSG)
             self.x2h = nn.Linear(d, 3 * hid, bias=True)
             self.h2h = nn.Linear(hid, 3 * hid, bias=False)
 
@@ -323,7 +325,7 @@ def torch_rnnpaper_direct_forecast(
             super().__init__()
             d = int(in_dim)
             if d <= 0:
-                raise ValueError("in_dim must be >= 1")
+                raise ValueError(_IN_DIM_MIN_MSG)
             self.x2h = nn.Linear(d, 4 * hid, bias=True)
             self.h2h = nn.Linear(hid, 4 * hid, bias=False)
             if forget_bias_init is not None or input_bias_init is not None:
@@ -357,7 +359,7 @@ def torch_rnnpaper_direct_forecast(
             d = int(in_dim)
             p = int(proj_dim)
             if d <= 0:
-                raise ValueError("in_dim must be >= 1")
+                raise ValueError(_IN_DIM_MIN_MSG)
             if p <= 0:
                 raise ValueError("proj_dim must be >= 1")
             self.proj_dim = p
@@ -389,7 +391,7 @@ def torch_rnnpaper_direct_forecast(
             super().__init__()
             in_features = int(in_dim)
             if in_features <= 0:
-                raise ValueError("in_dim must be >= 1")
+                raise ValueError(_IN_DIM_MIN_MSG)
             self.x2h = nn.Linear(in_features, hid, bias=True)
             self.h2h = nn.Linear(hid, hid, bias=False)
 
@@ -1236,7 +1238,7 @@ def torch_rnnpaper_direct_forecast(
     class _EUNNEncoder(_SeqEncoder):
         """
         Efficient Unitary Neural Network (lite): parameterize an orthogonal transform
-        as a small number of 2×2 Givens rotations (even/odd pairing).
+        as a small number of 2脳2 Givens rotations (even/odd pairing).
         """
 
         def __init__(self) -> None:
