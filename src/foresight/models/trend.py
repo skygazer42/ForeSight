@@ -31,6 +31,6 @@ def poly_trend_forecast(train: Any, horizon: int, *, degree: int = 1) -> np.ndar
     coef, *_ = np.linalg.lstsq(X, x, rcond=None)
 
     tf = np.arange(n, n + int(horizon), dtype=float)
-    Xf = np.vander(tf, N=int(degree) + 1, increasing=True)
-    yhat = Xf @ coef
+    x_future = np.vander(tf, N=int(degree) + 1, increasing=True)
+    yhat = x_future @ coef
     return np.asarray(yhat, dtype=float)

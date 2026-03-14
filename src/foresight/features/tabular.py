@@ -167,14 +167,14 @@ def build_column_lag_features(
 
 
 def build_lag_derived_features(
-    X_lags: Any,
+    lag_matrix: Any,
     *,
     roll_windows: Any = (),
     roll_stats: Any = (),
     diff_lags: Any = (),
 ) -> tuple[np.ndarray, list[str]]:
     """
-    Build derived features from a lag matrix `X_lags` (rows, lags).
+    Build derived features from a lag matrix `lag_matrix` (rows, lags).
 
     The design goal is simple, leakage-safe feature engineering that only depends on the
     lag window values themselves (no future targets).
@@ -191,7 +191,7 @@ def build_lag_derived_features(
         - F: float array of shape (rows, n_features)
         - names: aligned feature names
     """
-    X = _as_2d_float_array(X_lags)
+    X = _as_2d_float_array(lag_matrix)
     rows = int(X.shape[0])
     lags = int(X.shape[1])
     if rows == 0 or lags == 0:

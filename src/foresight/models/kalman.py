@@ -56,13 +56,13 @@ def kalman_local_level_forecast(
     for y in x:
         # Predict
         level_pred = level
-        P_pred = P + q
+        p_pred = P + q
 
         # Update
-        S = P_pred + r
-        K = P_pred / S
+        S = p_pred + r
+        K = p_pred / S
         level = level_pred + K * (float(y) - level_pred)
-        P = (1.0 - K) * P_pred
+        P = (1.0 - K) * p_pred
 
     return np.full((int(horizon),), float(level), dtype=float)
 
@@ -118,17 +118,17 @@ def kalman_local_linear_trend_forecast(
         # Predict
         state = np.array([level, trend], dtype=float)
         state_pred = F @ state
-        P_pred = F @ P @ F.T + Q
+        p_pred = F @ P @ F.T + Q
 
         # Update (scalar observation)
         y_pred = float(H @ state_pred)
-        S = float(H @ P_pred @ H.T + r)
+        S = float(H @ p_pred @ H.T + r)
         if S <= 0.0:
             raise ValueError("Numerical issue: non-positive innovation variance")
-        K = (P_pred @ H.T) / S  # shape (2,)
+        K = (p_pred @ H.T) / S  # shape (2,)
         innov = float(y) - y_pred
         state_upd = state_pred + K * innov
-        P = (np.eye(2) - np.outer(K, H)) @ P_pred
+        P = (np.eye(2) - np.outer(K, H)) @ p_pred
 
         level = float(state_upd[0])
         trend = float(state_upd[1])

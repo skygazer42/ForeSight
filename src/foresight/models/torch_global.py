@@ -2298,8 +2298,10 @@ def _predict_torch_xformer_global(
             return xb.view(B, L, heads, head_dim).transpose(1, 2)
 
         def _merge_heads(self, xb: Any) -> Any:
-            B, Hh, L, dh = xb.shape
-            return xb.transpose(1, 2).contiguous().view(B, L, Hh * dh)
+            batch_size, head_count, seq_len, head_width = xb.shape
+            return (
+                xb.transpose(1, 2).contiguous().view(batch_size, seq_len, head_count * head_width)
+            )
 
         def forward(self, xb: Any) -> Any:
             B, L, _ = xb.shape
@@ -2328,9 +2330,9 @@ def _predict_torch_xformer_global(
 
             if attn_s == "linformer":
                 E = self.E
-                Fp = self.F
+                f_proj = self.F
                 k_proj = torch.einsum("hml,bhld->bhmd", E, k)
-                v_proj = torch.einsum("hml,bhld->bhmd", Fp, v)
+                v_proj = torch.einsum("hml,bhld->bhmd", f_proj, v)
                 scores = torch.einsum(_EINSUM_QK_SCORES, q * scale, k_proj)
                 w = torch.softmax(scores, dim=-1)
                 out = torch.einsum(_EINSUM_ATTN_OUT, w, v_proj)
@@ -2359,14 +2361,14 @@ def _predict_torch_xformer_global(
                     k_s = k.gather(dim=2, index=gather_idx)
                     v_s = v.gather(dim=2, index=gather_idx)
 
-                    L_pad = int(int(math.ceil(float(L) / float(bs))) * bs)
-                    pad = int(L_pad - int(L))
+                    padded_length = int(int(math.ceil(float(L) / float(bs))) * bs)
+                    pad = int(padded_length - int(L))
                     if pad > 0:
                         q_s = torch.cat([q_s, q_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
                         k_s = torch.cat([k_s, k_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
                         v_s = torch.cat([v_s, v_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
 
-                    n_chunks = int(L_pad // bs)
+                    n_chunks = int(padded_length // bs)
                     q_c = q_s.reshape(B, heads, n_chunks, bs, head_dim)
                     k_c = k_s.reshape(B, heads, n_chunks, bs, head_dim)
                     v_c = v_s.reshape(B, heads, n_chunks, bs, head_dim)
@@ -2380,7 +2382,7 @@ def _predict_torch_xformer_global(
                     w = torch.softmax(scores, dim=-1)
                     out_c = torch.einsum("bhnqk,bhnkd->bhnqd", w, v_cat)
 
-                    out_s = out_c.reshape(B, heads, L_pad, head_dim)[:, :, :L, :]
+                    out_s = out_c.reshape(B, heads, padded_length, head_dim)[:, :, :L, :]
                     inv = sort_idx.argsort(dim=-1)
                     out = out_s.gather(dim=2, index=inv.unsqueeze(-1).expand(-1, -1, -1, head_dim))
                     out_acc = out_acc + out
@@ -2401,11 +2403,14 @@ def _predict_torch_xformer_global(
                 k_lm = k_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
 
                 A = torch.softmax(torch.einsum(_EINSUM_QK_SCORES, q * scale, k_lm), dim=-1)
-                Bmat = torch.softmax(torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm), dim=-1)
+                bridge_matrix = torch.softmax(
+                    torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm),
+                    dim=-1,
+                )
                 C = torch.softmax(torch.einsum("bhmd,bhld->bhml", q_lm * scale, k), dim=-1)
-                B_inv = torch.linalg.pinv(Bmat)
+                bridge_matrix_inv = torch.linalg.pinv(bridge_matrix)
                 CV = torch.einsum("bhml,bhld->bhmd", C, v)
-                out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, B_inv, CV)
+                out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, bridge_matrix_inv, CV)
                 return self.out(self._merge_heads(out))
 
             if attn_s == "autocorr":
@@ -11868,7 +11873,9 @@ def _predict_torch_seq2seq_global(
     x_pred_tensor = torch.tensor(x_pred, dtype=torch.float32, device=dev)
     idp = torch.tensor(ids_pred, dtype=torch.long, device=dev)
     with torch.no_grad():
-        yhat_scaled = model(x_pred_tensor, idp, y_true=None, teacher_forcing_ratio=0.0).detach().cpu().numpy()
+        yhat_scaled = (
+            model(x_pred_tensor, idp, y_true=None, teacher_forcing_ratio=0.0).detach().cpu().numpy()
+        )
 
     rows: list[dict[str, Any]] = []
     if qs:

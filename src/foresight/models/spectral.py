@@ -87,8 +87,8 @@ def fft_topk_forecast(
     for w in ws:
         cols_f.append(np.sin(float(w) * tf))
         cols_f.append(np.cos(float(w) * tf))
-    Xf = np.stack(cols_f, axis=1)
-    resid_fc = Xf @ coef
+    x_future = np.stack(cols_f, axis=1)
+    resid_fc = x_future @ coef
 
     trend_fc = a0 + b0 * tf
     return np.asarray(trend_fc + resid_fc, dtype=float)

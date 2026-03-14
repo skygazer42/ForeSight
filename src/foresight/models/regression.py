@@ -97,7 +97,7 @@ def _make_target_feat_row(history: Any, *, lags: Any) -> np.ndarray:
 
 
 def _augment_lag_matrix(
-    X_base: np.ndarray,
+    lag_matrix: np.ndarray,
     *,
     roll_windows: Any,
     roll_stats: Any,
@@ -109,13 +109,13 @@ def _augment_lag_matrix(
     t_index: np.ndarray | None = None,
     series: np.ndarray | None = None,
 ) -> np.ndarray:
-    parts: list[np.ndarray] = [X_base]
+    parts: list[np.ndarray] = [lag_matrix]
 
     if _wants_lag_derived_features(
         roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
     ):
         derived, _ = build_lag_derived_features(
-            X_base,
+            lag_matrix,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -130,7 +130,7 @@ def _augment_lag_matrix(
     ):
         if t_index is None:
             raise ValueError("t_index is required for seasonal/fourier features")
-        if int(t_index.shape[0]) != int(X_base.shape[0]):
+        if int(t_index.shape[0]) != int(lag_matrix.shape[0]):
             raise ValueError("t_index must have the same number of rows as X_base")
 
     if bool(seasonal_lags) or bool(seasonal_diff_lags):
@@ -151,12 +151,12 @@ def _augment_lag_matrix(
             parts.append(fourier)
 
     if len(parts) == 1:
-        return X_base
+        return lag_matrix
     return np.concatenate(parts, axis=1)
 
 
 def _augment_lag_feat_row(
-    feat_1xL: np.ndarray,
+    lag_row: np.ndarray,
     *,
     roll_windows: Any,
     roll_stats: Any,
@@ -168,13 +168,13 @@ def _augment_lag_feat_row(
     t_next: int | None = None,
     history: np.ndarray | None = None,
 ) -> np.ndarray:
-    parts: list[np.ndarray] = [feat_1xL]
+    parts: list[np.ndarray] = [lag_row]
 
     if _wants_lag_derived_features(
         roll_windows=roll_windows, roll_stats=roll_stats, diff_lags=diff_lags
     ):
         derived, _ = build_lag_derived_features(
-            feat_1xL,
+            lag_row,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,
@@ -207,7 +207,7 @@ def _augment_lag_feat_row(
             parts.append(fourier)
 
     if len(parts) == 1:
-        return feat_1xL
+        return lag_row
     return np.concatenate(parts, axis=1)
 
 
@@ -3594,7 +3594,11 @@ def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
 
     We validate these early to surface a clearer error than the underlying trainer.
     """
-    if obj in {XGB_OBJECTIVE_POISSON, XGB_OBJECTIVE_TWEEDIE, XGB_OBJECTIVE_SQUAREDLOGERROR} and np.any(x < 0.0):
+    if obj in {
+        XGB_OBJECTIVE_POISSON,
+        XGB_OBJECTIVE_TWEEDIE,
+        XGB_OBJECTIVE_SQUAREDLOGERROR,
+    } and np.any(x < 0.0):
         raise ValueError(f"{obj} requires non-negative series values")
     if obj == XGB_OBJECTIVE_GAMMA and np.any(x <= 0.0):
         raise ValueError(f"{XGB_OBJECTIVE_GAMMA} requires strictly positive series values")

@@ -58,7 +58,7 @@ def _diagonal_averaging(X: np.ndarray) -> np.ndarray:
     return out / counts
 
 
-def _ssa_recurrent_coefficients(U: np.ndarray, *, eps: float = 1e-10) -> np.ndarray | None:
+def _ssa_recurrent_coefficients(basis: np.ndarray, *, eps: float = 1e-10) -> np.ndarray | None:
     """
     Compute SSA recurrent (LRF) coefficients from selected eigenvectors.
 
@@ -67,18 +67,18 @@ def _ssa_recurrent_coefficients(U: np.ndarray, *, eps: float = 1e-10) -> np.ndar
 
     When coefficients are ill-conditioned (denominator ~ 0), returns None.
     """
-    if U.ndim != 2:
+    if basis.ndim != 2:
         raise ValueError("U must be 2D")
-    L, r = U.shape
+    L, r = basis.shape
     if L < 2 or r <= 0:
         raise ValueError("U must have shape (L>=2, r>=1)")
 
-    pi = U[-1, :].astype(float, copy=False)  # shape: (r,)
+    pi = basis[-1, :].astype(float, copy=False)  # shape: (r,)
     denom = 1.0 - float(np.sum(pi * pi))
     if not np.isfinite(denom) or denom <= float(eps):
         return None
 
-    a = (U[:-1, :] @ pi) / float(denom)  # shape: (L-1,)
+    a = (basis[:-1, :] @ pi) / float(denom)  # shape: (L-1,)
     a = np.asarray(a, dtype=float).reshape(-1)
     if a.shape != (int(L - 1),):
         raise RuntimeError("Internal error: invalid SSA coefficient shape")
@@ -119,8 +119,8 @@ def ssa_forecast(
         raise ValueError("window_length must be <= len(train)-1")
 
     X = _trajectory_matrix(x, window_length=L)  # (L, K)
-    U, s, Vt = np.linalg.svd(X, full_matrices=False)
-    m = int(min(U.shape[1], s.size, Vt.shape[0]))
+    u_matrix, s, v_transpose = np.linalg.svd(X, full_matrices=False)
+    m = int(min(u_matrix.shape[1], s.size, v_transpose.shape[0]))
     if m <= 0:
         raise ValueError("SSA SVD produced empty decomposition")
 
@@ -129,17 +129,17 @@ def ssa_forecast(
         raise ValueError("rank must be >= 1")
     r = min(int(r), int(m))
 
-    Ur = U[:, :r]
+    u_rank = u_matrix[:, :r]
     sr = s[:r]
-    Vtr = Vt[:r, :]
-    Xr = (Ur * sr.reshape(1, -1)) @ Vtr
+    v_transpose_rank = v_transpose[:r, :]
+    x_recon = (u_rank * sr.reshape(1, -1)) @ v_transpose_rank
 
-    y_recon = _diagonal_averaging(Xr)
+    y_recon = _diagonal_averaging(x_recon)
     if y_recon.shape != x.shape:
         # For Hankel trajectory matrices, diagonal averaging should recover length n.
         raise RuntimeError("Internal error: SSA reconstruction length mismatch")
 
-    a = _ssa_recurrent_coefficients(Ur)
+    a = _ssa_recurrent_coefficients(u_rank)
     if a is None:
         return np.full((h,), float(y_recon[-1]), dtype=float)
 
@@ -156,4 +156,3 @@ def ssa_forecast(
         ext[t] = float(np.dot(a, past))
 
     return ext[base:]
-

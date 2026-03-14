@@ -51,11 +51,11 @@ def analog_knn_forecast(
     X = np.lib.stride_tricks.sliding_window_view(x, lag_count)[:-1]
     y_next = x[lag_count:]
 
-    X_work = X
+    x_work = X
     if bool(normalize):
         means = X.mean(axis=1, keepdims=True)
         stds = X.std(axis=1, keepdims=True) + 1e-8
-        X_work = (X - means) / stds
+        x_work = (X - means) / stds
 
     weights_s = str(weights).strip().lower()
     if weights_s not in {"uniform", "distance"}:
@@ -73,9 +73,9 @@ def analog_knn_forecast(
             wm = float(w.mean())
             ws = float(w.std()) + 1e-8
             w_work = (w - wm) / ws
-            dist = np.sum((X_work - w_work) ** 2, axis=1)
+            dist = np.sum((x_work - w_work) ** 2, axis=1)
         else:
-            dist = np.sum((X_work - w) ** 2, axis=1)
+            dist = np.sum((x_work - w) ** 2, axis=1)
 
         idx = np.argpartition(dist, k_eff - 1)[:k_eff]
         if weights_s == "uniform":

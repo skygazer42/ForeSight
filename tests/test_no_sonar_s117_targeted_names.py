@@ -9,6 +9,9 @@ def _repo_root() -> Path:
 
 
 TARGETED_BAD_NAMES: dict[str, set[str]] = {
+    "src/foresight/features/tabular.py": {"X_lags"},
+    "src/foresight/models/analog.py": {"X_work"},
+    "src/foresight/models/fourier.py": {"Xf"},
     "src/foresight/models/global_regression.py": {
         "C_f",
         "X_all",
@@ -27,9 +30,17 @@ TARGETED_BAD_NAMES: dict[str, set[str]] = {
         "X_rep",
         "X_step",
         "Xj",
+        "feat_1xL",
     },
+    "src/foresight/models/spectral.py": {"Xf"},
+    "src/foresight/models/ssa.py": {"U", "Ur", "Vt", "Vtr", "Xr"},
     "src/foresight/models/statsmodels_wrap.py": {"X_cols", "Xf", "Xf_cols"},
     "src/foresight/models/torch_global.py": {
+        "B_inv",
+        "Bmat",
+        "Fp",
+        "Hh",
+        "L_pad",
         "X_chunks",
         "X_pred",
         "X_pred_arr",
@@ -56,6 +67,7 @@ TARGETED_BAD_NAMES: dict[str, set[str]] = {
     "src/foresight/models/catalog/stats.py": {"ModelSpec"},
     "src/foresight/models/catalog/torch_global.py": {"ModelSpec"},
     "src/foresight/models/catalog/torch_local.py": {"ModelSpec"},
+    "src/foresight/models/kalman.py": {"P_pred"},
     "src/foresight/models/torch_ct_rnn.py": {"X_seq"},
     "src/foresight/models/torch_nn.py": {
         "X_grid",
@@ -79,8 +91,19 @@ TARGETED_BAD_NAMES: dict[str, set[str]] = {
         "Y_t",
         "Y_val",
     },
+    "src/foresight/models/torch_rnn_zoo.py": {"X_seq"},
     "src/foresight/models/torch_seq2seq.py": {"X_seq", "X_t", "X_val", "Y_t", "Y_val"},
-    "src/foresight/models/torch_xformer.py": {"B_inv", "Bmat", "Fp", "Hh", "L_pad", "X_pad", "X_seq"},
+    "src/foresight/models/torch_ssm.py": {"X_seq"},
+    "src/foresight/models/torch_xformer.py": {
+        "B_inv",
+        "Bmat",
+        "Fp",
+        "Hh",
+        "L_pad",
+        "X_pad",
+        "X_seq",
+    },
+    "src/foresight/models/trend.py": {"Xf"},
 }
 
 
@@ -91,6 +114,16 @@ def _assigned_names_in_functions(path: str) -> list[str]:
 
     class _Visitor(ast.NodeVisitor):
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            arg_nodes = [
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ]
+            if node.args.vararg is not None:
+                arg_nodes.append(node.args.vararg)
+            if node.args.kwarg is not None:
+                arg_nodes.append(node.args.kwarg)
+            names.extend(arg.arg for arg in arg_nodes)
             for sub in ast.walk(node):
                 targets: list[ast.AST] = []
                 if isinstance(sub, ast.Assign):

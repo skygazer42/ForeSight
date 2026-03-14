@@ -58,8 +58,8 @@ def fourier_regression_forecast(
         cols_f.append(np.sin(w * float(k) * tf))
         cols_f.append(np.cos(w * float(k) * tf))
 
-    Xf = np.stack(cols_f, axis=1)
-    yhat = Xf @ coef
+    x_future = np.stack(cols_f, axis=1)
+    yhat = x_future @ coef
     return np.asarray(yhat, dtype=float)
 
 
@@ -163,6 +163,6 @@ def fourier_multi_regression_forecast(
             cols_f.append(np.sin(w * float(k) * tf))
             cols_f.append(np.cos(w * float(k) * tf))
 
-    Xf = np.stack(cols_f, axis=1)
-    yhat = Xf @ coef
+    x_future = np.stack(cols_f, axis=1)
+    yhat = x_future @ coef
     return np.asarray(yhat, dtype=float)

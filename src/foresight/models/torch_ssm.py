@@ -45,8 +45,8 @@ def _fit_local_sequence_model(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
-    model = _train_loop(build_model(lag_count, h), X_seq, Y, cfg=cfg, device=str(device))
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    model = _train_loop(build_model(lag_count, h), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
