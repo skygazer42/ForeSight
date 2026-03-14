@@ -660,12 +660,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
 
     failures_output = str(getattr(args, "failures_output", "")).strip()
     if failures_output:
-        out_path = Path(failures_output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        if failure_lines:
-            out_path.write_text("\n".join(failure_lines) + "\n", encoding="utf-8")
-        else:
-            out_path.write_text("", encoding="utf-8")
+        _cli_shared._write_output("\n".join(failure_lines), output=failures_output)
 
     summary_output = str(getattr(args, "summary_output", "")).strip()
     if summary_output:
@@ -689,9 +684,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             columns=_leaderboard_summary_columns(),
             fmt=summary_format,
         )
-        out_path = Path(summary_output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
+        _cli_shared._write_output(text, output=summary_output)
 
     _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
     return 0
