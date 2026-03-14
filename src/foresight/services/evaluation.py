@@ -309,6 +309,279 @@ def eval_hierarchical_forecast_df(
     return out
 
 
+def _eval_global_model_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    model_params: dict[str, Any] | None,
+    max_windows: int | None,
+    max_train_size: int | None,
+    conformal_levels: Any,
+    conformal_per_step: bool,
+) -> dict[str, Any]:
+    from ..cv import cross_validation_predictions_long_df
+    from ..eval_predictions import evaluate_predictions, evaluate_quantile_predictions
+
+    pred_df = cross_validation_predictions_long_df(
+        model=str(model),
+        long_df=df,
+        horizon=int(horizon),
+        step_size=int(step),
+        min_train_size=int(min_train_size),
+        model_params=model_params,
+        max_train_size=max_train_size,
+        n_windows=max_windows,
+    )
+
+    metrics_payload = evaluate_predictions(pred_df)
+    out: dict[str, Any] = {
+        "model": str(model),
+        "horizon": int(horizon),
+        "step": int(step),
+        "min_train_size": int(min_train_size),
+        "max_windows": None if max_windows is None else int(max_windows),
+        "max_train_size": None if max_train_size is None else int(max_train_size),
+        "n_series": int(pred_df.attrs.get("n_series", pred_df["unique_id"].nunique())),
+        "n_series_skipped": int(pred_df.attrs.get("n_series_skipped", 0)),
+        "n_points": int(metrics_payload["n_points"]),
+        "mae": float(metrics_payload["mae"]),
+        "rmse": float(metrics_payload["rmse"]),
+        "mape": float(metrics_payload["mape"]),
+        "smape": float(metrics_payload["smape"]),
+        "mae_by_step": list(metrics_payload.get("mae_by_step", [])),
+        "rmse_by_step": list(metrics_payload.get("rmse_by_step", [])),
+        "mape_by_step": list(metrics_payload.get("mape_by_step", [])),
+        "smape_by_step": list(metrics_payload.get("smape_by_step", [])),
+    }
+
+    q_payload = evaluate_quantile_predictions(pred_df)
+    if q_payload.get("quantiles"):
+        for k, v in q_payload.items():
+            out[f"q_{k}"] = v
+
+    levels = _parse_levels(conformal_levels)
+    if levels:
+        out.update(
+            summarize_conformal_predictions(
+                pred_df,
+                y_col="y",
+                yhat_col="yhat",
+                step_col="step",
+                levels=levels,
+                per_step=bool(conformal_per_step),
+            )
+        )
+
+    return out
+
+
+def _eval_local_xreg_model_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    params: dict[str, Any],
+    x_cols: tuple[str, ...],
+    max_windows: int | None,
+    max_train_size: int | None,
+) -> dict[str, Any]:
+    results: dict[str, Any] = {
+        "y_true_all": [],
+        "y_pred_all": [],
+        "y_true_by_step": [[] for _ in range(int(horizon))],
+        "y_pred_by_step": [[] for _ in range(int(horizon))],
+        "n_series": 0,
+        "n_series_skipped": 0,
+    }
+    local_xreg_params = dict(params)
+    local_xreg_params.pop("x_cols", None)
+
+    for _uid, g in df.groupby("unique_id", sort=False):
+        results["n_series"] += 1
+        missing_x_cols = [col for col in x_cols if col not in g.columns]
+        if missing_x_cols:
+            raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
+
+        y = g["y"].to_numpy(dtype=float, copy=False)
+        x = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+        if np.isnan(y).any():
+            raise ValueError("eval_model_long_df does not support missing y values")
+        if np.isnan(x).any():
+            raise ValueError("eval_model_long_df does not support missing x_cols values")
+
+        min_required = int(min_train_size) + int(horizon)
+        if y.size < min_required:
+            results["n_series_skipped"] += 1
+            continue
+
+        windows_run = 0
+        for split in rolling_origin_splits(
+            y.size,
+            horizon=int(horizon),
+            step_size=int(step),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+        ):
+            pred = _call_local_xreg_forecaster(
+                model=str(model),
+                train_y=y[split.train_start : split.train_end],
+                horizon=int(horizon),
+                train_exog=x[split.train_start : split.train_end, :],
+                future_exog=x[split.test_start : split.test_end, :],
+                model_params=local_xreg_params,
+            )
+            y_true = y[split.test_start : split.test_end]
+            results["y_true_all"].append(y_true.reshape(-1))
+            results["y_pred_all"].append(pred.reshape(-1))
+            for i in range(int(horizon)):
+                results["y_true_by_step"][i].append(y_true[i : i + 1])
+                results["y_pred_by_step"][i].append(pred[i : i + 1])
+
+            windows_run += 1
+            if max_windows is not None and windows_run >= int(max_windows):
+                break
+
+    return results
+
+
+def _eval_local_univariate_model_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    params: dict[str, Any],
+    max_windows: int | None,
+    max_train_size: int | None,
+) -> dict[str, Any]:
+    results: dict[str, Any] = {
+        "y_true_all": [],
+        "y_pred_all": [],
+        "y_true_by_step": [[] for _ in range(int(horizon))],
+        "y_pred_by_step": [[] for _ in range(int(horizon))],
+        "n_series": 0,
+        "n_series_skipped": 0,
+    }
+    forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
+
+    for _uid, g in df.groupby("unique_id", sort=False):
+        results["n_series"] += 1
+        y = g["y"].to_numpy(dtype=float, copy=False)
+        min_required = int(min_train_size) + int(horizon)
+        if y.size < min_required:
+            results["n_series_skipped"] += 1
+            continue
+        res = walk_forward(
+            y,
+            horizon=int(horizon),
+            step=int(step),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+            max_windows=max_windows,
+            forecaster=forecaster,
+        )
+
+        results["y_true_all"].append(res.y_true.reshape(-1))
+        results["y_pred_all"].append(res.y_pred.reshape(-1))
+
+        for i in range(res.horizon):
+            results["y_true_by_step"][i].append(res.y_true[:, i])
+            results["y_pred_by_step"][i].append(res.y_pred[:, i])
+
+    return results
+
+
+def _summarize_eval_model_long_df_results(
+    *,
+    model: str,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    max_windows: int | None,
+    max_train_size: int | None,
+    conformal_levels: Any,
+    conformal_per_step: bool,
+    results: dict[str, Any],
+) -> dict[str, Any]:
+    if not results["y_true_all"]:
+        raise ValueError("No series had enough data for the requested backtest parameters.")
+
+    yt = np.concatenate(results["y_true_all"], axis=0)
+    yp = np.concatenate(results["y_pred_all"], axis=0)
+
+    mae_by_step = [
+        mae(np.concatenate(t), np.concatenate(p))
+        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
+    ]
+    rmse_by_step = [
+        rmse(np.concatenate(t), np.concatenate(p))
+        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
+    ]
+    mape_by_step = [
+        mape(np.concatenate(t), np.concatenate(p))
+        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
+    ]
+    smape_by_step = [
+        smape(np.concatenate(t), np.concatenate(p))
+        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
+    ]
+
+    out: dict[str, Any] = {
+        "model": str(model),
+        "horizon": int(horizon),
+        "step": int(step),
+        "min_train_size": int(min_train_size),
+        "max_windows": None if max_windows is None else int(max_windows),
+        "max_train_size": None if max_train_size is None else int(max_train_size),
+        "n_series": int(results["n_series"]),
+        "n_series_skipped": int(results["n_series_skipped"]),
+        "n_points": int(yt.size),
+        "mae": mae(yt, yp),
+        "rmse": rmse(yt, yp),
+        "mape": mape(yt, yp),
+        "smape": smape(yt, yp),
+        "mae_by_step": mae_by_step,
+        "rmse_by_step": rmse_by_step,
+        "mape_by_step": mape_by_step,
+        "smape_by_step": smape_by_step,
+    }
+
+    levels = _parse_levels(conformal_levels)
+    if levels:
+        conf_df = pd.concat(
+            [
+                pd.DataFrame(
+                    {
+                        "y": np.concatenate(results["y_true_by_step"][i]),
+                        "yhat": np.concatenate(results["y_pred_by_step"][i]),
+                        "step": int(i + 1),
+                    }
+                )
+                for i in range(int(horizon))
+            ],
+            axis=0,
+            ignore_index=True,
+        )
+        out.update(
+            summarize_conformal_predictions(
+                conf_df,
+                y_col="y",
+                yhat_col="yhat",
+                step_col="step",
+                levels=levels,
+                per_step=bool(conformal_per_step),
+            )
+        )
+
+    return out
+
+
 def eval_model_long_df(
     *,
     model: str,
@@ -354,215 +627,56 @@ def eval_model_long_df(
         )
 
     if interface == "global":
-        from ..cv import cross_validation_predictions_long_df
-        from ..eval_predictions import evaluate_predictions, evaluate_quantile_predictions
-
-        pred_df = cross_validation_predictions_long_df(
+        return _eval_global_model_long_df(
             model=str(model),
-            long_df=df,
+            df=df,
             horizon=int(horizon),
-            step_size=int(step),
+            step=int(step),
             min_train_size=int(min_train_size),
             model_params=model_params,
+            max_windows=max_windows,
             max_train_size=max_train_size,
-            n_windows=max_windows,
+            conformal_levels=conformal_levels,
+            conformal_per_step=bool(conformal_per_step),
         )
 
-        metrics_payload = evaluate_predictions(pred_df)
-        out: dict[str, Any] = {
-            "model": str(model),
-            "horizon": int(horizon),
-            "step": int(step),
-            "min_train_size": int(min_train_size),
-            "max_windows": None if max_windows is None else int(max_windows),
-            "max_train_size": None if max_train_size is None else int(max_train_size),
-            "n_series": int(pred_df.attrs.get("n_series", pred_df["unique_id"].nunique())),
-            "n_series_skipped": int(pred_df.attrs.get("n_series_skipped", 0)),
-            "n_points": int(metrics_payload["n_points"]),
-            "mae": float(metrics_payload["mae"]),
-            "rmse": float(metrics_payload["rmse"]),
-            "mape": float(metrics_payload["mape"]),
-            "smape": float(metrics_payload["smape"]),
-            "mae_by_step": list(metrics_payload.get("mae_by_step", [])),
-            "rmse_by_step": list(metrics_payload.get("rmse_by_step", [])),
-            "mape_by_step": list(metrics_payload.get("mape_by_step", [])),
-            "smape_by_step": list(metrics_payload.get("smape_by_step", [])),
-        }
-
-        q_payload = evaluate_quantile_predictions(pred_df)
-        if q_payload.get("quantiles"):
-            for k, v in q_payload.items():
-                out[f"q_{k}"] = v
-
-        levels = _parse_levels(conformal_levels)
-        if levels:
-            out.update(
-                summarize_conformal_predictions(
-                    pred_df,
-                    y_col="y",
-                    yhat_col="yhat",
-                    step_col="step",
-                    levels=levels,
-                    per_step=bool(conformal_per_step),
-                )
-            )
-
-        return out
-
-    y_true_all: list[np.ndarray] = []
-    y_pred_all: list[np.ndarray] = []
-    y_true_by_step: list[list[np.ndarray]] = [[] for _ in range(int(horizon))]
-    y_pred_by_step: list[list[np.ndarray]] = [[] for _ in range(int(horizon))]
-
-    n_series = 0
-    n_series_skipped = 0
     if x_cols:
         if not bool(capabilities.get("supports_x_cols", False)):
             raise ValueError(f"Model {model!r} does not support x_cols in eval_model_long_df")
-        local_xreg_params = dict(params)
-        local_xreg_params.pop("x_cols", None)
-        for _uid, g in df.groupby("unique_id", sort=False):
-            n_series += 1
-            missing_x_cols = [col for col in x_cols if col not in g.columns]
-            if missing_x_cols:
-                raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
-
-            y = g["y"].to_numpy(dtype=float, copy=False)
-            x = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-            if np.isnan(y).any():
-                raise ValueError("eval_model_long_df does not support missing y values")
-            if np.isnan(x).any():
-                raise ValueError("eval_model_long_df does not support missing x_cols values")
-
-            min_required = int(min_train_size) + int(horizon)
-            if y.size < min_required:
-                n_series_skipped += 1
-                continue
-
-            windows_run = 0
-            for split in rolling_origin_splits(
-                y.size,
-                horizon=int(horizon),
-                step_size=int(step),
-                min_train_size=int(min_train_size),
-                max_train_size=max_train_size,
-            ):
-                pred = _call_local_xreg_forecaster(
-                    model=str(model),
-                    train_y=y[split.train_start : split.train_end],
-                    horizon=int(horizon),
-                    train_exog=x[split.train_start : split.train_end, :],
-                    future_exog=x[split.test_start : split.test_end, :],
-                    model_params=local_xreg_params,
-                )
-                y_true = y[split.test_start : split.test_end]
-                y_true_all.append(y_true.reshape(-1))
-                y_pred_all.append(pred.reshape(-1))
-                for i in range(int(horizon)):
-                    y_true_by_step[i].append(y_true[i : i + 1])
-                    y_pred_by_step[i].append(pred[i : i + 1])
-
-                windows_run += 1
-                if max_windows is not None and windows_run >= int(max_windows):
-                    break
+        results = _eval_local_xreg_model_long_df(
+            model=str(model),
+            df=df,
+            horizon=int(horizon),
+            step=int(step),
+            min_train_size=int(min_train_size),
+            params=params,
+            x_cols=x_cols,
+            max_windows=max_windows,
+            max_train_size=max_train_size,
+        )
     else:
-        forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
-
-        for _uid, g in df.groupby("unique_id", sort=False):
-            n_series += 1
-            y = g["y"].to_numpy(dtype=float, copy=False)
-            min_required = int(min_train_size) + int(horizon)
-            if y.size < min_required:
-                n_series_skipped += 1
-                continue
-            res = walk_forward(
-                y,
-                horizon=int(horizon),
-                step=int(step),
-                min_train_size=int(min_train_size),
-                max_train_size=max_train_size,
-                max_windows=max_windows,
-                forecaster=forecaster,
-            )
-
-            y_true_all.append(res.y_true.reshape(-1))
-            y_pred_all.append(res.y_pred.reshape(-1))
-
-            for i in range(res.horizon):
-                y_true_by_step[i].append(res.y_true[:, i])
-                y_pred_by_step[i].append(res.y_pred[:, i])
-
-    if not y_true_all:
-        raise ValueError("No series had enough data for the requested backtest parameters.")
-
-    yt = np.concatenate(y_true_all, axis=0)
-    yp = np.concatenate(y_pred_all, axis=0)
-
-    mae_by_step = [
-        mae(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(y_true_by_step, y_pred_by_step, strict=True)
-    ]
-    rmse_by_step = [
-        rmse(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(y_true_by_step, y_pred_by_step, strict=True)
-    ]
-    mape_by_step = [
-        mape(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(y_true_by_step, y_pred_by_step, strict=True)
-    ]
-    smape_by_step = [
-        smape(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(y_true_by_step, y_pred_by_step, strict=True)
-    ]
-
-    out: dict[str, Any] = {
-        "model": str(model),
-        "horizon": int(horizon),
-        "step": int(step),
-        "min_train_size": int(min_train_size),
-        "max_windows": None if max_windows is None else int(max_windows),
-        "max_train_size": None if max_train_size is None else int(max_train_size),
-        "n_series": int(n_series),
-        "n_series_skipped": int(n_series_skipped),
-        "n_points": int(yt.size),
-        "mae": mae(yt, yp),
-        "rmse": rmse(yt, yp),
-        "mape": mape(yt, yp),
-        "smape": smape(yt, yp),
-        "mae_by_step": mae_by_step,
-        "rmse_by_step": rmse_by_step,
-        "mape_by_step": mape_by_step,
-        "smape_by_step": smape_by_step,
-    }
-
-    levels = _parse_levels(conformal_levels)
-    if levels:
-        conf_df = pd.concat(
-            [
-                pd.DataFrame(
-                    {
-                        "y": np.concatenate(y_true_by_step[i]),
-                        "yhat": np.concatenate(y_pred_by_step[i]),
-                        "step": int(i + 1),
-                    }
-                )
-                for i in range(int(horizon))
-            ],
-            axis=0,
-            ignore_index=True,
-        )
-        out.update(
-            summarize_conformal_predictions(
-                conf_df,
-                y_col="y",
-                yhat_col="yhat",
-                step_col="step",
-                levels=levels,
-                per_step=bool(conformal_per_step),
-            )
+        results = _eval_local_univariate_model_long_df(
+            model=str(model),
+            df=df,
+            horizon=int(horizon),
+            step=int(step),
+            min_train_size=int(min_train_size),
+            params=params,
+            max_windows=max_windows,
+            max_train_size=max_train_size,
         )
 
-    return out
+    return _summarize_eval_model_long_df_results(
+        model=str(model),
+        horizon=int(horizon),
+        step=int(step),
+        min_train_size=int(min_train_size),
+        max_windows=max_windows,
+        max_train_size=max_train_size,
+        conformal_levels=conformal_levels,
+        conformal_per_step=bool(conformal_per_step),
+        results=results,
+    )
 
 
 def eval_model(

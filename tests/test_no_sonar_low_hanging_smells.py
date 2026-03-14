@@ -259,6 +259,35 @@ def test_cli_workflows_source_extracts_forecast_helpers() -> None:
     )
 
 
+def test_evaluation_source_extracts_eval_model_long_df_helpers() -> None:
+    source = _read_repo_file("src/foresight/services/evaluation.py")
+
+    assert "def _eval_global_model_long_df(" in source
+    assert "def _eval_local_xreg_model_long_df(" in source
+    assert "def _eval_local_univariate_model_long_df(" in source
+    assert "def _summarize_eval_model_long_df_results(" in source
+    assert _function_uses_name(
+        "src/foresight/services/evaluation.py",
+        "eval_model_long_df",
+        "_eval_global_model_long_df",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/evaluation.py",
+        "eval_model_long_df",
+        "_eval_local_xreg_model_long_df",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/evaluation.py",
+        "eval_model_long_df",
+        "_eval_local_univariate_model_long_df",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/evaluation.py",
+        "eval_model_long_df",
+        "_summarize_eval_model_long_df_results",
+    )
+
+
 def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
     source = _read_repo_file("src/foresight/models/kalman.py")
     assert "if not (vf > 0.0):" not in source
