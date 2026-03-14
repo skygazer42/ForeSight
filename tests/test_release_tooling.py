@@ -103,6 +103,8 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "src/foresight/cli_leaderboard.py" in config
     assert "src/foresight/models/runtime.py" in config
     assert "src/foresight/models/catalog/**" in config
+    assert "sonar.issue.ignore.multicriteria=e1" in config
+    assert "sonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083" in config
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
