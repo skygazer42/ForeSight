@@ -97,7 +97,10 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "tests/test_sonar_coverage_recent_fixes.py" in test_step["run"]
     assert "tests/test_sonar_torch_rename_coverage_smoke.py" in test_step["run"]
     assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
-    assert "tests/test_models_optional_deps_torch.py::test_torch_global_models_smoke_when_installed" in test_step["run"]
+    assert (
+        "tests/test_models_optional_deps_torch.py::test_torch_global_models_smoke_when_installed"
+        in test_step["run"]
+    )
     assert (
         "tests/test_models_torch_xformer_seq2seq_smoke.py::test_torch_xformer_and_rnn_global_smoke"
         in test_step["run"]
