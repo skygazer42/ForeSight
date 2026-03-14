@@ -71,6 +71,7 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
 
     steps = sonar_job["steps"]
     checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v4")
+    install_step = next(step for step in steps if step.get("name") == "Install")
     test_step = next(step for step in steps if step.get("name") == "Tests")
     scan_step = next(
         step
@@ -79,7 +80,10 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     )
 
     assert checkout["with"]["fetch-depth"] == 0
+    assert "pip install -e .[dev,torch,stats]" in install_step["run"]
     assert "coverage.xml" in test_step["run"]
+    assert "tests/test_model_validation_messages.py" in test_step["run"]
+    assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
     assert (
         scan_step["uses"]
         == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
