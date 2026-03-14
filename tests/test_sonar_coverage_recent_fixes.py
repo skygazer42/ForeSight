@@ -87,7 +87,10 @@ def _install_fake_sklearn(
 ) -> None:
     sklearn = types.ModuleType("sklearn")
     ensemble = types.ModuleType("sklearn.ensemble")
+    kernel_ridge = types.ModuleType("sklearn.kernel_ridge")
+    linear_model = types.ModuleType("sklearn.linear_model")
     multioutput = types.ModuleType("sklearn.multioutput")
+    neural_network = types.ModuleType("sklearn.neural_network")
     svm = types.ModuleType("sklearn.svm")
     tree = types.ModuleType("sklearn.tree")
 
@@ -110,10 +113,58 @@ def _install_fake_sklearn(
     class RandomForestRegressor(_CapturedEstimator):
         pass
 
+    class ExtraTreesRegressor(_CapturedEstimator):
+        pass
+
+    class GradientBoostingRegressor(_CapturedEstimator):
+        pass
+
+    class AdaBoostRegressor(_CapturedEstimator):
+        pass
+
+    class HistGradientBoostingRegressor(_CapturedEstimator):
+        pass
+
     class DecisionTreeRegressor(_CapturedEstimator):
         pass
 
+    class Ridge(_CapturedEstimator):
+        pass
+
+    class Lasso(_CapturedEstimator):
+        pass
+
+    class ElasticNet(_CapturedEstimator):
+        pass
+
+    class KernelRidge(_CapturedEstimator):
+        pass
+
+    class HuberRegressor(_CapturedEstimator):
+        pass
+
+    class PoissonRegressor(_CapturedEstimator):
+        pass
+
+    class GammaRegressor(_CapturedEstimator):
+        pass
+
+    class TweedieRegressor(_CapturedEstimator):
+        pass
+
+    class QuantileRegressor(_CapturedEstimator):
+        pass
+
+    class SGDRegressor(_CapturedEstimator):
+        pass
+
+    class MLPRegressor(_CapturedEstimator):
+        pass
+
     class SVR(_CapturedEstimator):
+        pass
+
+    class LinearSVR(_CapturedEstimator):
         pass
 
     class MultiOutputRegressor:
@@ -131,18 +182,40 @@ def _install_fake_sklearn(
         def predict(self, X: np.ndarray) -> np.ndarray:
             return np.zeros((int(X.shape[0]), int(self.n_outputs)), dtype=float)
 
+    ensemble.AdaBoostRegressor = AdaBoostRegressor
+    ensemble.ExtraTreesRegressor = ExtraTreesRegressor
+    ensemble.GradientBoostingRegressor = GradientBoostingRegressor
+    ensemble.HistGradientBoostingRegressor = HistGradientBoostingRegressor
     ensemble.RandomForestRegressor = RandomForestRegressor
+    kernel_ridge.KernelRidge = KernelRidge
+    linear_model.ElasticNet = ElasticNet
+    linear_model.GammaRegressor = GammaRegressor
+    linear_model.HuberRegressor = HuberRegressor
+    linear_model.Lasso = Lasso
+    linear_model.PoissonRegressor = PoissonRegressor
+    linear_model.QuantileRegressor = QuantileRegressor
+    linear_model.Ridge = Ridge
+    linear_model.SGDRegressor = SGDRegressor
+    linear_model.TweedieRegressor = TweedieRegressor
     multioutput.MultiOutputRegressor = MultiOutputRegressor
+    neural_network.MLPRegressor = MLPRegressor
+    svm.LinearSVR = LinearSVR
     svm.SVR = SVR
     tree.DecisionTreeRegressor = DecisionTreeRegressor
     sklearn.ensemble = ensemble
+    sklearn.kernel_ridge = kernel_ridge
+    sklearn.linear_model = linear_model
     sklearn.multioutput = multioutput
+    sklearn.neural_network = neural_network
     sklearn.svm = svm
     sklearn.tree = tree
 
     monkeypatch.setitem(sys.modules, "sklearn", sklearn)
     monkeypatch.setitem(sys.modules, "sklearn.ensemble", ensemble)
+    monkeypatch.setitem(sys.modules, "sklearn.kernel_ridge", kernel_ridge)
+    monkeypatch.setitem(sys.modules, "sklearn.linear_model", linear_model)
     monkeypatch.setitem(sys.modules, "sklearn.multioutput", multioutput)
+    monkeypatch.setitem(sys.modules, "sklearn.neural_network", neural_network)
     monkeypatch.setitem(sys.modules, "sklearn.svm", svm)
     monkeypatch.setitem(sys.modules, "sklearn.tree", tree)
 
@@ -402,6 +475,56 @@ def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
 
     kwargs = captured["SVR"][0]
     assert kwargs["kernel"] == "rbf"
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "kwargs", "message"),
+    [
+        ("ridge_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("rf_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
+        ("rf_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("extra_trees_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
+        ("extra_trees_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("decision_tree_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("gbrt_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
+        ("gbrt_step_lag_global_forecaster", {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        ("lasso_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("lasso_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("elasticnet_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("elasticnet_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("kernel_ridge_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("linear_svr_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("huber_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("huber_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("poisson_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("poisson_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("gamma_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("gamma_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("tweedie_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("tweedie_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("quantile_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("sgd_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("sgd_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("adaboost_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
+        ("adaboost_step_lag_global_forecaster", {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        ("mlp_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
+        ("mlp_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("hgb_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
+        ("hgb_step_lag_global_forecaster", {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        ("hgb_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
+    ],
+)
+def test_global_regression_forecasters_validate_shared_scalar_constraints(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+    factory = getattr(global_regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=message):
+        factory(**kwargs)
 
 
 def test_rf_lag_direct_forecast_sets_explicit_rf_defaults(
