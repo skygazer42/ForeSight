@@ -12,6 +12,7 @@ import pytest
 
 from foresight.cli import build_parser
 from foresight.models import global_regression as global_regression_mod
+from foresight.models import regression as regression_mod
 from foresight.models.global_regression import (
     decision_tree_step_lag_global_forecaster,
     rf_step_lag_global_forecaster,
@@ -525,6 +526,77 @@ def test_global_regression_forecasters_validate_shared_scalar_constraints(
 
     with pytest.raises(ValueError, match=message):
         factory(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "horizon", "kwargs", "message"),
+    [
+        ("rf_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
+        ("rf_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
+        ("rf_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        ("lasso_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("decision_tree_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("extra_trees_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("adaboost_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        ("hgb_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("hgb_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
+        ("huber_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
+        ("huber_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+        ("quantile_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
+        ("sgd_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
+        ("sgd_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
+    ],
+)
+def test_regression_forecasters_validate_shared_scalar_constraints(
+    monkeypatch: pytest.MonkeyPatch,
+    factory_name: str,
+    horizon: int,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_sklearn(monkeypatch, {})
+    factory = getattr(regression_mod, factory_name)
+
+    with pytest.raises(ValueError, match=message):
+        factory([1.0, 2.0, 3.0, 4.0, 5.0], horizon, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("factory", "kwargs", "message"),
+    [
+        (_xgb_lag_direct_forecast, {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        (_xgb_lag_direct_forecast, {"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
+        (_xgb_lag_direct_forecast, {"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
+        (_xgb_lag_direct_forecast, {"reg_lambda": -1.0}, "reg_lambda must be >= 0"),
+        (_xgb_lag_direct_forecast, {"min_child_weight": -1.0}, "min_child_weight must be >= 0"),
+        (_xgb_lag_direct_forecast, {"gamma": -1.0}, "gamma must be >= 0"),
+        (_xgb_lag_direct_forecast, {"n_jobs": 0}, "n_jobs must be non-zero"),
+        (_xgb_lag_recursive_forecast, {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        (_xgb_lag_recursive_forecast, {"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
+        (_xgb_lag_recursive_forecast, {"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
+        (_xgb_lag_recursive_forecast, {"reg_lambda": -1.0}, "reg_lambda must be >= 0"),
+        (_xgb_lag_recursive_forecast, {"min_child_weight": -1.0}, "min_child_weight must be >= 0"),
+        (_xgb_lag_recursive_forecast, {"gamma": -1.0}, "gamma must be >= 0"),
+        (_xgb_lag_recursive_forecast, {"n_jobs": 0}, "n_jobs must be non-zero"),
+    ],
+)
+def test_regression_xgb_internal_forecasters_validate_shared_scalar_constraints(
+    monkeypatch: pytest.MonkeyPatch,
+    factory: object,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    _install_fake_xgboost(monkeypatch)
+
+    with pytest.raises(ValueError, match=message):
+        factory(
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+            1,
+            lags=2,
+            booster="gbtree",
+            objective="reg:squarederror",
+            **kwargs,
+        )
 
 
 def test_rf_lag_direct_forecast_sets_explicit_rf_defaults(
