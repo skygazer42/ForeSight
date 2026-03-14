@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from foresight.cli import build_parser
 from foresight.models import global_regression as global_regression_mod
 from foresight.models.global_regression import (
     decision_tree_step_lag_global_forecaster,
@@ -147,6 +149,16 @@ def _install_fake_sklearn(
 
 def _literal_occurrence_count(path: Path, literal: str) -> int:
     return path.read_text(encoding="utf-8").count(literal)
+
+
+def _find_subparser(parser: argparse.ArgumentParser, *names: str) -> argparse.ArgumentParser:
+    current = parser
+    for name in names:
+        action = next(
+            action for action in current._actions if isinstance(action, argparse._SubParsersAction)
+        )
+        current = action.choices[name]
+    return current
 
 
 @pytest.mark.parametrize(
@@ -507,6 +519,39 @@ def test_fetch_rnn_paper_metadata_source_extracts_repeated_literals() -> None:
 
     for literal in literals:
         assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_cli_source_extracts_repeated_help_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "cli.py"
+    literals = [
+        "Dataset key",
+        "Optional target column name (default: use dataset spec default_y).",
+        "Optional rolling train window size (default: expanding window).",
+        "Model parameter as key=value (repeatable). Example: --model-param season_length=12",
+        "Optional path to write metrics output",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_build_parser_preserves_shared_help_texts() -> None:
+    parser = build_parser()
+
+    cv_run = _find_subparser(parser, "cv", "run")
+    eval_run = _find_subparser(parser, "eval", "run")
+
+    assert cv_run._option_string_actions["--dataset"].help == "Dataset key"
+    assert cv_run._option_string_actions["--y-col"].help == (
+        "Optional target column name (default: use dataset spec default_y)."
+    )
+    assert cv_run._option_string_actions["--max-train-size"].help == (
+        "Optional rolling train window size (default: expanding window)."
+    )
+    assert eval_run._option_string_actions["--model-param"].help == (
+        "Model parameter as key=value (repeatable). Example: --model-param season_length=12"
+    )
+    assert eval_run._option_string_actions["--output"].help == "Optional path to write metrics output"
 
 
 def test_xgb_lag_direct_forecast_validates_labels_before_training(
