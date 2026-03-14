@@ -23,7 +23,7 @@ def test_median_forecast_repeats_median():
 
 
 def test_drift_forecast_linear_trend():
-    # First=10, last=16 over 4 steps => slope = (16-10)/(5-1)=1.5
+    # The input series implies a linear slope of 1.5 per step.
     y = np.array([10.0, 11.0, 13.0, 14.0, 16.0])
     pred = drift_forecast(y, horizon=3)
     assert pred.shape == (3,)
@@ -42,7 +42,9 @@ def test_baselines_validate_horizon():
         mean_forecast([1.0], horizon=0)
 
 
-def _predict_registered_model(key: str, train: list[float] | np.ndarray, horizon: int, **params: object) -> np.ndarray:
+def _predict_registered_model(
+    key: str, train: list[float] | np.ndarray, horizon: int, **params: object
+) -> np.ndarray:
     try:
         forecaster = make_forecaster(key, **params)
         return forecaster(train, horizon)
@@ -57,7 +59,7 @@ def test_weighted_moving_average_forecast_emphasizes_recent_values():
         horizon=2,
         window=3,
     )
-    # Weighted mean with weights [1, 2, 3]: (1 + 4 + 30) / 6 = 35 / 6
+    # Recent values carry larger weights, yielding a forecast of 35 / 6.
     assert pred.shape == (2,)
     assert pred.tolist() == [35.0 / 6.0, 35.0 / 6.0]
 
