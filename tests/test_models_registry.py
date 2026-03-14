@@ -298,6 +298,10 @@ def test_torch_local_catalog_exposes_deduplicated_param_help_strings() -> None:
     perceiver = get_model_spec("torch-perceiver-direct")
     segrnn = get_model_spec("torch-segrnn-direct")
     moderntcn = get_model_spec("torch-moderntcn-direct")
+    basisformer = get_model_spec("torch-basisformer-direct")
+    witran = get_model_spec("torch-witran-direct")
+    pathformer = get_model_spec("torch-pathformer-direct")
+    timesmamba = get_model_spec("torch-timesmamba-direct")
 
     assert perceiver.param_help["d_model"] == "Latent and token embedding dimension"
     assert perceiver.param_help["latent_len"] == "Number of learned latent tokens"
@@ -311,6 +315,27 @@ def test_torch_local_catalog_exposes_deduplicated_param_help_strings() -> None:
         moderntcn.param_help["kernel_size"]
         == "Odd depthwise convolution kernel size over patch tokens"
     )
+    assert basisformer.param_help["lags"] == "Lag window length"
+    assert (
+        basisformer.param_help["num_bases"] == "Number of learned basis vectors in the dictionary"
+    )
+    assert basisformer.param_help["dim_feedforward"] == "Feed-forward dimension in the encoder"
+    assert witran.param_help["grid_cols"] == "Number of columns in the 2D lag grid"
+    assert witran.param_help["d_model"] == "Cell embedding / decoder dimension"
+    assert (
+        witran.param_help["hidden_size"] == "Hidden size of the coupled row/column recurrent states"
+    )
+    assert witran.param_help["nhead"] == "Number of decoder attention heads"
+    assert witran.param_help["num_layers"] == "Number of stacked grid recurrent blocks"
+    assert pathformer.param_help["d_model"] == "Shared expert/context embedding dimension"
+    assert pathformer.param_help["expert_patch_lens"] == "Patch lengths for the multi-scale experts"
+    assert pathformer.param_help["num_blocks"] == "Number of routing blocks"
+    assert pathformer.param_help["top_k"] == "Top-k experts selected by the router per block"
+    assert (
+        timesmamba.param_help["state_size"]
+        == "Latent state size in the recurrent state-space mixer"
+    )
+    assert timesmamba.param_help["num_blocks"] == "Number of stacked state-space mixer blocks"
 
 
 def test_torch_multivariate_models_are_registered() -> None:

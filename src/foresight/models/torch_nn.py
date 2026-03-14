@@ -7,6 +7,10 @@ from typing import Any
 
 import numpy as np
 
+_HIDDEN_SIZE_MIN_MSG = "hidden_size must be >= 1"
+_NUM_LAYERS_MIN_MSG = "num_layers must be >= 1"
+_DROPOUT_RANGE_MSG = "dropout must be in [0, 1)"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -38,7 +42,7 @@ def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
     class _ManualGRUCell(nn.Module):
         def __init__(self) -> None:
@@ -68,7 +72,7 @@ def _make_manual_lstm_cell(*, input_size: int, hidden_size: int) -> Any:
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
     class _ManualLSTMCell(nn.Module):
         def __init__(self) -> None:
@@ -111,11 +115,11 @@ def _make_manual_gru(
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _GRULayer(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -241,11 +245,11 @@ def _make_manual_lstm(
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _LSTMLayer(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -846,7 +850,7 @@ def torch_mlp_lag_direct_forecast(
         raise ValueError("hidden_sizes must be a non-empty sequence of positive ints")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     layers: list[Any] = []
     in_dim = int(X.shape[1])
@@ -926,9 +930,9 @@ def torch_lstm_direct_forecast(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -941,7 +945,7 @@ def torch_lstm_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _LSTMDirect(nn.Module):
         def __init__(self) -> None:
@@ -1030,9 +1034,9 @@ def torch_gru_direct_forecast(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -1045,7 +1049,7 @@ def torch_gru_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _GRUDirect(nn.Module):
         def __init__(self) -> None:
@@ -1164,7 +1168,7 @@ def torch_tcn_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     k = int(kernel_size)
 
@@ -1280,7 +1284,7 @@ def torch_nbeats_direct_forecast(
     if int(num_blocks) <= 0:
         raise ValueError("num_blocks must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(layer_width) <= 0:
         raise ValueError("layer_width must be >= 1")
 
@@ -1294,7 +1298,7 @@ def torch_nbeats_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _NBeatsBlock(nn.Module):
         def __init__(self) -> None:
@@ -1599,13 +1603,13 @@ def torch_transformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -1716,11 +1720,11 @@ def torch_informer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -1826,13 +1830,13 @@ def torch_autoformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -1943,11 +1947,11 @@ def torch_nonstationary_transformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     head_dim = d // heads
     cfg = TorchTrainConfig(
@@ -2111,7 +2115,7 @@ def torch_fedformer_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
         raise ValueError("ffn_dim must be >= 1")
     if mode_count <= 0:
@@ -2119,7 +2123,7 @@ def torch_fedformer_direct_forecast(
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -2255,11 +2259,11 @@ def torch_itransformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -2356,11 +2360,11 @@ def torch_timesnet_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if k <= 0:
         raise ValueError("top_k must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -2523,7 +2527,7 @@ def torch_tft_direct_forecast(
     if rnn_layers <= 0:
         raise ValueError("lstm_layers must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -2633,7 +2637,7 @@ def torch_timemixer_direct_forecast(
     if channel_hidden <= 0:
         raise ValueError("channel_mixing_hidden must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -2867,7 +2871,7 @@ def torch_lightts_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -2977,11 +2981,11 @@ def torch_frets_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if k <= 0:
         raise ValueError("top_k_freqs must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -3106,7 +3110,7 @@ def torch_film_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if k <= 0:
@@ -3114,7 +3118,7 @@ def torch_film_direct_forecast(
     if k % 2 == 0:
         raise ValueError("kernel_size must be odd for same-length filtering")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -3232,13 +3236,13 @@ def torch_micn_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if any(int(v) % 2 == 0 for v in ks):
         raise ValueError("kernel_sizes must be odd for same-length convolutions")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -3365,7 +3369,7 @@ def torch_koopa_direct_forecast(
     if ma <= 1:
         raise ValueError("ma_window must be >= 2")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -3489,9 +3493,9 @@ def torch_samformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     head_dim = d // heads
     cfg = TorchTrainConfig(
@@ -3626,11 +3630,11 @@ def torch_retnet_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
         raise ValueError("ffn_dim must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     head_dim = d // heads
     cfg = TorchTrainConfig(
@@ -3792,11 +3796,11 @@ def torch_retnet_recursive_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
         raise ValueError("ffn_dim must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     head_dim = d // heads
 
@@ -3841,7 +3845,9 @@ def torch_retnet_recursive_forecast(
             v = _reshape(self.v_proj(xb))
 
             decay = torch.sigmoid(self.decay_logits).view(1, heads, 1, 1)
-            state = torch.zeros((batch, heads, head_dim, head_dim), device=xb.device, dtype=xb.dtype)
+            state = torch.zeros(
+                (batch, heads, head_dim, head_dim), device=xb.device, dtype=xb.dtype
+            )
             key_state = torch.zeros((batch, heads, head_dim), device=xb.device, dtype=xb.dtype)
             outs: list[Any] = []
             for idx in range(seq_len):
@@ -3972,9 +3978,9 @@ def torch_timexer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
     if train_exog is None or future_exog is None:
         raise ValueError("torch-timexer-direct requires train_exog and future_exog")
 
@@ -4155,7 +4161,7 @@ def torch_patchtst_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -4293,13 +4299,13 @@ def torch_crossformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     # Build scale configs (skip scales that don't fit).
     scales: list[tuple[int, int, int]] = []  # (seg_len, step, n_tokens)
@@ -4475,13 +4481,13 @@ def torch_pyraformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     # Determine actual pyramid sizes.
     level_sizes: list[int] = [int(n0)]
@@ -4652,13 +4658,13 @@ def torch_perceiver_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -4799,7 +4805,7 @@ def torch_tsmixer_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -4945,7 +4951,7 @@ def torch_cnn_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
@@ -5079,7 +5085,7 @@ def torch_resnet1d_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
@@ -5209,13 +5215,13 @@ def torch_wavenet_direct_forecast(
     if c <= 0:
         raise ValueError("channels must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(kernel_size) <= 0:
         raise ValueError("kernel_size must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5341,9 +5347,9 @@ def torch_bilstm_direct_forecast(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     lag_count = int(lags)
 
@@ -5358,7 +5364,7 @@ def torch_bilstm_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _BiLSTMDirect(nn.Module):
         def __init__(self) -> None:
@@ -5447,9 +5453,9 @@ def torch_bigru_direct_forecast(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     lag_count = int(lags)
 
@@ -5464,7 +5470,7 @@ def torch_bigru_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     class _BiGRUDirect(nn.Module):
         def __init__(self) -> None:
@@ -5557,13 +5563,13 @@ def torch_attn_gru_direct_forecast(
     if lag_count <= 0:
         raise ValueError("lags must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5682,11 +5688,11 @@ def torch_segrnn_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if hidden <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5831,7 +5837,7 @@ def torch_moderntcn_direct_forecast(
     if k <= 0 or k % 2 == 0:
         raise ValueError("kernel_size must be a positive odd integer")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5993,11 +5999,11 @@ def torch_basisformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -6151,15 +6157,15 @@ def torch_witran_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if hidden <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if heads <= 0:
         raise ValueError("nhead must be >= 1")
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -6334,7 +6340,7 @@ def torch_crossgnn_direct_forecast(
     if k <= 0:
         raise ValueError("top_k must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -6489,7 +6495,7 @@ def torch_pathformer_direct_forecast(
     if k <= 0:
         raise ValueError("top_k must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     if isinstance(expert_patch_lens, int):
         patch_lens = (int(expert_patch_lens),)
@@ -6673,7 +6679,7 @@ def torch_timesmamba_direct_forecast(
     if blocks <= 0:
         raise ValueError("num_blocks must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -6818,13 +6824,13 @@ def torch_fnet_direct_forecast(
     if int(d_model) <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -6948,13 +6954,13 @@ def torch_gmlp_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(ffn_dim) <= 0:
         raise ValueError("ffn_dim must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7092,7 +7098,7 @@ def torch_nhits_direct_forecast(
     if int(num_blocks) <= 0:
         raise ValueError("num_blocks must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(layer_width) <= 0:
         raise ValueError("layer_width must be >= 1")
 
@@ -7114,7 +7120,7 @@ def torch_nhits_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7254,11 +7260,11 @@ def torch_tide_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7365,13 +7371,13 @@ def torch_deepar_recursive_forecast(
     if lag_count <= 0:
         raise ValueError("lags must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7494,13 +7500,13 @@ def torch_qrnn_recursive_forecast(
     if lag_count <= 0:
         raise ValueError("lags must be >= 1")
     if int(hidden_size) <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7622,13 +7628,13 @@ def torch_linear_attention_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -7796,7 +7802,7 @@ def torch_inception_direct_forecast(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
@@ -7936,10 +7942,10 @@ def torch_mamba_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
     k = int(conv_kernel)
     if k <= 0:
         raise ValueError("conv_kernel must be >= 1")
@@ -8092,13 +8098,13 @@ def torch_rwkv_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     ffn = int(ffn_dim)
     if ffn <= 0:
         raise ValueError("ffn_dim must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8305,7 +8311,7 @@ def torch_hyena_direct_forecast(
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     hidden = int(ffn_dim)
     if hidden <= 0:
         raise ValueError("ffn_dim must be >= 1")
@@ -8314,7 +8320,7 @@ def torch_hyena_direct_forecast(
         raise ValueError("kernel_size must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8457,16 +8463,16 @@ def torch_dilated_rnn_direct_forecast(
 
     d = int(hidden_size)
     if d <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     L = int(num_layers)
     if L <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     base = int(dilation_base)
     if base <= 1:
         raise ValueError("dilation_base must be >= 2")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8624,7 +8630,7 @@ def torch_kan_direct_forecast(
         raise ValueError("d_model must be >= 1")
     L = int(num_layers)
     if L <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     K = int(grid_size)
     if K < 4:
         raise ValueError("grid_size must be >= 4")
@@ -8633,7 +8639,7 @@ def torch_kan_direct_forecast(
         raise ValueError("grid_range must be > 0")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8778,7 +8784,7 @@ def torch_scinet_direct_forecast(
         raise ValueError("ffn_dim must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8958,12 +8964,12 @@ def torch_etsformer_direct_forecast(
     if d % heads != 0:
         raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     alpha0 = float(alpha_init)
     beta0 = float(beta_init)
@@ -9135,13 +9141,13 @@ def torch_esrnn_direct_forecast(
 
     d = int(hidden_size)
     if d <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     L = int(num_layers)
     if L <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(_NUM_LAYERS_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
+        raise ValueError(_DROPOUT_RANGE_MSG)
 
     alpha0 = float(alpha_init)
     beta0 = float(beta_init)
