@@ -45,15 +45,15 @@ def _require_torch() -> Any:
 
 
 def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
-    torch = _require_torch()
-    nn = torch.nn
-
     in_dim = int(input_size)
     hid = int(hidden_size)
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     class _ManualGRUCell(nn.Module):
         def __init__(self) -> None:
@@ -75,15 +75,15 @@ def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
 
 
 def _make_manual_lstm_cell(*, input_size: int, hidden_size: int) -> Any:
-    torch = _require_torch()
-    nn = torch.nn
-
     in_dim = int(input_size)
     hid = int(hidden_size)
     if in_dim <= 0:
         raise ValueError("input_size must be >= 1")
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     class _ManualLSTMCell(nn.Module):
         def __init__(self) -> None:
@@ -114,10 +114,6 @@ def _make_manual_gru(
     dropout: float = 0.0,
     bidirectional: bool = False,
 ) -> Any:
-    torch = _require_torch()
-    nn = torch.nn
-    F = torch.nn.functional
-
     in_dim = int(input_size)
     hid = int(hidden_size)
     layers = int(num_layers)
@@ -131,6 +127,10 @@ def _make_manual_gru(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
 
     class _GRULayer(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -244,10 +244,6 @@ def _make_manual_lstm(
     dropout: float = 0.0,
     bidirectional: bool = False,
 ) -> Any:
-    torch = _require_torch()
-    nn = torch.nn
-    F = torch.nn.functional
-
     in_dim = int(input_size)
     hid = int(hidden_size)
     layers = int(num_layers)
@@ -261,6 +257,10 @@ def _make_manual_lstm(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
+    F = torch.nn.functional
 
     class _LSTMLayer(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -1282,9 +1282,6 @@ def torch_nbeats_direct_forecast(
     - Each block outputs (backcast, forecast) via an MLP + linear projection.
     - Residual is updated by subtracting backcast; forecasts are summed.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
     x = _as_1d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
@@ -1298,6 +1295,9 @@ def torch_nbeats_direct_forecast(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(layer_width) <= 0:
         raise ValueError("layer_width must be >= 1")
+
+    torch = _require_torch()
+    nn = torch.nn
 
     x_work = x
     mean = 0.0
@@ -1594,9 +1594,6 @@ def torch_transformer_direct_forecast(
     """
     Torch Transformer encoder direct multi-horizon forecast on lag windows.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
     x = _as_1d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
@@ -1621,6 +1618,9 @@ def torch_transformer_direct_forecast(
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     x_work = x
     mean = 0.0
@@ -4137,9 +4137,6 @@ def torch_patchtst_direct_forecast(
     """
     PatchTST-style: patch lag windows and apply a Transformer encoder.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
     x = _as_1d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
@@ -4173,6 +4170,9 @@ def torch_patchtst_direct_forecast(
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     x_work = x
     mean = 0.0
@@ -4278,9 +4278,6 @@ def torch_crossformer_direct_forecast(
       - For each scale i, we segment the lag window into length `segment_len * 2^i` tokens and concatenate
         all scale tokens into a single Transformer encoder sequence.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
     x = _as_1d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
@@ -4317,6 +4314,9 @@ def torch_crossformer_direct_forecast(
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     # Build scale configs (skip scales that don't fit).
     scales: list[tuple[int, int, int]] = []  # (seg_len, step, n_tokens)
