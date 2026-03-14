@@ -302,9 +302,15 @@ def test_torch_local_catalog_exposes_deduplicated_param_help_strings() -> None:
     assert perceiver.param_help["d_model"] == "Latent and token embedding dimension"
     assert perceiver.param_help["latent_len"] == "Number of learned latent tokens"
     assert segrnn.param_help["segment_len"] == "Segment length used to chunk the lag window"
-    assert segrnn.param_help["dropout"] == "Dropout probability in [0,1) (only if num_layers>1 inside GRU)"
+    assert (
+        segrnn.param_help["dropout"]
+        == "Dropout probability in [0,1) (only if num_layers>1 inside GRU)"
+    )
     assert moderntcn.param_help["num_blocks"] == "Number of ModernTCN mixer blocks"
-    assert moderntcn.param_help["kernel_size"] == "Odd depthwise convolution kernel size over patch tokens"
+    assert (
+        moderntcn.param_help["kernel_size"]
+        == "Odd depthwise convolution kernel size over patch tokens"
+    )
 
 
 def test_torch_multivariate_models_are_registered() -> None:
