@@ -477,6 +477,8 @@ def rf_lag_direct_forecast(
     )
     base = RandomForestRegressor(
         n_estimators=int(n_estimators),
+        min_samples_leaf=1,
+        max_features=1.0,
         random_state=int(random_state),
     )
     model = MultiOutputRegressor(base)
@@ -918,6 +920,7 @@ def decision_tree_lag_direct_forecast(
     )
     model = DecisionTreeRegressor(
         max_depth=None if max_depth is None else int(max_depth),
+        ccp_alpha=0.0,
         random_state=int(random_state),
     )
     model.fit(X, Y)
@@ -1302,7 +1305,7 @@ def svr_lag_direct_forecast(
         t_index=t_idx,
         series=x,
     )
-    base = SVR(C=float(C), gamma=gamma, epsilon=float(epsilon))
+    base = SVR(C=float(C), gamma=gamma, epsilon=float(epsilon), kernel="rbf")
     model = MultiOutputRegressor(base)
     model.fit(X, Y)
 

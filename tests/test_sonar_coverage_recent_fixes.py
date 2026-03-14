@@ -9,6 +9,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from foresight.models import global_regression as global_regression_mod
+from foresight.models.global_regression import (
+    decision_tree_step_lag_global_forecaster,
+    rf_step_lag_global_forecaster,
+    svr_step_lag_global_forecaster,
+)
+from foresight.models.regression import (
+    decision_tree_lag_direct_forecast,
+    rf_lag_direct_forecast,
+    svr_lag_direct_forecast,
+)
 from foresight.docsgen.rnn import _metadata_primary_url, render_rnn_paper_zoo_doc, render_rnn_zoo_doc
 from foresight.models.regression import (
     _augment_lag_feat_row,
@@ -67,6 +78,71 @@ def _install_fake_xgboost(monkeypatch: pytest.MonkeyPatch) -> None:
 
     xgboost.XGBRegressor = _FakeXGBRegressor
     monkeypatch.setitem(sys.modules, "xgboost", xgboost)
+
+
+def _install_fake_sklearn(
+    monkeypatch: pytest.MonkeyPatch, captured: dict[str, list[dict[str, object]]]
+) -> None:
+    sklearn = types.ModuleType("sklearn")
+    ensemble = types.ModuleType("sklearn.ensemble")
+    multioutput = types.ModuleType("sklearn.multioutput")
+    svm = types.ModuleType("sklearn.svm")
+    tree = types.ModuleType("sklearn.tree")
+
+    class _CapturedEstimator:
+        def __init__(self, **kwargs: object) -> None:
+            captured.setdefault(type(self).__name__, []).append(dict(kwargs))
+            self._target_ndim = 1
+            self._n_outputs = 1
+
+        def fit(self, X: np.ndarray, y: np.ndarray) -> _CapturedEstimator:
+            self._target_ndim = int(np.ndim(y))
+            self._n_outputs = int(y.shape[1]) if np.ndim(y) > 1 else 1
+            return self
+
+        def predict(self, X: np.ndarray) -> np.ndarray:
+            if self._target_ndim > 1:
+                return np.zeros((int(X.shape[0]), int(self._n_outputs)), dtype=float)
+            return np.zeros((int(X.shape[0]),), dtype=float)
+
+    class RandomForestRegressor(_CapturedEstimator):
+        pass
+
+    class DecisionTreeRegressor(_CapturedEstimator):
+        pass
+
+    class SVR(_CapturedEstimator):
+        pass
+
+    class MultiOutputRegressor:
+        def __init__(self, estimator: object) -> None:
+            self.estimator = estimator
+            self.n_outputs = 1
+
+        def fit(self, X: np.ndarray, y: np.ndarray) -> MultiOutputRegressor:
+            self.n_outputs = int(y.shape[1]) if np.ndim(y) > 1 else 1
+            if hasattr(self.estimator, "fit"):
+                target = y[:, 0] if np.ndim(y) > 1 else y
+                self.estimator.fit(X, target)
+            return self
+
+        def predict(self, X: np.ndarray) -> np.ndarray:
+            return np.zeros((int(X.shape[0]), int(self.n_outputs)), dtype=float)
+
+    ensemble.RandomForestRegressor = RandomForestRegressor
+    multioutput.MultiOutputRegressor = MultiOutputRegressor
+    svm.SVR = SVR
+    tree.DecisionTreeRegressor = DecisionTreeRegressor
+    sklearn.ensemble = ensemble
+    sklearn.multioutput = multioutput
+    sklearn.svm = svm
+    sklearn.tree = tree
+
+    monkeypatch.setitem(sys.modules, "sklearn", sklearn)
+    monkeypatch.setitem(sys.modules, "sklearn.ensemble", ensemble)
+    monkeypatch.setitem(sys.modules, "sklearn.multioutput", multioutput)
+    monkeypatch.setitem(sys.modules, "sklearn.svm", svm)
+    monkeypatch.setitem(sys.modules, "sklearn.tree", tree)
 
 
 @pytest.mark.parametrize(
@@ -249,6 +325,107 @@ def test_lgbm_common_regressor_params_reject_invalid_scalars(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         _lgbm_validate_common_regressor_params(params)
+
+
+def test_rf_step_lag_global_forecaster_sets_explicit_rf_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+        assert callable(fit_model)
+        fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
+        return {"ok": True}
+
+    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+
+    forecaster = rf_step_lag_global_forecaster(lags=2, n_estimators=5)
+    assert forecaster(None, None, 1) == {"ok": True}
+
+    kwargs = captured["RandomForestRegressor"][0]
+    assert kwargs["min_samples_leaf"] == 1
+    assert kwargs["max_features"] == 1.0
+
+
+def test_decision_tree_step_lag_global_forecaster_sets_explicit_ccp_alpha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+        assert callable(fit_model)
+        fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
+        return {"ok": True}
+
+    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+
+    forecaster = decision_tree_step_lag_global_forecaster(lags=2)
+    assert forecaster(None, None, 1) == {"ok": True}
+
+    kwargs = captured["DecisionTreeRegressor"][0]
+    assert kwargs["ccp_alpha"] == 0.0
+
+
+def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+        assert callable(fit_model)
+        fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
+        return {"ok": True}
+
+    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+
+    forecaster = svr_step_lag_global_forecaster(lags=2)
+    assert forecaster(None, None, 1) == {"ok": True}
+
+    kwargs = captured["SVR"][0]
+    assert kwargs["kernel"] == "rbf"
+
+
+def test_rf_lag_direct_forecast_sets_explicit_rf_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    out = rf_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2, n_estimators=3)
+
+    assert out.shape == (2,)
+    kwargs = captured["RandomForestRegressor"][0]
+    assert kwargs["min_samples_leaf"] == 1
+    assert kwargs["max_features"] == 1.0
+
+
+def test_decision_tree_lag_direct_forecast_sets_explicit_ccp_alpha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    out = decision_tree_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+    assert out.shape == (2,)
+    kwargs = captured["DecisionTreeRegressor"][0]
+    assert kwargs["ccp_alpha"] == 0.0
+
+
+def test_svr_lag_direct_forecast_sets_explicit_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    out = svr_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+    assert out.shape == (2,)
+    kwargs = captured["SVR"][0]
+    assert kwargs["kernel"] == "rbf"
 
 
 def test_xgb_lag_direct_forecast_validates_labels_before_training(

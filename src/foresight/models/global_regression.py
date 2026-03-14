@@ -617,6 +617,8 @@ def rf_step_lag_global_forecaster(
         model = RandomForestRegressor(
             n_estimators=n_estimators_int,
             max_depth=max_depth_int,
+            min_samples_leaf=1,
+            max_features=1.0,
             random_state=random_state_int,
             n_jobs=n_jobs_int,
         )
@@ -754,7 +756,11 @@ def decision_tree_step_lag_global_forecaster(
         raise ValueError("max_depth must be >= 1 or None")
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
-        model = DecisionTreeRegressor(max_depth=max_depth_int, random_state=random_state_int)
+        model = DecisionTreeRegressor(
+            max_depth=max_depth_int,
+            ccp_alpha=0.0,
+            random_state=random_state_int,
+        )
         model.fit(X_train, y_train)
         return model
 
@@ -1234,7 +1240,7 @@ def svr_step_lag_global_forecaster(
         raise ValueError("epsilon must be >= 0")
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
-        model = SVR(C=C_f, gamma=gamma_v, epsilon=epsilon_f)
+        model = SVR(C=C_f, gamma=gamma_v, epsilon=epsilon_f, kernel="rbf")
         model.fit(X_train, y_train)
         return model
 
