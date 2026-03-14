@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from foresight.cli import build_parser
+from foresight.metrics import _validate_seasonal_training_window, mase, msis, rmsse
 from foresight.models import global_regression as global_regression_mod
 from foresight.models import regression as regression_mod
 from foresight.models.global_regression import (
@@ -32,7 +33,15 @@ from foresight.models.regression import (
     _xgb_lag_recursive_forecast,
     _xgb_validate_common_regressor_params,
 )
-from foresight.models.statsmodels_wrap import ets_forecast
+from foresight.models.statsmodels_wrap import (
+    _normalize_fourier_orders,
+    _normalize_valid_periods,
+    _validate_exog_pair,
+    _validate_non_negative_lags,
+    _validate_period_at_least_two,
+    _validate_positive_horizon,
+    ets_forecast,
+)
 from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
 
 
@@ -921,6 +930,91 @@ def test_metrics_source_extracts_repeated_seasonality_literals() -> None:
 
     for literal in literals:
         assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_statsmodels_validation_helpers_cover_recent_refactor_branches() -> None:
+    _validate_positive_horizon(1)
+    with pytest.raises(ValueError, match="horizon must be >= 1"):
+        _validate_positive_horizon(0)
+
+    _validate_non_negative_lags(0)
+    with pytest.raises(ValueError, match="lags must be >= 0"):
+        _validate_non_negative_lags(-1)
+
+    _validate_period_at_least_two(2)
+    with pytest.raises(ValueError, match="period must be >= 2"):
+        _validate_period_at_least_two(1)
+
+    train_exog, future_exog = _validate_exog_pair(
+        train_size=3,
+        horizon=2,
+        train_exog=[[1.0], [2.0], [3.0]],
+        future_exog=[[4.0], [5.0]],
+    )
+    assert train_exog is not None and train_exog.shape == (3, 1)
+    assert future_exog is not None and future_exog.shape == (2, 1)
+
+    with pytest.raises(ValueError, match="same number of rows as train"):
+        _validate_exog_pair(
+            train_size=3,
+            horizon=2,
+            train_exog=[[1.0], [2.0]],
+            future_exog=[[4.0], [5.0]],
+        )
+
+    with pytest.raises(ValueError, match="horizon rows"):
+        _validate_exog_pair(
+            train_size=3,
+            horizon=2,
+            train_exog=[[1.0], [2.0], [3.0]],
+            future_exog=[[4.0]],
+        )
+
+    with pytest.raises(ValueError, match="either both be provided or both be omitted"):
+        _validate_exog_pair(
+            train_size=3,
+            horizon=2,
+            train_exog=[[1.0], [2.0], [3.0]],
+            future_exog=None,
+        )
+
+
+def test_statsmodels_fourier_normalizers_cover_recent_refactor_branches() -> None:
+    assert _normalize_valid_periods("7,30") == (7, 30)
+    with pytest.raises(ValueError, match="periods must contain integers >= 2"):
+        _normalize_valid_periods((1, 7))
+
+    assert _normalize_fourier_orders("2", n_periods=2) == (2, 2)
+    with pytest.raises(ValueError, match="same length as periods"):
+        _normalize_fourier_orders("1,2,3", n_periods=2)
+    with pytest.raises(ValueError, match="same length as periods"):
+        _normalize_fourier_orders([1, 2, 3], n_periods=2)
+
+
+def test_metrics_scaled_error_helpers_cover_recent_refactor_branches() -> None:
+    train = np.array([1.0, 2.0, 4.0, 7.0, 11.0], dtype=float)
+    y_true = np.array([12.0, 16.0], dtype=float)
+    y_pred = np.array([11.0, 15.5], dtype=float)
+
+    _validate_seasonal_training_window(train, 1)
+    with pytest.raises(ValueError, match="seasonality must be >= 1"):
+        _validate_seasonal_training_window(train, 0)
+    with pytest.raises(ValueError, match="y_train too short for the requested seasonality"):
+        _validate_seasonal_training_window(train, 5)
+
+    assert mase(y_true, y_pred, y_train=train, seasonality=1) > 0.0
+    assert rmsse(y_true, y_pred, y_train=train, seasonality=1) > 0.0
+    assert (
+        msis(
+            y_true,
+            [10.0, 14.0],
+            [13.0, 17.0],
+            y_train=train,
+            seasonality=1,
+            alpha=0.2,
+        )
+        > 0.0
+    )
 
 
 def test_docsgen_rnn_source_extracts_repeated_literals() -> None:
