@@ -380,9 +380,9 @@ def _crossref_query(query: str, *, year: int | None, rows: int = 5) -> list[Cros
             and issued
             and isinstance(issued[0], list)
             and issued[0]
+            and isinstance(issued[0][0], int)
         ):
-            if isinstance(issued[0][0], int):
-                yr = int(issued[0][0])
+            yr = int(issued[0][0])
 
         authors: list[str] = []
         for a in it.get("author") or []:
@@ -650,11 +650,14 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
             )
         if url0 and not source_url0:
             # Backfill source based on which field is present.
-            source_url0 = (
-                "doi"
-                if doi0
-                else ("arxiv" if arxiv0 else ("override" if paper_id in url_overrides else ""))
-            )
+            if doi0:
+                source_url0 = "doi"
+            elif arxiv0:
+                source_url0 = "arxiv"
+            elif paper_id in url_overrides:
+                source_url0 = "override"
+            else:
+                source_url0 = ""
 
         current["url"] = url0
         current["source_url"] = source_url0
@@ -705,6 +708,21 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
             arxiv_id=(arxiv.arxiv_id if arxiv else ""),
             overrides=url_overrides,
         )
+        if arxiv:
+            source_title = "arxiv"
+        elif hint_title:
+            source_title = "hint"
+        elif crossref:
+            source_title = "crossref"
+        else:
+            source_title = ""
+
+        if arxiv and arxiv.doi:
+            source_doi = "arxiv"
+        elif crossref and crossref.doi:
+            source_doi = "crossref"
+        else:
+            source_doi = ""
 
         updated[paper_id] = {
             "paper_id": paper_id,
@@ -714,14 +732,8 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
             "doi": doi or "",
             "arxiv_id": arxiv.arxiv_id if arxiv else "",
             "url": url,
-            "source_title": (
-                "arxiv" if arxiv else ("hint" if hint_title else ("crossref" if crossref else ""))
-            ),
-            "source_doi": (
-                "arxiv"
-                if (arxiv and arxiv.doi)
-                else ("crossref" if (crossref and crossref.doi) else "")
-            ),
+            "source_title": source_title,
+            "source_doi": source_doi,
             "source_url": source_url,
         }
 

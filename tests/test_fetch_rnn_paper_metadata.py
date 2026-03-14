@@ -55,3 +55,22 @@ def test_main_resolves_output_path_before_fetching(monkeypatch: pytest.MonkeyPat
 
     assert mod["main"]() == 0
     assert captured["output_path"] == repo_root / "docs" / "cli-metadata.json"
+
+
+def test_fetch_tool_avoids_nested_conditionals_for_metadata_sources() -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "tools" / "fetch_rnn_paper_metadata.py").read_text(encoding="utf-8")
+
+    assert "if isinstance(issued[0][0], int):" not in source
+    assert (
+        'else ("arxiv" if arxiv0 else ("override" if paper_id in url_overrides else ""))'
+        not in source
+    )
+    assert (
+        '"arxiv" if arxiv else ("hint" if hint_title else ("crossref" if crossref else ""))'
+        not in source
+    )
+    assert (
+        '"arxiv" if (arxiv and arxiv.doi) else ("crossref" if (crossref and crossref.doi) else "")'
+        not in source
+    )
