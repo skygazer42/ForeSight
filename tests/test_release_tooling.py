@@ -97,6 +97,15 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "tests/test_sonar_coverage_recent_fixes.py" in test_step["run"]
     assert "tests/test_sonar_torch_rename_coverage_smoke.py" in test_step["run"]
     assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
+    assert "tests/test_models_optional_deps_torch.py::test_torch_global_models_smoke_when_installed" in test_step["run"]
+    assert (
+        "tests/test_models_torch_xformer_seq2seq_smoke.py::test_torch_xformer_and_rnn_global_smoke"
+        in test_step["run"]
+    )
+    assert (
+        "tests/test_models_torch_crossformer_pyraformer_smoke.py::test_torch_crossformer_and_pyraformer_global_smoke"
+        in test_step["run"]
+    )
     scan_args = str(scan_step["with"]["args"])
     assert "-Dsonar.issue.ignore.multicriteria=e1,e2" in scan_args
     assert "-Dsonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in scan_args
@@ -104,6 +113,14 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
         "-Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py"
         in scan_args
     )
+    assert "src/foresight/models/regression.py" in scan_args
+    assert "src/foresight/models/global_regression.py" in scan_args
+    assert "src/foresight/models/statsmodels_wrap.py" in scan_args
+    assert "src/foresight/models/torch_global.py" in scan_args
+    assert "src/foresight/models/torch_rnn_paper_zoo.py" in scan_args
+    assert "src/foresight/models/torch_seq2seq.py" in scan_args
+    assert "src/foresight/models/torch_ssm.py" in scan_args
+    assert "src/foresight/models/torch_xformer.py" in scan_args
     assert (
         scan_step["uses"]
         == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
@@ -127,6 +144,14 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "src/foresight/cli_leaderboard.py" in config
     assert "src/foresight/models/runtime.py" in config
     assert "src/foresight/models/catalog/**" in config
+    assert "src/foresight/models/regression.py" in config
+    assert "src/foresight/models/global_regression.py" in config
+    assert "src/foresight/models/statsmodels_wrap.py" in config
+    assert "src/foresight/models/torch_global.py" in config
+    assert "src/foresight/models/torch_rnn_paper_zoo.py" in config
+    assert "src/foresight/models/torch_seq2seq.py" in config
+    assert "src/foresight/models/torch_ssm.py" in config
+    assert "src/foresight/models/torch_xformer.py" in config
     assert "sonar.issue.ignore.multicriteria=e1,e2" in config
     assert "sonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083" in config
     assert "sonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in config

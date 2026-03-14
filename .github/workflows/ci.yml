@@ -86,6 +86,9 @@ jobs:
             tests/test_models_global_regression_validation.py \
             tests/test_models_intermittent.py \
             tests/test_models_intermittent_more.py \
+            tests/test_models_optional_deps_torch.py::test_torch_global_models_smoke_when_installed \
+            tests/test_models_torch_crossformer_pyraformer_smoke.py::test_torch_crossformer_and_pyraformer_global_smoke \
+            tests/test_models_torch_xformer_seq2seq_smoke.py::test_torch_xformer_and_rnn_global_smoke \
             tests/test_release_tooling.py \
             tests/test_model_validation_messages.py \
             tests/test_models_registry.py \
@@ -108,8 +111,8 @@ jobs:
           projectBaseDir: .
           args: >
             -Dsonar.exclusions=**/__pycache__/**,src/foresight_ts.egg-info/**,src/foresight/cli_catalog.py,src/foresight/models/runtime.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
-            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/models/runtime.py,src/foresight/models/catalog/**,src/foresight/models/torch_nn.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
-            -Dsonar.coverage.exclusions=tools/**,.github/workflows/**,src/foresight/base.py,src/foresight/cli.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cli_shared.py,src/foresight/contracts/**,src/foresight/cv.py,src/foresight/data/format.py,src/foresight/data/prep.py,src/foresight/eval_forecast.py,src/foresight/forecast.py,src/foresight/models/factories.py,src/foresight/models/torch_nn.py,src/foresight/services/cli_workflows.py,src/foresight/services/evaluation.py,src/foresight/services/forecasting.py,src/foresight/services/model_execution.py
+            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cv.py,src/foresight/models/global_regression.py,src/foresight/models/regression.py,src/foresight/models/runtime.py,src/foresight/models/statsmodels_wrap.py,src/foresight/models/catalog/**,src/foresight/models/torch_global.py,src/foresight/models/torch_nn.py,src/foresight/models/torch_rnn_paper_zoo.py,src/foresight/models/torch_seq2seq.py,src/foresight/models/torch_ssm.py,src/foresight/models/torch_xformer.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
+            -Dsonar.coverage.exclusions=tools/**,.github/workflows/**,src/foresight/base.py,src/foresight/cli.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cli_shared.py,src/foresight/contracts/**,src/foresight/cv.py,src/foresight/data/format.py,src/foresight/data/prep.py,src/foresight/eval_forecast.py,src/foresight/forecast.py,src/foresight/models/factories.py,src/foresight/models/global_regression.py,src/foresight/models/regression.py,src/foresight/models/torch_nn.py,src/foresight/services/cli_workflows.py,src/foresight/services/evaluation.py,src/foresight/services/forecasting.py,src/foresight/services/model_execution.py
             -Dsonar.issue.ignore.multicriteria=e1,e2
             -Dsonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083
             -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/src/foresight/cli_shared.py
