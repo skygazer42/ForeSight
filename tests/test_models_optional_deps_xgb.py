@@ -92,8 +92,8 @@ def test_global_xgb_models_raise_importerror_when_xgboost_missing() -> None:
     )
 
     for key in GLOBAL_XGB_MODELS:
-        f = make_global_forecaster(key)
         with pytest.raises(ImportError):
+            f = make_global_forecaster(key)
             f(df, ds[8], 2)
 
 

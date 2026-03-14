@@ -93,6 +93,6 @@ def test_global_ml_models_raise_importerror_when_sklearn_missing() -> None:
     )
 
     for key in GLOBAL_ML_MODELS:
-        f = make_global_forecaster(key)
         with pytest.raises(ImportError):
+            f = make_global_forecaster(key)
             f(df, ds[8], 2)

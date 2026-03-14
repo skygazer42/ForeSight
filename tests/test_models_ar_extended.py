@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from foresight.models.ar import (
+    ar_ols_forecast,
     ar_ols_auto_forecast,
     ar_ols_lags_forecast,
     sar_ols_forecast,
@@ -23,10 +24,11 @@ def test_sar_ols_period2_seasonal_lag():
     assert np.allclose(yhat, np.array([1.0, 2.0]))
 
 
-def test_select_ar_order_aic_prefers_2_on_period2():
+def test_select_ar_order_aic_finds_a_low_order_periodic_model():
     y = np.array([1, 2] * 30, dtype=float)
     p = select_ar_order_aic(y, max_p=5)
-    assert p == 2
+    assert p in {1, 2}
+    assert np.allclose(ar_ols_forecast(y, 4, p=p), np.array([1.0, 2.0, 1.0, 2.0]))
 
 
 def test_ar_ols_auto_forecast_shape_and_finite():

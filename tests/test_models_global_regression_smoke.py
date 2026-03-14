@@ -7,6 +7,35 @@ import pytest
 from foresight.cv import cross_validation_predictions_long_df
 from foresight.eval_predictions import evaluate_quantile_predictions
 
+_HAS_SKLEARN = importlib.util.find_spec("sklearn") is not None
+_SKLEARN_GLOBAL_MODELS = {
+    "ridge-step-lag-global",
+    "decision-tree-step-lag-global",
+    "lasso-step-lag-global",
+    "elasticnet-step-lag-global",
+    "knn-step-lag-global",
+    "rf-step-lag-global",
+    "kernel-ridge-step-lag-global",
+    "svr-step-lag-global",
+    "linear-svr-step-lag-global",
+    "huber-step-lag-global",
+    "bayesian-ridge-step-lag-global",
+    "ard-step-lag-global",
+    "omp-step-lag-global",
+    "passive-aggressive-step-lag-global",
+    "poisson-step-lag-global",
+    "gamma-step-lag-global",
+    "tweedie-step-lag-global",
+    "quantile-step-lag-global",
+    "sgd-step-lag-global",
+    "adaboost-step-lag-global",
+    "mlp-step-lag-global",
+    "bagging-step-lag-global",
+    "gbrt-step-lag-global",
+    "extra-trees-step-lag-global",
+    "hgb-step-lag-global",
+}
+
 
 def _small_panel_long_df() -> pd.DataFrame:
     ds = pd.date_range("2020-01-01", periods=40, freq="D")
@@ -63,6 +92,8 @@ def _assert_global_point_smoke(
     model_params: dict[str, object],
     long_df: pd.DataFrame | None = None,
 ) -> None:
+    if model in _SKLEARN_GLOBAL_MODELS and not _HAS_SKLEARN:
+        pytest.skip("scikit-learn not installed")
     pred = cross_validation_predictions_long_df(
         model=model,
         long_df=_small_panel_long_df() if long_df is None else long_df,
@@ -457,6 +488,8 @@ def test_extra_trees_step_lag_global_smoke() -> None:
 
 
 def test_hgb_step_lag_global_smoke() -> None:
+    if not _HAS_SKLEARN:
+        pytest.skip("scikit-learn not installed")
     df = _small_panel_long_df()
     pred = cross_validation_predictions_long_df(
         model="hgb-step-lag-global",

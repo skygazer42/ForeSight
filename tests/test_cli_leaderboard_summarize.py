@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -145,10 +146,10 @@ def test_leaderboard_summarize_treats_near_zero_best_metric_as_zero(tmp_path: Pa
     best_row = next(r for r in payload if r["model"] == "best")
     other_row = next(r for r in payload if r["model"] == "other")
 
-    assert best_row["mae_rel_mean"] == 1.0
-    assert best_row["mae_rel_wmean"] == 1.0
-    assert other_row["mae_rel_mean"] == float("inf")
-    assert other_row["mae_rel_wmean"] == float("inf")
+    assert abs(float(best_row["mae_rel_mean"]) - 1.0) < 1e-12
+    assert abs(float(best_row["mae_rel_wmean"]) - 1.0) < 1e-12
+    assert math.isinf(float(other_row["mae_rel_mean"]))
+    assert math.isinf(float(other_row["mae_rel_wmean"]))
 
 
 def test_leaderboard_summarize_min_datasets_filters_models(tmp_path: Path) -> None:

@@ -332,11 +332,21 @@ def _render_api_doc() -> str:
 
     lines.append("## Notable data contracts")
     lines.append("")
-    lines.append("- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).")
-    lines.append("- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion.")
-    lines.append("- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history.")
-    lines.append("- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied.")
-    lines.append("- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={\"promo\": \"sum\", \"temp\": \"mean\"}` for bottom-up exogenous aggregation.")
+    lines.append(
+        "- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates)."
+    )
+    lines.append(
+        "- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion."
+    )
+    lines.append(
+        "- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history."
+    )
+    lines.append(
+        "- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied."
+    )
+    lines.append(
+        '- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={"promo": "sum", "temp": "mean"}` for bottom-up exogenous aggregation.'
+    )
     lines.append("")
 
     lines.append("## Root package export list")

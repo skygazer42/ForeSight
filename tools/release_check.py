@@ -80,9 +80,19 @@ def main(argv: list[str] | None = None) -> int:
     quality_cmds = _quality_commands()
     if args.plan:
         _print_plan(quality_cmds)
-        print(" ".join(_display_command([sys.executable, "-m", "build", "--outdir", "<temp-dist-dir>"])), flush=True)
+        print(
+            " ".join(
+                _display_command([sys.executable, "-m", "build", "--outdir", "<temp-dist-dir>"])
+            ),
+            flush=True,
+        )
         if importlib.util.find_spec("twine") is not None:
-            print(" ".join(_display_command([sys.executable, "-m", "twine", "check", "<temp-dist-dir>/*"])), flush=True)
+            print(
+                " ".join(
+                    _display_command([sys.executable, "-m", "twine", "check", "<temp-dist-dir>/*"])
+                ),
+                flush=True,
+            )
         return 0
 
     for cmd in quality_cmds:

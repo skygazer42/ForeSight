@@ -97,6 +97,7 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "sonar.sources=src,tools,.github/workflows" in config
     assert "sonar.tests=tests" in config
     assert "sonar.python.coverage.reportPaths=coverage.xml" in config
+    assert "src/foresight/cli_catalog.py" in config
     assert "sonar.cpd.exclusions=" in config
     assert "src/foresight/cli.py" in config
     assert "src/foresight/cli_leaderboard.py" in config

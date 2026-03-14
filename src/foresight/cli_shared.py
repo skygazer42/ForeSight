@@ -116,12 +116,12 @@ def _parse_grid_params(items: list[str]) -> dict[str, tuple[Any, ...]]:
 def _write_output(text: str, *, output: str) -> None:
     if not output:
         return
-    out_path = Path(output).expanduser()
+    out_path = Path(output).expanduser().resolve(strict=False)
     if out_path.exists() and out_path.is_dir():
         raise ValueError("Output path must be a file, got directory")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     payload = "" if not text else text.rstrip("\n") + "\n"
-    out_path.write_text(payload, encoding="utf-8")
+    out_path.write_text(payload, encoding="utf-8")  # NOSONAR: CLI caller explicitly selects the output file path.
 
 
 def _emit_text(text: str, *, output: str) -> None:

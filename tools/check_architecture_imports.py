@@ -82,7 +82,7 @@ def _exported_names_for(path: Path) -> list[str]:
         for target in node.targets:
             if isinstance(target, ast.Name) and target.id == "__all__":
                 value = ast.literal_eval(node.value)
-                if isinstance(value, (list, tuple)):
+                if isinstance(value, list | tuple):
                     return [str(item) for item in value]
     return []
 

@@ -49,7 +49,7 @@ def test_new_statsmodels_models_raise_importerror_when_statsmodels_missing():
     if importlib.util.find_spec("statsmodels") is not None:
         pytest.skip("statsmodels installed; this test targets the missing-dep path")
 
-    y = [1.0, 2.0, 3.0, 4.0, 5.0]
+    y = [float(i) for i in range(1, 25)]
     for key in STATS_MODELS:
         f = make_forecaster(key)
         with pytest.raises(ImportError):

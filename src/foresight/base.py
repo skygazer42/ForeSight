@@ -16,6 +16,7 @@ def _as_1d_float_array(y: Any) -> np.ndarray:
         raise ValueError(f"Expected 1D series, got shape {arr.shape}")
     return arr
 
+
 def _unavailable_local_factory() -> Callable[[Any, int], np.ndarray]:
     raise RuntimeError("serialized local forecaster runtime factory was not rebuilt")
 
