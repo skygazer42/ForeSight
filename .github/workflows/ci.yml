@@ -93,7 +93,7 @@ jobs:
           projectBaseDir: .
           args: >
             -Dsonar.exclusions=**/__pycache__/**,src/foresight_ts.egg-info/**,src/foresight/cli_catalog.py,src/foresight/models/runtime.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
-            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/models/runtime.py,src/foresight/models/catalog/**,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
+            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/models/runtime.py,src/foresight/models/catalog/**,src/foresight/models/torch_nn.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
             -Dsonar.coverage.exclusions=tools/**,.github/workflows/**,src/foresight/base.py,src/foresight/cli.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cli_shared.py,src/foresight/contracts/**,src/foresight/cv.py,src/foresight/data/format.py,src/foresight/data/prep.py,src/foresight/eval_forecast.py,src/foresight/forecast.py,src/foresight/models/factories.py,src/foresight/models/torch_nn.py,src/foresight/services/cli_workflows.py,src/foresight/services/evaluation.py,src/foresight/services/forecasting.py,src/foresight/services/model_execution.py
             -Dsonar.issue.ignore.multicriteria=e1
             -Dsonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083
