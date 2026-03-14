@@ -256,9 +256,10 @@ _call_local_xreg_forecaster = _model_execution.call_local_xreg_forecaster
 
 
 def _as_datetime_index(ds: Any) -> pd.DatetimeIndex | None:
+    if isinstance(ds, pd.DatetimeIndex):
+        return ds
+
     idx = pd.Index(ds)
-    if isinstance(idx, pd.DatetimeIndex):
-        return idx
 
     if pd.api.types.is_numeric_dtype(idx.dtype):
         return None

@@ -45,6 +45,18 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def _resolve_output_path(output: str | Path) -> Path:
+    root = _repo_root().resolve(strict=False)
+    raw = Path(output)
+    candidate = raw if raw.is_absolute() else (root / raw)
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"output path must stay inside the repository root: {root}") from exc
+    return resolved
+
+
 def _parse_desc(desc: str) -> tuple[str, list[str], int | None]:
     """
     Parse description strings like:
@@ -785,7 +797,7 @@ def main() -> int:
     args = ap.parse_args()
 
     fetch_all(
-        output_path=Path(str(args.output)),
+        output_path=_resolve_output_path(str(args.output)),
         refresh=bool(args.refresh),
         sleep_s=float(args.sleep),
         only=str(args.only).strip(),

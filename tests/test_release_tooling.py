@@ -82,7 +82,9 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert checkout["with"]["fetch-depth"] == 0
     assert "pip install -e .[dev,torch,stats]" in install_step["run"]
     assert "coverage.xml" in test_step["run"]
+    assert "tests/test_fetch_rnn_paper_metadata.py" in test_step["run"]
     assert "tests/test_model_validation_messages.py" in test_step["run"]
+    assert "tests/test_forecasting_internals.py" in test_step["run"]
     assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
     assert (
         scan_step["uses"]

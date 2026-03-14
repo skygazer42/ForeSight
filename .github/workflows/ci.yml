@@ -80,6 +80,8 @@ jobs:
       - name: Tests
         run: |
           pytest -q \
+            tests/test_fetch_rnn_paper_metadata.py \
+            tests/test_forecasting_internals.py \
             tests/test_release_tooling.py \
             tests/test_model_validation_messages.py \
             tests/test_models_registry.py \
