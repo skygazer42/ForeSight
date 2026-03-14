@@ -36,14 +36,14 @@ def mase(forecast, insample, outsample, frequency):
 def smape_2(forecast, target):
     denom = np.abs(target) + np.abs(forecast)
     # divide by 1.0 instead of 0.0, in case when denom is zero the enumerator will be 0.0 anyway.
-    denom[denom == 0.0] = 1.0
+    denom[np.isclose(denom, 0.0)] = 1.0
     return 200 * np.abs(forecast - target) / denom
 
 
 def mape(forecast, target):
     denom = np.abs(target)
     # divide by 1.0 instead of 0.0, in case when denom is zero the enumerator will be 0.0 anyway.
-    denom[denom == 0.0] = 1.0
+    denom[np.isclose(denom, 0.0)] = 1.0
     return 100 * np.abs(forecast - target) / denom
 
 #这个类实现了M4时间序列预测比赛的评估。类的构造函数接收两个参数：file_path和root_path，

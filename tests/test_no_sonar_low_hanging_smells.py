@@ -293,6 +293,13 @@ def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
     assert "if not (vf > 0.0):" not in source
 
 
+def test_m4_summary_avoids_float_equality_guards() -> None:
+    source = _read_repo_file("transformer time series/Time-Series/utils/m4_summary.py")
+
+    assert "denom[denom == 0.0] = 1.0" not in source
+    assert source.count("np.isclose(denom, 0.0)") >= 2
+
+
 def test_global_regression_uses_lowercase_private_predict_helper_name() -> None:
     source = _read_repo_file("src/foresight/models/global_regression.py")
     assert "def _panel_step_lag_predict_X(" not in source
