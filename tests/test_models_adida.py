@@ -6,7 +6,7 @@ from foresight.models.intermittent import adida_forecast
 def test_adida_all_zero_returns_zero():
     yhat = adida_forecast([0, 0, 0, 0, 0, 0], 5, agg_period=3, base="ses", alpha=0.2)
     assert yhat.shape == (5,)
-    assert np.all(yhat == 0.0)
+    assert np.allclose(yhat, 0.0)
 
 
 def test_adida_output_shape_and_nonnegative():

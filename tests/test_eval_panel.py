@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from foresight.eval_forecast import eval_model
 
@@ -28,4 +29,4 @@ def test_eval_model_on_panel_dataset_aggregates_series(tmp_path):
         data_dir=str(root),
     )
     assert out["n_series"] == 2
-    assert out["mae"] == 0.0
+    assert out["mae"] == pytest.approx(0.0)

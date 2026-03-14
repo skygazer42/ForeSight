@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from foresight.datasets.loaders import load_store_sales
 
 
@@ -16,4 +18,4 @@ def test_load_store_sales_supports_env_data_dir(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("FORESIGHT_DATA_DIR", str(root))
     df = load_store_sales(nrows=5)
     assert len(df) == 1
-    assert float(df["sales"].iloc[0]) == 999.0
+    assert float(df["sales"].iloc[0]) == pytest.approx(999.0)

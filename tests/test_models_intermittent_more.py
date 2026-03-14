@@ -11,13 +11,13 @@ from foresight.models.intermittent import (
 def test_croston_sba_all_zero_returns_zero():
     yhat = croston_sba_forecast([0, 0, 0, 0], 3, alpha=0.1)
     assert yhat.shape == (3,)
-    assert np.all(yhat == 0.0)
+    assert np.allclose(yhat, 0.0)
 
 
 def test_croston_sbj_all_zero_returns_zero():
     yhat = croston_sbj_forecast([0, 0, 0, 0], 2, alpha=0.2)
     assert yhat.shape == (2,)
-    assert np.all(yhat == 0.0)
+    assert np.allclose(yhat, 0.0)
 
 
 def test_croston_opt_output_shape_and_nonnegative():
@@ -31,7 +31,7 @@ def test_croston_opt_output_shape_and_nonnegative():
 def test_les_all_zero_returns_zero():
     yhat = les_forecast([0, 0, 0, 0], 4, alpha=0.1, beta=0.1)
     assert yhat.shape == (4,)
-    assert np.all(yhat == 0.0)
+    assert np.allclose(yhat, 0.0)
 
 
 def test_les_decays_under_no_demand():

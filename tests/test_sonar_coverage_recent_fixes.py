@@ -738,7 +738,7 @@ def test_rf_step_lag_global_forecaster_sets_explicit_rf_defaults(
 
     kwargs = captured["RandomForestRegressor"][0]
     assert kwargs["min_samples_leaf"] == 1
-    assert kwargs["max_features"] == 1.0
+    assert kwargs["max_features"] == pytest.approx(1.0)
 
 
 def test_decision_tree_step_lag_global_forecaster_sets_explicit_ccp_alpha(
@@ -762,7 +762,7 @@ def test_decision_tree_step_lag_global_forecaster_sets_explicit_ccp_alpha(
     assert forecaster(None, None, 1) == {"ok": True}
 
     kwargs = captured["DecisionTreeRegressor"][0]
-    assert kwargs["ccp_alpha"] == 0.0
+    assert kwargs["ccp_alpha"] == pytest.approx(0.0)
 
 
 def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
@@ -809,8 +809,8 @@ def test_global_svr_forecasters_accept_lowercase_c_name(
     svr_step_lag_global_forecaster(lags=2, c=1.5)(None, None, 1)
     global_regression_mod.linear_svr_step_lag_global_forecaster(lags=2, c=2.5)(None, None, 1)
 
-    assert captured["SVR"][0]["C"] == 1.5
-    assert captured["LinearSVR"][0]["C"] == 2.5
+    assert captured["SVR"][0]["C"] == pytest.approx(1.5)
+    assert captured["LinearSVR"][0]["C"] == pytest.approx(2.5)
 
 
 @pytest.mark.parametrize(
@@ -1266,7 +1266,7 @@ def test_rf_lag_direct_forecast_sets_explicit_rf_defaults(
     assert out.shape == (2,)
     kwargs = captured["RandomForestRegressor"][0]
     assert kwargs["min_samples_leaf"] == 1
-    assert kwargs["max_features"] == 1.0
+    assert kwargs["max_features"] == pytest.approx(1.0)
 
 
 def test_decision_tree_lag_direct_forecast_sets_explicit_ccp_alpha(
@@ -1279,7 +1279,7 @@ def test_decision_tree_lag_direct_forecast_sets_explicit_ccp_alpha(
 
     assert out.shape == (2,)
     kwargs = captured["DecisionTreeRegressor"][0]
-    assert kwargs["ccp_alpha"] == 0.0
+    assert kwargs["ccp_alpha"] == pytest.approx(0.0)
 
 
 def test_svr_lag_direct_forecast_sets_explicit_kernel(
@@ -1316,8 +1316,8 @@ def test_regression_svr_forecasters_accept_lowercase_c_name(
 
     assert out_svr.shape == (2,)
     assert out_linear.shape == (2,)
-    assert captured["SVR"][0]["C"] == 1.5
-    assert captured["LinearSVR"][0]["C"] == 2.5
+    assert captured["SVR"][0]["C"] == pytest.approx(1.5)
+    assert captured["LinearSVR"][0]["C"] == pytest.approx(2.5)
 
 
 def test_regression_source_extracts_repeated_xgb_literals() -> None:

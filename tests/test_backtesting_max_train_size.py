@@ -31,11 +31,11 @@ def test_walk_forward_max_train_size_changes_train_window():
 
     assert expanding.y_pred.shape == rolling.y_pred.shape
     # Expanding window always starts at 0 -> first value is 0 for all windows
-    assert np.all(expanding.y_pred == 0.0)
+    assert np.allclose(expanding.y_pred, 0.0)
     # Rolling window starts shift -> first values increase with each window
-    assert rolling.y_pred[0, 0] == 0.0
-    assert rolling.y_pred[1, 0] == 2.0
-    assert rolling.y_pred[2, 0] == 4.0
+    assert rolling.y_pred[0, 0] == pytest.approx(0.0)
+    assert rolling.y_pred[1, 0] == pytest.approx(2.0)
+    assert rolling.y_pred[2, 0] == pytest.approx(4.0)
 
 
 def test_walk_forward_max_train_size_invalid_raises():

@@ -557,7 +557,7 @@ def test_tbats_lite_autoreg_factory_normalizes_core_params(monkeypatch: pytest.M
     assert captured["include_trend"] is True
     assert captured["lags"] == 0
     assert captured["trend"] == "n"
-    assert captured["boxcox_lambda"] == 0.5
+    assert captured["boxcox_lambda"] == pytest.approx(0.5)
 
 
 def test_tbats_lite_auto_arima_spec_exposes_fourier_and_auto_arima_params():
@@ -653,7 +653,7 @@ def test_tbats_lite_auto_arima_factory_normalizes_core_params(monkeypatch: pytes
     assert captured["enforce_stationarity"] is False
     assert captured["enforce_invertibility"] is False
     assert captured["information_criterion"] == "bic"
-    assert captured["boxcox_lambda"] == 0.5
+    assert captured["boxcox_lambda"] == pytest.approx(0.5)
 
 
 def test_tbats_lite_uc_spec_exposes_fourier_and_uc_params():
@@ -713,7 +713,7 @@ def test_tbats_lite_uc_factory_normalizes_core_params(monkeypatch: pytest.Monkey
     assert captured["orders"] == (2, 1)
     assert captured["include_trend"] is True
     assert captured["level"] == "local linear trend"
-    assert captured["boxcox_lambda"] == 0.5
+    assert captured["boxcox_lambda"] == pytest.approx(0.5)
 
 
 def test_tbats_lite_ets_spec_exposes_fourier_and_ets_params():
@@ -779,7 +779,7 @@ def test_tbats_lite_ets_factory_normalizes_core_params(monkeypatch: pytest.Monke
     assert captured["include_trend"] is True
     assert captured["trend"] is None
     assert captured["damped_trend"] is True
-    assert captured["boxcox_lambda"] == 0.5
+    assert captured["boxcox_lambda"] == pytest.approx(0.5)
 
 
 def test_tbats_lite_sarimax_spec_exposes_fourier_and_sarimax_params():
@@ -863,7 +863,7 @@ def test_tbats_lite_sarimax_factory_normalizes_core_params(monkeypatch: pytest.M
     assert captured["trend"] is None
     assert captured["enforce_stationarity"] is False
     assert captured["enforce_invertibility"] is False
-    assert captured["boxcox_lambda"] == 0.5
+    assert captured["boxcox_lambda"] == pytest.approx(0.5)
 
 
 def test_fourier_auto_arima_spec_exposes_periods_orders_and_arima_params():
@@ -917,7 +917,9 @@ def test_fourier_auto_arima_factory_normalizes_trend_and_bool_like_strings(
         captured["information_criterion"] = information_criterion
         return np.zeros(int(horizon), dtype=float)
 
-    monkeypatch.setattr(registry_mod, "fourier_auto_arima_forecast", _fake_fourier_auto_arima_forecast)
+    monkeypatch.setattr(
+        registry_mod, "fourier_auto_arima_forecast", _fake_fourier_auto_arima_forecast
+    )
 
     yhat = make_forecaster(
         "fourier-auto-arima",
@@ -1197,7 +1199,9 @@ def test_uc_seasonal_factory_normalizes_seasonal_int(monkeypatch: pytest.MonkeyP
         captured["seasonal"] = seasonal
         return np.zeros(int(horizon), dtype=float)
 
-    monkeypatch.setattr(registry_mod, "unobserved_components_forecast", _fake_unobserved_components_forecast)
+    monkeypatch.setattr(
+        registry_mod, "unobserved_components_forecast", _fake_unobserved_components_forecast
+    )
 
     yhat = make_forecaster(
         "uc-seasonal",

@@ -94,11 +94,11 @@ def test_forecast_csv_can_emit_interval_quantile_columns(tmp_path: Path) -> None
 
     rows = json.loads(proc.stdout)
     assert len(rows) == 2
-    assert rows[0]["yhat"] == 5.0
-    assert rows[0]["yhat_lo_80"] == 6.0
-    assert rows[0]["yhat_hi_80"] == 6.0
-    assert rows[0]["yhat_lo_90"] == 6.0
-    assert rows[0]["yhat_hi_90"] == 6.0
+    assert rows[0]["yhat"] == pytest.approx(5.0)
+    assert rows[0]["yhat_lo_80"] == pytest.approx(6.0)
+    assert rows[0]["yhat_hi_80"] == pytest.approx(6.0)
+    assert rows[0]["yhat_lo_90"] == pytest.approx(6.0)
+    assert rows[0]["yhat_hi_90"] == pytest.approx(6.0)
 
 
 @pytest.mark.skipif(
@@ -562,11 +562,11 @@ def test_forecast_artifact_can_emit_interval_quantile_columns_for_local_artifact
 
     rows = json.loads(reuse_proc.stdout)
     assert len(rows) == 2
-    assert rows[0]["yhat"] == 5.0
-    assert rows[0]["yhat_lo_80"] == 6.0
-    assert rows[0]["yhat_hi_80"] == 6.0
-    assert rows[0]["yhat_lo_90"] == 6.0
-    assert rows[0]["yhat_hi_90"] == 6.0
+    assert rows[0]["yhat"] == pytest.approx(5.0)
+    assert rows[0]["yhat_lo_80"] == pytest.approx(6.0)
+    assert rows[0]["yhat_hi_80"] == pytest.approx(6.0)
+    assert rows[0]["yhat_lo_90"] == pytest.approx(6.0)
+    assert rows[0]["yhat_hi_90"] == pytest.approx(6.0)
 
 
 def test_forecast_artifact_rejects_unsupported_schema_version(tmp_path: Path) -> None:

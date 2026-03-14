@@ -24,7 +24,9 @@ def _small_panel_long_df() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_global_forecaster_object_requires_fit_before_predict() -> None:
     f = make_global_forecaster_object("ridge-step-lag-global", lags=5, alpha=1.0)
     assert isinstance(f, BaseGlobalForecaster)
@@ -33,7 +35,9 @@ def test_global_forecaster_object_requires_fit_before_predict() -> None:
         f.predict(pd.Timestamp("2020-01-20"), 2)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_global_forecaster_object_supports_fit_then_predict() -> None:
     long_df = _small_panel_long_df()
     cutoff = pd.Timestamp("2020-01-24")
@@ -48,7 +52,7 @@ def test_global_forecaster_object_supports_fit_then_predict() -> None:
     )
     assert f.fit(long_df) is f
     assert f.model_key == "ridge-step-lag-global"
-    assert f.model_params["alpha"] == 0.5
+    assert f.model_params["alpha"] == pytest.approx(0.5)
 
     pred = f.predict(cutoff, 2)
     expected = make_global_forecaster(

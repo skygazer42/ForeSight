@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from foresight.cli_leaderboard import _summarize_leaderboard_rows
 
 
@@ -79,17 +81,17 @@ def test_leaderboard_summarize_from_json_file(tmp_path: Path) -> None:
     mean_row = next(r for r in payload if r["model"] == "mean")
     assert mean_row["n_datasets"] == 2
     assert mean_row["n_datasets_total"] == 2
-    assert mean_row["dataset_coverage"] == 1.0
-    assert mean_row["mae_mean"] == 1.0
+    assert mean_row["dataset_coverage"] == pytest.approx(1.0)
+    assert mean_row["mae_mean"] == pytest.approx(1.0)
     # weighted mean over n_points: (0.5*10 + 1.5*30) / 40 = 1.25
     assert abs(float(mean_row["mae_wmean"]) - 1.25) < 1e-12
-    assert mean_row["mae_rank_mean"] == 1.0
-    assert mean_row["mae_rank_wmean"] == 1.0
-    assert mean_row["mae_rel_mean"] == 1.0
-    assert mean_row["mae_rel_wmean"] == 1.0
+    assert mean_row["mae_rank_mean"] == pytest.approx(1.0)
+    assert mean_row["mae_rank_wmean"] == pytest.approx(1.0)
+    assert mean_row["mae_rel_mean"] == pytest.approx(1.0)
+    assert mean_row["mae_rel_wmean"] == pytest.approx(1.0)
 
     naive_row = next(r for r in payload if r["model"] == "naive-last")
-    assert naive_row["mae_rank_mean"] == 2.0
+    assert naive_row["mae_rank_mean"] == pytest.approx(2.0)
     assert abs(float(naive_row["mae_rel_mean"]) - (5.0 / 3.0)) < 1e-12
     assert abs(float(naive_row["mae_rel_wmean"]) - 1.5) < 1e-12
 
@@ -242,8 +244,24 @@ def test_leaderboard_summarize_desc_sort_keeps_missing_last(tmp_path: Path) -> N
 
 def test_leaderboard_summarize_breaks_primary_sort_ties_with_mae_mean() -> None:
     rows = [
-        {"model": "b", "dataset": "d1", "mae": 2.0, "rmse": 1.0, "mape": 0.1, "smape": 0.2, "n_points": 10},
-        {"model": "a", "dataset": "d2", "mae": 1.0, "rmse": 1.0, "mape": 0.1, "smape": 0.2, "n_points": 10},
+        {
+            "model": "b",
+            "dataset": "d1",
+            "mae": 2.0,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+            "n_points": 10,
+        },
+        {
+            "model": "a",
+            "dataset": "d2",
+            "mae": 1.0,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+            "n_points": 10,
+        },
     ]
 
     summary = _summarize_leaderboard_rows(rows, sort="n_datasets", limit=0)
