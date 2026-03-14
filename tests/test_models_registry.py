@@ -338,6 +338,30 @@ def test_torch_local_catalog_exposes_deduplicated_param_help_strings() -> None:
     assert timesmamba.param_help["num_blocks"] == "Number of stacked state-space mixer blocks"
 
 
+def test_classical_catalog_exposes_shared_param_help_strings() -> None:
+    from foresight.models.catalog import classical as classical_catalog
+
+    holt = get_model_spec("holt")
+    holt_damped = get_model_spec("holt-damped")
+    holt_winters_add = get_model_spec("holt-winters-add")
+    holt_winters_mul = get_model_spec("holt-winters-mul")
+    theta_auto = get_model_spec("theta-auto")
+    croston = get_model_spec("croston")
+
+    assert classical_catalog._LEVEL_SMOOTHING_HELP == "Level smoothing in [0, 1]"
+    assert classical_catalog._TREND_SMOOTHING_HELP == "Trend smoothing in [0, 1]"
+    assert classical_catalog._SEASON_LENGTH_HELP == "Season length"
+    assert classical_catalog._ALPHA_GRID_SIZE_HELP == "Number of alpha values to try (default: 19)"
+    assert classical_catalog._SMOOTHING_PARAM_HELP == "Smoothing parameter in [0,1]"
+    assert holt.param_help["alpha"] == classical_catalog._LEVEL_SMOOTHING_HELP
+    assert holt.param_help["beta"] == classical_catalog._TREND_SMOOTHING_HELP
+    assert holt_damped.param_help["alpha"] == classical_catalog._LEVEL_SMOOTHING_HELP
+    assert holt_winters_add.param_help["season_length"] == classical_catalog._SEASON_LENGTH_HELP
+    assert holt_winters_mul.param_help["season_length"] == classical_catalog._SEASON_LENGTH_HELP
+    assert theta_auto.param_help["grid_size"] == classical_catalog._ALPHA_GRID_SIZE_HELP
+    assert croston.param_help["alpha"] == classical_catalog._SMOOTHING_PARAM_HELP
+
+
 def test_torch_multivariate_models_are_registered() -> None:
     keys = set(list_models())
     for key in TORCH_MULTIVARIATE_KEYS:
