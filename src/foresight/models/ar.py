@@ -12,6 +12,17 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _pop_legacy_keyword(kwargs: dict[str, Any], *, legacy_name: str, value: Any) -> Any:
+    if legacy_name in kwargs:
+        return kwargs.pop(legacy_name)
+    return value
+
+
+def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
+    if kwargs:
+        raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
+
+
 def ar_ols_forecast(train: Any, horizon: int, *, p: int) -> np.ndarray:
     """
     Autoregression AR(p) fit by OLS, forecast recursively.
@@ -121,8 +132,9 @@ def sar_ols_forecast(
     horizon: int,
     *,
     p: int = 1,
-    P: int = 1,
+    seasonal_p: int = 1,
     season_length: int = 12,
+    **kwargs: Any,
 ) -> np.ndarray:
     """
     Seasonal autoregression using OLS with both short and seasonal lags.
@@ -130,16 +142,19 @@ def sar_ols_forecast(
     Uses lags:
       1..p  and  season_length, 2*season_length, .., P*season_length
     """
+    seasonal_p = int(_pop_legacy_keyword(kwargs, legacy_name="P", value=seasonal_p))
+    _raise_unexpected_kwargs("sar_ols_forecast", kwargs)
+
     if p < 0:
         raise ValueError("p must be >= 0")
-    if P < 0:
+    if seasonal_p < 0:
         raise ValueError("P must be >= 0")
     if season_length <= 0:
         raise ValueError("season_length must be >= 1")
 
     lags: list[int] = []
     lags.extend(range(1, int(p) + 1))
-    lags.extend([int(season_length) * k for k in range(1, int(P) + 1)])
+    lags.extend([int(season_length) * k for k in range(1, int(seasonal_p) + 1)])
     if not lags:
         raise ValueError("At least one of p or P must be > 0")
 

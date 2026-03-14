@@ -24,6 +24,13 @@ def test_sar_ols_period2_seasonal_lag():
     assert np.allclose(yhat, np.array([1.0, 2.0]))
 
 
+def test_sar_ols_forecast_accepts_lowercase_seasonal_p_name():
+    y = np.array([1, 2, 1, 2, 1, 2, 1, 2], dtype=float)
+    yhat = sar_ols_forecast(y, 2, p=0, seasonal_p=1, season_length=2)
+    assert yhat.shape == (2,)
+    assert np.allclose(yhat, np.array([1.0, 2.0]))
+
+
 def test_select_ar_order_aic_finds_a_low_order_periodic_model():
     y = np.array([1, 2] * 30, dtype=float)
     p = select_ar_order_aic(y, max_p=5)

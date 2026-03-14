@@ -30,7 +30,11 @@ from foresight.models.regression import (
     rf_lag_direct_forecast,
     svr_lag_direct_forecast,
 )
-from foresight.docsgen.rnn import _metadata_primary_url, render_rnn_paper_zoo_doc, render_rnn_zoo_doc
+from foresight.docsgen.rnn import (
+    _metadata_primary_url,
+    render_rnn_paper_zoo_doc,
+    render_rnn_zoo_doc,
+)
 from foresight.models.regression import (
     _augment_lag_feat_row,
     _lgbm_validate_common_regressor_params,
@@ -53,9 +57,7 @@ from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
 from foresight.models.torch_xformer import torch_xformer_direct_forecast
 
 
-def _install_fake_statsmodels(
-    monkeypatch: pytest.MonkeyPatch, captured: dict[str, object]
-) -> None:
+def _install_fake_statsmodels(monkeypatch: pytest.MonkeyPatch, captured: dict[str, object]) -> None:
     statsmodels = types.ModuleType("statsmodels")
     tsa = types.ModuleType("statsmodels.tsa")
     holtwinters = types.ModuleType("statsmodels.tsa.holtwinters")
@@ -427,7 +429,7 @@ def _literal_occurrence_count(path: Path, literal: str) -> int:
 def test_literal_occurrence_count_matches_exact_string_literals_only(tmp_path: Path) -> None:
     path = tmp_path / "sample_strings.py"
     path.write_text(
-        '\n'.join(
+        "\n".join(
             [
                 'A = "channels must be >= 1"',
                 'B = "bottleneck_channels must be >= 1"',
@@ -720,12 +722,16 @@ def test_rf_step_lag_global_forecaster_sets_explicit_rf_defaults(
     captured: dict[str, list[dict[str, object]]] = {}
     _install_fake_sklearn(monkeypatch, captured)
 
-    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+    def _fake_run_point_global_model(
+        *args: object, fit_model: object, **kwargs: object
+    ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
         return {"ok": True}
 
-    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+    monkeypatch.setattr(
+        global_regression_mod, "_run_point_global_model", _fake_run_point_global_model
+    )
 
     forecaster = rf_step_lag_global_forecaster(lags=2, n_estimators=5)
     assert forecaster(None, None, 1) == {"ok": True}
@@ -741,12 +747,16 @@ def test_decision_tree_step_lag_global_forecaster_sets_explicit_ccp_alpha(
     captured: dict[str, list[dict[str, object]]] = {}
     _install_fake_sklearn(monkeypatch, captured)
 
-    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+    def _fake_run_point_global_model(
+        *args: object, fit_model: object, **kwargs: object
+    ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
         return {"ok": True}
 
-    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+    monkeypatch.setattr(
+        global_regression_mod, "_run_point_global_model", _fake_run_point_global_model
+    )
 
     forecaster = decision_tree_step_lag_global_forecaster(lags=2)
     assert forecaster(None, None, 1) == {"ok": True}
@@ -761,12 +771,16 @@ def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
     captured: dict[str, list[dict[str, object]]] = {}
     _install_fake_sklearn(monkeypatch, captured)
 
-    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+    def _fake_run_point_global_model(
+        *args: object, fit_model: object, **kwargs: object
+    ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
         return {"ok": True}
 
-    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+    monkeypatch.setattr(
+        global_regression_mod, "_run_point_global_model", _fake_run_point_global_model
+    )
 
     forecaster = svr_step_lag_global_forecaster(lags=2)
     assert forecaster(None, None, 1) == {"ok": True}
@@ -775,15 +789,51 @@ def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
     assert kwargs["kernel"] == "rbf"
 
 
+def test_global_svr_forecasters_accept_lowercase_c_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    def _fake_run_point_global_model(
+        *args: object, fit_model: object, **kwargs: object
+    ) -> dict[str, bool]:
+        assert callable(fit_model)
+        fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        global_regression_mod, "_run_point_global_model", _fake_run_point_global_model
+    )
+
+    svr_step_lag_global_forecaster(lags=2, c=1.5)(None, None, 1)
+    global_regression_mod.linear_svr_step_lag_global_forecaster(lags=2, c=2.5)(None, None, 1)
+
+    assert captured["SVR"][0]["C"] == 1.5
+    assert captured["LinearSVR"][0]["C"] == 2.5
+
+
 @pytest.mark.parametrize(
     ("factory_name", "kwargs", "message"),
     [
         ("ridge_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
         ("rf_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
         ("rf_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
-        ("extra_trees_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
-        ("extra_trees_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
-        ("decision_tree_step_lag_global_forecaster", {"max_depth": 0}, "max_depth must be >= 1 or None"),
+        (
+            "extra_trees_step_lag_global_forecaster",
+            {"n_estimators": 0},
+            "n_estimators must be >= 1",
+        ),
+        (
+            "extra_trees_step_lag_global_forecaster",
+            {"max_depth": 0},
+            "max_depth must be >= 1 or None",
+        ),
+        (
+            "decision_tree_step_lag_global_forecaster",
+            {"max_depth": 0},
+            "max_depth must be >= 1 or None",
+        ),
         ("gbrt_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
         ("gbrt_step_lag_global_forecaster", {"learning_rate": 0.0}, "learning_rate must be > 0"),
         ("lasso_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
@@ -804,7 +854,11 @@ def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
         ("sgd_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
         ("sgd_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
         ("adaboost_step_lag_global_forecaster", {"n_estimators": 0}, "n_estimators must be >= 1"),
-        ("adaboost_step_lag_global_forecaster", {"learning_rate": 0.0}, "learning_rate must be > 0"),
+        (
+            "adaboost_step_lag_global_forecaster",
+            {"learning_rate": 0.0},
+            "learning_rate must be > 0",
+        ),
         ("mlp_step_lag_global_forecaster", {"alpha": -0.1}, "alpha must be >= 0"),
         ("mlp_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
         ("hgb_step_lag_global_forecaster", {"max_iter": 0}, "max_iter must be >= 1"),
@@ -870,12 +924,16 @@ def test_tweedie_step_lag_global_forecaster_validates_targets_via_shared_helper(
 ) -> None:
     _install_fake_sklearn(monkeypatch, {})
 
-    def _fake_run_point_global_model(*args: object, fit_model: object, **kwargs: object) -> dict[str, bool]:
+    def _fake_run_point_global_model(
+        *args: object, fit_model: object, **kwargs: object
+    ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((3, 2), dtype=float), np.array([1.0, 0.0, 2.0], dtype=float))
         return {"ok": True}
 
-    monkeypatch.setattr(global_regression_mod, "_run_point_global_model", _fake_run_point_global_model)
+    monkeypatch.setattr(
+        global_regression_mod, "_run_point_global_model", _fake_run_point_global_model
+    )
 
     forecaster = global_regression_mod.tweedie_step_lag_global_forecaster(lags=2, power=1.5)
 
@@ -941,11 +999,31 @@ def test_global_step_lag_quantile_factories_normalize_valid_percentiles(
         ("rf_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
         ("rf_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
         ("lasso_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
-        ("decision_tree_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
-        ("extra_trees_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
-        ("adaboost_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        (
+            "decision_tree_lag_direct_forecast",
+            1,
+            {"lags": 2, "max_depth": 0},
+            "max_depth must be >= 1 or None",
+        ),
+        (
+            "extra_trees_lag_direct_forecast",
+            1,
+            {"lags": 2, "max_depth": 0},
+            "max_depth must be >= 1 or None",
+        ),
+        (
+            "adaboost_lag_direct_forecast",
+            1,
+            {"lags": 2, "n_estimators": 0},
+            "n_estimators must be >= 1",
+        ),
         ("hgb_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
-        ("hgb_lag_direct_forecast", 1, {"lags": 2, "max_depth": 0}, "max_depth must be >= 1 or None"),
+        (
+            "hgb_lag_direct_forecast",
+            1,
+            {"lags": 2, "max_depth": 0},
+            "max_depth must be >= 1 or None",
+        ),
         ("huber_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
         ("huber_lag_direct_forecast", 1, {"lags": 2, "max_iter": 0}, "max_iter must be >= 1"),
         ("quantile_lag_direct_forecast", 1, {"lags": 2, "alpha": -0.1}, "alpha must be >= 0"),
@@ -1013,16 +1091,31 @@ def test_make_lagged_xy_multi_reuses_horizon_min_error() -> None:
         ("knn_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
         ("gbrt_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("gbrt_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
-        ("gbrt_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        (
+            "gbrt_lag_direct_forecast",
+            1,
+            {"lags": 2, "n_estimators": 0},
+            "n_estimators must be >= 1",
+        ),
         ("ridge_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("decision_tree_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("decision_tree_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
         ("extra_trees_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("extra_trees_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
-        ("extra_trees_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        (
+            "extra_trees_lag_direct_forecast",
+            1,
+            {"lags": 2, "n_estimators": 0},
+            "n_estimators must be >= 1",
+        ),
         ("adaboost_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("adaboost_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
-        ("bagging_lag_direct_forecast", 1, {"lags": 2, "n_estimators": 0}, "n_estimators must be >= 1"),
+        (
+            "bagging_lag_direct_forecast",
+            1,
+            {"lags": 2, "n_estimators": 0},
+            "n_estimators must be >= 1",
+        ),
         ("bagging_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
         ("bagging_lag_direct_forecast", 1, {"lags": 0}, "lags must be >= 1"),
         ("hgb_lag_direct_forecast", 0, {"lags": 2}, "horizon must be >= 1"),
@@ -1066,14 +1159,22 @@ def test_regression_additional_forecasters_cover_recent_literal_refactors(
     [
         (_xgb_lag_direct_forecast, {"learning_rate": 0.0}, "learning_rate must be > 0"),
         (_xgb_lag_direct_forecast, {"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
-        (_xgb_lag_direct_forecast, {"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
+        (
+            _xgb_lag_direct_forecast,
+            {"colsample_bytree": 0.0},
+            "colsample_bytree must be in \\(0,1\\]",
+        ),
         (_xgb_lag_direct_forecast, {"reg_lambda": -1.0}, "reg_lambda must be >= 0"),
         (_xgb_lag_direct_forecast, {"min_child_weight": -1.0}, "min_child_weight must be >= 0"),
         (_xgb_lag_direct_forecast, {"gamma": -1.0}, "gamma must be >= 0"),
         (_xgb_lag_direct_forecast, {"n_jobs": 0}, "n_jobs must be non-zero"),
         (_xgb_lag_recursive_forecast, {"learning_rate": 0.0}, "learning_rate must be > 0"),
         (_xgb_lag_recursive_forecast, {"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
-        (_xgb_lag_recursive_forecast, {"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
+        (
+            _xgb_lag_recursive_forecast,
+            {"colsample_bytree": 0.0},
+            "colsample_bytree must be in \\(0,1\\]",
+        ),
         (_xgb_lag_recursive_forecast, {"reg_lambda": -1.0}, "reg_lambda must be >= 0"),
         (_xgb_lag_recursive_forecast, {"min_child_weight": -1.0}, "min_child_weight must be >= 0"),
         (_xgb_lag_recursive_forecast, {"gamma": -1.0}, "gamma must be >= 0"),
@@ -1194,6 +1295,31 @@ def test_svr_lag_direct_forecast_sets_explicit_kernel(
     assert kwargs["kernel"] == "rbf"
 
 
+def test_regression_svr_forecasters_accept_lowercase_c_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, list[dict[str, object]]] = {}
+    _install_fake_sklearn(monkeypatch, captured)
+
+    out_svr = regression_mod.svr_lag_direct_forecast(
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        2,
+        lags=2,
+        c=1.5,
+    )
+    out_linear = regression_mod.linear_svr_lag_direct_forecast(
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        2,
+        lags=2,
+        c=2.5,
+    )
+
+    assert out_svr.shape == (2,)
+    assert out_linear.shape == (2,)
+    assert captured["SVR"][0]["C"] == 1.5
+    assert captured["LinearSVR"][0]["C"] == 2.5
+
+
 def test_regression_source_extracts_repeated_xgb_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "regression.py"
     literals = [
@@ -1230,7 +1356,11 @@ def test_regression_source_extracts_repeated_xgb_literals() -> None:
 
 def test_global_regression_source_extracts_repeated_quantile_and_svr_literals() -> None:
     path = (
-        Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "global_regression.py"
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "foresight"
+        / "models"
+        / "global_regression.py"
     )
     literals = [
         "reg:squarederror",
@@ -1341,7 +1471,11 @@ def test_cv_source_extracts_repeated_n_windows_literal() -> None:
 
 def test_torch_rnn_paper_zoo_source_extracts_repeated_in_dim_literal() -> None:
     path = (
-        Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "torch_rnn_paper_zoo.py"
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "foresight"
+        / "models"
+        / "torch_rnn_paper_zoo.py"
     )
 
     assert _literal_occurrence_count(path, "in_dim must be >= 1") <= 1
@@ -1502,6 +1636,38 @@ def test_statsmodels_refactor_wrappers_cover_core_horizon_and_exog_paths(
         statsmodels_wrap_mod.auto_arima_forecast(train, 2, max_P=1, seasonal_period=1)
 
 
+def test_statsmodels_auto_arima_accepts_lowercase_seasonal_bound_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_statsmodels_suite(monkeypatch)
+    train = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=float)
+    train_exog = np.arange(10, dtype=float).reshape(5, 2)
+    future_exog = np.arange(4, dtype=float).reshape(2, 2)
+
+    assert statsmodels_wrap_mod.auto_arima_forecast(
+        train,
+        2,
+        max_seasonal_p=1,
+        max_seasonal_d=0,
+        max_seasonal_q=1,
+        seasonal_period=2,
+        train_exog=train_exog,
+        future_exog=future_exog,
+    ).shape == (2,)
+    out = statsmodels_wrap_mod.auto_arima_forecast_with_intervals(
+        train,
+        2,
+        interval_levels=(0.8,),
+        max_seasonal_p=1,
+        max_seasonal_d=0,
+        max_seasonal_q=1,
+        seasonal_period=2,
+        train_exog=train_exog,
+        future_exog=future_exog,
+    )
+    assert out["mean"].shape == (2,)
+
+
 def test_statsmodels_refactor_wrappers_cover_stl_and_fourier_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1533,7 +1699,9 @@ def test_statsmodels_refactor_wrappers_cover_mstl_and_tbats_paths(
     train = np.arange(1.0, 13.0, dtype=float)
 
     assert statsmodels_wrap_mod.mstl_arima_forecast(train, 2, periods=(2, 3)).shape == (2,)
-    assert statsmodels_wrap_mod.mstl_autoreg_forecast(train, 2, periods=(2, 3), lags=1).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_autoreg_forecast(train, 2, periods=(2, 3), lags=1).shape == (
+        2,
+    )
     assert statsmodels_wrap_mod.mstl_ets_forecast(train, 2, periods=(2, 3)).shape == (2,)
     assert statsmodels_wrap_mod.mstl_uc_forecast(train, 2, periods=(2, 3)).shape == (2,)
     assert statsmodels_wrap_mod.mstl_sarimax_forecast(train, 2, periods=(2, 3)).shape == (2,)
@@ -1622,7 +1790,9 @@ def test_build_parser_preserves_shared_help_texts() -> None:
     assert eval_run._option_string_actions["--model-param"].help == (
         "Model parameter as key=value (repeatable). Example: --model-param season_length=12"
     )
-    assert eval_run._option_string_actions["--output"].help == "Optional path to write metrics output"
+    assert (
+        eval_run._option_string_actions["--output"].help == "Optional path to write metrics output"
+    )
 
 
 def test_xgb_lag_direct_forecast_validates_labels_before_training(

@@ -27,6 +27,17 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _pop_legacy_keyword(kwargs: dict[str, Any], *, legacy_name: str, value: Any) -> Any:
+    if legacy_name in kwargs:
+        return kwargs.pop(legacy_name)
+    return value
+
+
+def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
+    if kwargs:
+        raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
+
+
 def _as_2d_float_array(values: Any, *, name: str) -> np.ndarray:
     arr = np.asarray(values, dtype=float)
     if arr.ndim == 1:
@@ -168,9 +179,9 @@ def _fit_auto_arima_best_result(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_P: int = 0,
-    max_D: int = 0,
-    max_Q: int = 0,
+    max_seasonal_p: int = 0,
+    max_seasonal_d: int = 0,
+    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
     trend: str | None = None,
     enforce_stationarity: bool = True,
@@ -192,7 +203,7 @@ def _fit_auto_arima_best_result(
         raise ValueError("auto_arima_forecast requires at least 5 training points")
     if int(max_p) < 0 or int(max_d) < 0 or int(max_q) < 0:
         raise ValueError("max_p/max_d/max_q must be >= 0")
-    if int(max_P) < 0 or int(max_D) < 0 or int(max_Q) < 0:
+    if int(max_seasonal_p) < 0 or int(max_seasonal_d) < 0 or int(max_seasonal_q) < 0:
         raise ValueError("max_P/max_D/max_Q must be >= 0")
 
     exog_train, exog_future = _validate_exog_pair(
@@ -207,7 +218,9 @@ def _fit_auto_arima_best_result(
         if seasonal_period is None or str(seasonal_period).strip().lower() in {"none", "null", ""}
         else int(seasonal_period)
     )
-    if seasonal_period_int is None and any(int(v) > 0 for v in (max_P, max_D, max_Q)):
+    if seasonal_period_int is None and any(
+        int(v) > 0 for v in (max_seasonal_p, max_seasonal_d, max_seasonal_q)
+    ):
         raise ValueError("seasonal_period must be provided when max_P/max_D/max_Q are non-zero")
     if seasonal_period_int is not None and seasonal_period_int <= 1:
         raise ValueError("seasonal_period must be at least 2")
@@ -216,7 +229,9 @@ def _fit_auto_arima_best_result(
     if ic_key not in {"aic", "bic"}:
         raise ValueError("information_criterion must be 'aic' or 'bic'")
 
-    trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
     allow_zero_order = exog_train is not None or trend_final not in {None, "n"}
 
     best_ic = float("inf")
@@ -230,9 +245,9 @@ def _fit_auto_arima_best_result(
                     if seasonal_period_int is None
                     else [
                         (P, D, Q, seasonal_period_int)
-                        for P in range(0, int(max_P) + 1)
-                        for D in range(0, int(max_D) + 1)
-                        for Q in range(0, int(max_Q) + 1)
+                        for P in range(0, int(max_seasonal_p) + 1)
+                        for D in range(0, int(max_seasonal_d) + 1)
+                        for Q in range(0, int(max_seasonal_q) + 1)
                     ]
                 )
                 for P, D, Q, s in seasonal_grid:
@@ -539,7 +554,9 @@ def stl_ets_forecast(
         raise ValueError("stl_ets_forecast requires at least 3 training points")
     _validate_period_at_least_two(period)
 
-    trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
     stlf = STLForecast(
         x,
         ExponentialSmoothing,
@@ -774,9 +791,9 @@ def auto_arima_forecast(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_P: int = 0,
-    max_D: int = 0,
-    max_Q: int = 0,
+    max_seasonal_p: int = 0,
+    max_seasonal_d: int = 0,
+    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
     trend: str | None = None,
     enforce_stationarity: bool = True,
@@ -784,6 +801,7 @@ def auto_arima_forecast(
     train_exog: Any | None = None,
     future_exog: Any | None = None,
     information_criterion: str = "aic",
+    **kwargs: Any,
 ) -> np.ndarray:
     """
     Lightweight AutoARIMA-style grid search via statsmodels ARIMA (optional dependency).
@@ -791,15 +809,20 @@ def auto_arima_forecast(
     This tries orders in a small (p,d,q) grid, optionally with seasonal
     (P,D,Q,s), and selects the best by AIC/BIC.
     """
+    max_seasonal_p = int(_pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p))
+    max_seasonal_d = int(_pop_legacy_keyword(kwargs, legacy_name="max_D", value=max_seasonal_d))
+    max_seasonal_q = int(_pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q))
+    _raise_unexpected_kwargs("auto_arima_forecast", kwargs)
+
     best_res, exog_future = _fit_auto_arima_best_result(
         train,
         horizon,
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
-        max_P=max_P,
-        max_D=max_D,
-        max_Q=max_Q,
+        max_seasonal_p=max_seasonal_p,
+        max_seasonal_d=max_seasonal_d,
+        max_seasonal_q=max_seasonal_q,
         seasonal_period=seasonal_period,
         trend=trend,
         enforce_stationarity=enforce_stationarity,
@@ -823,9 +846,9 @@ def auto_arima_forecast_with_intervals(
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_P: int = 0,
-    max_D: int = 0,
-    max_Q: int = 0,
+    max_seasonal_p: int = 0,
+    max_seasonal_d: int = 0,
+    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
     trend: str | None = None,
     enforce_stationarity: bool = True,
@@ -833,16 +856,22 @@ def auto_arima_forecast_with_intervals(
     train_exog: Any | None = None,
     future_exog: Any | None = None,
     information_criterion: str = "aic",
+    **kwargs: Any,
 ) -> dict[str, Any]:
+    max_seasonal_p = int(_pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p))
+    max_seasonal_d = int(_pop_legacy_keyword(kwargs, legacy_name="max_D", value=max_seasonal_d))
+    max_seasonal_q = int(_pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q))
+    _raise_unexpected_kwargs("auto_arima_forecast_with_intervals", kwargs)
+
     best_res, exog_future = _fit_auto_arima_best_result(
         train,
         horizon,
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
-        max_P=max_P,
-        max_D=max_D,
-        max_Q=max_Q,
+        max_seasonal_p=max_seasonal_p,
+        max_seasonal_d=max_seasonal_d,
+        max_seasonal_q=max_seasonal_q,
         seasonal_period=seasonal_period,
         trend=trend,
         enforce_stationarity=enforce_stationarity,
@@ -1154,7 +1183,9 @@ def fourier_ets_forecast(
     fitted = X @ coef
     resid = x - fitted
 
-    trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
     resid_model = ExponentialSmoothing(
         resid,
         trend=trend_final,
@@ -1466,7 +1497,9 @@ def mstl_ets_forecast(
     seasonal_sum = np.sum(seasonal, axis=1)
     y_adj = x - seasonal_sum
 
-    trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
     model = ExponentialSmoothing(
         y_adj,
         trend=trend_final,
@@ -1933,7 +1966,9 @@ def tbats_lite_ets_forecast(
     fitted = X @ coef
     resid = x_work - fitted
 
-    trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
     resid_model = ExponentialSmoothing(
         resid,
         trend=trend_final,

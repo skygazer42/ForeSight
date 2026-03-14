@@ -33,6 +33,12 @@ def _is_effectively_one(value: float) -> bool:
     return math.isclose(float(value), 1.0, rel_tol=0.0, abs_tol=1e-12)
 
 
+def _pop_legacy_keyword(params: dict[str, Any], *, legacy_name: str, value: Any) -> Any:
+    if legacy_name in params:
+        return params.pop(legacy_name)
+    return value
+
+
 def _validate_tweedie_targets(*, power: float, y_train: np.ndarray) -> None:
     power_f = float(power)
     power_is_one = _is_effectively_one(power_f)
@@ -1213,7 +1219,7 @@ def kernel_ridge_step_lag_global_forecaster(
 def svr_step_lag_global_forecaster(
     *,
     lags: int = 24,
-    C: float = 1.0,
+    c: float = 1.0,
     gamma: str | float = "scale",
     epsilon: float = 0.1,
     roll_windows: Any = (),
@@ -1236,7 +1242,7 @@ def svr_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    c_value = float(C)
+    c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
     epsilon_f = float(epsilon)
     if isinstance(gamma, str):
         gamma_s = gamma.strip().lower()
@@ -1286,7 +1292,7 @@ def svr_step_lag_global_forecaster(
 def linear_svr_step_lag_global_forecaster(
     *,
     lags: int = 24,
-    C: float = 1.0,
+    c: float = 1.0,
     epsilon: float = 0.0,
     max_iter: int = 5000,
     random_state: int = 0,
@@ -1310,7 +1316,7 @@ def linear_svr_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    c_value = float(C)
+    c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
     epsilon_f = float(epsilon)
     max_iter_int = int(max_iter)
     random_state_int = int(random_state)
@@ -1660,7 +1666,7 @@ def omp_step_lag_global_forecaster(
 def passive_aggressive_step_lag_global_forecaster(
     *,
     lags: int = 24,
-    C: float = 1.0,
+    c: float = 1.0,
     loss: str = "epsilon_insensitive",
     epsilon: float = 0.1,
     max_iter: int = 1000,
@@ -1685,7 +1691,7 @@ def passive_aggressive_step_lag_global_forecaster(
         ) from e
 
     lags_int = int(lags)
-    c_value = float(C)
+    c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
     loss_s = str(loss).strip().lower()
     epsilon_f = float(epsilon)
     max_iter_int = int(max_iter)

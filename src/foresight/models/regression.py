@@ -43,6 +43,17 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _pop_legacy_keyword(kwargs: dict[str, Any], *, legacy_name: str, value: Any) -> Any:
+    if legacy_name in kwargs:
+        return kwargs.pop(legacy_name)
+    return value
+
+
+def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
+    if kwargs:
+        raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
+
+
 def _wants_lag_derived_features(*, roll_windows: Any, roll_stats: Any, diff_lags: Any) -> bool:
     return bool(roll_windows) or bool(roll_stats) or bool(diff_lags)
 
@@ -1282,7 +1293,7 @@ def svr_lag_direct_forecast(
     horizon: int,
     *,
     lags: int,
-    C: float = 1.0,
+    c: float = 1.0,
     gamma: str | float = "scale",
     epsilon: float = 0.1,
     roll_windows: Any = (),
@@ -1292,6 +1303,7 @@ def svr_lag_direct_forecast(
     seasonal_diff_lags: Any = (),
     fourier_periods: Any = (),
     fourier_orders: Any = 2,
+    **kwargs: Any,
 ) -> np.ndarray:
     """
     Direct multi-horizon SVR (RBF) on lag features (requires scikit-learn).
@@ -1305,11 +1317,13 @@ def svr_lag_direct_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
+    c_value = float(_pop_legacy_keyword(kwargs, legacy_name="C", value=c))
+    _raise_unexpected_kwargs("svr_lag_direct_forecast", kwargs)
     if horizon <= 0:
         raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if float(C) <= 0:
+    if c_value <= 0:
         raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
         raise ValueError(SVR_EPSILON_ERROR)
@@ -1330,7 +1344,7 @@ def svr_lag_direct_forecast(
         t_index=t_idx,
         series=x,
     )
-    base = SVR(C=float(C), gamma=gamma, epsilon=float(epsilon), kernel="rbf")
+    base = SVR(C=c_value, gamma=gamma, epsilon=float(epsilon), kernel="rbf")
     model = MultiOutputRegressor(base)
     model.fit(X, Y)
 
@@ -1356,7 +1370,7 @@ def linear_svr_lag_direct_forecast(
     horizon: int,
     *,
     lags: int,
-    C: float = 1.0,
+    c: float = 1.0,
     epsilon: float = 0.0,
     max_iter: int = 5000,
     random_state: int = 0,
@@ -1367,6 +1381,7 @@ def linear_svr_lag_direct_forecast(
     seasonal_diff_lags: Any = (),
     fourier_periods: Any = (),
     fourier_orders: Any = 2,
+    **kwargs: Any,
 ) -> np.ndarray:
     """
     Direct multi-horizon LinearSVR on lag features (requires scikit-learn).
@@ -1380,11 +1395,13 @@ def linear_svr_lag_direct_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
+    c_value = float(_pop_legacy_keyword(kwargs, legacy_name="C", value=c))
+    _raise_unexpected_kwargs("linear_svr_lag_direct_forecast", kwargs)
     if horizon <= 0:
         raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if float(C) <= 0:
+    if c_value <= 0:
         raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
         raise ValueError(SVR_EPSILON_ERROR)
@@ -1408,7 +1425,7 @@ def linear_svr_lag_direct_forecast(
         series=x,
     )
     base = LinearSVR(
-        C=float(C),
+        C=c_value,
         epsilon=float(epsilon),
         max_iter=int(max_iter),
         random_state=int(random_state),
