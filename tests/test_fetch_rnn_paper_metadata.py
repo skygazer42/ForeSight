@@ -12,21 +12,29 @@ def _load_tool():
     return runpy.run_path(root / "tools" / "fetch_rnn_paper_metadata.py")
 
 
-def test_resolve_output_path_keeps_repo_relative_paths_under_repo_root() -> None:
+def test_resolve_output_path_anchors_safe_filenames_under_docs_dir() -> None:
     mod = _load_tool()
     resolve_output_path = mod["_resolve_output_path"]
     repo_root = Path(__file__).resolve().parents[1]
 
-    resolved = resolve_output_path("docs/custom-metadata.json")
+    resolved = resolve_output_path("custom-metadata.json")
 
     assert resolved == repo_root / "docs" / "custom-metadata.json"
+
+
+def test_resolve_output_path_rejects_nested_paths() -> None:
+    mod = _load_tool()
+    resolve_output_path = mod["_resolve_output_path"]
+
+    with pytest.raises(ValueError, match="filename inside docs"):
+        resolve_output_path("docs/custom-metadata.json")
 
 
 def test_resolve_output_path_rejects_repo_escape() -> None:
     mod = _load_tool()
     resolve_output_path = mod["_resolve_output_path"]
 
-    with pytest.raises(ValueError, match="inside the repository root"):
+    with pytest.raises(ValueError, match="filename inside docs"):
         resolve_output_path("../escaped.json")
 
 
@@ -42,7 +50,7 @@ def test_main_resolves_output_path_before_fetching(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         sys,
         "argv",
-        ["fetch_rnn_paper_metadata.py", "--output", "docs/cli-metadata.json"],
+        ["fetch_rnn_paper_metadata.py", "--output", "cli-metadata.json"],
     )
 
     assert mod["main"]() == 0

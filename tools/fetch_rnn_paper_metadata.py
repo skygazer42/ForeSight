@@ -46,15 +46,17 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _resolve_output_path(output: str | Path) -> Path:
-    root = _repo_root().resolve(strict=False)
-    raw = Path(output)
-    candidate = raw if raw.is_absolute() else (root / raw)
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"output path must stay inside the repository root: {root}") from exc
-    return resolved
+    name = str(output).strip()
+    candidate = Path(name)
+    if (
+        not name
+        or candidate.is_absolute()
+        or len(candidate.parts) != 1
+        or candidate.name != name
+        or re.fullmatch(r"[A-Za-z0-9._-]+\.json", name) is None
+    ):
+        raise ValueError("output must be a JSON filename inside docs/")
+    return _repo_root().resolve(strict=False) / "docs" / candidate.name
 
 
 def _parse_desc(desc: str) -> tuple[str, list[str], int | None]:
@@ -774,8 +776,8 @@ def main() -> int:
     ap.add_argument(
         "--output",
         type=str,
-        default=str(_repo_root() / "docs" / "rnn_paper_metadata.json"),
-        help="Output JSON path (default: docs/rnn_paper_metadata.json)",
+        default="rnn_paper_metadata.json",
+        help="Output JSON filename under docs/ (default: rnn_paper_metadata.json)",
     )
     ap.add_argument(
         "--refresh",
