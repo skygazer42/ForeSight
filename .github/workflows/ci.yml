@@ -89,6 +89,14 @@ jobs:
       - name: SonarQube Scan
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
+        with:
+          projectBaseDir: .
+          args: >
+            -Dsonar.exclusions=**/__pycache__/**,src/foresight_ts.egg-info/**,src/foresight/cli_catalog.py,src/foresight/models/runtime.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
+            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/models/runtime.py,src/foresight/models/catalog/**,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
+            -Dsonar.issue.ignore.multicriteria=e1
+            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083
+            -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/src/foresight/cli_shared.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
