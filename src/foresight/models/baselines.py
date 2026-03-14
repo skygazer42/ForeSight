@@ -4,6 +4,10 @@ from typing import Any
 
 import numpy as np
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+WINDOW_MIN_ERROR = "window must be >= 1"
+SEASON_LENGTH_MIN_ERROR = "season_length must be >= 1"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -15,7 +19,7 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
 def mean_forecast(train: Any, horizon: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("mean_forecast requires at least 1 training point")
     m = float(np.mean(x))
@@ -25,7 +29,7 @@ def mean_forecast(train: Any, horizon: int) -> np.ndarray:
 def median_forecast(train: Any, horizon: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("median_forecast requires at least 1 training point")
     m = float(np.median(x))
@@ -41,7 +45,7 @@ def drift_forecast(train: Any, horizon: int) -> np.ndarray:
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size < 2:
         raise ValueError("drift_forecast requires at least 2 training points")
     slope = (float(x[-1]) - float(x[0])) / float(x.size - 1)
@@ -52,9 +56,9 @@ def drift_forecast(train: Any, horizon: int) -> np.ndarray:
 def moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if window <= 0:
-        raise ValueError("window must be >= 1")
+        raise ValueError(WINDOW_MIN_ERROR)
     if x.size < window:
         raise ValueError(f"moving_average_forecast requires at least {window} points, got {x.size}")
 
@@ -65,9 +69,9 @@ def moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndar
 def weighted_moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if window <= 0:
-        raise ValueError("window must be >= 1")
+        raise ValueError(WINDOW_MIN_ERROR)
     if x.size < window:
         raise ValueError(
             f"weighted_moving_average_forecast requires at least {window} points, got {x.size}"
@@ -81,9 +85,9 @@ def weighted_moving_average_forecast(train: Any, horizon: int, *, window: int) -
 def moving_median_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if window <= 0:
-        raise ValueError("window must be >= 1")
+        raise ValueError(WINDOW_MIN_ERROR)
     if x.size < window:
         raise ValueError(f"moving_median_forecast requires at least {window} points, got {x.size}")
 
@@ -101,9 +105,9 @@ def seasonal_mean_forecast(train: Any, horizon: int, *, season_length: int) -> n
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < season_length:
         raise ValueError(
             f"seasonal_mean_forecast requires at least {season_length} points, got {x.size}"
@@ -126,9 +130,9 @@ def seasonal_drift_forecast(train: Any, horizon: int, *, season_length: int) -> 
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < 2 * season_length:
         raise ValueError(
             "seasonal_drift_forecast requires at least two full seasons "

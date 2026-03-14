@@ -8,6 +8,8 @@ from ..features.lag import build_seasonal_lag_features, make_lagged_xy
 from ..features.tabular import build_lag_derived_features, normalize_int_tuple, normalize_lag_steps
 from ..features.time import build_fourier_features
 
+TARGET_LAGS_MIN_ERROR = "target_lags must be >= 1"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -39,7 +41,7 @@ def _compute_feature_start_t(*, lags: Any, seasonal_lags: Any, seasonal_diff_lag
     """
     lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if not lag_steps:
-        raise ValueError("target_lags must be >= 1")
+        raise ValueError(TARGET_LAGS_MIN_ERROR)
     start_t = int(max(lag_steps))
 
     seas = normalize_int_tuple(seasonal_lags)
@@ -60,7 +62,7 @@ def _make_target_feat_row(history: Any, *, lags: Any) -> np.ndarray:
     x = _as_1d_float_array(history)
     lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if not lag_steps:
-        raise ValueError("target_lags must be >= 1")
+        raise ValueError(TARGET_LAGS_MIN_ERROR)
 
     t_next = int(x.size)
     max_lag = int(max(lag_steps))
@@ -267,7 +269,7 @@ def _make_lagged_xy_multi(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
     if not lag_steps:
-        raise ValueError("target_lags must be >= 1")
+        raise ValueError(TARGET_LAGS_MIN_ERROR)
 
     t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
     if n < t0 + h:

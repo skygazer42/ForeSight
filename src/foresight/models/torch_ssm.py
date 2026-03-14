@@ -13,6 +13,10 @@ from .torch_nn import (
     _train_loop,
 )
 
+DMODEL_MIN_ERROR = "d_model must be >= 1"
+NUM_LAYERS_MIN_ERROR = "num_layers must be >= 1"
+DROPOUT_RANGE_ERROR = "dropout must be in [0,1)"
+
 
 def _fit_local_sequence_model(
     train: Any,
@@ -92,11 +96,11 @@ def torch_s4d_direct_forecast(
     layers = int(num_layers)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(DMODEL_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -210,13 +214,13 @@ def torch_mamba2_direct_forecast(
     k = int(conv_kernel)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(DMODEL_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if k <= 0:
         raise ValueError("conv_kernel must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -336,13 +340,13 @@ def torch_s4_direct_forecast(
     sdim = int(state_dim)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(DMODEL_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if sdim <= 0:
         raise ValueError("state_dim must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -459,15 +463,15 @@ def torch_s5_direct_forecast(
     n_heads = int(heads)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(DMODEL_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if sdim <= 0:
         raise ValueError("state_dim must be >= 1")
     if n_heads <= 0:
         raise ValueError("heads must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),

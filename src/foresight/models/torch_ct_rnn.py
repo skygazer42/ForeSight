@@ -13,6 +13,12 @@ from .torch_nn import (
     _train_loop,
 )
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+LAGS_MIN_ERROR = "lags must be >= 1"
+HIDDEN_SIZE_MIN_ERROR = "hidden_size must be >= 1"
+NUM_LAYERS_MIN_ERROR = "num_layers must be >= 1"
+DROPOUT_RANGE_ERROR = "dropout must be in [0,1)"
+
 
 def torch_lmu_direct_forecast(
     train: Any,
@@ -56,17 +62,17 @@ def torch_lmu_direct_forecast(
     layers = int(num_layers)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if d <= 0:
         raise ValueError("d_model must be >= 1")
     if mem_dim <= 0:
         raise ValueError("memory_dim must be >= 1")
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
@@ -183,15 +189,15 @@ def torch_ltc_direct_forecast(
     layers = int(num_layers)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(HIDDEN_SIZE_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
@@ -310,17 +316,17 @@ def torch_cfc_direct_forecast(
     bb = int(backbone_hidden)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(HIDDEN_SIZE_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if bb <= 0:
         raise ValueError("backbone_hidden must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
@@ -442,17 +448,17 @@ def torch_xlstm_direct_forecast(
     expand = int(proj_factor)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(HIDDEN_SIZE_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if expand <= 0:
         raise ValueError("proj_factor must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
@@ -579,17 +585,17 @@ def torch_griffin_direct_forecast(
     k = int(conv_kernel)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(HIDDEN_SIZE_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if k <= 0:
         raise ValueError("conv_kernel must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
@@ -711,17 +717,17 @@ def torch_hawk_direct_forecast(
     exp = int(expansion_factor)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
+        raise ValueError(HIDDEN_SIZE_MIN_ERROR)
     if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
+        raise ValueError(NUM_LAYERS_MIN_ERROR)
     if exp <= 0:
         raise ValueError("expansion_factor must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = 0.0
