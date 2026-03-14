@@ -468,6 +468,47 @@ def test_global_regression_source_extracts_repeated_quantile_and_svr_literals() 
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_docsgen_rnn_source_extracts_repeated_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "docsgen" / "rnn.py"
+    literals = [
+        "rnn_paper_metadata.json",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_generate_model_capability_docs_source_extracts_repeated_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "tools" / "generate_model_capability_docs.py"
+    literals = [
+        "Core classes",
+        "Data preparation",
+        "Hierarchical forecasting",
+        "Intervals and tuning",
+        "foresight.data",
+        "foresight.eval_forecast",
+        "foresight.serialization",
+        "foresight.models.registry",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
+def test_fetch_rnn_paper_metadata_source_extracts_repeated_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "tools" / "fetch_rnn_paper_metadata.py"
+    literals = [
+        "ForeSight-metadata/0.1",
+        r"[^a-z0-9]+",
+        "An Empirical Exploration of Recurrent Network Architectures",
+        "https://proceedings.mlr.press/v37/jozefowicz15.html",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
 def test_xgb_lag_direct_forecast_validates_labels_before_training(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

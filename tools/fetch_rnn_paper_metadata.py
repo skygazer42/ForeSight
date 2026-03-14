@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+METADATA_USER_AGENT = "ForeSight-metadata/0.1"
+SLUG_SPLIT_REGEX = r"[^a-z0-9]+"
+JOZEFOWICZ_MUTATION_TITLE = "An Empirical Exploration of Recurrent Network Architectures"
+JOZEFOWICZ_MUTATION_URL = "https://proceedings.mlr.press/v37/jozefowicz15.html"
+
 
 def _repo_root() -> Path:
     # tools/fetch_rnn_paper_metadata.py -> repo root is parent of tools/
@@ -131,13 +136,13 @@ def _expand_name_for_title_search(name: str) -> list[str]:
 
 
 def _http_get_json(url: str, *, headers: dict[str, str] | None = None, timeout: int = 30) -> Any:
-    req = urllib.request.Request(url, headers=headers or {"User-Agent": "ForeSight-metadata/0.1"})
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": METADATA_USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.load(resp)
 
 
 def _http_get_text(url: str, *, headers: dict[str, str] | None = None, timeout: int = 30) -> str:
-    req = urllib.request.Request(url, headers=headers or {"User-Agent": "ForeSight-metadata/0.1"})
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": METADATA_USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
@@ -285,7 +290,7 @@ def _score_arxiv_hit(
             score += 1.0
 
     # Token overlap.
-    name_tokens = [t for t in re.split(r"[^a-z0-9]+", name.lower()) if t and len(t) >= 3]
+    name_tokens = [t for t in re.split(SLUG_SPLIT_REGEX, name.lower()) if t and len(t) >= 3]
     if name_tokens:
         overlap = sum(1 for t in set(name_tokens) if t in title_l)
         score += 0.4 * float(overlap)
@@ -361,7 +366,7 @@ def _crossref_query(query: str, *, year: int | None, rows: int = 5) -> list[Cros
     if year is not None:
         params["filter"] = f"from-pub-date:{int(year)}-01-01,until-pub-date:{int(year)}-12-31"
     url = "https://api.crossref.org/works?" + urllib.parse.urlencode(params)
-    data = _http_get_json(url, headers={"User-Agent": "ForeSight-metadata/0.1"}, timeout=30)
+    data = _http_get_json(url, headers={"User-Agent": METADATA_USER_AGENT}, timeout=30)
 
     out: list[CrossrefHit] = []
     for it in data.get("message", {}).get("items", []):
@@ -423,7 +428,7 @@ def _score_crossref_hit(
 
     if expected_title:
         et = expected_title.lower()
-        etoks = {t for t in re.split(r"[^a-z0-9]+", et) if t and len(t) >= 3}
+        etoks = {t for t in re.split(SLUG_SPLIT_REGEX, et) if t and len(t) >= 3}
         overlap = sum(1 for t in etoks if t in title_l)
         score += 0.3 * float(overlap)
     else:
@@ -438,7 +443,7 @@ def _score_crossref_hit(
 
 
 def _title_token_set(title: str) -> set[str]:
-    return {t for t in re.split(r"[^a-z0-9]+", str(title).lower()) if t and len(t) >= 3}
+    return {t for t in re.split(SLUG_SPLIT_REGEX, str(title).lower()) if t and len(t) >= 3}
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
@@ -568,9 +573,9 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
         "janet": "The unreasonable effectiveness of the forget gate",
         "layer-normalization": "Layer Normalization",
         # Multiple named variants in a single source paper.
-        "mut1": "An Empirical Exploration of Recurrent Network Architectures",
-        "mut2": "An Empirical Exploration of Recurrent Network Architectures",
-        "mut3": "An Empirical Exploration of Recurrent Network Architectures",
+        "mut1": JOZEFOWICZ_MUTATION_TITLE,
+        "mut2": JOZEFOWICZ_MUTATION_TITLE,
+        "mut3": JOZEFOWICZ_MUTATION_TITLE,
         "neural-turing-machine": "Neural Turing Machines",
         "differentiable-neural-computer": "Hybrid computing using a neural network with dynamic external memory",
         "pointer-sentinel-mixture": "Pointer Sentinel Mixture Models",
@@ -597,9 +602,9 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
         # Gers et al. (2002) is a JMLR paper (no DOI); use the canonical JMLR landing page.
         "peephole-lstm": "https://www.jmlr.org/papers/v3/gers02a.html",
         # Józefowicz et al. (2015) ICML / PMLR (no DOI); use proceedings landing page.
-        "mut1": "https://proceedings.mlr.press/v37/jozefowicz15.html",
-        "mut2": "https://proceedings.mlr.press/v37/jozefowicz15.html",
-        "mut3": "https://proceedings.mlr.press/v37/jozefowicz15.html",
+        "mut1": JOZEFOWICZ_MUTATION_URL,
+        "mut2": JOZEFOWICZ_MUTATION_URL,
+        "mut3": JOZEFOWICZ_MUTATION_URL,
         # Jaeger (2001) GMD report hosted on Fraunhofer's publica.
         "echo-state-network": "https://publica.fraunhofer.de/handle/publica/291207",
     }

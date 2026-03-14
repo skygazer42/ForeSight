@@ -6,13 +6,16 @@ import re
 import urllib.parse
 from pathlib import Path
 
+RNN_PAPER_METADATA_FILENAME = "rnn_paper_metadata.json"
+RNN_DOC_TABLE_RULE = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+
 
 def _find_repo_root_from(start: Path) -> Path | None:
     """
     Best-effort repo root detector for source checkouts.
 
     We want a stable root for:
-      - `docs/rnn_paper_metadata.json`
+      - docs metadata JSON
       - `src/foresight/models/*.py` anchor lookup
     """
 
@@ -144,10 +147,10 @@ def _read_rnn_paper_metadata() -> dict[str, dict[str, object]]:
 
     root = _repo_root()
     if root is not None:
-        candidates.append(root / "docs" / "rnn_paper_metadata.json")
+        candidates.append(root / "docs" / RNN_PAPER_METADATA_FILENAME)
 
-    candidates.append(Path.cwd() / "docs" / "rnn_paper_metadata.json")
-    candidates.append(_package_root() / "data" / "rnn_paper_metadata.json")
+    candidates.append(Path.cwd() / "docs" / RNN_PAPER_METADATA_FILENAME)
+    candidates.append(_package_root() / "data" / RNN_PAPER_METADATA_FILENAME)
 
     for path in candidates:
         if not (path.exists() and path.is_file()):
@@ -304,7 +307,7 @@ def render_rnn_paper_zoo_doc() -> str:
     lines.append(
         "| paper_id | model_key | architecture (as in code) | paper_title | year | DOI | arXiv | URL | implementation | Semantic Scholar | Crossref |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append(RNN_DOC_TABLE_RULE)
     for paper_id, desc in _PAPER_DEFS:
         key = f"torch-rnnpaper-{paper_id}-direct"
         m = meta.get(paper_id, {})
@@ -383,7 +386,7 @@ def render_rnn_zoo_doc() -> str:
     lines.append(
         "| base | description | paper_id | paper_title | year | DOI | arXiv | URL | implementation | Semantic Scholar | Crossref |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append(RNN_DOC_TABLE_RULE)
     for base, desc in _BASE_DESCRIPTIONS.items():
         paper_id = _rnnzoo_base_to_paper_id(base)
         m = meta.get(paper_id, {})
@@ -407,7 +410,7 @@ def render_rnn_zoo_doc() -> str:
     lines.append(
         "| variant | description | paper_id | paper_title | year | DOI | arXiv | URL | implementation | Semantic Scholar | Crossref |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append(RNN_DOC_TABLE_RULE)
     for v, desc in _VARIANT_DESCRIPTIONS.items():
         impl = _rnnzoo_variant_impl_anchor(v)
         if v == "direct":

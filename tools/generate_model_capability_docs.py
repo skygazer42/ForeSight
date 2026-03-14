@@ -8,6 +8,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+GROUP_CORE_CLASSES = "Core classes"
+GROUP_DATA_PREPARATION = "Data preparation"
+GROUP_HIERARCHICAL_FORECASTING = "Hierarchical forecasting"
+GROUP_INTERVALS_AND_TUNING = "Intervals and tuning"
+SOURCE_FORESIGHT_DATA = "foresight.data"
+SOURCE_FORESIGHT_EVAL_FORECAST = "foresight.eval_forecast"
+SOURCE_FORESIGHT_SERIALIZATION = "foresight.serialization"
+SOURCE_FORESIGHT_MODELS_REGISTRY = "foresight.models.registry"
+
 _CAPABILITY_DESCRIPTIONS: dict[str, str] = {
     "requires_future_covariates": "Model expects known future covariates rather than treating them as optional.",
     "supports_artifact_save": "Model can be persisted and restored through the artifact save/load workflow.",
@@ -18,13 +27,13 @@ _CAPABILITY_DESCRIPTIONS: dict[str, str] = {
 }
 
 _API_GROUP_ORDER = [
-    "Core classes",
+    GROUP_CORE_CLASSES,
     "Forecasting",
     "Evaluation",
     "Artifacts",
-    "Data preparation",
-    "Hierarchical forecasting",
-    "Intervals and tuning",
+    GROUP_DATA_PREPARATION,
+    GROUP_HIERARCHICAL_FORECASTING,
+    GROUP_INTERVALS_AND_TUNING,
     "Package metadata",
 ]
 
@@ -35,48 +44,48 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "purpose": "Installed ForeSight package version.",
     },
     "BaseForecaster": {
-        "group": "Core classes",
+        "group": GROUP_CORE_CLASSES,
         "source": "foresight.base",
         "purpose": "Stateful local forecaster base class with fit/predict helpers.",
     },
     "BaseGlobalForecaster": {
-        "group": "Core classes",
+        "group": GROUP_CORE_CLASSES,
         "source": "foresight.base",
         "purpose": "Stateful panel/global forecaster base class for long-format data.",
     },
     "bootstrap_intervals": {
-        "group": "Intervals and tuning",
+        "group": GROUP_INTERVALS_AND_TUNING,
         "source": "foresight.intervals",
         "purpose": "Construct bootstrap forecast intervals from historical residual behavior.",
     },
     "build_hierarchy_spec": {
-        "group": "Hierarchical forecasting",
-        "source": "foresight.data",
+        "group": GROUP_HIERARCHICAL_FORECASTING,
+        "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Build a hierarchy specification from raw identifier columns.",
     },
     "check_hierarchical_consistency": {
-        "group": "Hierarchical forecasting",
+        "group": GROUP_HIERARCHICAL_FORECASTING,
         "source": "foresight.hierarchical",
         "purpose": "Validate whether hierarchical forecasts reconcile cleanly.",
     },
     "eval_hierarchical_forecast_df": {
-        "group": "Hierarchical forecasting",
-        "source": "foresight.eval_forecast",
+        "group": GROUP_HIERARCHICAL_FORECASTING,
+        "source": SOURCE_FORESIGHT_EVAL_FORECAST,
         "purpose": "Score reconciled hierarchical forecasts against held-out history, including bottom-up exogenous aggregation when requested.",
     },
     "eval_model": {
         "group": "Evaluation",
-        "source": "foresight.eval_forecast",
+        "source": SOURCE_FORESIGHT_EVAL_FORECAST,
         "purpose": "Walk-forward evaluation for a single univariate series or packaged dataset.",
     },
     "eval_model_long_df": {
         "group": "Evaluation",
-        "source": "foresight.eval_forecast",
+        "source": SOURCE_FORESIGHT_EVAL_FORECAST,
         "purpose": "Walk-forward evaluation for long-format panel/global forecasting data.",
     },
     "eval_multivariate_model_df": {
         "group": "Evaluation",
-        "source": "foresight.eval_forecast",
+        "source": SOURCE_FORESIGHT_EVAL_FORECAST,
         "purpose": "Evaluate multivariate forecasters on wide data frames.",
     },
     "forecast_model": {
@@ -90,78 +99,78 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "purpose": "Run a one-off forecast for long-format panel/global inputs, optionally with a separate future_df for known future covariates.",
     },
     "infer_series_frequency": {
-        "group": "Data preparation",
-        "source": "foresight.data",
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Infer a sensible pandas-compatible series frequency from timestamps.",
     },
     "load_forecaster": {
         "group": "Artifacts",
-        "source": "foresight.serialization",
+        "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Load a persisted forecaster object from disk.",
     },
     "load_forecaster_artifact": {
         "group": "Artifacts",
-        "source": "foresight.serialization",
+        "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Inspect the structured artifact payload before reconstructing an object.",
     },
     "make_forecaster": {
         "group": "Forecasting",
-        "source": "foresight.models.registry",
+        "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
         "purpose": "Create a stateless local forecasting callable from the registry.",
     },
     "make_forecaster_object": {
         "group": "Forecasting",
-        "source": "foresight.models.registry",
+        "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
         "purpose": "Create a stateful local forecaster object with fit/predict/save support.",
     },
     "make_global_forecaster": {
         "group": "Forecasting",
-        "source": "foresight.models.registry",
+        "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
         "purpose": "Create a stateless global/panel forecasting callable from the registry.",
     },
     "make_global_forecaster_object": {
         "group": "Forecasting",
-        "source": "foresight.models.registry",
+        "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
         "purpose": "Create a stateful global forecaster object for panel workflows.",
     },
     "make_multivariate_forecaster": {
         "group": "Forecasting",
-        "source": "foresight.models.registry",
+        "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
         "purpose": "Create a multivariate forecaster callable for wide matrix forecasting.",
     },
     "prepare_long_df": {
-        "group": "Data preparation",
-        "source": "foresight.data",
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates.",
     },
     "reconcile_hierarchical_forecasts": {
-        "group": "Hierarchical forecasting",
+        "group": GROUP_HIERARCHICAL_FORECASTING,
         "source": "foresight.hierarchical",
         "purpose": "Reconcile hierarchical forecasts with top-down or bottom-up methods, with optional bottom-up exogenous aggregation via exog_agg.",
     },
     "save_forecaster": {
         "group": "Artifacts",
-        "source": "foresight.serialization",
+        "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Persist a fitted forecaster and its schema/version metadata to disk.",
     },
     "to_long": {
-        "group": "Data preparation",
-        "source": "foresight.data",
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support.",
     },
     "tune_model": {
-        "group": "Intervals and tuning",
+        "group": GROUP_INTERVALS_AND_TUNING,
         "source": "foresight.tuning",
         "purpose": "Grid-search a local forecasting model against backtest metrics.",
     },
     "tune_model_long_df": {
-        "group": "Intervals and tuning",
+        "group": GROUP_INTERVALS_AND_TUNING,
         "source": "foresight.tuning",
         "purpose": "Grid-search a panel/global model on long-format data.",
     },
     "validate_long_df": {
-        "group": "Data preparation",
-        "source": "foresight.data",
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Check that long-format inputs satisfy required schema and null rules.",
     },
 }
@@ -194,10 +203,10 @@ def _render_models_doc() -> str:
     root = _repo_root()
     _ensure_src_on_path(root)
 
-    from foresight.models.registry import get_model_spec, list_models
+    from foresight.models import registry as registry_mod
 
-    keys = sorted(list_models())
-    specs = [get_model_spec(key) for key in keys]
+    keys = sorted(registry_mod.list_models())
+    specs = [registry_mod.get_model_spec(key) for key in keys]
     capability_keys = sorted({name for spec in specs for name in spec.capabilities})
 
     missing_capability_docs = [
