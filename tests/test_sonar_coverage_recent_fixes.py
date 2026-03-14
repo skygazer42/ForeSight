@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import argparse
 import importlib.util
 import json
@@ -400,7 +401,30 @@ def _install_fake_sklearn(
 
 
 def _literal_occurrence_count(path: Path, literal: str) -> int:
-    return path.read_text(encoding="utf-8").count(literal)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sum(
+        1
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value == literal
+    )
+
+
+def test_literal_occurrence_count_matches_exact_string_literals_only(tmp_path: Path) -> None:
+    path = tmp_path / "sample_strings.py"
+    path.write_text(
+        '\n'.join(
+            [
+                'A = "channels must be >= 1"',
+                'B = "bottleneck_channels must be >= 1"',
+                'C = "max_depth must be >= 1"',
+                'D = "max_depth must be >= 1 or None"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert _literal_occurrence_count(path, "channels must be >= 1") == 1
+    assert _literal_occurrence_count(path, "max_depth must be >= 1") == 1
 
 
 def _find_subparser(parser: argparse.ArgumentParser, *names: str) -> argparse.ArgumentParser:
@@ -1010,6 +1034,21 @@ def test_svr_lag_direct_forecast_sets_explicit_kernel(
 def test_regression_source_extracts_repeated_xgb_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "regression.py"
     literals = [
+        "horizon must be >= 1",
+        "lags must be >= 1",
+        "n_estimators must be >= 1",
+        "max_depth must be >= 1",
+        "max_depth must be >= 1 or None",
+        "max_iter must be >= 1",
+        "alpha must be >= 0",
+        "step_scale must be one of: one_based, zero_based, unit",
+        "learning_rate must be > 0",
+        "subsample must be in (0,1]",
+        "colsample_bytree must be in (0,1]",
+        "n_jobs must be non-zero",
+        "reg_lambda must be >= 0",
+        "min_child_weight must be >= 0",
+        "gamma must be >= 0",
         "reg:squarederror",
         "reg:squaredlogerror",
         "reg:logistic",

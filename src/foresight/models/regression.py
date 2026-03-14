@@ -9,6 +9,21 @@ from ..features.tabular import build_lag_derived_features, normalize_int_tuple, 
 from ..features.time import build_fourier_features
 
 TARGET_LAGS_MIN_ERROR = "target_lags must be >= 1"
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+LAGS_MIN_ERROR = "lags must be >= 1"
+N_ESTIMATORS_MIN_ERROR = "n_estimators must be >= 1"
+MAX_DEPTH_MIN_ERROR = "max_depth must be >= 1"
+MAX_DEPTH_MIN_OR_NONE_ERROR = "max_depth must be >= 1 or None"
+MAX_ITER_MIN_ERROR = "max_iter must be >= 1"
+ALPHA_NON_NEGATIVE_ERROR = "alpha must be >= 0"
+STEP_SCALE_OPTIONS_ERROR = "step_scale must be one of: one_based, zero_based, unit"
+LEARNING_RATE_POSITIVE_ERROR = "learning_rate must be > 0"
+SUBSAMPLE_RANGE_ERROR = "subsample must be in (0,1]"
+COLSAMPLE_BYTREE_RANGE_ERROR = "colsample_bytree must be in (0,1]"
+N_JOBS_NON_ZERO_ERROR = "n_jobs must be non-zero"
+REG_LAMBDA_NON_NEGATIVE_ERROR = "reg_lambda must be >= 0"
+MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR = "min_child_weight must be >= 0"
+GAMMA_NON_NEGATIVE_ERROR = "gamma must be >= 0"
 SVR_C_ERROR = "C must be > 0"
 SVR_EPSILON_ERROR = "epsilon must be >= 0"
 XGB_INSTALL_ERROR = 'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
@@ -218,7 +233,7 @@ def lr_lag_forecast(
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     max_target_lag = int(max(target_lags))
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size <= max_target_lag:
         raise ValueError(
             f"lr_lag_forecast requires > lags points (lags={max_target_lag}), got {x.size}"
@@ -276,7 +291,7 @@ def _make_lagged_xy_multi(
     h = int(horizon)
     lag_steps = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if not lag_steps:
         raise ValueError(TARGET_LAGS_MIN_ERROR)
 
@@ -316,7 +331,7 @@ def lr_lag_direct_forecast(
     x = _as_1d_float_array(train)
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -387,7 +402,7 @@ def ridge_lag_forecast(
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     max_target_lag = int(max(target_lags))
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size <= max_target_lag:
         raise ValueError(
             f"ridge_lag_forecast requires > lags points (lags={max_target_lag}), got {x.size}"
@@ -463,11 +478,11 @@ def rf_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -539,11 +554,11 @@ def lasso_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -611,11 +626,11 @@ def elasticnet_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -687,9 +702,9 @@ def knn_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_neighbors <= 0:
         raise ValueError("n_neighbors must be >= 1")
 
@@ -760,11 +775,11 @@ def gbrt_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -838,7 +853,7 @@ def ridge_lag_direct_forecast(
     x = _as_1d_float_array(train)
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -906,11 +921,11 @@ def decision_tree_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if max_depth is not None and int(max_depth) <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MIN_OR_NONE_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -980,13 +995,13 @@ def extra_trees_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if max_depth is not None and int(max_depth) <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MIN_OR_NONE_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1057,11 +1072,11 @@ def adaboost_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1133,11 +1148,11 @@ def bagging_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if not (0.0 < float(max_samples) <= 1.0):
         raise ValueError("max_samples must be in (0,1]")
 
@@ -1212,13 +1227,13 @@ def hgb_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
     if max_depth is not None and int(max_depth) <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MIN_OR_NONE_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1291,9 +1306,9 @@ def svr_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if float(C) <= 0:
         raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
@@ -1366,15 +1381,15 @@ def linear_svr_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if float(C) <= 0:
         raise ValueError(SVR_C_ERROR)
     if float(epsilon) < 0:
         raise ValueError(SVR_EPSILON_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1446,11 +1461,11 @@ def kernel_ridge_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if float(alpha) < 0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1518,13 +1533,13 @@ def mlp_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
     if float(alpha) < 0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
     if float(learning_rate_init) <= 0:
         raise ValueError("learning_rate_init must be > 0")
 
@@ -1599,15 +1614,15 @@ def huber_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if float(epsilon) <= 1.0:
         raise ValueError("epsilon must be > 1.0")
     if float(alpha) < 0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1676,14 +1691,14 @@ def quantile_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     q = float(quantile)
     if not (0.0 < q < 1.0):
         raise ValueError("quantile must be in (0,1)")
     if float(alpha) < 0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1752,13 +1767,13 @@ def sgd_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if float(alpha) < 0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
     if max_iter <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MIN_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -1837,29 +1852,29 @@ def _xgb_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if max_depth <= 0:
-        raise ValueError("max_depth must be >= 1")
+        raise ValueError(MAX_DEPTH_MIN_ERROR)
     if float(learning_rate) <= 0:
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
     if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     if float(reg_alpha) < 0:
         raise ValueError("reg_alpha must be >= 0")
     if float(reg_lambda) < 0:
-        raise ValueError("reg_lambda must be >= 0")
+        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
     if float(min_child_weight) < 0:
-        raise ValueError("min_child_weight must be >= 0")
+        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
     if float(gamma) < 0:
-        raise ValueError("gamma must be >= 0")
+        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
     if n_jobs == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
     obj = str(objective).strip()
     if not obj:
@@ -1983,33 +1998,33 @@ def _xgb_lag_recursive_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if x.size <= lags:
         raise ValueError(
             f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
         )
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if max_depth <= 0:
-        raise ValueError("max_depth must be >= 1")
+        raise ValueError(MAX_DEPTH_MIN_ERROR)
     if float(learning_rate) <= 0:
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
     if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     if float(reg_alpha) < 0:
         raise ValueError("reg_alpha must be >= 0")
     if float(reg_lambda) < 0:
-        raise ValueError("reg_lambda must be >= 0")
+        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
     if float(min_child_weight) < 0:
-        raise ValueError("min_child_weight must be >= 0")
+        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
     if float(gamma) < 0:
-        raise ValueError("gamma must be >= 0")
+        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
     if n_jobs == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
     obj = str(objective).strip()
     if not obj:
@@ -2335,25 +2350,25 @@ def xgbrf_lag_direct_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if max_depth <= 0:
-        raise ValueError("max_depth must be >= 1")
+        raise ValueError(MAX_DEPTH_MIN_ERROR)
     if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     if float(reg_lambda) < 0:
-        raise ValueError("reg_lambda must be >= 0")
+        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
     if float(min_child_weight) < 0:
-        raise ValueError("min_child_weight must be >= 0")
+        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
     if float(gamma) < 0:
-        raise ValueError("gamma must be >= 0")
+        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
     if n_jobs == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
     h = int(horizon)
     start_t = _compute_feature_start_t(
@@ -2461,29 +2476,29 @@ def xgbrf_lag_recursive_forecast(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if x.size <= lags:
         raise ValueError(
             f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
         )
     if n_estimators <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if max_depth <= 0:
-        raise ValueError("max_depth must be >= 1")
+        raise ValueError(MAX_DEPTH_MIN_ERROR)
     if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     if float(reg_lambda) < 0:
-        raise ValueError("reg_lambda must be >= 0")
+        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
     if float(min_child_weight) < 0:
-        raise ValueError("min_child_weight must be >= 0")
+        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
     if float(gamma) < 0:
-        raise ValueError("gamma must be >= 0")
+        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
     if n_jobs == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -3593,32 +3608,32 @@ def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
         and params["n_estimators"] is not None
         and int(params["n_estimators"]) <= 0
     ):
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if "max_depth" in params and params["max_depth"] is not None and int(params["max_depth"]) <= 0:
-        raise ValueError("max_depth must be >= 1")
+        raise ValueError(MAX_DEPTH_MIN_ERROR)
     if (
         "learning_rate" in params
         and params["learning_rate"] is not None
         and float(params["learning_rate"]) <= 0
     ):
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
     if (
         "subsample" in params
         and params["subsample"] is not None
         and not (0.0 < float(params["subsample"]) <= 1.0)
     ):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if (
         "colsample_bytree" in params
         and params["colsample_bytree"] is not None
         and not (0.0 < float(params["colsample_bytree"]) <= 1.0)
     ):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     for key in ("reg_alpha", "reg_lambda", "min_child_weight", "gamma"):
         if key in params and params[key] is not None and float(params[key]) < 0:
             raise ValueError(f"{key} must be >= 0")
     if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
 
 def _xgb_lag_direct_forecast_kwargs(
@@ -3642,9 +3657,9 @@ def _xgb_lag_direct_forecast_kwargs(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(xgb_params)
     params.setdefault("verbosity", 0)
@@ -3735,9 +3750,9 @@ def _xgb_lag_recursive_forecast_kwargs(
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if x.size <= lags:
         raise ValueError(
             f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
@@ -3823,9 +3838,9 @@ def _xgb_lag_step_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(xgb_params)
     params.setdefault("verbosity", 0)
@@ -3849,7 +3864,7 @@ def _xgb_lag_step_forecast_kwargs(
     )
 
     if step_scale not in {"one_based", "zero_based", "unit"}:
-        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+        raise ValueError(STEP_SCALE_OPTIONS_ERROR)
 
     if step_scale == "zero_based":
         step = np.arange(h, dtype=float)
@@ -3932,9 +3947,9 @@ def _xgb_lag_dirrec_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(xgb_params)
     params.setdefault("verbosity", 0)
@@ -4045,9 +4060,9 @@ def _xgb_lag_mimo_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(xgb_params)
     params.setdefault("verbosity", 0)
@@ -4272,10 +4287,10 @@ def xgb_custom_lag_recursive_forecast(
 def _lgbm_validate_common_regressor_params(params: dict[str, Any]) -> None:
     if "n_estimators" in params and params["n_estimators"] is not None:
         if int(params["n_estimators"]) <= 0:
-            raise ValueError("n_estimators must be >= 1")
+            raise ValueError(N_ESTIMATORS_MIN_ERROR)
     if "learning_rate" in params and params["learning_rate"] is not None:
         if float(params["learning_rate"]) <= 0:
-            raise ValueError("learning_rate must be > 0")
+            raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
     if "max_depth" in params and params["max_depth"] is not None:
         max_depth = int(params["max_depth"])
         # LightGBM convention: -1 means "no limit".
@@ -4289,18 +4304,18 @@ def _lgbm_validate_common_regressor_params(params: dict[str, Any]) -> None:
         and params["subsample"] is not None
         and not (0.0 < float(params["subsample"]) <= 1.0)
     ):
-        raise ValueError("subsample must be in (0,1]")
+        raise ValueError(SUBSAMPLE_RANGE_ERROR)
     if (
         "colsample_bytree" in params
         and params["colsample_bytree"] is not None
         and not (0.0 < float(params["colsample_bytree"]) <= 1.0)
     ):
-        raise ValueError("colsample_bytree must be in (0,1]")
+        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
     for key in ("reg_alpha", "reg_lambda", "min_child_weight", "min_split_gain"):
         if key in params and params[key] is not None and float(params[key]) < 0:
             raise ValueError(f"{key} must be >= 0")
     if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
-        raise ValueError("n_jobs must be non-zero")
+        raise ValueError(N_JOBS_NON_ZERO_ERROR)
 
 
 def _require_lightgbm() -> Any:
@@ -4349,9 +4364,9 @@ def _lgbm_lag_direct_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(lgbm_params)
     params.setdefault("verbosity", -1)
@@ -4436,9 +4451,9 @@ def _lgbm_lag_recursive_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if x.size <= lags:
         raise ValueError(
             f"lightgbm recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
@@ -4516,9 +4531,9 @@ def _lgbm_lag_step_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(lgbm_params)
     params.setdefault("verbosity", -1)
@@ -4537,7 +4552,7 @@ def _lgbm_lag_step_forecast_kwargs(
     )
 
     if step_scale not in {"one_based", "zero_based", "unit"}:
-        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+        raise ValueError(STEP_SCALE_OPTIONS_ERROR)
 
     if step_scale == "zero_based":
         step = np.arange(h, dtype=float)
@@ -4618,9 +4633,9 @@ def _lgbm_lag_dirrec_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(lgbm_params)
     params.setdefault("verbosity", -1)
@@ -5072,7 +5087,7 @@ def _catboost_validate_common_regressor_params(params: dict[str, Any]) -> None:
             raise ValueError("iterations must be >= 1")
     if "learning_rate" in params and params["learning_rate"] is not None:
         if float(params["learning_rate"]) <= 0:
-            raise ValueError("learning_rate must be > 0")
+            raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
     if "depth" in params and params["depth"] is not None:
         if int(params["depth"]) <= 0:
             raise ValueError("depth must be >= 1")
@@ -5116,9 +5131,9 @@ def _catboost_lag_direct_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(cb_params)
     params.setdefault("loss_function", "RMSE")
@@ -5206,9 +5221,9 @@ def _catboost_lag_recursive_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if x.size <= lags:
         raise ValueError(
             f"catboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
@@ -5288,9 +5303,9 @@ def _catboost_lag_step_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(cb_params)
     params.setdefault("loss_function", "RMSE")
@@ -5311,7 +5326,7 @@ def _catboost_lag_step_forecast_kwargs(
     )
 
     if step_scale not in {"one_based", "zero_based", "unit"}:
-        raise ValueError("step_scale must be one of: one_based, zero_based, unit")
+        raise ValueError(STEP_SCALE_OPTIONS_ERROR)
 
     if step_scale == "zero_based":
         step = np.arange(h, dtype=float)
@@ -5392,9 +5407,9 @@ def _catboost_lag_dirrec_forecast_kwargs(
     x = _as_1d_float_array(train)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
 
     params = dict(cb_params)
     params.setdefault("loss_function", "RMSE")
