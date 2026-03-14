@@ -760,7 +760,10 @@ def _summarize_leaderboard_rows(
     limit: int,
     min_datasets: int = 0,
 ) -> list[dict[str, Any]]:
+    import math
     import statistics
+
+    zero_tol = 1e-12
 
     def _as_float(v: object) -> float | None:
         if v is None:
@@ -793,6 +796,11 @@ def _summarize_leaderboard_rows(
             return int(float(s))
         except Exception:  # noqa: BLE001
             return None
+
+    def _relative_metric_to_best(value: float, best: float) -> float:
+        if math.isclose(best, 0.0, abs_tol=zero_tol):
+            return 1.0 if math.isclose(value, 0.0, abs_tol=zero_tol) else float("inf")
+        return float(value / best)
 
     cleaned: list[dict[str, Any]] = []
     bad = 0
@@ -896,10 +904,7 @@ def _summarize_leaderboard_rows(
                 if best is None:
                     continue
                 v = float(v_obj)
-                if best == 0.0:
-                    rel = 1.0 if v == 0.0 else float("inf")
-                else:
-                    rel = float(v / best)
+                rel = _relative_metric_to_best(v, float(best))
                 rels.append(rel)
 
             row[f"{metric}_rel_mean"] = None if not rels else float(sum(rels) / float(len(rels)))
@@ -917,10 +922,7 @@ def _summarize_leaderboard_rows(
                 if best is None:
                     continue
                 v = float(v_obj)
-                if best == 0.0:
-                    rel = 1.0 if v == 0.0 else float("inf")
-                else:
-                    rel = float(v / best)
+                rel = _relative_metric_to_best(v, float(best))
                 rel_pairs.append((rel, int(w)))
 
             rel_wsum = float(sum(w for _r, w in rel_pairs))
