@@ -39,6 +39,8 @@ from ..contracts.params import (
 from ..intervals import bootstrap_intervals
 from . import model_execution as _model_execution
 
+_HORIZON_MIN_MSG = "horizon must be >= 1"
+
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
     return _contracts_require_long_df(long_df, require_non_empty=True)
@@ -273,7 +275,7 @@ def _as_datetime_index(ds: Any) -> pd.DatetimeIndex | None:
 def _infer_future_ds(ds: Any, horizon: int) -> pd.Index:
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_HORIZON_MIN_MSG)
 
     idx = pd.Index(ds)
     if len(idx) == 0:
@@ -331,7 +333,7 @@ def _prepare_local_xreg_forecast_group(
 ) -> tuple[pd.DataFrame, pd.DataFrame, Any]:
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_HORIZON_MIN_MSG)
 
     missing_x_cols = [col for col in x_cols if col not in g.columns]
     if missing_x_cols:
@@ -385,7 +387,7 @@ def _prepare_global_forecast_input(
 ) -> tuple[pd.DataFrame, Any]:
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_HORIZON_MIN_MSG)
 
     missing_x_cols = [col for col in x_cols if col not in df.columns]
     if missing_x_cols:

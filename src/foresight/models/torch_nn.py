@@ -14,6 +14,7 @@ _HORIZON_MIN_MSG = "horizon must be >= 1"
 _LAGS_MIN_MSG = "lags must be >= 1"
 _NUM_BLOCKS_MIN_MSG = "num_blocks must be >= 1"
 _D_MODEL_MIN_MSG = "d_model must be >= 1"
+_TOP_K_MIN_MSG = "top_k must be >= 1"
 _NHEAD_MIN_MSG = "nhead must be >= 1"
 _D_MODEL_HEAD_DIVISIBILITY_MSG = "d_model must be divisible by nhead"
 _DIM_FEEDFORWARD_MIN_MSG = "dim_feedforward must be >= 1"
@@ -2372,7 +2373,7 @@ def torch_timesnet_direct_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if k <= 0:
-        raise ValueError("top_k must be >= 1")
+        raise ValueError(_TOP_K_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -6348,7 +6349,7 @@ def torch_crossgnn_direct_forecast(
     if blocks <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if k <= 0:
-        raise ValueError("top_k must be >= 1")
+        raise ValueError(_TOP_K_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -6503,7 +6504,7 @@ def torch_pathformer_direct_forecast(
     if blocks <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if k <= 0:
-        raise ValueError("top_k must be >= 1")
+        raise ValueError(_TOP_K_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
