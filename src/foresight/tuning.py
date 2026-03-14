@@ -53,7 +53,7 @@ def _grid_trials(
     trials: list[dict[str, Any]] = []
     for values in itertools.product(*(search_space[k] for k in keys)):
         params = dict(base_params)
-        params.update({k: v for k, v in zip(keys, values, strict=True)})
+        params.update(dict(zip(keys, values, strict=True)))
         payload = evaluator(params)
         score = _resolve_score(payload, metric=metric)
         trials.append(

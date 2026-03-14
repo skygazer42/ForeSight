@@ -217,7 +217,12 @@ def _reconcile_exog_bottom_up(
         if merged is None:
             merged = col_df
         else:
-            merged = merged.merge(col_df, on=["unique_id", "ds"], how="outer")
+            merged = merged.merge(
+                col_df,
+                on=["unique_id", "ds"],
+                how="outer",
+                validate="one_to_one",
+            )
 
     if merged is None:
         return forecast_df.loc[:, ["unique_id", "ds"]].drop_duplicates().reset_index(drop=True)
@@ -299,7 +304,12 @@ def reconcile_hierarchical_forecasts(
                 exog_agg=exog_agg_norm,
                 node_order=node_order,
             )
-            out = out.merge(exog_df, on=["unique_id", "ds"], how="left")
+            out = out.merge(
+                exog_df,
+                on=["unique_id", "ds"],
+                how="left",
+                validate="one_to_one",
+            )
         return out
 
     hist = _require_tidy_df(history_df, value_col="y")

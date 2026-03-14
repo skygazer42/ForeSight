@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _read_repo_file(path: str) -> str:
+    return (_repo_root() / path).read_text(encoding="utf-8")
+
+
+def _parse_repo_file(path: str) -> ast.AST:
+    return ast.parse(_read_repo_file(path), filename=path)
+
+
+def _function_uses_name(path: str, func_name: str, name: str) -> bool:
+    tree = _parse_repo_file(path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == func_name:
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Name)
+                    and isinstance(sub.ctx, ast.Load)
+                    and sub.id == name
+                ):
+                    return True
+            return False
+    raise AssertionError(f"Function {func_name!r} not found in {path}")
+
+
+def _call_lines_missing_keyword(path: str, *, method_name: str, keyword: str) -> list[int]:
+    tree = _parse_repo_file(path)
+    out: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != method_name:
+            continue
+        if any(kw.arg == keyword for kw in node.keywords):
+            continue
+        out.append(node.lineno)
+    return sorted(out)
+
+
+def _dict_comp_update_lines(path: str) -> list[int]:
+    tree = _parse_repo_file(path)
+    out: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "update" or len(node.args) != 1:
+            continue
+        if isinstance(node.args[0], ast.DictComp):
+            out.append(node.lineno)
+    return sorted(out)
+
+
+def _set_generator_lines(path: str) -> list[int]:
+    tree = _parse_repo_file(path)
+    out: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "set":
+            continue
+        if len(node.args) != 1:
+            continue
+        if isinstance(node.args[0], ast.GeneratorExp):
+            out.append(node.lineno)
+    return sorted(out)
+
+
+def _unused_shape_dims(path: str) -> list[tuple[int, str]]:
+    tree = _parse_repo_file(path)
+    findings: list[tuple[int, str]] = []
+
+    class _Visitor(ast.NodeVisitor):
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            loaded = {
+                sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+            }
+            for sub in ast.walk(node):
+                if not isinstance(sub, ast.Assign):
+                    continue
+                if not isinstance(sub.value, ast.Attribute) or sub.value.attr != "shape":
+                    continue
+                for target in sub.targets:
+                    if not isinstance(target, ast.Tuple):
+                        continue
+                    for elt in target.elts:
+                        if not isinstance(elt, ast.Name) or elt.id not in {"B", "T"}:
+                            continue
+                        if elt.id not in loaded:
+                            findings.append((sub.lineno, elt.id))
+            self.generic_visit(node)
+
+    _Visitor().visit(tree)
+    return sorted(findings)
+
+
+def test_hf_time_series_forecast_uses_epochs_parameter() -> None:
+    assert _function_uses_name(
+        "src/foresight/models/hf_time_series.py",
+        "hf_timeseries_transformer_direct_forecast",
+        "epochs",
+    )
+
+
+def test_hierarchical_merge_calls_specify_validate_keyword() -> None:
+    assert _call_lines_missing_keyword(
+        "src/foresight/hierarchical.py",
+        method_name="merge",
+        keyword="validate",
+    ) == []
+
+
+def test_tuning_avoids_dict_comprehension_in_update_calls() -> None:
+    assert _dict_comp_update_lines("src/foresight/tuning.py") == []
+
+
+def test_tabular_avoids_set_constructor_with_generator() -> None:
+    assert _set_generator_lines("src/foresight/features/tabular.py") == []
+
+
+def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
+    source = _read_repo_file("src/foresight/models/kalman.py")
+    assert "if not (vf > 0.0):" not in source
+
+
+def test_global_regression_uses_lowercase_private_predict_helper_name() -> None:
+    source = _read_repo_file("src/foresight/models/global_regression.py")
+    assert "def _panel_step_lag_predict_X(" not in source
+    assert "def _panel_step_lag_predict_x(" in source
+
+
+def test_torch_files_do_not_leave_unused_shape_dimensions() -> None:
+    assert _unused_shape_dims("src/foresight/models/torch_nn.py") == []
+    assert _unused_shape_dims("src/foresight/models/torch_rnn_paper_zoo.py") == []
+
+
+def test_torch_rnn_paper_zoo_avoids_sonar_flagged_source_patterns() -> None:
+    source = _read_repo_file("src/foresight/models/torch_rnn_paper_zoo.py")
+
+    assert "_PAPER_DESC = {paper_id: desc for paper_id, desc in _PAPER_DEFS}" not in source
+    assert "w = torch.zeros((int(B), self.M), device=xb.device, dtype=xb.dtype)" not in source
+    assert 'return self.head(last)  # (B,2) = (mu, raw_sigma)' not in source

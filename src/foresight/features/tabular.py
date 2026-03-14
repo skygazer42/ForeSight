@@ -198,7 +198,7 @@ def build_lag_derived_features(
         return np.empty((rows, 0), dtype=float), []
 
     windows = tuple(sorted(set(normalize_int_tuple(roll_windows))))
-    stats = tuple(sorted(set(s.lower().strip() for s in normalize_str_tuple(roll_stats) if s)))
+    stats = tuple(sorted({s.lower().strip() for s in normalize_str_tuple(roll_stats) if s}))
     diffs = tuple(sorted(set(normalize_int_tuple(diff_lags))))
 
     allowed = {"mean", "std", "min", "max", "median", "slope", "iqr", "mad", "skew", "kurt"}

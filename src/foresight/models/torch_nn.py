@@ -199,7 +199,7 @@ def _make_manual_gru(
                     f"Expected input_size={int(self.input_size)}, got C={int(xb.shape[2])}"
                 )
 
-            B, T, _C = xb.shape
+            _, T, _C = xb.shape
             if int(T) <= 0:
                 raise ValueError("Sequence length T must be >= 1")
 
@@ -343,7 +343,7 @@ def _make_manual_lstm(
                     f"Expected input_size={int(self.input_size)}, got C={int(xb.shape[2])}"
                 )
 
-            B, T, _C = xb.shape
+            _, T, _C = xb.shape
             if int(T) <= 0:
                 raise ValueError("Sequence length T must be >= 1")
 

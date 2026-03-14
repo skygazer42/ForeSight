@@ -132,7 +132,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
 ]
 
 _PAPER_IDS = [paper_id for paper_id, _desc in _PAPER_DEFS]
-_PAPER_DESC = {paper_id: desc for paper_id, desc in _PAPER_DEFS}
+_PAPER_DESC = dict(_PAPER_DEFS)
 
 
 def list_rnnpaper_specs() -> list[RNNPaperModelSpec]:
@@ -1339,7 +1339,7 @@ def torch_rnnpaper_direct_forecast(
             self.x0 = nn.Linear(1, hid, bias=True)
 
         def forward(self, xb: Any) -> Any:
-            B, T, _ = xb.shape
+            _, T, _ = xb.shape
             h_t = self.x0(xb[:, 0, :])
             outs = [h_t.unsqueeze(1)]
             for t in range(1, int(T)):
@@ -1399,7 +1399,6 @@ def torch_rnnpaper_direct_forecast(
         def forward(self, xb: Any) -> Any:
             B, T, _ = xb.shape
             mem = torch.zeros((int(B), self.M, self.D), device=xb.device, dtype=xb.dtype)
-            w = torch.zeros((int(B), self.M), device=xb.device, dtype=xb.dtype)
             h_t = torch.zeros((int(B), hid), device=xb.device, dtype=xb.dtype)
             r_t = torch.zeros((int(B), self.D), device=xb.device, dtype=xb.dtype)
             outs = []
@@ -2238,7 +2237,8 @@ def torch_rnnpaper_direct_forecast(
             def forward(self, xb: Any) -> Any:
                 out = self.rnn(xb)
                 last = out[:, -1, :]
-                return self.head(last)  # (B,2) = (mu, raw_sigma)
+                # Head outputs the Gaussian mean and raw scale parameters.
+                return self.head(last)
 
         def _gaussian_nll(pred: Any, yb: Any) -> Any:
             mu = pred[:, 0:1]
@@ -2423,7 +2423,7 @@ def torch_rnnpaper_direct_forecast(
 
             def forward(self, xb: Any) -> Any:
                 # xb: (B,T,1)
-                B, T, _ = xb.shape
+                _, T, _ = xb.shape
                 x1 = xb.transpose(1, 2)  # (B,1,T)
                 feat = torch.relu(self.conv(x1)[:, :, :T]).transpose(1, 2)  # (B,T,H)
 
@@ -2736,7 +2736,7 @@ def torch_rnnpaper_direct_forecast(
             def forward(
                 self, xb: Any, yb: Any | None = None, *, teacher_forcing_ratio: float
             ) -> Any:
-                B, T, _ = xb.shape
+                batch_size = int(xb.shape[0])
                 enc_out, (h_t, c_t) = self._encode(xb)
 
                 y_prev = xb[:, -1, :]  # (B,1)
@@ -2753,7 +2753,7 @@ def torch_rnnpaper_direct_forecast(
                     ys.append(y_next)
 
                     if yb is not None and tf > 0.0:
-                        use_teacher = torch.rand((int(B), 1), device=xb.device) < tf
+                        use_teacher = torch.rand((batch_size, 1), device=xb.device) < tf
                         y_prev = torch.where(use_teacher, yb[:, t : t + 1], y_next)
                     else:
                         y_prev = y_next

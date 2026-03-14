@@ -71,6 +71,10 @@ def hf_timeseries_transformer_direct_forecast(
 
     The output is the mean across generated samples: shape `(horizon,)`.
     """
+    epochs_n = int(epochs)
+    if epochs_n < 0:
+        raise ValueError("epochs must be >= 0")
+
     torch = _require_torch()
     _require_transformers()
     from transformers import (  # type: ignore

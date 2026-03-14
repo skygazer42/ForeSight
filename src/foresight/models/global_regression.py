@@ -343,7 +343,7 @@ def _panel_step_lag_train_xy(
     return X_all, y_all, uid_to_val, id_dim, time_dim, exog_dim
 
 
-def _panel_step_lag_predict_X(
+def _panel_step_lag_predict_x(
     g: pd.DataFrame,
     *,
     uid_val: float,
@@ -443,6 +443,9 @@ def _panel_step_lag_predict_X(
 
     ds_out = ds_arr[target_idx]
     return X_pred.astype(float, copy=False), ds_out
+
+
+_panel_step_lag_predict_X = _panel_step_lag_predict_x
 
 
 def _run_point_global_model(

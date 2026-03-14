@@ -16,7 +16,7 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
 
 def _require_positive(name: str, v: float) -> float:
     vf = float(v)
-    if not (vf > 0.0):
+    if vf <= 0.0:
         raise ValueError(f"{name} must be > 0, got {vf}")
     return vf
 
