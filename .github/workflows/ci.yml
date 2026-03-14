@@ -91,8 +91,11 @@ jobs:
             tests/test_models_registry.py \
             tests/test_models_theta.py \
             tests/test_models_theta_auto.py \
+            tests/test_no_mergeable_nested_ifs.py \
+            tests/test_no_nested_conditionals.py \
             tests/test_no_float_literal_comparisons.py \
             tests/test_root_import.py \
+            tests/test_sonar_coverage_recent_fixes.py \
             tests/test_torch_global_validation_messages.py \
             --cov=foresight \
             --cov-report=xml:coverage.xml

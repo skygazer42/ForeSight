@@ -90,8 +90,11 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "tests/test_model_validation_messages.py" in test_step["run"]
     assert "tests/test_models_theta.py" in test_step["run"]
     assert "tests/test_models_theta_auto.py" in test_step["run"]
+    assert "tests/test_no_mergeable_nested_ifs.py" in test_step["run"]
+    assert "tests/test_no_nested_conditionals.py" in test_step["run"]
     assert "tests/test_no_float_literal_comparisons.py" in test_step["run"]
     assert "tests/test_forecasting_internals.py" in test_step["run"]
+    assert "tests/test_sonar_coverage_recent_fixes.py" in test_step["run"]
     assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
     scan_args = str(scan_step["with"]["args"])
     assert "-Dsonar.issue.ignore.multicriteria=e1,e2" in scan_args
