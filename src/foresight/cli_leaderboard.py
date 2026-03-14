@@ -1004,14 +1004,22 @@ def _summarize_leaderboard_rows(
         except Exception:  # noqa: BLE001
             return None
 
-    def _sort_key(row: dict[str, Any]) -> tuple[int, float, int, float, str]:
-        v = _num(row.get(sort_s))
-        missing = 1 if v is None else 0
-        val_key = 0.0 if v is None else (float(-v) if descending else float(v))
+    def _sort_value_key(v: float | None) -> tuple[int, float]:
+        if v is None:
+            return (1, 0.0)
 
-        sv = _num(row.get(secondary)) if secondary else None
-        smissing = 1 if sv is None else 0
-        sval_key = 0.0 if sv is None else (float(-sv) if descending else float(sv))
+        value = float(v)
+        if descending:
+            value = -value
+        return (0, value)
+
+    def _sort_key(row: dict[str, Any]) -> tuple[int, float, int, float, str]:
+        missing, val_key = _sort_value_key(_num(row.get(sort_s)))
+
+        secondary_value = None
+        if secondary:
+            secondary_value = _num(row.get(secondary))
+        smissing, sval_key = _sort_value_key(secondary_value)
 
         return (missing, val_key, smissing, sval_key, str(row.get("model", "")))
 

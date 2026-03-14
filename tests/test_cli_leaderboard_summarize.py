@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from foresight.cli_leaderboard import _summarize_leaderboard_rows
+
 
 def _run_cli(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
     repo_root = Path(__file__).resolve().parents[1]
@@ -236,3 +238,22 @@ def test_leaderboard_summarize_desc_sort_keeps_missing_last(tmp_path: Path) -> N
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
     assert [r["model"] for r in payload] == ["a", "b"]
+
+
+def test_leaderboard_summarize_breaks_primary_sort_ties_with_mae_mean() -> None:
+    rows = [
+        {"model": "b", "dataset": "d1", "mae": 2.0, "rmse": 1.0, "mape": 0.1, "smape": 0.2, "n_points": 10},
+        {"model": "a", "dataset": "d2", "mae": 1.0, "rmse": 1.0, "mape": 0.1, "smape": 0.2, "n_points": 10},
+    ]
+
+    summary = _summarize_leaderboard_rows(rows, sort="n_datasets", limit=0)
+
+    assert [row["model"] for row in summary] == ["a", "b"]
+
+
+def test_leaderboard_summary_source_avoids_nested_sort_conditionals() -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "src" / "foresight" / "cli_leaderboard.py").read_text(encoding="utf-8")
+
+    assert "sv = _num(row.get(secondary)) if secondary else None" not in source
+    assert "0.0 if sv is None else (float(-sv) if descending else float(sv))" not in source
