@@ -16,13 +16,6 @@ from .torch_nn import (
     _make_manual_lstm_cell,
 )
 
-D_MODEL_MIN_ERROR = "d_model must be >= 1"
-NHEAD_MIN_ERROR = "nhead must be >= 1"
-D_MODEL_DIVISIBLE_ERROR = "d_model must be divisible by nhead"
-NUM_LAYERS_MIN_ERROR = "num_layers must be >= 1"
-DROPOUT_RANGE_ERROR = "dropout must be in [0,1)"
-FFN_DIM_MIN_ERROR = "ffn_dim must be >= 1"
-
 
 def _require_torch() -> Any:
     try:
@@ -1076,15 +1069,15 @@ def _predict_torch_timexer_global(
     layers = int(num_layers)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _CrossBlock(nn.Module):
         def __init__(self) -> None:
@@ -1429,11 +1422,11 @@ def _predict_torch_fedformer_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(ffn_dim) <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     if int(modes) <= 0:
         raise ValueError("modes must be >= 1")
     w = int(ma_window)
@@ -1442,7 +1435,7 @@ def _predict_torch_fedformer_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _FourierMix(nn.Module):
         def __init__(self) -> None:
@@ -1729,18 +1722,18 @@ def _predict_torch_nonstationary_transformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     head_dim = d // heads
 
@@ -2072,13 +2065,13 @@ def _predict_torch_xformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
@@ -2112,7 +2105,7 @@ def _predict_torch_xformer_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
     drop_path_f = float(drop_path)
     if not (0.0 <= drop_path_f < 1.0):
         raise ValueError("drop_path must be in [0,1)")
@@ -2846,11 +2839,11 @@ def _predict_torch_rnn_global(
     if hidden <= 0:
         raise ValueError("hidden_size must be >= 1")
     if layers <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
     rnn_drop = drop if layers > 1 else 0.0
 
     class _RNNGlobal(nn.Module):
@@ -3105,17 +3098,17 @@ def _predict_torch_retnet_global(
     hidden = int(ffn_dim)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if layers <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if hidden <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     head_dim = d // heads
 
@@ -3398,13 +3391,13 @@ def _predict_torch_patchtst_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
@@ -3422,7 +3415,7 @@ def _predict_torch_patchtst_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     patch_in_dim = int((input_dim + int(id_emb_dim)) * p_len)
 
@@ -3696,13 +3689,13 @@ def _predict_torch_crossformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
@@ -3720,7 +3713,7 @@ def _predict_torch_crossformer_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     # Build scale configs (skip scales that don't fit).
     scales: list[tuple[int, int, int]] = []  # (seg_len, step, n_tokens)
@@ -4013,13 +4006,13 @@ def _predict_torch_pyraformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
@@ -4041,7 +4034,7 @@ def _predict_torch_pyraformer_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     level_sizes: list[int] = [int(n0)]
     for _i in range(int(levels_req) - 1):
@@ -4331,7 +4324,7 @@ def _predict_torch_tsmixer_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_blocks) <= 0:
         raise ValueError("num_blocks must be >= 1")
     if int(token_mixing_hidden) <= 0:
@@ -4341,7 +4334,7 @@ def _predict_torch_tsmixer_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _MixerBlock(nn.Module):
         def __init__(self) -> None:
@@ -4615,19 +4608,19 @@ def _predict_torch_itransformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _ITransformerGlobal(nn.Module):
         def __init__(self) -> None:
@@ -4887,9 +4880,9 @@ def _predict_torch_timesnet_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
 
     k = int(top_k)
     if k <= 0:
@@ -4897,7 +4890,7 @@ def _predict_torch_timesnet_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     def _detect_periods(y_ctx: Any) -> tuple[list[int], Any]:
         # y_ctx: (B, ctx)
@@ -5290,7 +5283,7 @@ def _predict_torch_tcn_global(
         raise ValueError("dilation_base must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _CausalConv1d(nn.Module):
         def __init__(self, in_ch: int, out_ch: int, *, dilation: int) -> None:
@@ -5554,12 +5547,12 @@ def _predict_torch_nbeats_global(
     if int(num_blocks) <= 0:
         raise ValueError("num_blocks must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(layer_width) <= 0:
         raise ValueError("layer_width must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     backcast_dim = int(seq_len * input_dim + int(id_emb_dim))
     forecast_dim = int(h * out_dim)
@@ -5809,7 +5802,7 @@ def _predict_torch_nhits_global(
     if int(num_blocks) <= 0:
         raise ValueError("num_blocks must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(layer_width) <= 0:
         raise ValueError("layer_width must be >= 1")
 
@@ -5831,7 +5824,7 @@ def _predict_torch_nhits_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     forecast_dim = int(h * out_dim)
 
@@ -6098,13 +6091,13 @@ def _predict_torch_tide_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     hidden = int(hidden_size)
     if hidden <= 0:
         raise ValueError("hidden_size must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     ctx = int(context_length)
     enc_in_dim = int(ctx * input_dim + int(id_emb_dim))
@@ -6342,13 +6335,13 @@ def _predict_torch_wavenet_global(
     if c <= 0:
         raise ValueError("channels must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     k = int(kernel_size)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     in_ch = int(input_dim + int(id_emb_dim))
 
@@ -6613,7 +6606,7 @@ def _predict_torch_resnet1d_global(
         raise ValueError("kernel_size must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     pad = int(k) // 2
     in_ch = int(input_dim + int(id_emb_dim))
@@ -6876,7 +6869,7 @@ def _predict_torch_inception_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     in_ch = int(input_dim + int(id_emb_dim))
 
@@ -7144,7 +7137,7 @@ def _predict_torch_lstnet_global(
         raise ValueError("highway_window must be <= context_length")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     in_ch = int(input_dim + int(id_emb_dim))
 
@@ -7417,14 +7410,14 @@ def _predict_torch_fnet_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _FNetLayer(nn.Module):
         def __init__(self) -> None:
@@ -7664,15 +7657,15 @@ def _predict_torch_gmlp_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     ffn = int(ffn_dim)
     if ffn <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _SpatialGatingUnit(nn.Module):
         def __init__(self) -> None:
@@ -7927,12 +7920,12 @@ def _predict_torch_ssm_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _SSMBlock(nn.Module):
         def __init__(self) -> None:
@@ -8185,15 +8178,15 @@ def _predict_torch_mamba_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     k = int(conv_kernel)
     if k <= 0:
         raise ValueError("conv_kernel must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _MambaBlock(nn.Module):
         def __init__(self) -> None:
@@ -8455,15 +8448,15 @@ def _predict_torch_rwkv_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     ffn = int(ffn_dim)
     if ffn <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _RWKVBlock(nn.Module):
         def __init__(self) -> None:
@@ -8785,18 +8778,18 @@ def _predict_torch_hyena_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     hidden = int(ffn_dim)
     if hidden <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     k = int(kernel_size)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _HyenaBlock(nn.Module):
         def __init__(self) -> None:
@@ -9059,16 +9052,16 @@ def _predict_torch_dilated_rnn_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     L = int(num_layers)
     if L <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     base = int(dilation_base)
     if base <= 1:
         raise ValueError("dilation_base must be >= 2")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _DilatedRNNGlobal(nn.Module):
         def __init__(self) -> None:
@@ -9341,10 +9334,10 @@ def _predict_torch_kan_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     L = int(num_layers)
     if L <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     K = int(grid_size)
     if K < 4:
         raise ValueError("grid_size must be >= 4")
@@ -9353,7 +9346,7 @@ def _predict_torch_kan_global(
         raise ValueError("grid_range must be > 0")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     flat_dim = int(seq_len * input_dim)
     in_dim = int(flat_dim + int(id_emb_dim))
@@ -9615,7 +9608,7 @@ def _predict_torch_scinet_global(
 
     d = int(d_model)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     stages = int(num_stages)
     if stages <= 0:
         raise ValueError("num_stages must be >= 1")
@@ -9624,10 +9617,10 @@ def _predict_torch_scinet_global(
         raise ValueError("conv_kernel must be >= 1")
     hidden = int(ffn_dim)
     if hidden <= 0:
-        raise ValueError(FFN_DIM_MIN_ERROR)
+        raise ValueError("ffn_dim must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     pad_left = (k - 1) // 2
     pad_right = (k - 1) - pad_left
@@ -9918,18 +9911,18 @@ def _predict_torch_etsformer_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     alpha0 = float(alpha_init)
     beta0 = float(beta_init)
@@ -10234,10 +10227,10 @@ def _predict_torch_esrnn_global(
         raise ValueError("hidden_size must be >= 1")
     L = int(num_layers)
     if L <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     alpha0 = float(alpha_init)
     beta0 = float(beta_init)
@@ -10545,18 +10538,18 @@ def _predict_torch_transformer_encdec_global(
     d = int(d_model)
     heads = int(nhead)
     if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
+        raise ValueError("d_model must be >= 1")
     if heads <= 0:
-        raise ValueError(NHEAD_MIN_ERROR)
+        raise ValueError("nhead must be >= 1")
     if d % heads != 0:
-        raise ValueError(D_MODEL_DIVISIBLE_ERROR)
+        raise ValueError("d_model must be divisible by nhead")
     if int(num_layers) <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     if int(dim_feedforward) <= 0:
         raise ValueError("dim_feedforward must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     class _EncoderLayer(nn.Module):
         def __init__(self) -> None:
@@ -10848,7 +10841,7 @@ def _predict_torch_nlinear_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     forecast_dim = int(h * out_dim)
 
@@ -11065,7 +11058,7 @@ def _predict_torch_dlinear_global(
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
 
     forecast_dim = int(h * out_dim)
 
@@ -11289,10 +11282,10 @@ def _predict_torch_deepar_global(
         raise ValueError("hidden_size must be >= 1")
     layers = int(num_layers)
     if layers <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
     rnn_drop = drop if layers > 1 else 0.0
 
     class _DeepARGlobal(nn.Module):
@@ -11554,11 +11547,11 @@ def _predict_torch_seq2seq_global(
     if hidden <= 0:
         raise ValueError("hidden_size must be >= 1")
     if layers <= 0:
-        raise ValueError(NUM_LAYERS_MIN_ERROR)
+        raise ValueError("num_layers must be >= 1")
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+        raise ValueError("dropout must be in [0,1)")
     rnn_drop = drop if layers > 1 else 0.0
 
     tf0 = float(teacher_forcing)
