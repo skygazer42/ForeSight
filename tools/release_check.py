@@ -50,9 +50,15 @@ def _quality_commands() -> list[list[str]]:
     ]
 
 
+def _display_command(cmd: list[str]) -> list[str]:
+    if cmd and Path(cmd[0]).name.lower() in {"python", "python.exe", "py", "py.exe"}:
+        return ["python", *cmd[1:]]
+    return list(cmd)
+
+
 def _print_plan(cmds: list[list[str]]) -> None:
     for cmd in cmds:
-        print(" ".join(cmd), flush=True)
+        print(" ".join(_display_command(cmd)), flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,9 +80,9 @@ def main(argv: list[str] | None = None) -> int:
     quality_cmds = _quality_commands()
     if args.plan:
         _print_plan(quality_cmds)
-        print(f"{sys.executable} -m build --outdir <temp-dist-dir>", flush=True)
+        print(" ".join(_display_command([sys.executable, "-m", "build", "--outdir", "<temp-dist-dir>"])), flush=True)
         if importlib.util.find_spec("twine") is not None:
-            print(f"{sys.executable} -m twine check <temp-dist-dir>/*", flush=True)
+            print(" ".join(_display_command([sys.executable, "-m", "twine", "check", "<temp-dist-dir>/*"])), flush=True)
         return 0
 
     for cmd in quality_cmds:
