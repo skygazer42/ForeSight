@@ -51,11 +51,11 @@ def test_make_forecaster_sar_ols_accepts_legacy_uppercase_p_keyword(
         horizon: int,
         *,
         p: int,
-        P: int,
         season_length: int,
+        **kwargs: object,
     ) -> np.ndarray:
         captured["p"] = p
-        captured["P"] = P
+        captured["P"] = int(kwargs["P"])
         captured["season_length"] = season_length
         return np.zeros(int(horizon), dtype=float)
 
