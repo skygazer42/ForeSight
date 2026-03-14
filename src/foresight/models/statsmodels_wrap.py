@@ -4,6 +4,18 @@ from typing import Any
 
 import numpy as np
 
+HORIZON_MUST_BE_AT_LEAST_ONE = "horizon must be >= 1"
+TRAIN_EXOG_ROWS_MUST_MATCH_TRAIN = "train_exog must have the same number of rows as train"
+FUTURE_EXOG_ROWS_MUST_MATCH_HORIZON = "future_exog must have horizon rows"
+EXOG_INPUTS_MUST_BE_PAIRED = (
+    "train_exog and future_exog must either both be provided or both be omitted"
+)
+LAGS_MUST_BE_NON_NEGATIVE = "lags must be >= 0"
+LOCAL_LEVEL = "local level"
+PERIOD_MUST_BE_AT_LEAST_TWO = "period must be >= 2"
+FOURIER_ORDERS_MUST_MATCH_PERIODS = "orders must be an int or have the same length as periods"
+FOURIER_PERIODS_MUST_BE_VALID = "periods must contain integers >= 2"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -19,6 +31,43 @@ def _as_2d_float_array(values: Any, *, name: str) -> np.ndarray:
     if arr.ndim != 2:
         raise ValueError(f"{name} must be 1D or 2D, got shape {arr.shape}")
     return arr
+
+
+def _validate_positive_horizon(horizon: int) -> None:
+    if horizon <= 0:
+        raise ValueError(HORIZON_MUST_BE_AT_LEAST_ONE)
+
+
+def _validate_non_negative_lags(lags: int) -> None:
+    if int(lags) < 0:
+        raise ValueError(LAGS_MUST_BE_NON_NEGATIVE)
+
+
+def _validate_period_at_least_two(period: int) -> None:
+    if int(period) <= 1:
+        raise ValueError(PERIOD_MUST_BE_AT_LEAST_TWO)
+
+
+def _validate_exog_pair(
+    *,
+    train_size: int,
+    horizon: int,
+    train_exog: Any | None,
+    future_exog: Any | None,
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    exog_train = None
+    exog_future = None
+    if train_exog is not None:
+        exog_train = _as_2d_float_array(train_exog, name="train_exog")
+        if int(exog_train.shape[0]) != int(train_size):
+            raise ValueError(TRAIN_EXOG_ROWS_MUST_MATCH_TRAIN)
+    if future_exog is not None:
+        exog_future = _as_2d_float_array(future_exog, name="future_exog")
+        if int(exog_future.shape[0]) != int(horizon):
+            raise ValueError(FUTURE_EXOG_ROWS_MUST_MATCH_HORIZON)
+    if (exog_train is None) != (exog_future is None):
+        raise ValueError(EXOG_INPUTS_MUST_BE_PAIRED)
+    return exog_train, exog_future
 
 
 def _normalize_interval_levels(interval_levels: Any) -> tuple[float, ...]:
@@ -86,23 +135,16 @@ def _fit_sarimax_result(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("sarimax_forecast requires at least 3 training points")
 
-    exog_train = None
-    exog_future = None
-    if train_exog is not None:
-        exog_train = _as_2d_float_array(train_exog, name="train_exog")
-        if int(exog_train.shape[0]) != int(x.size):
-            raise ValueError("train_exog must have the same number of rows as train")
-    if future_exog is not None:
-        exog_future = _as_2d_float_array(future_exog, name="future_exog")
-        if int(exog_future.shape[0]) != int(horizon):
-            raise ValueError("future_exog must have horizon rows")
-    if (exog_train is None) != (exog_future is None):
-        raise ValueError("train_exog and future_exog must either both be provided or both be omitted")
+    exog_train, exog_future = _validate_exog_pair(
+        train_size=int(x.size),
+        horizon=int(horizon),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    )
 
     model = SARIMAX(
         x,
@@ -142,8 +184,7 @@ def _fit_auto_arima_best_result(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("auto_arima_forecast requires at least 5 training points")
     if int(max_p) < 0 or int(max_d) < 0 or int(max_q) < 0:
@@ -151,18 +192,12 @@ def _fit_auto_arima_best_result(
     if int(max_P) < 0 or int(max_D) < 0 or int(max_Q) < 0:
         raise ValueError("max_P/max_D/max_Q must be >= 0")
 
-    exog_train = None
-    exog_future = None
-    if train_exog is not None:
-        exog_train = _as_2d_float_array(train_exog, name="train_exog")
-        if int(exog_train.shape[0]) != int(x.size):
-            raise ValueError("train_exog must have the same number of rows as train")
-    if future_exog is not None:
-        exog_future = _as_2d_float_array(future_exog, name="future_exog")
-        if int(exog_future.shape[0]) != int(horizon):
-            raise ValueError("future_exog must have horizon rows")
-    if (exog_train is None) != (exog_future is None):
-        raise ValueError("train_exog and future_exog must either both be provided or both be omitted")
+    exog_train, exog_future = _validate_exog_pair(
+        train_size=int(x.size),
+        horizon=int(horizon),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    )
 
     seasonal_period_int = (
         None
@@ -172,7 +207,7 @@ def _fit_auto_arima_best_result(
     if seasonal_period_int is None and any(int(v) > 0 for v in (max_P, max_D, max_Q)):
         raise ValueError("seasonal_period must be provided when max_P/max_D/max_Q are non-zero")
     if seasonal_period_int is not None and seasonal_period_int <= 1:
-        raise ValueError("seasonal_period must be >= 2")
+        raise ValueError("seasonal_period must be at least 2")
 
     ic_key = str(information_criterion).strip().lower()
     if ic_key not in {"aic", "bic"}:
@@ -252,23 +287,16 @@ def arima_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("arima_forecast requires at least 3 training points")
 
-    exog_train = None
-    exog_future = None
-    if train_exog is not None:
-        exog_train = _as_2d_float_array(train_exog, name="train_exog")
-        if int(exog_train.shape[0]) != int(x.size):
-            raise ValueError("train_exog must have the same number of rows as train")
-    if future_exog is not None:
-        exog_future = _as_2d_float_array(future_exog, name="future_exog")
-        if int(exog_future.shape[0]) != int(horizon):
-            raise ValueError("future_exog must have horizon rows")
-    if (exog_train is None) != (exog_future is None):
-        raise ValueError("train_exog and future_exog must either both be provided or both be omitted")
+    exog_train, exog_future = _validate_exog_pair(
+        train_size=int(x.size),
+        horizon=int(horizon),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    )
 
     p, d, q = map(int, order)
     model = ARIMA(
@@ -374,25 +402,17 @@ def autoreg_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("autoreg_forecast requires at least 3 training points")
-    if int(lags) < 0:
-        raise ValueError("lags must be >= 0")
+    _validate_non_negative_lags(lags)
 
-    exog_train = None
-    exog_future = None
-    if train_exog is not None:
-        exog_train = _as_2d_float_array(train_exog, name="train_exog")
-        if int(exog_train.shape[0]) != int(x.size):
-            raise ValueError("train_exog must have the same number of rows as train")
-    if future_exog is not None:
-        exog_future = _as_2d_float_array(future_exog, name="future_exog")
-        if int(exog_future.shape[0]) != int(horizon):
-            raise ValueError("future_exog must have horizon rows")
-    if (exog_train is None) != (exog_future is None):
-        raise ValueError("train_exog and future_exog must either both be provided or both be omitted")
+    exog_train, exog_future = _validate_exog_pair(
+        train_size=int(x.size),
+        horizon=int(horizon),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    )
 
     model = AutoReg(
         x,
@@ -415,14 +435,14 @@ def unobserved_components_forecast(
     train: Any,
     horizon: int,
     *,
-    level: str = "local level",
+    level: str = LOCAL_LEVEL,
     seasonal: int | None = None,
 ) -> np.ndarray:
     """
     Structural / state-space model via statsmodels UnobservedComponents (optional dependency).
 
     Common `level` strings:
-      - "local level"
+      - the default structural level setting
       - "local linear trend"
       - "random walk"
     """
@@ -434,8 +454,7 @@ def unobserved_components_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("unobserved_components_forecast requires at least 3 training points")
     seasonal_int = None if seasonal is None else int(seasonal)
@@ -473,12 +492,10 @@ def stl_arima_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("stl_arima_forecast requires at least 3 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
+    _validate_period_at_least_two(period)
 
     stlf = STLForecast(
         x,
@@ -514,12 +531,10 @@ def stl_ets_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("stl_ets_forecast requires at least 3 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
+    _validate_period_at_least_two(period)
 
     trend_final = None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
     stlf = STLForecast(
@@ -560,14 +575,11 @@ def stl_autoreg_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("stl_autoreg_forecast requires at least 3 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
-    if int(lags) < 0:
-        raise ValueError("lags must be >= 0")
+    _validate_period_at_least_two(period)
+    _validate_non_negative_lags(lags)
 
     stlf = STLForecast(
         x,
@@ -591,7 +603,7 @@ def stl_uc_forecast(
     horizon: int,
     *,
     period: int,
-    level: str = "local level",
+    level: str = LOCAL_LEVEL,
     seasonal: int = 7,
     robust: bool = False,
 ) -> np.ndarray:
@@ -608,12 +620,10 @@ def stl_uc_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("stl_uc_forecast requires at least 3 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
+    _validate_period_at_least_two(period)
 
     decomp = STL(
         x,
@@ -664,12 +674,10 @@ def stl_sarimax_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("stl_sarimax_forecast requires at least 3 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
+    _validate_period_at_least_two(period)
 
     decomp = STL(
         x,
@@ -723,12 +731,10 @@ def stl_auto_arima_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("stl_auto_arima_forecast requires at least 5 training points")
-    if int(period) <= 1:
-        raise ValueError("period must be >= 2")
+    _validate_period_at_least_two(period)
 
     decomp = STL(
         x,
@@ -866,6 +872,13 @@ def _normalize_periods(periods: Any) -> tuple[int, ...]:
     return (int(periods),)
 
 
+def _normalize_valid_periods(periods: Any) -> tuple[int, ...]:
+    periods_tup = _normalize_periods(periods)
+    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
+    return tuple(int(p) for p in periods_tup)
+
+
 def _normalize_fourier_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]:
     if orders is None:
         return tuple([2] * int(n_periods))
@@ -879,13 +892,13 @@ def _normalize_fourier_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]
         if len(parts) == 1 and int(n_periods) > 1:
             return tuple([int(parts[0])] * int(n_periods))
         if len(parts) != int(n_periods):
-            raise ValueError("orders must be an int or have the same length as periods")
+            raise ValueError(FOURIER_ORDERS_MUST_MATCH_PERIODS)
         return tuple(int(p) for p in parts)
     if isinstance(orders, list | tuple):
         if len(orders) == 1 and int(n_periods) > 1:
             return tuple([int(orders[0])] * int(n_periods))
         if len(orders) != int(n_periods):
-            raise ValueError("orders must be an int or have the same length as periods")
+            raise ValueError(FOURIER_ORDERS_MUST_MATCH_PERIODS)
         return tuple(int(o) for o in orders)
     return tuple([int(orders)] * int(n_periods))
 
@@ -927,15 +940,11 @@ def fourier_auto_arima_forecast(
     Dynamic harmonic regression: Fourier seasonal terms + AutoARIMA residual search.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("fourier_auto_arima_forecast requires at least 5 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -985,15 +994,11 @@ def fourier_arima_forecast(
     Dynamic harmonic regression: Fourier seasonal terms + fixed-order ARIMA errors.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("fourier_arima_forecast requires at least 5 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1041,15 +1046,11 @@ def fourier_sarimax_forecast(
     Dynamic harmonic regression: Fourier seasonal terms + fixed-order SARIMAX errors.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("fourier_sarimax_forecast requires at least 5 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1102,15 +1103,11 @@ def fourier_ets_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("fourier_ets_forecast requires at least 3 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1162,21 +1159,17 @@ def fourier_uc_forecast(
     *,
     periods: Any,
     orders: Any = 2,
-    level: str = "local level",
+    level: str = LOCAL_LEVEL,
 ) -> np.ndarray:
     """
     Dynamic harmonic regression: Fourier seasonal terms + UnobservedComponents residuals.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("fourier_uc_forecast requires at least 3 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1232,15 +1225,11 @@ def fourier_autoreg_forecast(
     Dynamic harmonic regression: Fourier seasonal terms + AutoReg / AR-X errors.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("fourier_autoreg_forecast requires at least 3 training points")
 
-    periods_tup = _normalize_periods(periods)
-    if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
-    periods_tup = tuple(int(p) for p in periods_tup)
+    periods_tup = _normalize_valid_periods(periods)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1305,14 +1294,13 @@ def mstl_arima_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_arima_forecast requires at least 10 training points")
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_p = int(max(periods_tup))
     if x.size < 2 * max_p:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_p} points, got {x.size}")
@@ -1369,16 +1357,14 @@ def mstl_autoreg_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_autoreg_forecast requires at least 10 training points")
-    if int(lags) < 0:
-        raise ValueError("lags must be >= 0")
+    _validate_non_negative_lags(lags)
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_p = int(max(periods_tup))
     if x.size < 2 * max_p:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_p} points, got {x.size}")
@@ -1440,14 +1426,13 @@ def mstl_ets_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_ets_forecast requires at least 10 training points")
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_p = int(max(periods_tup))
     if x.size < 2 * max_p:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_p} points, got {x.size}")
@@ -1492,7 +1477,7 @@ def mstl_uc_forecast(
     horizon: int,
     *,
     periods: Any,
-    level: str = "local level",
+    level: str = LOCAL_LEVEL,
     iterate: int = 2,
     lmbda: float | str | None = None,
 ) -> np.ndarray:
@@ -1509,14 +1494,13 @@ def mstl_uc_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_uc_forecast requires at least 10 training points")
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_period = int(max(periods_tup))
     if x.size < 2 * max_period:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_period} points, got {x.size}")
@@ -1579,14 +1563,13 @@ def mstl_sarimax_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_sarimax_forecast requires at least 10 training points")
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_p = int(max(periods_tup))
     if x.size < 2 * max_p:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_p} points, got {x.size}")
@@ -1652,14 +1635,13 @@ def mstl_auto_arima_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("mstl_auto_arima_forecast requires at least 10 training points")
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
     max_period = int(max(periods_tup))
     if x.size < 2 * max_period:
         raise ValueError(f"Need at least 2*max(periods)={2 * max_period} points, got {x.size}")
@@ -1739,8 +1721,7 @@ def tbats_lite_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_forecast requires at least 10 training points")
 
@@ -1750,28 +1731,9 @@ def tbats_lite_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
-    # Normalize orders to match number of periods.
-    if isinstance(orders, int | float):
-        orders_tup = tuple([int(orders)] * len(periods_tup))
-    elif isinstance(orders, str):
-        parts = [p.strip() for p in str(orders).split(",") if p.strip()]
-        if len(parts) == 1 and len(periods_tup) > 1:
-            orders_tup = tuple([int(parts[0])] * len(periods_tup))
-        else:
-            if len(parts) != len(periods_tup):
-                raise ValueError("orders must be an int or have the same length as periods")
-            orders_tup = tuple(int(p) for p in parts)
-    elif isinstance(orders, list | tuple):
-        if len(orders) == 1 and len(periods_tup) > 1:
-            orders_tup = tuple([int(orders[0])] * len(periods_tup))
-        else:
-            if len(orders) != len(periods_tup):
-                raise ValueError("orders must be an int or have the same length as periods")
-            orders_tup = tuple(int(o) for o in orders)
-    else:
-        orders_tup = tuple([int(orders)] * len(periods_tup))
+    orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
 
     if any(int(o) < 0 for o in orders_tup):
         raise ValueError("All orders must be >= 0")
@@ -1841,12 +1803,10 @@ def tbats_lite_autoreg_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_autoreg_forecast requires at least 10 training points")
-    if int(lags) < 0:
-        raise ValueError("lags must be >= 0")
+    _validate_non_negative_lags(lags)
 
     x_work = x
     if boxcox_lambda is not None:
@@ -1854,7 +1814,7 @@ def tbats_lite_autoreg_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -1933,8 +1893,7 @@ def tbats_lite_ets_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_ets_forecast requires at least 10 training points")
 
@@ -1944,7 +1903,7 @@ def tbats_lite_ets_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -2019,8 +1978,7 @@ def tbats_lite_sarimax_forecast(
     TBATS-like baseline: multi-season Fourier terms + SARIMAX residuals (optional Box-Cox).
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_sarimax_forecast requires at least 10 training points")
 
@@ -2030,7 +1988,7 @@ def tbats_lite_sarimax_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -2107,8 +2065,7 @@ def tbats_lite_auto_arima_forecast(
     TBATS-like baseline: multi-season Fourier terms + AutoARIMA residual search (optional Box-Cox).
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_auto_arima_forecast requires at least 10 training points")
 
@@ -2118,7 +2075,7 @@ def tbats_lite_auto_arima_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -2184,15 +2141,14 @@ def tbats_lite_uc_forecast(
     periods: Any,
     orders: Any = 2,
     include_trend: bool = True,
-    level: str = "local level",
+    level: str = LOCAL_LEVEL,
     boxcox_lambda: float | None = None,
 ) -> np.ndarray:
     """
     TBATS-like baseline: multi-season Fourier terms + UnobservedComponents residuals.
     """
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 10:
         raise ValueError("tbats_lite_uc_forecast requires at least 10 training points")
 
@@ -2202,7 +2158,7 @@ def tbats_lite_uc_forecast(
 
     periods_tup = _normalize_periods(periods)
     if not periods_tup or any(int(p) <= 1 for p in periods_tup):
-        raise ValueError("periods must contain integers >= 2")
+        raise ValueError(FOURIER_PERIODS_MUST_BE_VALID)
 
     orders_tup = _normalize_fourier_orders(orders, n_periods=len(periods_tup))
     if any(int(o) < 0 for o in orders_tup):
@@ -2279,8 +2235,7 @@ def ets_forecast(
         ) from e
 
     x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+    _validate_positive_horizon(horizon)
     if x.size < 3:
         raise ValueError("ets_forecast requires at least 3 training points")
 

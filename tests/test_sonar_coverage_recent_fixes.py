@@ -892,6 +892,26 @@ def test_global_regression_source_extracts_repeated_quantile_and_svr_literals() 
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_statsmodels_wrap_source_extracts_repeated_validation_literals() -> None:
+    path = (
+        Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "statsmodels_wrap.py"
+    )
+    literals = [
+        "horizon must be >= 1",
+        "train_exog must have the same number of rows as train",
+        "future_exog must have horizon rows",
+        "train_exog and future_exog must either both be provided or both be omitted",
+        "lags must be >= 0",
+        "local level",
+        "period must be >= 2",
+        "orders must be an int or have the same length as periods",
+        "periods must contain integers >= 2",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
 def test_docsgen_rnn_source_extracts_repeated_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "docsgen" / "rnn.py"
     literals = [
