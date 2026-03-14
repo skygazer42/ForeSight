@@ -7,10 +7,10 @@ if TYPE_CHECKING:
 
 
 def build_foundation_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _factory_hf_timeseries_transformer_direct = context._factory_hf_timeseries_transformer_direct
     return {
-    "hf-timeseries-transformer-direct": ModelSpec(
+    "hf-timeseries-transformer-direct": model_spec(
         key="hf-timeseries-transformer-direct",
         description="Hugging Face TimeSeriesTransformer wrapper (lite) (direct local). Requires transformers + PyTorch.",
         factory=_factory_hf_timeseries_transformer_direct,
@@ -58,7 +58,7 @@ def build_foundation_catalog(context: Any) -> dict[str, Any]:
 
 def _make_wave1_foundation_wrapper_a_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 07 ownership: Lag-Llama / Chronos / TimesFM wrapper families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     np = context.np
 
     extra: dict[str, ModelSpec] = {}
@@ -147,7 +147,7 @@ def _make_wave1_foundation_wrapper_a_specs(context: Any) -> dict[str, ModelSpec]
         return _f
 
     for key, description in families.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,
@@ -162,7 +162,7 @@ def _make_wave1_foundation_wrapper_a_specs(context: Any) -> dict[str, ModelSpec]
 
 def _make_wave1_foundation_wrapper_b_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 08 ownership: Moirai / MOMENT / Time-MoE / Timer-S1 wrapper families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     np = context.np
 
     extra: dict[str, ModelSpec] = {}
@@ -251,7 +251,7 @@ def _make_wave1_foundation_wrapper_b_specs(context: Any) -> dict[str, ModelSpec]
         return _f
 
     for key, description in families.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,

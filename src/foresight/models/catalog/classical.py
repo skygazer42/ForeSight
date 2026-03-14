@@ -10,7 +10,7 @@ _SMOOTHING_PARAM_HELP = "Smoothing parameter in [0,1]"
 
 
 def build_classical_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _factory_adida = context._factory_adida
     _factory_analog_knn = context._factory_analog_knn
     _factory_ar_ols = context._factory_ar_ols
@@ -56,19 +56,19 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
     _factory_tsb = context._factory_tsb
     _factory_weighted_moving_average = context._factory_weighted_moving_average
     return {
-        "naive-last": ModelSpec(
+        "naive-last": model_spec(
             key="naive-last",
             description="Repeat the last observed value.",
             factory=_factory_naive_last,
         ),
-        "seasonal-naive": ModelSpec(
+        "seasonal-naive": model_spec(
             key="seasonal-naive",
             description="Repeat the last season of length `season_length`.",
             factory=_factory_seasonal_naive,
             default_params={"season_length": 12},
             param_help={"season_length": "Season length for repeating the last season"},
         ),
-        "seasonal-naive-auto": ModelSpec(
+        "seasonal-naive-auto": model_spec(
             key="seasonal-naive-auto",
             description="Auto seasonal-naive baseline (infer season length via ACF scan).",
             factory=_factory_seasonal_naive_auto,
@@ -85,71 +85,71 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "min_corr": "Minimum correlation threshold to accept seasonality (default: 0.2)",
             },
         ),
-        "mean": ModelSpec(
+        "mean": model_spec(
             key="mean",
             description="Repeat the mean of the training window.",
             factory=_factory_mean,
         ),
-        "median": ModelSpec(
+        "median": model_spec(
             key="median",
             description="Repeat the median of the training window.",
             factory=_factory_median,
         ),
-        "drift": ModelSpec(
+        "drift": model_spec(
             key="drift",
             description="Random walk with drift (linear extrapolation from first to last).",
             factory=_factory_drift,
         ),
-        "moving-average": ModelSpec(
+        "moving-average": model_spec(
             key="moving-average",
             description="Repeat the mean of the last `window` values.",
             factory=_factory_moving_average,
             default_params={"window": 3},
             param_help={"window": "Trailing window size for the moving average"},
         ),
-        "weighted-moving-average": ModelSpec(
+        "weighted-moving-average": model_spec(
             key="weighted-moving-average",
             description="Repeat the linearly weighted mean of the last `window` values.",
             factory=_factory_weighted_moving_average,
             default_params={"window": 3},
             param_help={"window": "Trailing window size for the weighted moving average"},
         ),
-        "moving-median": ModelSpec(
+        "moving-median": model_spec(
             key="moving-median",
             description="Repeat the median of the last `window` values.",
             factory=_factory_moving_median,
             default_params={"window": 3},
             param_help={"window": "Trailing window size for the moving median"},
         ),
-        "seasonal-mean": ModelSpec(
+        "seasonal-mean": model_spec(
             key="seasonal-mean",
             description="Repeat the seasonal means for each position in a season.",
             factory=_factory_seasonal_mean,
             default_params={"season_length": 12},
             param_help={"season_length": "Season length for seasonal means"},
         ),
-        "seasonal-drift": ModelSpec(
+        "seasonal-drift": model_spec(
             key="seasonal-drift",
             description="Repeat the last season with per-position drift estimated from the previous season.",
             factory=_factory_seasonal_drift,
             default_params={"season_length": 12},
             param_help={"season_length": "Season length for per-position seasonal drift"},
         ),
-        "ses": ModelSpec(
+        "ses": model_spec(
             key="ses",
             description="Simple Exponential Smoothing (SES).",
             factory=_factory_ses,
             default_params={"alpha": 0.2},
             param_help={"alpha": "Smoothing level in [0, 1]"},
         ),
-        "ses-auto": ModelSpec(
+        "ses-auto": model_spec(
             key="ses-auto",
             description="Auto-tuned SES (grid search over alpha).",
             factory=_factory_ses_auto,
             default_params={"grid_size": 19},
             param_help={"grid_size": "Number of alpha values to try (default: 19)"},
         ),
-        "holt": ModelSpec(
+        "holt": model_spec(
             key="holt",
             description="Holt linear trend exponential smoothing.",
             factory=_factory_holt,
@@ -159,14 +159,14 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "beta": _TREND_SMOOTHING_HELP,
             },
         ),
-        "holt-auto": ModelSpec(
+        "holt-auto": model_spec(
             key="holt-auto",
             description="Auto-tuned Holt (grid search over alpha,beta).",
             factory=_factory_holt_auto,
             default_params={"grid_size": 10},
             param_help={"grid_size": "Grid size per parameter (default: 10)"},
         ),
-        "holt-damped": ModelSpec(
+        "holt-damped": model_spec(
             key="holt-damped",
             description="Holt damped trend exponential smoothing.",
             factory=_factory_holt_damped,
@@ -177,7 +177,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "phi": "Damping parameter in [0, 1] (phi=1 reduces to Holt)",
             },
         ),
-        "holt-winters-add": ModelSpec(
+        "holt-winters-add": model_spec(
             key="holt-winters-add",
             description="Holt-Winters additive seasonality + additive trend.",
             factory=_factory_holt_winters_add,
@@ -189,7 +189,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "gamma": "Seasonal smoothing in [0, 1]",
             },
         ),
-        "holt-winters-mul": ModelSpec(
+        "holt-winters-mul": model_spec(
             key="holt-winters-mul",
             description="Holt-Winters multiplicative seasonality + additive trend (positive series only).",
             factory=_factory_holt_winters_mul,
@@ -201,7 +201,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "gamma": "Seasonal smoothing in [0, 1]",
             },
         ),
-        "holt-winters-add-auto": ModelSpec(
+        "holt-winters-add-auto": model_spec(
             key="holt-winters-add-auto",
             description="Auto-tuned Holt-Winters additive (small grid search).",
             factory=_factory_holt_winters_add_auto,
@@ -211,7 +211,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "grid_size": "Grid size per parameter (default: 7)",
             },
         ),
-        "holt-winters-mul-auto": ModelSpec(
+        "holt-winters-mul-auto": model_spec(
             key="holt-winters-mul-auto",
             description="Auto-tuned Holt-Winters multiplicative (small grid search).",
             factory=_factory_holt_winters_mul_auto,
@@ -221,35 +221,35 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "grid_size": "Grid size per parameter (default: 7)",
             },
         ),
-        "theta": ModelSpec(
+        "theta": model_spec(
             key="theta",
             description="Theta-style baseline (SES level + half-slope drift).",
             factory=_factory_theta,
             default_params={"alpha": 0.2},
             param_help={"alpha": "SES smoothing level in [0, 1]"},
         ),
-        "theta-auto": ModelSpec(
+        "theta-auto": model_spec(
             key="theta-auto",
             description="Auto-tuned Theta-style baseline (grid search over alpha).",
             factory=_factory_theta_auto,
             default_params={"grid_size": 19},
             param_help={"grid_size": _ALPHA_GRID_SIZE_HELP},
         ),
-        "ar-ols": ModelSpec(
+        "ar-ols": model_spec(
             key="ar-ols",
             description="Autoregression AR(p) fitted by OLS (recursive forecast).",
             factory=_factory_ar_ols,
             default_params={"p": 5},
             param_help={"p": "AR order"},
         ),
-        "ar-ols-lags": ModelSpec(
+        "ar-ols-lags": model_spec(
             key="ar-ols-lags",
             description="Autoregression with custom lag set, fitted by OLS (recursive forecast).",
             factory=_factory_ar_ols_lags,
             default_params={"lags": (1, 2, 3, 4, 5)},
             param_help={"lags": "Lag indices (e.g. 1,2,12)"},
         ),
-        "sar-ols": ModelSpec(
+        "sar-ols": model_spec(
             key="sar-ols",
             description="Seasonal AR using OLS with short and seasonal lags (recursive forecast).",
             factory=_factory_sar_ols,
@@ -260,42 +260,42 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "season_length": "Season length (e.g. 12 for monthly)",
             },
         ),
-        "ar-ols-auto": ModelSpec(
+        "ar-ols-auto": model_spec(
             key="ar-ols-auto",
             description="Auto AR(p) by AIC (OLS), recursive forecast.",
             factory=_factory_ar_ols_auto,
             default_params={"max_p": 10},
             param_help={"max_p": "Maximum AR order to consider"},
         ),
-        "croston": ModelSpec(
+        "croston": model_spec(
             key="croston",
             description="Croston classic intermittent-demand method.",
             factory=_factory_croston,
             default_params={"alpha": 0.1},
             param_help={"alpha": _SMOOTHING_PARAM_HELP},
         ),
-        "croston-sba": ModelSpec(
+        "croston-sba": model_spec(
             key="croston-sba",
             description="Croston-SBA intermittent-demand method (bias-corrected).",
             factory=_factory_croston_sba,
             default_params={"alpha": 0.1},
             param_help={"alpha": _SMOOTHING_PARAM_HELP},
         ),
-        "croston-sbj": ModelSpec(
+        "croston-sbj": model_spec(
             key="croston-sbj",
             description="Croston-SBJ intermittent-demand method (bias-corrected).",
             factory=_factory_croston_sbj,
             default_params={"alpha": 0.1},
             param_help={"alpha": _SMOOTHING_PARAM_HELP},
         ),
-        "croston-opt": ModelSpec(
+        "croston-opt": model_spec(
             key="croston-opt",
             description="Croston classic with alpha tuned by in-sample SSE grid search.",
             factory=_factory_croston_opt,
             default_params={"grid_size": 19},
             param_help={"grid_size": _ALPHA_GRID_SIZE_HELP},
         ),
-        "les": ModelSpec(
+        "les": model_spec(
             key="les",
             description="LES intermittent-demand method (linear decay under no demand).",
             factory=_factory_les,
@@ -305,7 +305,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "beta": "Interval smoothing in [0,1] (also controls decay rate)",
             },
         ),
-        "tsb": ModelSpec(
+        "tsb": model_spec(
             key="tsb",
             description="TSB intermittent-demand method (probability + size smoothing).",
             factory=_factory_tsb,
@@ -315,7 +315,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "beta": "Probability smoothing in [0,1]",
             },
         ),
-        "adida": ModelSpec(
+        "adida": model_spec(
             key="adida",
             description="ADIDA aggregation/disaggregation intermittent-demand baseline.",
             factory=_factory_adida,
@@ -326,7 +326,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "alpha": "SES alpha when base='ses'",
             },
         ),
-        "fourier": ModelSpec(
+        "fourier": model_spec(
             key="fourier",
             description="Fourier regression (seasonality + optional trend).",
             factory=_factory_fourier,
@@ -337,7 +337,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "include_trend": "Include linear trend term (true/false)",
             },
         ),
-        "fourier-multi": ModelSpec(
+        "fourier-multi": model_spec(
             key="fourier-multi",
             description="Fourier regression with multiple seasonalities.",
             factory=_factory_fourier_multi,
@@ -348,14 +348,14 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "include_trend": "Include linear trend term (true/false)",
             },
         ),
-        "poly-trend": ModelSpec(
+        "poly-trend": model_spec(
             key="poly-trend",
             description="Polynomial trend regression on time index.",
             factory=_factory_poly_trend,
             default_params={"degree": 1},
             param_help={"degree": "Polynomial degree (0=mean, 1=linear, 2=quadratic, ...)"},
         ),
-        "fft": ModelSpec(
+        "fft": model_spec(
             key="fft",
             description="FFT-based extrapolation (top-K frequencies + optional trend).",
             factory=_factory_fft,
@@ -365,7 +365,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "include_trend": "Detrend with linear regression before FFT (true/false)",
             },
         ),
-        "ssa": ModelSpec(
+        "ssa": model_spec(
             key="ssa",
             description="Singular Spectrum Analysis (SSA) recurrent forecast (rank-truncated SVD).",
             factory=_factory_ssa,
@@ -375,7 +375,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "rank": "Truncated SVD rank r (>=1)",
             },
         ),
-        "analog-knn": ModelSpec(
+        "analog-knn": model_spec(
             key="analog-knn",
             description="Analog kNN forecasting on lag windows (non-parametric).",
             factory=_factory_analog_knn,
@@ -387,7 +387,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "weights": "Neighbor weights: uniform or distance",
             },
         ),
-        "kalman-level": ModelSpec(
+        "kalman-level": model_spec(
             key="kalman-level",
             description="Kalman filter local-level model (random walk level).",
             factory=_factory_kalman_level,
@@ -397,7 +397,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "obs_variance": "Observation noise variance (r); None for heuristic default",
             },
         ),
-        "kalman-trend": ModelSpec(
+        "kalman-trend": model_spec(
             key="kalman-trend",
             description="Kalman filter local linear trend model (level + trend).",
             factory=_factory_kalman_trend,
@@ -408,7 +408,7 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "obs_variance": "Observation noise variance; None for heuristic default",
             },
         ),
-        "pipeline": ModelSpec(
+        "pipeline": model_spec(
             key="pipeline",
             description="Meta-model: apply transforms then run a base model (params forwarded).",
             factory=_factory_pipeline,
@@ -418,14 +418,14 @@ def build_classical_catalog(context: Any) -> dict[str, Any]:
                 "transforms": "Transform list (e.g. log1p,diff1,standardize)",
             },
         ),
-        "ensemble-mean": ModelSpec(
+        "ensemble-mean": model_spec(
             key="ensemble-mean",
             description="Meta-model: average predictions from several member models.",
             factory=_factory_ensemble_mean,
             default_params={"members": ("naive-last", "seasonal-naive", "theta")},
             param_help={"members": "Comma-separated model keys to average"},
         ),
-        "ensemble-median": ModelSpec(
+        "ensemble-median": model_spec(
             key="ensemble-median",
             description="Meta-model: median of predictions from several member models.",
             factory=_factory_ensemble_median,

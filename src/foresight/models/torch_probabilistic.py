@@ -90,7 +90,7 @@ def torch_probabilistic_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _GaussianMeanHead(nn.Module):
         def __init__(self) -> None:
@@ -190,7 +190,7 @@ def torch_probabilistic_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_make_loss())
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_make_loss())
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():

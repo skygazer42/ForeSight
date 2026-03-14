@@ -561,10 +561,10 @@ def _train_loop(
 
     model = model.to(dev)
 
-    X_t = torch.tensor(X, dtype=torch.float32, device=dev)
-    Y_t = torch.tensor(Y, dtype=torch.float32, device=dev)
+    x_tensor = torch.tensor(X, dtype=torch.float32, device=dev)
+    y_tensor = torch.tensor(Y, dtype=torch.float32, device=dev)
 
-    n = int(X_t.shape[0])
+    n = int(x_tensor.shape[0])
     val_n = 0
     if float(cfg.val_split) > 0.0 and n >= 5:
         val_n = max(1, int(round(float(cfg.val_split) * n)))
@@ -572,11 +572,11 @@ def _train_loop(
 
     if val_n > 0:
         train_end = n - val_n
-        X_train, Y_train = X_t[:train_end], Y_t[:train_end]
-        X_val, Y_val = X_t[train_end:], Y_t[train_end:]
+        X_train, Y_train = x_tensor[:train_end], y_tensor[:train_end]
+        x_val, y_val = x_tensor[train_end:], y_tensor[train_end:]
     else:
-        X_train, Y_train = X_t, Y_t
-        X_val, Y_val = None, None
+        X_train, Y_train = x_tensor, y_tensor
+        x_val, y_val = None, None
 
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(X_train, Y_train),
@@ -585,9 +585,9 @@ def _train_loop(
     )
     val_loader = (
         None
-        if X_val is None
+        if x_val is None
         else torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(X_val, Y_val),
+            torch.utils.data.TensorDataset(x_val, y_val),
             batch_size=int(cfg.batch_size),
             shuffle=False,
         )
@@ -722,10 +722,10 @@ def _fit_encoder_direct_model(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     model = build_model(lag_count, h)
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -959,7 +959,7 @@ def torch_lstm_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=int(lags), horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -1002,7 +1002,7 @@ def torch_lstm_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-int(lags) :].astype(float, copy=False).reshape(1, int(lags), 1)
     with torch.no_grad():
@@ -1063,7 +1063,7 @@ def torch_gru_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=int(lags), horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -1106,7 +1106,7 @@ def torch_gru_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-int(lags) :].astype(float, copy=False).reshape(1, int(lags), 1)
     with torch.no_grad():
@@ -1169,7 +1169,7 @@ def torch_tcn_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=int(lags), horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     if isinstance(channels, int):
         chans = (int(channels),)
@@ -1242,7 +1242,7 @@ def torch_tcn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-int(lags) :].astype(float, copy=False).reshape(1, int(lags), 1)
     with torch.no_grad():
@@ -1636,7 +1636,7 @@ def torch_transformer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _TransformerDirect(nn.Module):
         def __init__(self) -> None:
@@ -1679,7 +1679,7 @@ def torch_transformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -3829,8 +3829,8 @@ def torch_retnet_recursive_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=1)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
-    Y_next = Y.reshape(Y.shape[0], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    y_next = Y.reshape(Y.shape[0], 1)
 
     class _RetentionBlock(nn.Module):
         def __init__(self) -> None:
@@ -3922,7 +3922,7 @@ def torch_retnet_recursive_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y_next, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, y_next, cfg=cfg, device=str(device))
 
     hist = x_work[-lag_count:].astype(float, copy=True)
     preds: list[float] = []
@@ -4188,7 +4188,7 @@ def torch_patchtst_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _PatchTSTDirect(nn.Module):
         def __init__(self) -> None:
@@ -4233,7 +4233,7 @@ def torch_patchtst_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -4349,7 +4349,7 @@ def torch_crossformer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _CrossFormerDirect(nn.Module):
         def __init__(self) -> None:
@@ -4412,7 +4412,7 @@ def torch_crossformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -4522,7 +4522,7 @@ def torch_pyraformer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _PyraFormerDirect(nn.Module):
         def __init__(self) -> None:
@@ -4604,7 +4604,7 @@ def torch_pyraformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -4691,7 +4691,7 @@ def torch_perceiver_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _PerceiverDirect(nn.Module):
         def __init__(self) -> None:
@@ -4756,7 +4756,7 @@ def torch_perceiver_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -4832,7 +4832,7 @@ def torch_tsmixer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     d = int(d_model)
 
@@ -4895,7 +4895,7 @@ def torch_tsmixer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -4982,7 +4982,7 @@ def torch_cnn_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     k = int(kernel_size)
     pad = k // 2
@@ -5039,7 +5039,7 @@ def torch_cnn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5116,7 +5116,7 @@ def torch_resnet1d_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     k = int(kernel_size)
     pad = k // 2
@@ -5175,7 +5175,7 @@ def torch_resnet1d_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5248,7 +5248,7 @@ def torch_wavenet_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     k = int(kernel_size)
 
@@ -5315,7 +5315,7 @@ def torch_wavenet_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5378,7 +5378,7 @@ def torch_bilstm_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -5421,7 +5421,7 @@ def torch_bilstm_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5484,7 +5484,7 @@ def torch_bigru_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -5526,7 +5526,7 @@ def torch_bigru_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5596,7 +5596,7 @@ def torch_attn_gru_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _AttnGRUDirect(nn.Module):
         def __init__(self) -> None:
@@ -5637,7 +5637,7 @@ def torch_attn_gru_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -5728,7 +5728,7 @@ def torch_segrnn_direct_forecast(
             windows = np.pad(windows, ((0, 0), (pad_left, 0)), mode="edge")
         return windows.reshape(int(windows.shape[0]), n_segments, seg_len)
 
-    X_seg = _segmentize_windows(X)
+    x_segments = _segmentize_windows(X)
 
     class _SegRNNDirect(nn.Module):
         def __init__(self) -> None:
@@ -5779,7 +5779,7 @@ def torch_segrnn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seg, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_segments, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_seg = _segmentize_windows(feat)
@@ -5873,7 +5873,7 @@ def torch_moderntcn_direct_forecast(
             windows = np.pad(windows, ((0, 0), (pad_left, 0)), mode="edge")
         return windows.reshape(int(windows.shape[0]), n_patches, patch)
 
-    X_patch = _patchify_windows(X)
+    x_patches = _patchify_windows(X)
     hidden_dim = max(1, int(round(d * expand)))
 
     class _ModernTCNBlock(nn.Module):
@@ -5939,7 +5939,7 @@ def torch_moderntcn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_patch, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_patches, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_patch = _patchify_windows(feat)
@@ -6039,7 +6039,7 @@ def torch_basisformer_direct_forecast(
             windows = np.pad(windows, ((0, 0), (pad_left, 0)), mode="edge")
         return windows.reshape(int(windows.shape[0]), n_patches, patch)
 
-    X_patch = _patchify_windows(X)
+    x_patches = _patchify_windows(X)
 
     class _BasisformerDirect(nn.Module):
         def __init__(self) -> None:
@@ -6105,7 +6105,7 @@ def torch_basisformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_patch, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_patches, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_patch = _patchify_windows(feat)
@@ -6201,7 +6201,7 @@ def torch_witran_direct_forecast(
             windows = np.pad(windows, ((0, 0), (pad_left, 0)), mode="edge")
         return windows.reshape(int(windows.shape[0]), rows, cols)
 
-    X_grid = _gridify_windows(X)
+    x_grid = _gridify_windows(X)
 
     class _GridBlock(nn.Module):
         def __init__(self) -> None:
@@ -6290,7 +6290,7 @@ def torch_witran_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_grid, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_grid, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_grid = _gridify_windows(feat)
@@ -6367,7 +6367,7 @@ def torch_crossgnn_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
     topk = min(k, lag_count)
 
     class _GraphBlock(nn.Module):
@@ -6445,7 +6445,7 @@ def torch_crossgnn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -6535,7 +6535,7 @@ def torch_pathformer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _ScaleExpert(nn.Module):
         def __init__(self, patch_len: int) -> None:
@@ -6626,7 +6626,7 @@ def torch_pathformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -6715,7 +6715,7 @@ def torch_timesmamba_direct_forecast(
             windows = np.pad(windows, ((0, 0), (pad_left, 0)), mode="edge")
         return windows.reshape(int(windows.shape[0]), n_patches, patch)
 
-    X_patch = _patchify_windows(X)
+    x_patches = _patchify_windows(X)
 
     class _SSMBlock(nn.Module):
         def __init__(self) -> None:
@@ -6785,7 +6785,7 @@ def torch_timesmamba_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_patch, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_patches, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_patch = _patchify_windows(feat)
@@ -6857,7 +6857,7 @@ def torch_fnet_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     d = int(d_model)
 
@@ -6915,7 +6915,7 @@ def torch_fnet_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -6987,7 +6987,7 @@ def torch_gmlp_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _SpatialGatingUnit(nn.Module):
         def __init__(self) -> None:
@@ -7054,7 +7054,7 @@ def torch_gmlp_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -7404,8 +7404,8 @@ def torch_deepar_recursive_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=1)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
-    Y_next = Y.reshape(Y.shape[0], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    y_next = Y.reshape(Y.shape[0], 1)
 
     class _DeepAR(nn.Module):
         def __init__(self) -> None:
@@ -7450,7 +7450,7 @@ def torch_deepar_recursive_forecast(
         restore_best=bool(restore_best),
     )
     model = _train_loop(
-        model, X_seq, Y_next, cfg=cfg, device=str(device), loss_fn_override=_gaussian_nll
+        model, x_seq, y_next, cfg=cfg, device=str(device), loss_fn_override=_gaussian_nll
     )
 
     hist = x_work[-lag_count:].astype(float, copy=True)
@@ -7533,8 +7533,8 @@ def torch_qrnn_recursive_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=1)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
-    Y_next = Y.reshape(Y.shape[0], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    y_next = Y.reshape(Y.shape[0], 1)
 
     class _QRNN(nn.Module):
         def __init__(self) -> None:
@@ -7577,7 +7577,7 @@ def torch_qrnn_recursive_forecast(
         restore_best=bool(restore_best),
     )
     model = _train_loop(
-        model, X_seq, Y_next, cfg=cfg, device=str(device), loss_fn_override=_pinball
+        model, x_seq, y_next, cfg=cfg, device=str(device), loss_fn_override=_pinball
     )
 
     hist = x_work[-lag_count:].astype(float, copy=True)
@@ -7661,7 +7661,7 @@ def torch_linear_attention_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _LinearAttention(nn.Module):
         def __init__(self) -> None:
@@ -7740,7 +7740,7 @@ def torch_linear_attention_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -7833,7 +7833,7 @@ def torch_inception_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _InceptionBlock(nn.Module):
         def __init__(self) -> None:
@@ -7897,7 +7897,7 @@ def torch_inception_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -7975,7 +7975,7 @@ def torch_mamba_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _MambaBlock(nn.Module):
         def __init__(self) -> None:
@@ -8054,7 +8054,7 @@ def torch_mamba_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -8131,7 +8131,7 @@ def torch_rwkv_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _RWKVBlock(nn.Module):
         def __init__(self) -> None:
@@ -8266,7 +8266,7 @@ def torch_rwkv_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -8347,7 +8347,7 @@ def torch_hyena_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _HyenaBlock(nn.Module):
         def __init__(self) -> None:
@@ -8416,7 +8416,7 @@ def torch_hyena_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -8499,7 +8499,7 @@ def torch_dilated_rnn_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _DilatedRNNDirect(nn.Module):
         def __init__(self) -> None:
@@ -8582,7 +8582,7 @@ def torch_dilated_rnn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -8811,7 +8811,7 @@ def torch_scinet_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     pad_left = (k - 1) // 2
     pad_right = (k - 1) - pad_left
@@ -8912,7 +8912,7 @@ def torch_scinet_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -9003,7 +9003,7 @@ def torch_etsformer_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     def _logit(p: float) -> float:
         p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
@@ -9093,7 +9093,7 @@ def torch_etsformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -9181,7 +9181,7 @@ def torch_esrnn_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     def _logit(p: float) -> float:
         p2 = min(max(float(p), 1e-4), 1.0 - 1e-4)
@@ -9280,7 +9280,7 @@ def torch_esrnn_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():

@@ -210,8 +210,8 @@ def torch_xformer_direct_forecast(
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
     # Build sequence input with horizon tokens appended.
     seq_len = lag_count + h
-    X_pad = np.concatenate([X, np.zeros((X.shape[0], h), dtype=float)], axis=1)
-    X_seq = X_pad.reshape(X_pad.shape[0], seq_len, 1)
+    x_pad = np.concatenate([X, np.zeros((X.shape[0], h), dtype=float)], axis=1)
+    x_seq = x_pad.reshape(x_pad.shape[0], seq_len, 1)
 
     head_dim = d // heads
 
@@ -365,8 +365,8 @@ def torch_xformer_direct_forecast(
             return xb.view(B, L, heads, head_dim).transpose(1, 2)  # (B,H,L,dh)
 
         def _merge_heads(self, xb: Any) -> Any:
-            B, Hh, L, dh = xb.shape
-            return xb.transpose(1, 2).contiguous().view(B, L, Hh * dh)
+            B, head_count, L, dh = xb.shape
+            return xb.transpose(1, 2).contiguous().view(B, L, head_count * dh)
 
         def forward(self, xb: Any) -> Any:
             B, L, _ = xb.shape
@@ -397,9 +397,9 @@ def torch_xformer_direct_forecast(
 
             if attn_s == "linformer":
                 E = self.E
-                Fp = self.F
+                f_proj = self.F
                 k_proj = torch.einsum("hml,bhld->bhmd", E, k)
-                v_proj = torch.einsum("hml,bhld->bhmd", Fp, v)
+                v_proj = torch.einsum("hml,bhld->bhmd", f_proj, v)
                 scores = torch.einsum(_EINSUM_QK_SCORES, q * scale, k_proj)
                 w = torch.softmax(scores, dim=-1)
                 out = torch.einsum(_EINSUM_ATTN_OUT, w, v_proj)
@@ -428,14 +428,14 @@ def torch_xformer_direct_forecast(
                     k_s = k.gather(dim=2, index=gather_idx)
                     v_s = v.gather(dim=2, index=gather_idx)
 
-                    L_pad = int(int(math.ceil(float(L) / float(bs))) * bs)
-                    pad = int(L_pad - int(L))
+                    padded_len = int(int(math.ceil(float(L) / float(bs))) * bs)
+                    pad = int(padded_len - int(L))
                     if pad > 0:
                         q_s = torch.cat([q_s, q_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
                         k_s = torch.cat([k_s, k_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
                         v_s = torch.cat([v_s, v_s[:, :, -1:, :].expand(-1, -1, pad, -1)], dim=2)
 
-                    n_chunks = int(L_pad // bs)
+                    n_chunks = int(padded_len // bs)
                     q_c = q_s.reshape(B, heads, n_chunks, bs, head_dim)
                     k_c = k_s.reshape(B, heads, n_chunks, bs, head_dim)
                     v_c = v_s.reshape(B, heads, n_chunks, bs, head_dim)
@@ -449,7 +449,7 @@ def torch_xformer_direct_forecast(
                     w = torch.softmax(scores, dim=-1)
                     out_c = torch.einsum("bhnqk,bhnkd->bhnqd", w, v_cat)
 
-                    out_s = out_c.reshape(B, heads, L_pad, head_dim)[:, :, :L, :]
+                    out_s = out_c.reshape(B, heads, padded_len, head_dim)[:, :, :L, :]
                     inv = sort_idx.argsort(dim=-1)
                     out = out_s.gather(dim=2, index=inv.unsqueeze(-1).expand(-1, -1, -1, head_dim))
                     out_acc = out_acc + out
@@ -471,11 +471,11 @@ def torch_xformer_direct_forecast(
                 k_lm = k_pad.reshape(B, heads, m, chunk, head_dim).mean(dim=3)
 
                 A = torch.softmax(torch.einsum(_EINSUM_QK_SCORES, q * scale, k_lm), dim=-1)
-                Bmat = torch.softmax(torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm), dim=-1)
+                b_mat = torch.softmax(torch.einsum("bhmd,bhnd->bhmn", q_lm * scale, k_lm), dim=-1)
                 C = torch.softmax(torch.einsum("bhmd,bhld->bhml", q_lm * scale, k), dim=-1)
-                B_inv = torch.linalg.pinv(Bmat)
+                b_inv = torch.linalg.pinv(b_mat)
                 CV = torch.einsum("bhml,bhld->bhmd", C, v)
-                out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, B_inv, CV)
+                out = torch.einsum("bhlm,bhmn,bhnd->bhld", A, b_inv, CV)
                 return self.out(self._merge_heads(out))
 
             if attn_s == "autocorr":
@@ -737,7 +737,7 @@ def torch_xformer_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count)
     feat_pad = np.concatenate([feat, np.zeros((1, h), dtype=float)], axis=1).reshape(1, seq_len, 1)

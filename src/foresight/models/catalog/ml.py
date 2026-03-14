@@ -4,7 +4,7 @@ from typing import Any
 
 
 def build_ml_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _LAG_DERIVED_DEFAULTS = context._LAG_DERIVED_DEFAULTS
     _LAG_DERIVED_PARAM_HELP = context._LAG_DERIVED_PARAM_HELP
     _factory_adaboost_lag = context._factory_adaboost_lag
@@ -188,7 +188,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)"
     )
     return {
-    "lr-lag": ModelSpec(
+    "lr-lag": model_spec(
         key="lr-lag",
         description="Linear regression on lag features (OLS, recursive forecast).",
         factory=_factory_lr_lag,
@@ -200,7 +200,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
             "diff_lags": "Optional diffs: diff_k = last - lag(k+1); each k must be < lags",
         },
     ),
-    "lr-lag-direct": ModelSpec(
+    "lr-lag-direct": model_spec(
         key="lr-lag-direct",
         description="Linear regression on lag features (OLS, direct multi-horizon).",
         factory=_factory_lr_lag_direct,
@@ -212,7 +212,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
             "diff_lags": "Optional diffs: diff_k = last - lag(k+1); each k must be < lags",
         },
     ),
-    "ridge-lag": ModelSpec(
+    "ridge-lag": model_spec(
         key="ridge-lag",
         description="Ridge regression on lag features (recursive forecast). Requires scikit-learn.",
         factory=_factory_ridge_lag,
@@ -224,7 +224,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "rf-lag": ModelSpec(
+    "rf-lag": model_spec(
         key="rf-lag",
         description="RandomForest on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_rf_lag,
@@ -242,7 +242,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "lasso-lag": ModelSpec(
+    "lasso-lag": model_spec(
         key="lasso-lag",
         description="Lasso on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_lasso_lag,
@@ -255,7 +255,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "elasticnet-lag": ModelSpec(
+    "elasticnet-lag": model_spec(
         key="elasticnet-lag",
         description="ElasticNet on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_elasticnet_lag,
@@ -275,7 +275,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "knn-lag": ModelSpec(
+    "knn-lag": model_spec(
         key="knn-lag",
         description="KNN regression on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_knn_lag,
@@ -293,7 +293,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "gbrt-lag": ModelSpec(
+    "gbrt-lag": model_spec(
         key="gbrt-lag",
         description="GradientBoosting on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_gbrt_lag,
@@ -315,7 +315,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "ridge-lag-direct": ModelSpec(
+    "ridge-lag-direct": model_spec(
         key="ridge-lag-direct",
         description="Ridge regression on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_ridge_lag_direct,
@@ -327,7 +327,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "decision-tree-lag": ModelSpec(
+    "decision-tree-lag": model_spec(
         key="decision-tree-lag",
         description="DecisionTreeRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_decision_tree_lag,
@@ -340,7 +340,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "extra-trees-lag": ModelSpec(
+    "extra-trees-lag": model_spec(
         key="extra-trees-lag",
         description="ExtraTreesRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_extra_trees_lag,
@@ -360,7 +360,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "adaboost-lag": ModelSpec(
+    "adaboost-lag": model_spec(
         key="adaboost-lag",
         description="AdaBoostRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_adaboost_lag,
@@ -380,7 +380,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "bagging-lag": ModelSpec(
+    "bagging-lag": model_spec(
         key="bagging-lag",
         description="BaggingRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_bagging_lag,
@@ -400,7 +400,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "hgb-lag": ModelSpec(
+    "hgb-lag": model_spec(
         key="hgb-lag",
         description="HistGradientBoostingRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_hgb_lag,
@@ -422,7 +422,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "svr-lag": ModelSpec(
+    "svr-lag": model_spec(
         key="svr-lag",
         description="SVR (RBF) on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_svr_lag,
@@ -442,7 +442,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "linear-svr-lag": ModelSpec(
+    "linear-svr-lag": model_spec(
         key="linear-svr-lag",
         description="LinearSVR on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_linear_svr_lag,
@@ -464,7 +464,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "kernel-ridge-lag": ModelSpec(
+    "kernel-ridge-lag": model_spec(
         key="kernel-ridge-lag",
         description="KernelRidge on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_kernel_ridge_lag,
@@ -484,7 +484,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "mlp-lag": ModelSpec(
+    "mlp-lag": model_spec(
         key="mlp-lag",
         description="MLPRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_mlp_lag,
@@ -508,7 +508,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "huber-lag": ModelSpec(
+    "huber-lag": model_spec(
         key="huber-lag",
         description="HuberRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_huber_lag,
@@ -528,7 +528,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "quantile-lag": ModelSpec(
+    "quantile-lag": model_spec(
         key="quantile-lag",
         description="QuantileRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_quantile_lag,
@@ -541,7 +541,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "sgd-lag": ModelSpec(
+    "sgd-lag": model_spec(
         key="sgd-lag",
         description="SGDRegressor on lag features (direct multi-horizon). Requires scikit-learn.",
         factory=_factory_sgd_lag,
@@ -563,7 +563,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("ml",),
     ),
-    "lgbm-custom-lag": ModelSpec(
+    "lgbm-custom-lag": model_spec(
         key="lgbm-custom-lag",
         description=(
             "Customizable LightGBM (LGBMRegressor) on lag features (direct multi-horizon). "
@@ -608,7 +608,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-custom-lag-recursive": ModelSpec(
+    "lgbm-custom-lag-recursive": model_spec(
         key="lgbm-custom-lag-recursive",
         description=(
             "Customizable LightGBM (LGBMRegressor) on lag features (one-step trained, recursive forecast). "
@@ -653,7 +653,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-custom-step-lag": ModelSpec(
+    "lgbm-custom-step-lag": model_spec(
         key="lgbm-custom-step-lag",
         description=(
             "Customizable LightGBM (LGBMRegressor) on lag features with a learned step-index feature "
@@ -705,7 +705,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-custom-dirrec-lag": ModelSpec(
+    "lgbm-custom-dirrec-lag": model_spec(
         key="lgbm-custom-dirrec-lag",
         description=(
             "Customizable LightGBM (LGBMRegressor) DirRec strategy on lag features (per-step models with "
@@ -750,7 +750,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-lag": ModelSpec(
+    "lgbm-lag": model_spec(
         key="lgbm-lag",
         description="LightGBM (LGBMRegressor) on lag features (direct multi-horizon). Requires lightgbm.",
         factory=_factory_lgbm_lag,
@@ -786,7 +786,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-lag-recursive": ModelSpec(
+    "lgbm-lag-recursive": model_spec(
         key="lgbm-lag-recursive",
         description=(
             "LightGBM (LGBMRegressor) on lag features (one-step trained, recursive forecast). Requires lightgbm."
@@ -824,7 +824,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-step-lag": ModelSpec(
+    "lgbm-step-lag": model_spec(
         key="lgbm-step-lag",
         description=(
             "LightGBM (LGBMRegressor) on lag features with a learned step-index feature "
@@ -869,7 +869,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "lgbm-dirrec-lag": ModelSpec(
+    "lgbm-dirrec-lag": model_spec(
         key="lgbm-dirrec-lag",
         description=(
             "LightGBM (LGBMRegressor) DirRec strategy on lag features (per-step models with previous-step "
@@ -908,7 +908,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("lgbm",),
     ),
-    "catboost-custom-lag": ModelSpec(
+    "catboost-custom-lag": model_spec(
         key="catboost-custom-lag",
         description=(
             "Customizable CatBoost (CatBoostRegressor) on lag features (direct multi-horizon). "
@@ -943,7 +943,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-custom-lag-recursive": ModelSpec(
+    "catboost-custom-lag-recursive": model_spec(
         key="catboost-custom-lag-recursive",
         description=(
             "Customizable CatBoost (CatBoostRegressor) on lag features (one-step trained, recursive forecast). "
@@ -978,7 +978,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-custom-step-lag": ModelSpec(
+    "catboost-custom-step-lag": model_spec(
         key="catboost-custom-step-lag",
         description=(
             "Customizable CatBoost (CatBoostRegressor) on lag features with a learned step-index feature "
@@ -1020,7 +1020,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-custom-dirrec-lag": ModelSpec(
+    "catboost-custom-dirrec-lag": model_spec(
         key="catboost-custom-dirrec-lag",
         description=(
             "Customizable CatBoost (CatBoostRegressor) DirRec strategy on lag features (per-step models with "
@@ -1055,7 +1055,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-lag": ModelSpec(
+    "catboost-lag": model_spec(
         key="catboost-lag",
         description="CatBoost (CatBoostRegressor) on lag features (direct multi-horizon). Requires catboost.",
         factory=_factory_catboost_lag,
@@ -1081,7 +1081,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-lag-recursive": ModelSpec(
+    "catboost-lag-recursive": model_spec(
         key="catboost-lag-recursive",
         description=(
             "CatBoost (CatBoostRegressor) on lag features (one-step trained, recursive forecast). Requires catboost."
@@ -1109,7 +1109,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-step-lag": ModelSpec(
+    "catboost-step-lag": model_spec(
         key="catboost-step-lag",
         description=(
             "CatBoost (CatBoostRegressor) on lag features with a learned step-index feature "
@@ -1144,7 +1144,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "catboost-dirrec-lag": ModelSpec(
+    "catboost-dirrec-lag": model_spec(
         key="catboost-dirrec-lag",
         description=(
             "CatBoost (CatBoostRegressor) DirRec strategy on lag features (per-step models with previous-step "
@@ -1173,7 +1173,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("catboost",),
     ),
-    "xgb-custom-lag": ModelSpec(
+    "xgb-custom-lag": model_spec(
         key="xgb-custom-lag",
         description=(
             "Customizable XGBoost (XGBRegressor) on lag features (direct multi-horizon). "
@@ -1218,7 +1218,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-custom-lag-recursive": ModelSpec(
+    "xgb-custom-lag-recursive": model_spec(
         key="xgb-custom-lag-recursive",
         description=(
             "Customizable XGBoost (XGBRegressor) on lag features (one-step trained, recursive forecast). "
@@ -1263,7 +1263,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-custom-step-lag": ModelSpec(
+    "xgb-custom-step-lag": model_spec(
         key="xgb-custom-step-lag",
         description=(
             "Customizable XGBoost (XGBRegressor) on lag features using a learned multi-horizon step-index "
@@ -1315,7 +1315,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-custom-dirrec-lag": ModelSpec(
+    "xgb-custom-dirrec-lag": model_spec(
         key="xgb-custom-dirrec-lag",
         description=(
             "Customizable XGBoost (XGBRegressor) DirRec strategy on lag features (per-step models with "
@@ -1361,7 +1361,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-custom-mimo-lag": ModelSpec(
+    "xgb-custom-mimo-lag": model_spec(
         key="xgb-custom-mimo-lag",
         description=(
             "Customizable XGBoost (XGBRegressor) MIMO multi-output regression on lag features (single-model "
@@ -1409,7 +1409,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-step-lag": ModelSpec(
+    "xgb-step-lag": model_spec(
         key="xgb-step-lag",
         description=(
             "XGBoost (XGBRegressor) on lag features with a learned multi-horizon 'step index' feature "
@@ -1456,7 +1456,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-dirrec-lag": ModelSpec(
+    "xgb-dirrec-lag": model_spec(
         key="xgb-dirrec-lag",
         description=(
             "XGBoost (XGBRegressor) DirRec strategy on lag features (per-step models using previous-step "
@@ -1497,7 +1497,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-mimo-lag": ModelSpec(
+    "xgb-mimo-lag": model_spec(
         key="xgb-mimo-lag",
         description=(
             "XGBoost (XGBRegressor) MIMO multi-output regression on lag features (single-model direct "
@@ -1540,7 +1540,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-lag": ModelSpec(
+    "xgb-lag": model_spec(
         key="xgb-lag",
         description="XGBoost (XGBRegressor) on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_lag,
@@ -1578,7 +1578,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-lag-recursive": ModelSpec(
+    "xgb-lag-recursive": model_spec(
         key="xgb-lag-recursive",
         description="XGBoost (XGBRegressor) on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_lag_recursive,
@@ -1616,7 +1616,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-msle-lag": ModelSpec(
+    "xgb-msle-lag": model_spec(
         key="xgb-msle-lag",
         description="XGBoost squared-log-error objective on lag features (direct multi-horizon). Requires xgboost (y>=0).",
         factory=_factory_xgb_msle_lag,
@@ -1654,7 +1654,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-msle-lag-recursive": ModelSpec(
+    "xgb-msle-lag-recursive": model_spec(
         key="xgb-msle-lag-recursive",
         description="XGBoost squared-log-error objective on lag features (one-step trained, recursive forecast). Requires xgboost (y>=0).",
         factory=_factory_xgb_msle_lag_recursive,
@@ -1692,7 +1692,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-logistic-lag": ModelSpec(
+    "xgb-logistic-lag": model_spec(
         key="xgb-logistic-lag",
         description="XGBoost logistic objective on lag features (direct multi-horizon). Requires xgboost (y in [0,1]).",
         factory=_factory_xgb_logistic_lag,
@@ -1730,7 +1730,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-logistic-lag-recursive": ModelSpec(
+    "xgb-logistic-lag-recursive": model_spec(
         key="xgb-logistic-lag-recursive",
         description="XGBoost logistic objective on lag features (one-step trained, recursive forecast). Requires xgboost (y in [0,1]).",
         factory=_factory_xgb_logistic_lag_recursive,
@@ -1768,7 +1768,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-dart-lag": ModelSpec(
+    "xgb-dart-lag": model_spec(
         key="xgb-dart-lag",
         description="XGBoost DART booster on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_dart_lag,
@@ -1806,7 +1806,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-dart-lag-recursive": ModelSpec(
+    "xgb-dart-lag-recursive": model_spec(
         key="xgb-dart-lag-recursive",
         description="XGBoost DART booster on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_dart_lag_recursive,
@@ -1844,7 +1844,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgbrf-lag": ModelSpec(
+    "xgbrf-lag": model_spec(
         key="xgbrf-lag",
         description="XGBoost random forest (XGBRFRegressor) on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgbrf_lag,
@@ -1878,7 +1878,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgbrf-lag-recursive": ModelSpec(
+    "xgbrf-lag-recursive": model_spec(
         key="xgbrf-lag-recursive",
         description="XGBoost random forest (XGBRFRegressor) on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgbrf_lag_recursive,
@@ -1912,7 +1912,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-linear-lag": ModelSpec(
+    "xgb-linear-lag": model_spec(
         key="xgb-linear-lag",
         description="XGBoost linear booster (gblinear) on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_linear_lag,
@@ -1944,7 +1944,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-linear-lag-recursive": ModelSpec(
+    "xgb-linear-lag-recursive": model_spec(
         key="xgb-linear-lag-recursive",
         description="XGBoost linear booster (gblinear) on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_linear_lag_recursive,
@@ -1976,7 +1976,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-mae-lag": ModelSpec(
+    "xgb-mae-lag": model_spec(
         key="xgb-mae-lag",
         description="XGBoost MAE objective on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_mae_lag,
@@ -2014,7 +2014,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-mae-lag-recursive": ModelSpec(
+    "xgb-mae-lag-recursive": model_spec(
         key="xgb-mae-lag-recursive",
         description="XGBoost MAE objective on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_mae_lag_recursive,
@@ -2052,7 +2052,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-huber-lag": ModelSpec(
+    "xgb-huber-lag": model_spec(
         key="xgb-huber-lag",
         description="XGBoost pseudo-Huber objective on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_huber_lag,
@@ -2092,7 +2092,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-huber-lag-recursive": ModelSpec(
+    "xgb-huber-lag-recursive": model_spec(
         key="xgb-huber-lag-recursive",
         description="XGBoost pseudo-Huber objective on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_huber_lag_recursive,
@@ -2132,7 +2132,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-quantile-lag": ModelSpec(
+    "xgb-quantile-lag": model_spec(
         key="xgb-quantile-lag",
         description="XGBoost quantile objective on lag features (direct multi-horizon). Requires xgboost.",
         factory=_factory_xgb_quantile_lag,
@@ -2172,7 +2172,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-quantile-lag-recursive": ModelSpec(
+    "xgb-quantile-lag-recursive": model_spec(
         key="xgb-quantile-lag-recursive",
         description="XGBoost quantile objective on lag features (one-step trained, recursive forecast). Requires xgboost.",
         factory=_factory_xgb_quantile_lag_recursive,
@@ -2212,7 +2212,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-poisson-lag": ModelSpec(
+    "xgb-poisson-lag": model_spec(
         key="xgb-poisson-lag",
         description="XGBoost Poisson objective on lag features (direct multi-horizon). Requires xgboost (y>=0).",
         factory=_factory_xgb_poisson_lag,
@@ -2250,7 +2250,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-poisson-lag-recursive": ModelSpec(
+    "xgb-poisson-lag-recursive": model_spec(
         key="xgb-poisson-lag-recursive",
         description="XGBoost Poisson objective on lag features (one-step trained, recursive forecast). Requires xgboost (y>=0).",
         factory=_factory_xgb_poisson_lag_recursive,
@@ -2288,7 +2288,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-gamma-lag": ModelSpec(
+    "xgb-gamma-lag": model_spec(
         key="xgb-gamma-lag",
         description="XGBoost Gamma objective on lag features (direct multi-horizon). Requires xgboost (y>0).",
         factory=_factory_xgb_gamma_lag,
@@ -2326,7 +2326,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-gamma-lag-recursive": ModelSpec(
+    "xgb-gamma-lag-recursive": model_spec(
         key="xgb-gamma-lag-recursive",
         description="XGBoost Gamma objective on lag features (one-step trained, recursive forecast). Requires xgboost (y>0).",
         factory=_factory_xgb_gamma_lag_recursive,
@@ -2364,7 +2364,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-tweedie-lag": ModelSpec(
+    "xgb-tweedie-lag": model_spec(
         key="xgb-tweedie-lag",
         description="XGBoost Tweedie objective on lag features (direct multi-horizon). Requires xgboost (y>=0).",
         factory=_factory_xgb_tweedie_lag,
@@ -2404,7 +2404,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "xgb-tweedie-lag-recursive": ModelSpec(
+    "xgb-tweedie-lag-recursive": model_spec(
         key="xgb-tweedie-lag-recursive",
         description="XGBoost Tweedie objective on lag features (one-step trained, recursive forecast). Requires xgboost (y>=0).",
         factory=_factory_xgb_tweedie_lag_recursive,
@@ -2444,7 +2444,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("xgb",),
     ),
-    "lasso-step-lag-global": ModelSpec(
+    "lasso-step-lag-global": model_spec(
         key="lasso-step-lag-global",
         description=(
             "Global (panel) Lasso regression using lag features + step-index feature. "
@@ -2482,7 +2482,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "elasticnet-step-lag-global": ModelSpec(
+    "elasticnet-step-lag-global": model_spec(
         key="elasticnet-step-lag-global",
         description=(
             "Global (panel) ElasticNet regression using lag features + step-index feature. "
@@ -2522,7 +2522,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "knn-step-lag-global": ModelSpec(
+    "knn-step-lag-global": model_spec(
         key="knn-step-lag-global",
         description=(
             "Global (panel) KNeighborsRegressor using lag features + step-index feature. "
@@ -2560,7 +2560,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "kernel-ridge-step-lag-global": ModelSpec(
+    "kernel-ridge-step-lag-global": model_spec(
         key="kernel-ridge-step-lag-global",
         description=(
             "Global (panel) KernelRidge using lag features + step-index feature. "
@@ -2600,7 +2600,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "svr-step-lag-global": ModelSpec(
+    "svr-step-lag-global": model_spec(
         key="svr-step-lag-global",
         description=(
             "Global (panel) SVR using lag features + step-index feature. "
@@ -2640,7 +2640,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "linear-svr-step-lag-global": ModelSpec(
+    "linear-svr-step-lag-global": model_spec(
         key="linear-svr-step-lag-global",
         description=(
             "Global (panel) LinearSVR using lag features + step-index feature. "
@@ -2682,7 +2682,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "huber-step-lag-global": ModelSpec(
+    "huber-step-lag-global": model_spec(
         key="huber-step-lag-global",
         description=(
             "Global (panel) HuberRegressor using lag features + step-index feature. "
@@ -2722,7 +2722,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "bayesian-ridge-step-lag-global": ModelSpec(
+    "bayesian-ridge-step-lag-global": model_spec(
         key="bayesian-ridge-step-lag-global",
         description=(
             "Global (panel) BayesianRidge using lag features + step-index feature. "
@@ -2768,7 +2768,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "ard-step-lag-global": ModelSpec(
+    "ard-step-lag-global": model_spec(
         key="ard-step-lag-global",
         description=(
             "Global (panel) ARDRegression using lag features + step-index feature. "
@@ -2816,7 +2816,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "omp-step-lag-global": ModelSpec(
+    "omp-step-lag-global": model_spec(
         key="omp-step-lag-global",
         description=(
             "Global (panel) OrthogonalMatchingPursuit using lag features + step-index feature. "
@@ -2854,7 +2854,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "passive-aggressive-step-lag-global": ModelSpec(
+    "passive-aggressive-step-lag-global": model_spec(
         key="passive-aggressive-step-lag-global",
         description=(
             "Global (panel) PassiveAggressiveRegressor using lag features + step-index feature. "
@@ -2898,7 +2898,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "poisson-step-lag-global": ModelSpec(
+    "poisson-step-lag-global": model_spec(
         key="poisson-step-lag-global",
         description=(
             "Global (panel) PoissonRegressor using lag features + step-index feature. "
@@ -2936,7 +2936,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "gamma-step-lag-global": ModelSpec(
+    "gamma-step-lag-global": model_spec(
         key="gamma-step-lag-global",
         description=(
             "Global (panel) GammaRegressor using lag features + step-index feature. "
@@ -2974,7 +2974,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "tweedie-step-lag-global": ModelSpec(
+    "tweedie-step-lag-global": model_spec(
         key="tweedie-step-lag-global",
         description=(
             "Global (panel) TweedieRegressor using lag features + step-index feature. "
@@ -3014,7 +3014,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "quantile-step-lag-global": ModelSpec(
+    "quantile-step-lag-global": model_spec(
         key="quantile-step-lag-global",
         description=(
             "Global (panel) QuantileRegressor using lag features + step-index feature. "
@@ -3052,7 +3052,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "sgd-step-lag-global": ModelSpec(
+    "sgd-step-lag-global": model_spec(
         key="sgd-step-lag-global",
         description=(
             "Global (panel) SGDRegressor using lag features + step-index feature. "
@@ -3094,7 +3094,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "adaboost-step-lag-global": ModelSpec(
+    "adaboost-step-lag-global": model_spec(
         key="adaboost-step-lag-global",
         description=(
             "Global (panel) AdaBoostRegressor using lag features + step-index feature. "
@@ -3134,7 +3134,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "mlp-step-lag-global": ModelSpec(
+    "mlp-step-lag-global": model_spec(
         key="mlp-step-lag-global",
         description=(
             "Global (panel) MLPRegressor using lag features + step-index feature. "
@@ -3178,7 +3178,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "decision-tree-step-lag-global": ModelSpec(
+    "decision-tree-step-lag-global": model_spec(
         key="decision-tree-step-lag-global",
         description=(
             "Global (panel) DecisionTreeRegressor using lag features + step-index feature. "
@@ -3216,7 +3216,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "bagging-step-lag-global": ModelSpec(
+    "bagging-step-lag-global": model_spec(
         key="bagging-step-lag-global",
         description=(
             "Global (panel) BaggingRegressor using lag features + step-index feature. "
@@ -3256,7 +3256,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "gbrt-step-lag-global": ModelSpec(
+    "gbrt-step-lag-global": model_spec(
         key="gbrt-step-lag-global",
         description=(
             "Global (panel) GradientBoostingRegressor using lag features + step-index feature. "
@@ -3298,7 +3298,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "ridge-step-lag-global": ModelSpec(
+    "ridge-step-lag-global": model_spec(
         key="ridge-step-lag-global",
         description=(
             "Global (panel) Ridge regression using lag features + step-index feature. "
@@ -3334,7 +3334,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "rf-step-lag-global": ModelSpec(
+    "rf-step-lag-global": model_spec(
         key="rf-step-lag-global",
         description=(
             "Global (panel) RandomForestRegressor using lag features + step-index feature. "
@@ -3376,7 +3376,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "extra-trees-step-lag-global": ModelSpec(
+    "extra-trees-step-lag-global": model_spec(
         key="extra-trees-step-lag-global",
         description=(
             "Global (panel) ExtraTreesRegressor using lag features + step-index feature. "
@@ -3418,7 +3418,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "hgb-step-lag-global": ModelSpec(
+    "hgb-step-lag-global": model_spec(
         key="hgb-step-lag-global",
         description=(
             "Global (panel) HistGradientBoostingRegressor using lag features + step-index feature. "
@@ -3460,7 +3460,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("ml",),
         interface="global",
     ),
-    "xgb-step-lag-global": ModelSpec(
+    "xgb-step-lag-global": model_spec(
         key="xgb-step-lag-global",
         description=(
             "Global (panel) XGBoost step-lag regressor (single model with step-index feature). "
@@ -3520,7 +3520,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-msle-step-lag-global": ModelSpec(
+    "xgb-msle-step-lag-global": model_spec(
         key="xgb-msle-step-lag-global",
         description=(
             "Global (panel) XGBoost squared-log-error step-lag regressor "
@@ -3578,7 +3578,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-logistic-step-lag-global": ModelSpec(
+    "xgb-logistic-step-lag-global": model_spec(
         key="xgb-logistic-step-lag-global",
         description=(
             "Global (panel) XGBoost logistic step-lag regressor "
@@ -3636,7 +3636,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-mae-step-lag-global": ModelSpec(
+    "xgb-mae-step-lag-global": model_spec(
         key="xgb-mae-step-lag-global",
         description=(
             "Global (panel) XGBoost MAE step-lag regressor "
@@ -3694,7 +3694,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-gamma-step-lag-global": ModelSpec(
+    "xgb-gamma-step-lag-global": model_spec(
         key="xgb-gamma-step-lag-global",
         description=(
             "Global (panel) XGBoost Gamma step-lag regressor "
@@ -3752,7 +3752,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-huber-step-lag-global": ModelSpec(
+    "xgb-huber-step-lag-global": model_spec(
         key="xgb-huber-step-lag-global",
         description=(
             "Global (panel) XGBoost pseudo-Huber step-lag regressor "
@@ -3812,7 +3812,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-poisson-step-lag-global": ModelSpec(
+    "xgb-poisson-step-lag-global": model_spec(
         key="xgb-poisson-step-lag-global",
         description=(
             "Global (panel) XGBoost Poisson step-lag regressor "
@@ -3870,7 +3870,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-tweedie-step-lag-global": ModelSpec(
+    "xgb-tweedie-step-lag-global": model_spec(
         key="xgb-tweedie-step-lag-global",
         description=(
             "Global (panel) XGBoost Tweedie step-lag regressor "
@@ -3930,7 +3930,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-dart-step-lag-global": ModelSpec(
+    "xgb-dart-step-lag-global": model_spec(
         key="xgb-dart-step-lag-global",
         description=(
             "Global (panel) XGBoost DART step-lag regressor "
@@ -3988,7 +3988,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgb-linear-step-lag-global": ModelSpec(
+    "xgb-linear-step-lag-global": model_spec(
         key="xgb-linear-step-lag-global",
         description=(
             "Global (panel) XGBoost linear booster (gblinear) step-lag regressor "
@@ -4040,7 +4040,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "xgbrf-step-lag-global": ModelSpec(
+    "xgbrf-step-lag-global": model_spec(
         key="xgbrf-step-lag-global",
         description=(
             "Global (panel) XGBoost random forest (XGBRFRegressor) step-lag regressor "
@@ -4094,7 +4094,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("xgb",),
         interface="global",
     ),
-    "lgbm-step-lag-global": ModelSpec(
+    "lgbm-step-lag-global": model_spec(
         key="lgbm-step-lag-global",
         description=(
             "Global (panel) LightGBM step-lag regressor (single model with step-index feature). "
@@ -4152,7 +4152,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         requires=("lgbm",),
         interface="global",
     ),
-    "catboost-step-lag-global": ModelSpec(
+    "catboost-step-lag-global": model_spec(
         key="catboost-step-lag-global",
         description=(
             "Global (panel) CatBoost step-lag regressor (single model with step-index feature). "

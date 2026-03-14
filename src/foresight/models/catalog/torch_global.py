@@ -4,7 +4,7 @@ from typing import Any
 
 
 def build_torch_global_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_timexer_global = context._factory_torch_timexer_global
@@ -75,7 +75,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         "Teacher forcing ratio at the end of training (None keeps it constant)"
     )
     return {
-    "torch-tft-global": ModelSpec(
+    "torch-tft-global": model_spec(
         key="torch-tft-global",
         description="Torch Temporal Fusion Transformer (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_tft_global_forecaster,
@@ -113,7 +113,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-timexer-global": ModelSpec(
+    "torch-timexer-global": model_spec(
         key="torch-timexer-global",
         description="Torch TimeXer-style exogenous-aware transformer (lite) trained globally across panel series. Requires PyTorch.",
         factory=_factory_torch_timexer_global,
@@ -150,7 +150,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         interface="global",
         capability_overrides={"requires_future_covariates": True},
     ),
-    "torch-retnet-global": ModelSpec(
+    "torch-retnet-global": model_spec(
         key="torch-retnet-global",
         description="Torch RetNet-style retention network (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_retnet_global_forecaster,
@@ -190,7 +190,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-informer-global": ModelSpec(
+    "torch-informer-global": model_spec(
         key="torch-informer-global",
         description="Torch Informer (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_informer_global_forecaster,
@@ -230,7 +230,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-autoformer-global": ModelSpec(
+    "torch-autoformer-global": model_spec(
         key="torch-autoformer-global",
         description="Torch Autoformer (lite) with series decomposition, trained globally across panel series. Requires PyTorch.",
         factory=torch_autoformer_global_forecaster,
@@ -272,7 +272,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-fedformer-global": ModelSpec(
+    "torch-fedformer-global": model_spec(
         key="torch-fedformer-global",
         description="Torch FEDformer-style (lite) decomposition + frequency mixing, trained globally across panel series. Requires PyTorch.",
         factory=torch_fedformer_global_forecaster,
@@ -314,7 +314,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-nonstationary-transformer-global": ModelSpec(
+    "torch-nonstationary-transformer-global": model_spec(
         key="torch-nonstationary-transformer-global",
         description="Torch Non-stationary Transformer (lite) with RevIN + de-stationary attention factors, trained globally across panel series. Requires PyTorch.",
         factory=torch_nonstationary_transformer_global_forecaster,
@@ -354,7 +354,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-patchtst-global": ModelSpec(
+    "torch-patchtst-global": model_spec(
         key="torch-patchtst-global",
         description="Torch PatchTST-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_patchtst_global_forecaster,
@@ -398,7 +398,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-crossformer-global": ModelSpec(
+    "torch-crossformer-global": model_spec(
         key="torch-crossformer-global",
         description="Torch Crossformer-style (lite) multi-scale segmented Transformer encoder trained globally across panel series. Requires PyTorch.",
         factory=torch_crossformer_global_forecaster,
@@ -444,7 +444,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-pyraformer-global": ModelSpec(
+    "torch-pyraformer-global": model_spec(
         key="torch-pyraformer-global",
         description="Torch Pyraformer-style (lite) pyramid-pooled segmented Transformer encoder trained globally across panel series. Requires PyTorch.",
         factory=torch_pyraformer_global_forecaster,
@@ -490,7 +490,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-tsmixer-global": ModelSpec(
+    "torch-tsmixer-global": model_spec(
         key="torch-tsmixer-global",
         description="Torch TSMixer-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_tsmixer_global_forecaster,
@@ -530,7 +530,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-itransformer-global": ModelSpec(
+    "torch-itransformer-global": model_spec(
         key="torch-itransformer-global",
         description="Torch iTransformer-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_itransformer_global_forecaster,
@@ -570,7 +570,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-timesnet-global": ModelSpec(
+    "torch-timesnet-global": model_spec(
         key="torch-timesnet-global",
         description="Torch TimesNet-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_timesnet_global_forecaster,
@@ -608,7 +608,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-tcn-global": ModelSpec(
+    "torch-tcn-global": model_spec(
         key="torch-tcn-global",
         description="Torch TCN (causal dilated Conv1D) trained globally across panel series. Requires PyTorch.",
         factory=torch_tcn_global_forecaster,
@@ -646,7 +646,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-nbeats-global": ModelSpec(
+    "torch-nbeats-global": model_spec(
         key="torch-nbeats-global",
         description="Torch N-BEATS-style (generic) trained globally across panel series. Requires PyTorch.",
         factory=torch_nbeats_global_forecaster,
@@ -684,7 +684,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-nhits-global": ModelSpec(
+    "torch-nhits-global": model_spec(
         key="torch-nhits-global",
         description="Torch N-HiTS-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_nhits_global_forecaster,
@@ -724,7 +724,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-tide-global": ModelSpec(
+    "torch-tide-global": model_spec(
         key="torch-tide-global",
         description="Torch TiDE-style (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_tide_global_forecaster,
@@ -760,7 +760,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-wavenet-global": ModelSpec(
+    "torch-wavenet-global": model_spec(
         key="torch-wavenet-global",
         description="Torch WaveNet-style gated dilated CNN trained globally across panel series. Requires PyTorch.",
         factory=torch_wavenet_global_forecaster,
@@ -798,7 +798,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-resnet1d-global": ModelSpec(
+    "torch-resnet1d-global": model_spec(
         key="torch-resnet1d-global",
         description="Torch ResNet-1D Conv1D model trained globally across panel series. Requires PyTorch.",
         factory=torch_resnet1d_global_forecaster,
@@ -836,7 +836,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-inception-global": ModelSpec(
+    "torch-inception-global": model_spec(
         key="torch-inception-global",
         description="Torch InceptionTime-style Conv1D model trained globally across panel series. Requires PyTorch.",
         factory=torch_inception_global_forecaster,
@@ -876,7 +876,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-lstnet-global": ModelSpec(
+    "torch-lstnet-global": model_spec(
         key="torch-lstnet-global",
         description="Torch LSTNet-style (CNN+GRU+skip+highway, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_lstnet_global_forecaster,
@@ -918,7 +918,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-fnet-global": ModelSpec(
+    "torch-fnet-global": model_spec(
         key="torch-fnet-global",
         description="Torch FNet-style (FFT token mixing, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_fnet_global_forecaster,
@@ -956,7 +956,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-gmlp-global": ModelSpec(
+    "torch-gmlp-global": model_spec(
         key="torch-gmlp-global",
         description="Torch gMLP-style (spatial gating, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_gmlp_global_forecaster,
@@ -994,7 +994,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-ssm-global": ModelSpec(
+    "torch-ssm-global": model_spec(
         key="torch-ssm-global",
         description="Torch diagonal state-space model (SSM, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_ssm_global_forecaster,
@@ -1030,7 +1030,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-mamba-global": ModelSpec(
+    "torch-mamba-global": model_spec(
         key="torch-mamba-global",
         description="Torch Mamba-style selective SSM (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_mamba_global_forecaster,
@@ -1068,7 +1068,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-rwkv-global": ModelSpec(
+    "torch-rwkv-global": model_spec(
         key="torch-rwkv-global",
         description="Torch RWKV-style time-mix + channel-mix (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_rwkv_global_forecaster,
@@ -1106,7 +1106,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-hyena-global": ModelSpec(
+    "torch-hyena-global": model_spec(
         key="torch-hyena-global",
         description="Torch Hyena-style long convolution (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_hyena_global_forecaster,
@@ -1146,7 +1146,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-dilated-rnn-global": ModelSpec(
+    "torch-dilated-rnn-global": model_spec(
         key="torch-dilated-rnn-global",
         description="Torch Dilated RNN (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_dilated_rnn_global_forecaster,
@@ -1186,7 +1186,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-kan-global": ModelSpec(
+    "torch-kan-global": model_spec(
         key="torch-kan-global",
         description="Torch KAN-style spline MLP (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_kan_global_forecaster,
@@ -1228,7 +1228,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-scinet-global": ModelSpec(
+    "torch-scinet-global": model_spec(
         key="torch-scinet-global",
         description="Torch SCINet-style sample-convolution interaction network (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_scinet_global_forecaster,
@@ -1268,7 +1268,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-etsformer-global": ModelSpec(
+    "torch-etsformer-global": model_spec(
         key="torch-etsformer-global",
         description="Torch ETSformer-style exponential smoothing + Transformer residual model (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_etsformer_global_forecaster,
@@ -1312,7 +1312,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-esrnn-global": ModelSpec(
+    "torch-esrnn-global": model_spec(
         key="torch-esrnn-global",
         description="Torch ESRNN-style hybrid (Holt smoothing + RNN residual, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_esrnn_global_forecaster,
@@ -1354,7 +1354,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-transformer-encdec-global": ModelSpec(
+    "torch-transformer-encdec-global": model_spec(
         key="torch-transformer-encdec-global",
         description="Torch encoder-decoder Transformer (lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_transformer_encdec_global_forecaster,
@@ -1394,7 +1394,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-nlinear-global": ModelSpec(
+    "torch-nlinear-global": model_spec(
         key="torch-nlinear-global",
         description="Torch NLinear-style (last-value centering + linear head, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_nlinear_global_forecaster,
@@ -1426,7 +1426,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-dlinear-global": ModelSpec(
+    "torch-dlinear-global": model_spec(
         key="torch-dlinear-global",
         description="Torch DLinear-style (moving-average decomposition + linear heads, lite) trained globally across panel series. Requires PyTorch.",
         factory=torch_dlinear_global_forecaster,
@@ -1460,7 +1460,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-deepar-global": ModelSpec(
+    "torch-deepar-global": model_spec(
         key="torch-deepar-global",
         description="Torch DeepAR-style global Gaussian RNN (direct multi-horizon, lite). Requires PyTorch.",
         factory=torch_deepar_global_forecaster,
@@ -1497,7 +1497,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-seq2seq-lstm-global": ModelSpec(
+    "torch-seq2seq-lstm-global": model_spec(
         key="torch-seq2seq-lstm-global",
         description="Torch Seq2Seq (encoder-decoder) global model (LSTM, no attention). Requires PyTorch.",
         factory=torch_seq2seq_global_forecaster,
@@ -1541,7 +1541,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-seq2seq-gru-global": ModelSpec(
+    "torch-seq2seq-gru-global": model_spec(
         key="torch-seq2seq-gru-global",
         description="Torch Seq2Seq (encoder-decoder) global model (GRU, no attention). Requires PyTorch.",
         factory=torch_seq2seq_global_forecaster,
@@ -1585,7 +1585,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-seq2seq-attn-lstm-global": ModelSpec(
+    "torch-seq2seq-attn-lstm-global": model_spec(
         key="torch-seq2seq-attn-lstm-global",
         description="Torch Seq2Seq (encoder-decoder) global model (LSTM + Bahdanau attention). Requires PyTorch.",
         factory=torch_seq2seq_global_forecaster,
@@ -1629,7 +1629,7 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="global",
     ),
-    "torch-seq2seq-attn-gru-global": ModelSpec(
+    "torch-seq2seq-attn-gru-global": model_spec(
         key="torch-seq2seq-attn-gru-global",
         description="Torch Seq2Seq (encoder-decoder) global model (GRU + Bahdanau attention). Requires PyTorch.",
         factory=torch_seq2seq_global_forecaster,

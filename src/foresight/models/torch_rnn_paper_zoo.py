@@ -32,7 +32,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("multi-dimensional-rnn", "Multi-Dimensional RNN (Graves et al., 2007)"),
     ("gated-feedback-rnn", "Gated Feedback RNN (Chung et al., 2015)"),
     ("hierarchical-multiscale-rnn", "Hierarchical Multiscale RNN (Chung et al., 2016)"),
-    ("clockwork-rnn", "Clockwork RNN (Koutn铆k et al., 2014)"),
+    ("clockwork-rnn", "Clockwork RNN (Koutn閾唊 et al., 2014)"),
     ("dilated-rnn", "Dilated RNN (Chang et al., 2017)"),
     ("skip-rnn", "Skip RNN (Campos et al., 2017)"),
     ("sliced-rnn", "Sliced RNN (Yu & Liu, 2018)"),
@@ -66,9 +66,9 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("cfn", "Chaos-Free Network (Laurent & von Brecht, 2016)"),
     ("ran", "Recurrent Additive Network / RAN (Lee et al., 2017)"),
     ("atr", "Addition-Subtraction Twin-Gated RNN / ATR (Zhang et al., 2018)"),
-    ("mut1", "MUT1 cell (J贸zefowicz et al., 2015)"),
-    ("mut2", "MUT2 cell (J贸zefowicz et al., 2015)"),
-    ("mut3", "MUT3 cell (J贸zefowicz et al., 2015)"),
+    ("mut1", "MUT1 cell (J璐竮efowicz et al., 2015)"),
+    ("mut2", "MUT2 cell (J璐竮efowicz et al., 2015)"),
+    ("mut3", "MUT3 cell (J璐竮efowicz et al., 2015)"),
     ("fast-rnn", "FastRNN (Kusupati et al., 2018)"),
     ("fast-grnn", "FastGRNN (Kusupati et al., 2018)"),
     ("fru", "Fourier Recurrent Unit / FRU (Zhang et al., 2018)"),
@@ -79,7 +79,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("cornn", "Coupled Oscillatory RNN / coRNN (Rusch & Mishra, 2020)"),
     ("unicornn", "UnICORNN (Rusch & Mishra, 2021)"),
     ("lem", "Long Expressive Memory / LEM (Rusch et al., 2021)"),
-    ("tau-gru", "Weighted time-delay feedback GRU / 蟿-GRU (Erichson et al., 2022)"),
+    ("tau-gru", "Weighted time-delay feedback GRU / 锜?GRU (Erichson et al., 2022)"),
     ("dg-rnn", "Dynamic Gated RNN (Cheng et al., 2024)"),
     ("star", "Stackable recurrent cell / STAR (Turkoglu et al., 2019)"),
     ("strongly-typed-rnn", "Strongly-Typed RNN (Balduzzi & Ghifary, 2016)"),
@@ -115,7 +115,7 @@ _PAPER_DEFS: list[tuple[str, str]] = [
     ("copynet", "CopyNet (Gu et al., 2016)"),
     ("rnn-transducer", "RNN Transducer / RNN-T (Graves, 2012)"),
     ("seq2seq", "Seq2Seq (Sutskever et al., 2014)"),
-    ("rnn-encoder-decoder", "RNN Encoder鈥揇ecoder (Cho et al., 2014)"),
+    ("rnn-encoder-decoder", "RNN Encoder閳ユ弴ecoder (Cho et al., 2014)"),
     ("bahdanau-attention", "Additive (Bahdanau) attention (Bahdanau et al., 2015)"),
     ("luong-attention", "Multiplicative (Luong) attention (Luong et al., 2015)"),
     ("neural-stack", "Neural Stack (Grefenstette et al., 2015)"),
@@ -231,7 +231,7 @@ def torch_rnnpaper_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _SeqEncoder(nn.Module):
         def forward(self, xb: Any) -> Any:
@@ -1238,7 +1238,7 @@ def torch_rnnpaper_direct_forecast(
     class _EUNNEncoder(_SeqEncoder):
         """
         Efficient Unitary Neural Network (lite): parameterize an orthogonal transform
-        as a small number of 2脳2 Givens rotations (even/odd pairing).
+        as a small number of 2鑴? Givens rotations (even/odd pairing).
         """
 
         def __init__(self) -> None:
@@ -1484,21 +1484,21 @@ def torch_rnnpaper_direct_forecast(
             def forward(self, xb: Any) -> Any:
                 B, T, _ = xb.shape
                 side = int(max(1, round(float(T) ** 0.5)))
-                Hh = side
-                Ww = int((int(T) + Hh - 1) // Hh)
-                pad = Hh * Ww - int(T)
+                height = side
+                width = int((int(T) + height - 1) // height)
+                pad = height * width - int(T)
                 if pad > 0:
                     xb2 = torch.cat(
                         [xb, torch.zeros((int(B), pad, 1), device=xb.device, dtype=xb.dtype)], dim=1
                     )
                 else:
                     xb2 = xb
-                grid = xb2.reshape(int(B), Hh, Ww, 1)
+                grid = xb2.reshape(int(B), height, width, 1)
                 zero_state = torch.zeros((int(B), hid), device=xb.device, dtype=xb.dtype)
                 rows: list[Any] = []
-                for i in range(Hh):
+                for i in range(height):
                     row_states = []
-                    for j in range(Ww):
+                    for j in range(width):
                         x_ij = grid[:, i, j, :]
                         h_l = row_states[j - 1] if j > 0 else zero_state
                         h_u = rows[i - 1][j] if i > 0 else zero_state
@@ -2222,7 +2222,7 @@ def torch_rnnpaper_direct_forecast(
         encoder = _ConceptorESNEncoder(spectral_radius=float(spectral_radius), leak=float(leak))
     elif paper_id in {"deep-ar"}:
         # DeepAR-style: train a 1-step probabilistic RNN, decode recursively with predictive mean.
-        Y_next = Y[:, :1].reshape(Y.shape[0], 1)
+        y_next = Y[:, :1].reshape(Y.shape[0], 1)
 
         class _DeepAR(nn.Module):
             def __init__(self) -> None:
@@ -2265,7 +2265,7 @@ def torch_rnnpaper_direct_forecast(
             restore_best=bool(restore_best),
         )
         model = _train_loop(
-            model, X_seq, Y_next, cfg=cfg, device=str(device), loss_fn_override=_gaussian_nll
+            model, x_seq, y_next, cfg=cfg, device=str(device), loss_fn_override=_gaussian_nll
         )
 
         hist = x_work[-lag_count:].astype(float, copy=True)
@@ -2331,7 +2331,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_pinball)
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_pinball)
 
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         dev = torch.device(str(device))
@@ -2386,7 +2386,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         dev = torch.device(str(device))
         with torch.no_grad():
@@ -2459,7 +2459,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         with torch.no_grad():
@@ -2558,7 +2558,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         with torch.no_grad():
@@ -2665,7 +2665,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         dev = torch.device(str(device))
         with torch.no_grad():
@@ -2808,10 +2808,10 @@ def torch_rnnpaper_direct_forecast(
 
             model = model.to(dev)
 
-            X_t = torch.tensor(X, dtype=torch.float32, device=dev)
-            Y_t = torch.tensor(Y, dtype=torch.float32, device=dev)
+            x_tensor = torch.tensor(X, dtype=torch.float32, device=dev)
+            y_tensor = torch.tensor(Y, dtype=torch.float32, device=dev)
 
-            n = int(X_t.shape[0])
+            n = int(x_tensor.shape[0])
             val_n = 0
             if float(cfg.val_split) > 0.0 and n >= 5:
                 val_n = max(1, int(round(float(cfg.val_split) * n)))
@@ -2819,11 +2819,11 @@ def torch_rnnpaper_direct_forecast(
 
             if val_n > 0:
                 train_end = n - val_n
-                X_train, Y_train = X_t[:train_end], Y_t[:train_end]
-                X_val, Y_val = X_t[train_end:], Y_t[train_end:]
+                X_train, Y_train = x_tensor[:train_end], y_tensor[:train_end]
+                x_val, y_val = x_tensor[train_end:], y_tensor[train_end:]
             else:
-                X_train, Y_train = X_t, Y_t
-                X_val, Y_val = None, None
+                X_train, Y_train = x_tensor, y_tensor
+                x_val, y_val = None, None
 
             train_loader = torch.utils.data.DataLoader(
                 torch.utils.data.TensorDataset(X_train, Y_train),
@@ -2832,9 +2832,9 @@ def torch_rnnpaper_direct_forecast(
             )
             val_loader = (
                 None
-                if X_val is None
+                if x_val is None
                 else torch.utils.data.DataLoader(
-                    torch.utils.data.TensorDataset(X_val, Y_val),
+                    torch.utils.data.TensorDataset(x_val, y_val),
                     batch_size=int(cfg.batch_size),
                     shuffle=False,
                 )
@@ -2958,7 +2958,7 @@ def torch_rnnpaper_direct_forecast(
         )
         model = _train_seq2seq(
             model,
-            X_seq,
+            x_seq,
             Y,
             cfg=cfg,
             device=str(device),
@@ -3087,7 +3087,7 @@ def torch_rnnpaper_direct_forecast(
             scheduler_gamma=float(scheduler_gamma),
             restore_best=bool(restore_best),
         )
-        model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+        model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
         dev = torch.device(str(device))
         with torch.no_grad():
@@ -3174,7 +3174,7 @@ def torch_rnnpaper_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():

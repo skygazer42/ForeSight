@@ -12,7 +12,7 @@ DROPOUT_RANGE_PARAM_HELP = "Dropout in [0,1)"
 
 
 def build_multivariate_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_graphwavenet_multivariate = context._factory_torch_graphwavenet_multivariate
@@ -20,7 +20,7 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
     _factory_torch_stid_multivariate = context._factory_torch_stid_multivariate
     _factory_var = context._factory_var
     return {
-    "var": ModelSpec(
+    "var": model_spec(
         key="var",
         description="Vector autoregression via statsmodels on a multivariate target matrix. Optional dependency.",
         factory=_factory_var,
@@ -33,7 +33,7 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
         requires=("stats",),
         interface="multivariate",
     ),
-    "torch-stid-multivariate": ModelSpec(
+    "torch-stid-multivariate": model_spec(
         key="torch-stid-multivariate",
         description="Torch STID-style multivariate baseline (lite) on a wide target matrix. Requires PyTorch.",
         factory=_factory_torch_stid_multivariate,
@@ -54,7 +54,7 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="multivariate",
     ),
-    "torch-stgcn-multivariate": ModelSpec(
+    "torch-stgcn-multivariate": model_spec(
         key="torch-stgcn-multivariate",
         description="Torch STGCN-style spatiotemporal baseline (lite) on a wide target matrix. Requires PyTorch.",
         factory=_factory_torch_stgcn_multivariate,
@@ -83,7 +83,7 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
         requires=("torch",),
         interface="multivariate",
     ),
-    "torch-graphwavenet-multivariate": ModelSpec(
+    "torch-graphwavenet-multivariate": model_spec(
         key="torch-graphwavenet-multivariate",
         description="Torch Graph WaveNet-style baseline (lite) on a wide target matrix. Requires PyTorch.",
         factory=_factory_torch_graphwavenet_multivariate,
@@ -123,7 +123,7 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
 
 def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 03 ownership: ASTGCN / GMAN style multivariate graph lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -266,7 +266,7 @@ def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,
@@ -281,7 +281,7 @@ def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 04 ownership: AGCRN / MTGNN style graph-structure lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -448,7 +448,7 @@ def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,
@@ -463,7 +463,7 @@ def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 05 ownership: StemGNN / FourierGNN style graph spectral lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -590,7 +590,7 @@ def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,

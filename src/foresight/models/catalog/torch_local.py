@@ -62,7 +62,7 @@ _TIMESMAMBA_BLOCKS_HELP = "Number of stacked state-space mixer blocks"
 
 
 def build_torch_local_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_attn_gru_direct = context._factory_torch_attn_gru_direct
@@ -138,7 +138,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
     _factory_torch_wavenet_direct = context._factory_torch_wavenet_direct
     _factory_torch_xlstm_direct = context._factory_torch_xlstm_direct
     return {
-        "torch-mlp-direct": ModelSpec(
+        "torch-mlp-direct": model_spec(
             key="torch-mlp-direct",
             description="Torch MLP on lag features (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_mlp_direct,
@@ -156,7 +156,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-lstm-direct": ModelSpec(
+        "torch-lstm-direct": model_spec(
             key="torch-lstm-direct",
             description="Torch LSTM on lag windows (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_lstm_direct,
@@ -176,7 +176,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-gru-direct": ModelSpec(
+        "torch-gru-direct": model_spec(
             key="torch-gru-direct",
             description="Torch GRU on lag windows (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_gru_direct,
@@ -196,7 +196,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-tcn-direct": ModelSpec(
+        "torch-tcn-direct": model_spec(
             key="torch-tcn-direct",
             description="Torch TCN on lag windows (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_tcn_direct,
@@ -216,7 +216,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-nbeats-direct": ModelSpec(
+        "torch-nbeats-direct": model_spec(
             key="torch-nbeats-direct",
             description="Torch N-BEATS-style model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_nbeats_direct,
@@ -238,7 +238,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-nlinear-direct": ModelSpec(
+        "torch-nlinear-direct": model_spec(
             key="torch-nlinear-direct",
             description="Torch NLinear-style baseline (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_nlinear_direct,
@@ -252,7 +252,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-dlinear-direct": ModelSpec(
+        "torch-dlinear-direct": model_spec(
             key="torch-dlinear-direct",
             description="Torch DLinear-style baseline (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_dlinear_direct,
@@ -268,7 +268,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-transformer-direct": ModelSpec(
+        "torch-transformer-direct": model_spec(
             key="torch-transformer-direct",
             description="Torch Transformer encoder (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_transformer_direct,
@@ -292,7 +292,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-informer-direct": ModelSpec(
+        "torch-informer-direct": model_spec(
             key="torch-informer-direct",
             description="Torch Informer-style (lite) encoder (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_informer_direct,
@@ -316,7 +316,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-autoformer-direct": ModelSpec(
+        "torch-autoformer-direct": model_spec(
             key="torch-autoformer-direct",
             description="Torch Autoformer-style decomposition encoder (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_autoformer_direct,
@@ -342,7 +342,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-nonstationary-transformer-direct": ModelSpec(
+        "torch-nonstationary-transformer-direct": model_spec(
             key="torch-nonstationary-transformer-direct",
             description="Torch Non-stationary Transformer-style model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_nonstationary_transformer_direct,
@@ -366,7 +366,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-fedformer-direct": ModelSpec(
+        "torch-fedformer-direct": model_spec(
             key="torch-fedformer-direct",
             description="Torch FEDformer-style decomposition + frequency mixing model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_fedformer_direct,
@@ -392,7 +392,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-itransformer-direct": ModelSpec(
+        "torch-itransformer-direct": model_spec(
             key="torch-itransformer-direct",
             description="Torch iTransformer-style inverted-token encoder (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_itransformer_direct,
@@ -416,7 +416,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timesnet-direct": ModelSpec(
+        "torch-timesnet-direct": model_spec(
             key="torch-timesnet-direct",
             description="Torch TimesNet-style period-mixing Conv2D model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timesnet_direct,
@@ -438,7 +438,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-tft-direct": ModelSpec(
+        "torch-tft-direct": model_spec(
             key="torch-tft-direct",
             description="Torch TFT-style hybrid encoder (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_tft_direct,
@@ -460,7 +460,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timemixer-direct": ModelSpec(
+        "torch-timemixer-direct": model_spec(
             key="torch-timemixer-direct",
             description="Torch TimeMixer-style multiscale mixer (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timemixer_direct,
@@ -486,7 +486,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-sparsetsf-direct": ModelSpec(
+        "torch-sparsetsf-direct": model_spec(
             key="torch-sparsetsf-direct",
             description="Torch SparseTSF-style sparse seasonal readout (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_sparsetsf_direct,
@@ -504,7 +504,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timexer-direct": ModelSpec(
+        "torch-timexer-direct": model_spec(
             key="torch-timexer-direct",
             description="Torch TimeXer-style exogenous-aware transformer (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timexer_direct,
@@ -529,7 +529,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             requires=("torch",),
             capability_overrides={"requires_future_covariates": True},
         ),
-        "torch-lmu-direct": ModelSpec(
+        "torch-lmu-direct": model_spec(
             key="torch-lmu-direct",
             description="Torch LMU-style recurrent memory model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_lmu_direct,
@@ -551,7 +551,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-ltc-direct": ModelSpec(
+        "torch-ltc-direct": model_spec(
             key="torch-ltc-direct",
             description="Torch LTC-style liquid time-constant recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_ltc_direct,
@@ -571,7 +571,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-cfc-direct": ModelSpec(
+        "torch-cfc-direct": model_spec(
             key="torch-cfc-direct",
             description="Torch CfC-style closed-form continuous-time recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_cfc_direct,
@@ -593,7 +593,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-xlstm-direct": ModelSpec(
+        "torch-xlstm-direct": model_spec(
             key="torch-xlstm-direct",
             description="Torch xLSTM-style expanded-gate recurrent model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_xlstm_direct,
@@ -615,7 +615,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-griffin-direct": ModelSpec(
+        "torch-griffin-direct": model_spec(
             key="torch-griffin-direct",
             description="Torch Griffin-style recurrent hybrid model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_griffin_direct,
@@ -637,7 +637,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-hawk-direct": ModelSpec(
+        "torch-hawk-direct": model_spec(
             key="torch-hawk-direct",
             description="Torch Hawk-style gated recurrent mixer (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_hawk_direct,
@@ -659,7 +659,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-s4d-direct": ModelSpec(
+        "torch-s4d-direct": model_spec(
             key="torch-s4d-direct",
             description="Torch S4D-style diagonal state-space model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_s4d_direct,
@@ -679,7 +679,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-s4-direct": ModelSpec(
+        "torch-s4-direct": model_spec(
             key="torch-s4-direct",
             description="Torch S4-style structured state-space model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_s4_direct,
@@ -701,7 +701,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-s5-direct": ModelSpec(
+        "torch-s5-direct": model_spec(
             key="torch-s5-direct",
             description="Torch S5-style multi-state-space model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_s5_direct,
@@ -725,7 +725,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-mamba2-direct": ModelSpec(
+        "torch-mamba2-direct": model_spec(
             key="torch-mamba2-direct",
             description="Torch Mamba-2-style selective state-space refinement (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_mamba2_direct,
@@ -747,7 +747,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-lightts-direct": ModelSpec(
+        "torch-lightts-direct": model_spec(
             key="torch-lightts-direct",
             description="Torch LightTS-style dual-sampling MLP (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_lightts_direct,
@@ -767,7 +767,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-frets-direct": ModelSpec(
+        "torch-frets-direct": model_spec(
             key="torch-frets-direct",
             description="Torch FreTS-style frequency-domain MLP (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_frets_direct,
@@ -789,7 +789,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-film-direct": ModelSpec(
+        "torch-film-direct": model_spec(
             key="torch-film-direct",
             description="Torch FiLM-style decomposition + long-filter mixer (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_film_direct,
@@ -813,7 +813,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-micn-direct": ModelSpec(
+        "torch-micn-direct": model_spec(
             key="torch-micn-direct",
             description="Torch MICN-style multiscale convolutional decomposition model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_micn_direct,
@@ -837,7 +837,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-koopa-direct": ModelSpec(
+        "torch-koopa-direct": model_spec(
             key="torch-koopa-direct",
             description="Torch Koopa-style decomposition + latent linear dynamics model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_koopa_direct,
@@ -861,7 +861,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-samformer-direct": ModelSpec(
+        "torch-samformer-direct": model_spec(
             key="torch-samformer-direct",
             description="Torch SAMformer-style linear-attention + adaptive mixing model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_samformer_direct,
@@ -883,7 +883,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-retnet-direct": ModelSpec(
+        "torch-retnet-direct": model_spec(
             key="torch-retnet-direct",
             description="Torch RetNet-style retention network (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_retnet_direct,
@@ -907,7 +907,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-retnet-recursive": ModelSpec(
+        "torch-retnet-recursive": model_spec(
             key="torch-retnet-recursive",
             description="Torch RetNet-style retention network (one-step trained, recursive forecast). Requires PyTorch.",
             factory=_factory_torch_retnet_recursive,
@@ -931,7 +931,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-mamba-direct": ModelSpec(
+        "torch-mamba-direct": model_spec(
             key="torch-mamba-direct",
             description="Torch Mamba-style selective SSM (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_mamba_direct,
@@ -953,7 +953,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-rwkv-direct": ModelSpec(
+        "torch-rwkv-direct": model_spec(
             key="torch-rwkv-direct",
             description="Torch RWKV-style time-mix + channel-mix (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_rwkv_direct,
@@ -975,7 +975,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-hyena-direct": ModelSpec(
+        "torch-hyena-direct": model_spec(
             key="torch-hyena-direct",
             description="Torch Hyena-style long convolution model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_hyena_direct,
@@ -999,7 +999,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-dilated-rnn-direct": ModelSpec(
+        "torch-dilated-rnn-direct": model_spec(
             key="torch-dilated-rnn-direct",
             description="Torch Dilated RNN (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_dilated_rnn_direct,
@@ -1023,7 +1023,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-kan-direct": ModelSpec(
+        "torch-kan-direct": model_spec(
             key="torch-kan-direct",
             description="Torch KAN-style spline MLP (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_kan_direct,
@@ -1049,7 +1049,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-scinet-direct": ModelSpec(
+        "torch-scinet-direct": model_spec(
             key="torch-scinet-direct",
             description="Torch SCINet-style sample-convolution interaction network (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_scinet_direct,
@@ -1073,7 +1073,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-etsformer-direct": ModelSpec(
+        "torch-etsformer-direct": model_spec(
             key="torch-etsformer-direct",
             description="Torch ETSformer-style exponential smoothing + Transformer residual model (lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_etsformer_direct,
@@ -1101,7 +1101,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-esrnn-direct": ModelSpec(
+        "torch-esrnn-direct": model_spec(
             key="torch-esrnn-direct",
             description="Torch ESRNN-style hybrid (Holt smoothing + RNN residual, lite) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_esrnn_direct,
@@ -1127,7 +1127,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-patchtst-direct": ModelSpec(
+        "torch-patchtst-direct": model_spec(
             key="torch-patchtst-direct",
             description="Torch PatchTST-style model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_patchtst_direct,
@@ -1155,7 +1155,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-crossformer-direct": ModelSpec(
+        "torch-crossformer-direct": model_spec(
             key="torch-crossformer-direct",
             description="Torch Crossformer-style (lite) multi-scale segmented Transformer encoder (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_crossformer_direct,
@@ -1185,7 +1185,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-pyraformer-direct": ModelSpec(
+        "torch-pyraformer-direct": model_spec(
             key="torch-pyraformer-direct",
             description="Torch Pyraformer-style (lite) pyramid-pooled segmented Transformer encoder (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_pyraformer_direct,
@@ -1215,7 +1215,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-perceiver-direct": ModelSpec(
+        "torch-perceiver-direct": model_spec(
             key="torch-perceiver-direct",
             description="Torch Perceiver-style latent cross-attention model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_perceiver_direct,
@@ -1241,7 +1241,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-perceiver-deep-direct": ModelSpec(
+        "torch-perceiver-deep-direct": model_spec(
             key="torch-perceiver-deep-direct",
             description="Torch Perceiver-style latent cross-attention model, deeper config (4 latent layers) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_perceiver_direct,
@@ -1267,7 +1267,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-perceiver-wide-direct": ModelSpec(
+        "torch-perceiver-wide-direct": model_spec(
             key="torch-perceiver-wide-direct",
             description="Torch Perceiver-style latent cross-attention model, wider config (d_model=128) (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_perceiver_direct,
@@ -1293,7 +1293,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-tsmixer-direct": ModelSpec(
+        "torch-tsmixer-direct": model_spec(
             key="torch-tsmixer-direct",
             description="Torch TSMixer-style model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_tsmixer_direct,
@@ -1317,7 +1317,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-cnn-direct": ModelSpec(
+        "torch-cnn-direct": model_spec(
             key="torch-cnn-direct",
             description="Torch Conv1D stack (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_cnn_direct,
@@ -1339,7 +1339,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-resnet1d-direct": ModelSpec(
+        "torch-resnet1d-direct": model_spec(
             key="torch-resnet1d-direct",
             description="Torch ResNet-1D (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_resnet1d_direct,
@@ -1363,7 +1363,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-wavenet-direct": ModelSpec(
+        "torch-wavenet-direct": model_spec(
             key="torch-wavenet-direct",
             description="Torch WaveNet-style gated dilated CNN (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_wavenet_direct,
@@ -1385,7 +1385,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-bilstm-direct": ModelSpec(
+        "torch-bilstm-direct": model_spec(
             key="torch-bilstm-direct",
             description="Torch bidirectional LSTM on lag windows (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_bilstm_direct,
@@ -1405,7 +1405,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-bigru-direct": ModelSpec(
+        "torch-bigru-direct": model_spec(
             key="torch-bigru-direct",
             description="Torch bidirectional GRU on lag windows (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_bigru_direct,
@@ -1425,7 +1425,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-attn-gru-direct": ModelSpec(
+        "torch-attn-gru-direct": model_spec(
             key="torch-attn-gru-direct",
             description="Torch GRU + attention pooling (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_attn_gru_direct,
@@ -1445,7 +1445,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-segrnn-direct": ModelSpec(
+        "torch-segrnn-direct": model_spec(
             key="torch-segrnn-direct",
             description="Torch SegRNN-style segmented recurrent model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_segrnn_direct,
@@ -1469,7 +1469,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-segrnn-deep-direct": ModelSpec(
+        "torch-segrnn-deep-direct": model_spec(
             key="torch-segrnn-deep-direct",
             description="Torch SegRNN-style segmented recurrent model, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_segrnn_direct,
@@ -1493,7 +1493,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-segrnn-wide-direct": ModelSpec(
+        "torch-segrnn-wide-direct": model_spec(
             key="torch-segrnn-wide-direct",
             description="Torch SegRNN-style segmented recurrent model, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_segrnn_direct,
@@ -1517,7 +1517,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-moderntcn-direct": ModelSpec(
+        "torch-moderntcn-direct": model_spec(
             key="torch-moderntcn-direct",
             description="Torch ModernTCN-style patchified convolutional mixer (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_moderntcn_direct,
@@ -1543,7 +1543,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-moderntcn-deep-direct": ModelSpec(
+        "torch-moderntcn-deep-direct": model_spec(
             key="torch-moderntcn-deep-direct",
             description="Torch ModernTCN-style patchified convolutional mixer, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_moderntcn_direct,
@@ -1569,7 +1569,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-moderntcn-wide-direct": ModelSpec(
+        "torch-moderntcn-wide-direct": model_spec(
             key="torch-moderntcn-wide-direct",
             description="Torch ModernTCN-style patchified convolutional mixer, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_moderntcn_direct,
@@ -1595,7 +1595,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-basisformer-direct": ModelSpec(
+        "torch-basisformer-direct": model_spec(
             key="torch-basisformer-direct",
             description="Torch Basisformer-style learned basis routing model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_basisformer_direct,
@@ -1623,7 +1623,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-basisformer-deep-direct": ModelSpec(
+        "torch-basisformer-deep-direct": model_spec(
             key="torch-basisformer-deep-direct",
             description="Torch Basisformer-style learned basis routing model, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_basisformer_direct,
@@ -1651,7 +1651,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-basisformer-wide-direct": ModelSpec(
+        "torch-basisformer-wide-direct": model_spec(
             key="torch-basisformer-wide-direct",
             description="Torch Basisformer-style learned basis routing model, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_basisformer_direct,
@@ -1679,7 +1679,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-witran-direct": ModelSpec(
+        "torch-witran-direct": model_spec(
             key="torch-witran-direct",
             description="Torch WITRAN-style 2D grid recurrent mixer (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_witran_direct,
@@ -1705,7 +1705,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-witran-deep-direct": ModelSpec(
+        "torch-witran-deep-direct": model_spec(
             key="torch-witran-deep-direct",
             description="Torch WITRAN-style 2D grid recurrent mixer, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_witran_direct,
@@ -1731,7 +1731,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-witran-wide-direct": ModelSpec(
+        "torch-witran-wide-direct": model_spec(
             key="torch-witran-wide-direct",
             description="Torch WITRAN-style 2D grid recurrent mixer, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_witran_direct,
@@ -1757,7 +1757,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-crossgnn-direct": ModelSpec(
+        "torch-crossgnn-direct": model_spec(
             key="torch-crossgnn-direct",
             description="Torch CrossGNN-style lag-graph mixer (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_crossgnn_direct,
@@ -1779,7 +1779,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-crossgnn-deep-direct": ModelSpec(
+        "torch-crossgnn-deep-direct": model_spec(
             key="torch-crossgnn-deep-direct",
             description="Torch CrossGNN-style lag-graph mixer, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_crossgnn_direct,
@@ -1801,7 +1801,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-crossgnn-wide-direct": ModelSpec(
+        "torch-crossgnn-wide-direct": model_spec(
             key="torch-crossgnn-wide-direct",
             description="Torch CrossGNN-style lag-graph mixer, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_crossgnn_direct,
@@ -1823,7 +1823,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-pathformer-direct": ModelSpec(
+        "torch-pathformer-direct": model_spec(
             key="torch-pathformer-direct",
             description="Torch Pathformer-style multi-scale expert routing model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_pathformer_direct,
@@ -1847,7 +1847,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-pathformer-deep-direct": ModelSpec(
+        "torch-pathformer-deep-direct": model_spec(
             key="torch-pathformer-deep-direct",
             description="Torch Pathformer-style multi-scale expert routing model, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_pathformer_direct,
@@ -1871,7 +1871,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-pathformer-wide-direct": ModelSpec(
+        "torch-pathformer-wide-direct": model_spec(
             key="torch-pathformer-wide-direct",
             description="Torch Pathformer-style multi-scale expert routing model, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_pathformer_direct,
@@ -1895,7 +1895,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timesmamba-direct": ModelSpec(
+        "torch-timesmamba-direct": model_spec(
             key="torch-timesmamba-direct",
             description="Torch TimesMamba-style patch state-space mixer (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timesmamba_direct,
@@ -1919,7 +1919,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timesmamba-deep-direct": ModelSpec(
+        "torch-timesmamba-deep-direct": model_spec(
             key="torch-timesmamba-deep-direct",
             description="Torch TimesMamba-style patch state-space mixer, deeper config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timesmamba_direct,
@@ -1943,7 +1943,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-timesmamba-wide-direct": ModelSpec(
+        "torch-timesmamba-wide-direct": model_spec(
             key="torch-timesmamba-wide-direct",
             description="Torch TimesMamba-style patch state-space mixer, wider config (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_timesmamba_direct,
@@ -1967,7 +1967,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-fnet-direct": ModelSpec(
+        "torch-fnet-direct": model_spec(
             key="torch-fnet-direct",
             description="Torch FNet-style (Fourier mixing) model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_fnet_direct,
@@ -1989,7 +1989,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-linear-attn-direct": ModelSpec(
+        "torch-linear-attn-direct": model_spec(
             key="torch-linear-attn-direct",
             description="Torch linear-attention encoder (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_linear_attn_direct,
@@ -2011,7 +2011,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-inception-direct": ModelSpec(
+        "torch-inception-direct": model_spec(
             key="torch-inception-direct",
             description="Torch InceptionTime-style Conv1D model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_inception_direct,
@@ -2037,7 +2037,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-gmlp-direct": ModelSpec(
+        "torch-gmlp-direct": model_spec(
             key="torch-gmlp-direct",
             description="Torch gMLP-style model (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_gmlp_direct,
@@ -2059,7 +2059,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-nhits-direct": ModelSpec(
+        "torch-nhits-direct": model_spec(
             key="torch-nhits-direct",
             description="Torch N-HiTS-style multi-rate residual MLP (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_nhits_direct,
@@ -2083,7 +2083,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-tide-direct": ModelSpec(
+        "torch-tide-direct": model_spec(
             key="torch-tide-direct",
             description="Torch TiDE-style encoder/decoder MLP (direct multi-horizon). Requires PyTorch.",
             factory=_factory_torch_tide_direct,
@@ -2103,7 +2103,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-deepar-recursive": ModelSpec(
+        "torch-deepar-recursive": model_spec(
             key="torch-deepar-recursive",
             description="Torch DeepAR-style Gaussian RNN (one-step trained, recursive forecast). Requires PyTorch.",
             factory=_factory_torch_deepar_recursive,
@@ -2124,7 +2124,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
             },
             requires=("torch",),
         ),
-        "torch-qrnn-recursive": ModelSpec(
+        "torch-qrnn-recursive": model_spec(
             key="torch-qrnn-recursive",
             description="Torch quantile-regression RNN (one-step trained, recursive forecast). Requires PyTorch.",
             factory=_factory_torch_qrnn_recursive,
@@ -2150,7 +2150,7 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
     }
 
 def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_lstnet_direct = context._factory_torch_lstnet_direct
@@ -2219,7 +2219,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
         description: str,
         **overrides: Any,
     ) -> None:
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory_torch_xformer_direct,
@@ -2352,7 +2352,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     }
 
     def _add_local_seq2seq(key: str, description: str, **overrides: Any) -> None:
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory_torch_seq2seq_direct,
@@ -2426,7 +2426,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
         "dropout": _DROPOUT_HELP,
         **_TORCH_COMMON_PARAM_HELP,
     }
-    extra["torch-lstnet-direct"] = ModelSpec(
+    extra["torch-lstnet-direct"] = model_spec(
         key="torch-lstnet-direct",
         description="Torch LSTNet-style CNN+GRU(+skip)+highway (lite) direct multi-horizon. Requires PyTorch.",
         factory=_factory_torch_lstnet_direct,
@@ -2512,7 +2512,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     }
 
     def _add_global_xformer(key: str, description: str, **overrides: Any) -> None:
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=torch_xformer_global_forecaster,
@@ -2650,7 +2650,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     }
 
     def _add_global_rnn(key: str, description: str, **overrides: Any) -> None:
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=torch_rnn_global_forecaster,
@@ -2681,7 +2681,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
 
 
 def _make_torch_rnnpaper_specs(context: Any) -> dict[str, ModelSpec]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_rnnpaper_direct = context._factory_torch_rnnpaper_direct
@@ -2720,7 +2720,7 @@ def _make_torch_rnnpaper_specs(context: Any) -> dict[str, ModelSpec]:
     }
 
     for spec in list_rnnpaper_specs():
-        extra[spec.key] = ModelSpec(
+        extra[spec.key] = model_spec(
             key=spec.key,
             description=spec.description + ". Requires PyTorch.",
             factory=_factory_torch_rnnpaper_direct,
@@ -2734,7 +2734,7 @@ def _make_torch_rnnpaper_specs(context: Any) -> dict[str, ModelSpec]:
 
 
 def _make_torch_rnnzoo_specs(context: Any) -> dict[str, ModelSpec]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     _factory_torch_rnnzoo_direct = context._factory_torch_rnnzoo_direct
@@ -2776,7 +2776,7 @@ def _make_torch_rnnzoo_specs(context: Any) -> dict[str, ModelSpec]:
     }
 
     for spec in list_rnnzoo_specs():
-        extra[spec.key] = ModelSpec(
+        extra[spec.key] = model_spec(
             key=spec.key,
             description=spec.description + ". Requires PyTorch.",
             factory=_factory_torch_rnnzoo_direct,
@@ -2791,7 +2791,7 @@ def _make_torch_rnnzoo_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_reservoir_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 01 ownership: ESN / reservoir / liquid-state lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -2919,7 +2919,7 @@ def _make_wave1_reservoir_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,
@@ -2934,7 +2934,7 @@ def _make_wave1_reservoir_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_structured_rnn_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 02 ownership: structured / grid recurrent lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -3052,7 +3052,7 @@ def _make_wave1_structured_rnn_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,
@@ -3067,7 +3067,7 @@ def _make_wave1_structured_rnn_specs(context: Any) -> dict[str, ModelSpec]:
 
 def _make_wave1_probabilistic_specs(context: Any) -> dict[str, ModelSpec]:
     """Lane 06 ownership: TimeGrad / TACTiS style probabilistic lite families."""
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
     _TORCH_COMMON_PARAM_HELP = context._TORCH_COMMON_PARAM_HELP
     np = context.np
@@ -3196,7 +3196,7 @@ def _make_wave1_probabilistic_specs(context: Any) -> dict[str, ModelSpec]:
         return _f
 
     for key, description in descriptions.items():
-        extra[key] = ModelSpec(
+        extra[key] = model_spec(
             key=key,
             description=description,
             factory=_factory,

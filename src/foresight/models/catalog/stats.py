@@ -4,7 +4,7 @@ from typing import Any
 
 
 def build_stats_catalog(context: Any) -> dict[str, Any]:
-    ModelSpec = context.ModelSpec
+    model_spec = context.ModelSpec
     _factory_arima = context._factory_arima
     _factory_auto_arima = context._factory_auto_arima
     _factory_autoreg = context._factory_autoreg
@@ -62,7 +62,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         "Optional Box-Cox lambda (float); requires y > 0"
     )
     return {
-    "ets": ModelSpec(
+    "ets": model_spec(
         key="ets",
         description="ETS (ExponentialSmoothing) via statsmodels. Optional dependency.",
         factory=_factory_ets,
@@ -81,7 +81,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         requires=("stats",),
         capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
-    "arima": ModelSpec(
+    "arima": model_spec(
         key="arima",
         description="ARIMA(p,d,q) via statsmodels. Optional dependency.",
         factory=_factory_arima,
@@ -100,7 +100,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         requires=("stats",),
         capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
-    "auto-arima": ModelSpec(
+    "auto-arima": model_spec(
         key="auto-arima",
         description="AutoARIMA-style grid search via statsmodels. Optional dependency.",
         factory=_factory_auto_arima,
@@ -135,7 +135,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         requires=("stats",),
         capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
-    "fourier-auto-arima": ModelSpec(
+    "fourier-auto-arima": model_spec(
         key="fourier-auto-arima",
         description="Dynamic harmonic regression: Fourier seasonal terms + AutoARIMA errors. Optional dependency.",
         factory=_factory_fourier_auto_arima,
@@ -163,7 +163,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "fourier-arima": ModelSpec(
+    "fourier-arima": model_spec(
         key="fourier-arima",
         description="Dynamic harmonic regression: Fourier seasonal terms + fixed-order ARIMA errors. Optional dependency.",
         factory=_factory_fourier_arima,
@@ -185,7 +185,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "fourier-sarimax": ModelSpec(
+    "fourier-sarimax": model_spec(
         key="fourier-sarimax",
         description="Dynamic harmonic regression: Fourier seasonal terms + fixed-order SARIMAX errors. Optional dependency.",
         factory=_factory_fourier_sarimax,
@@ -209,7 +209,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "fourier-autoreg": ModelSpec(
+    "fourier-autoreg": model_spec(
         key="fourier-autoreg",
         description="Dynamic harmonic regression: Fourier seasonal terms + AutoReg / AR-X errors. Optional dependency.",
         factory=_factory_fourier_autoreg,
@@ -227,7 +227,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "fourier-ets": ModelSpec(
+    "fourier-ets": model_spec(
         key="fourier-ets",
         description="Dynamic harmonic regression: Fourier seasonal terms + ETS residuals. Optional dependency.",
         factory=_factory_fourier_ets,
@@ -245,7 +245,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "fourier-uc": ModelSpec(
+    "fourier-uc": model_spec(
         key="fourier-uc",
         description="Dynamic harmonic regression: Fourier seasonal terms + UnobservedComponents residuals. Optional dependency.",
         factory=_factory_fourier_uc,
@@ -261,7 +261,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "sarimax": ModelSpec(
+    "sarimax": model_spec(
         key="sarimax",
         description="SARIMAX / seasonal ARIMA via statsmodels. Optional dependency.",
         factory=_factory_sarimax,
@@ -284,7 +284,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         requires=("stats",),
         capability_overrides={"supports_interval_forecast_with_x_cols": True},
     ),
-    "autoreg": ModelSpec(
+    "autoreg": model_spec(
         key="autoreg",
         description="AutoReg (AR) via statsmodels. Optional dependency.",
         factory=_factory_autoreg,
@@ -297,7 +297,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "uc-local-level": ModelSpec(
+    "uc-local-level": model_spec(
         key="uc-local-level",
         description="UnobservedComponents local level via statsmodels. Optional dependency.",
         factory=_factory_unobserved_components,
@@ -305,7 +305,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         param_help={"level": "Level specification string (default: 'local level')"},
         requires=("stats",),
     ),
-    "uc-local-linear-trend": ModelSpec(
+    "uc-local-linear-trend": model_spec(
         key="uc-local-linear-trend",
         description="UnobservedComponents local linear trend via statsmodels. Optional dependency.",
         factory=_factory_unobserved_components,
@@ -313,7 +313,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         param_help={"level": "Level specification string (default: 'local linear trend')"},
         requires=("stats",),
     ),
-    "uc-seasonal": ModelSpec(
+    "uc-seasonal": model_spec(
         key="uc-seasonal",
         description="UnobservedComponents local level + seasonal component via statsmodels. Optional dependency.",
         factory=_factory_unobserved_components,
@@ -324,7 +324,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-arima": ModelSpec(
+    "stl-arima": model_spec(
         key="stl-arima",
         description="STL + ARIMA remainder forecasting via statsmodels. Optional dependency.",
         factory=_factory_stl_arima,
@@ -337,7 +337,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-ets": ModelSpec(
+    "stl-ets": model_spec(
         key="stl-ets",
         description="STL + ETS remainder forecasting via statsmodels. Optional dependency.",
         factory=_factory_stl_ets,
@@ -350,7 +350,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-autoreg": ModelSpec(
+    "stl-autoreg": model_spec(
         key="stl-autoreg",
         description="STL + AutoReg remainder forecasting via statsmodels. Optional dependency.",
         factory=_factory_stl_autoreg,
@@ -364,7 +364,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-uc": ModelSpec(
+    "stl-uc": model_spec(
         key="stl-uc",
         description="STL decomposition + UnobservedComponents on the seasonally-adjusted series. Optional dependency.",
         factory=_factory_stl_uc,
@@ -377,7 +377,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-auto-arima": ModelSpec(
+    "stl-auto-arima": model_spec(
         key="stl-auto-arima",
         description="STL decomposition + AutoARIMA-style grid search on the seasonally-adjusted series. Optional dependency.",
         factory=_factory_stl_auto_arima,
@@ -407,7 +407,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "stl-sarimax": ModelSpec(
+    "stl-sarimax": model_spec(
         key="stl-sarimax",
         description="STL decomposition + SARIMAX on the seasonally-adjusted series. Optional dependency.",
         factory=_factory_stl_sarimax,
@@ -433,7 +433,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-arima": ModelSpec(
+    "mstl-arima": model_spec(
         key="mstl-arima",
         description="MSTL (multi-seasonal STL) + ARIMA on seasonally-adjusted series. Optional dependency.",
         factory=_factory_mstl_arima,
@@ -446,7 +446,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-autoreg": ModelSpec(
+    "mstl-autoreg": model_spec(
         key="mstl-autoreg",
         description="MSTL (multi-seasonal STL) + AutoReg on seasonally-adjusted series. Optional dependency.",
         factory=_factory_mstl_autoreg,
@@ -460,7 +460,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-ets": ModelSpec(
+    "mstl-ets": model_spec(
         key="mstl-ets",
         description="MSTL (multi-seasonal STL) + ETS on seasonally-adjusted series. Optional dependency.",
         factory=_factory_mstl_ets,
@@ -480,7 +480,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-uc": ModelSpec(
+    "mstl-uc": model_spec(
         key="mstl-uc",
         description="MSTL (multi-seasonal STL) + UnobservedComponents on seasonally-adjusted series. Optional dependency.",
         factory=_factory_mstl_uc,
@@ -498,7 +498,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-sarimax": ModelSpec(
+    "mstl-sarimax": model_spec(
         key="mstl-sarimax",
         description="MSTL (multi-seasonal STL) + SARIMAX on seasonally-adjusted series. Optional dependency.",
         factory=_factory_mstl_sarimax,
@@ -524,7 +524,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "mstl-auto-arima": ModelSpec(
+    "mstl-auto-arima": model_spec(
         key="mstl-auto-arima",
         description="MSTL + AutoARIMA-style grid search on adjusted series. Optional dependency.",
         factory=_factory_mstl_auto_arima,
@@ -554,7 +554,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite": ModelSpec(
+    "tbats-lite": model_spec(
         key="tbats-lite",
         description="TBATS-like: multi-season Fourier + ARIMA residuals (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite,
@@ -574,7 +574,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite-autoreg": ModelSpec(
+    "tbats-lite-autoreg": model_spec(
         key="tbats-lite-autoreg",
         description="TBATS-like: multi-season Fourier + AutoReg residuals (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite_autoreg,
@@ -596,7 +596,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite-ets": ModelSpec(
+    "tbats-lite-ets": model_spec(
         key="tbats-lite-ets",
         description="TBATS-like: multi-season Fourier + ETS residuals (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite_ets,
@@ -618,7 +618,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite-sarimax": ModelSpec(
+    "tbats-lite-sarimax": model_spec(
         key="tbats-lite-sarimax",
         description="TBATS-like: multi-season Fourier + SARIMAX residuals (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite_sarimax,
@@ -646,7 +646,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite-auto-arima": ModelSpec(
+    "tbats-lite-auto-arima": model_spec(
         key="tbats-lite-auto-arima",
         description="TBATS-like: multi-season Fourier + AutoARIMA residual search (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite_auto_arima,
@@ -678,7 +678,7 @@ def build_stats_catalog(context: Any) -> dict[str, Any]:
         },
         requires=("stats",),
     ),
-    "tbats-lite-uc": ModelSpec(
+    "tbats-lite-uc": model_spec(
         key="tbats-lite-uc",
         description="TBATS-like: multi-season Fourier + UnobservedComponents residuals (optional Box-Cox). Optional dependency.",
         factory=_factory_tbats_lite_uc,

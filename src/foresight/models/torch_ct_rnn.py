@@ -81,7 +81,7 @@ def torch_lmu_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _LMUBlock(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -137,7 +137,7 @@ def torch_lmu_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_LMUDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_LMUDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -206,7 +206,7 @@ def torch_ltc_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _LTCBlock(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -262,7 +262,7 @@ def torch_ltc_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_LTCDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_LTCDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -335,7 +335,7 @@ def torch_cfc_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _CfCBlock(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -394,7 +394,7 @@ def torch_cfc_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_CfCDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_CfCDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -467,7 +467,7 @@ def torch_xlstm_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
     inner = hid * expand
 
     class _xLSTMBlock(nn.Module):
@@ -530,7 +530,7 @@ def torch_xlstm_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_xLSTMDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_xLSTMDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -604,7 +604,7 @@ def torch_griffin_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
 
     class _GriffinBlock(nn.Module):
         def __init__(self, *, in_dim: int) -> None:
@@ -663,7 +663,7 @@ def torch_griffin_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_GriffinDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_GriffinDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
@@ -736,7 +736,7 @@ def torch_hawk_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
     inner = hid * exp
 
     class _HawkBlock(nn.Module):
@@ -793,7 +793,7 @@ def torch_hawk_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(_HawkDirect(), X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(_HawkDirect(), x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():

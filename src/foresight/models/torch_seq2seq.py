@@ -67,10 +67,10 @@ def _train_seq2seq(
 
     model = model.to(dev)
 
-    X_t = torch.tensor(X, dtype=torch.float32, device=dev)
-    Y_t = torch.tensor(Y, dtype=torch.float32, device=dev)
+    x_tensor = torch.tensor(X, dtype=torch.float32, device=dev)
+    y_tensor = torch.tensor(Y, dtype=torch.float32, device=dev)
 
-    n = int(X_t.shape[0])
+    n = int(x_tensor.shape[0])
     val_n = 0
     if float(cfg.val_split) > 0.0 and n >= 5:
         val_n = max(1, int(round(float(cfg.val_split) * n)))
@@ -78,11 +78,11 @@ def _train_seq2seq(
 
     if val_n > 0:
         train_end = n - val_n
-        X_train, Y_train = X_t[:train_end], Y_t[:train_end]
-        X_val, Y_val = X_t[train_end:], Y_t[train_end:]
+        X_train, Y_train = x_tensor[:train_end], y_tensor[:train_end]
+        x_val, y_val = x_tensor[train_end:], y_tensor[train_end:]
     else:
-        X_train, Y_train = X_t, Y_t
-        X_val, Y_val = None, None
+        X_train, Y_train = x_tensor, y_tensor
+        x_val, y_val = None, None
 
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(X_train, Y_train),
@@ -91,9 +91,9 @@ def _train_seq2seq(
     )
     val_loader = (
         None
-        if X_val is None
+        if x_val is None
         else torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(X_val, Y_val),
+            torch.utils.data.TensorDataset(x_val, y_val),
             batch_size=int(cfg.batch_size),
             shuffle=False,
         )
@@ -271,7 +271,7 @@ def torch_seq2seq_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], lag_count, 1)
+    x_seq = X.reshape(X.shape[0], lag_count, 1)
 
     class _Bahdanau(nn.Module):
         def __init__(self) -> None:
@@ -379,7 +379,7 @@ def torch_seq2seq_direct_forecast(
     )
     model = _train_seq2seq(
         model,
-        X_seq,
+        x_seq,
         Y,
         cfg=cfg,
         device=str(device),
@@ -474,7 +474,7 @@ def torch_lstnet_direct_forecast(
         x_work, mean, std = _normalize_series(x_work)
 
     X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    X_seq = X.reshape(X.shape[0], lag_count, 1)
+    x_seq = X.reshape(X.shape[0], lag_count, 1)
 
     class _LSTNetLite(nn.Module):
         def __init__(self) -> None:
@@ -555,7 +555,7 @@ def torch_lstnet_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, X_seq, Y, cfg=cfg, device=str(device))
+    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():
