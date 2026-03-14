@@ -1037,6 +1037,13 @@ def test_global_regression_source_extracts_repeated_quantile_and_svr_literals() 
         "quantiles must be in (0,1)",
         "quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)",
         "quantiles must be strictly between 0 and 1",
+        "alpha must be >= 0",
+        "max_iter must be >= 1",
+        "Unexpected prediction shape",
+        "Global model produced 0 predictions at this cutoff",
+        "n_estimators must be >= 1",
+        "max_depth must be >= 1 or None",
+        "learning_rate must be > 0",
     ]
 
     for literal in literals:

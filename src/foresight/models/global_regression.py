@@ -20,6 +20,13 @@ QUANTILES_RANGE_ERROR = "quantiles must be in (0,1)"
 QUANTILES_ALIGN_ERROR = "quantiles must align to integer percentiles (e.g. 0.1,0.5,0.9)"
 QUANTILES_STRICT_ERROR = "quantiles must be strictly between 0 and 1"
 POINT_OBJECTIVE_SQUAREDERROR = "reg:squarederror"
+ALPHA_MUST_BE_NON_NEGATIVE = "alpha must be >= 0"
+MAX_ITER_MUST_BE_AT_LEAST_ONE = "max_iter must be >= 1"
+UNEXPECTED_PREDICTION_SHAPE_ERROR = "Unexpected prediction shape"
+NO_GLOBAL_PREDICTIONS_ERROR = "Global model produced 0 predictions at this cutoff"
+N_ESTIMATORS_MUST_BE_AT_LEAST_ONE = "n_estimators must be >= 1"
+MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE = "max_depth must be >= 1 or None"
+LEARNING_RATE_MUST_BE_POSITIVE = "learning_rate must be > 0"
 
 
 def _is_effectively_one(value: float) -> bool:
@@ -507,12 +514,12 @@ def _run_point_global_model(
             continue
         pred = np.asarray(model.predict(X_pred), dtype=float).reshape(-1)
         if pred.shape[0] != int(horizon):
-            raise RuntimeError("Unexpected prediction shape")
+            raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
         for i in range(int(horizon)):
             rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
     if not rows:
-        raise ValueError("Global model produced 0 predictions at this cutoff")
+        raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
     return pd.DataFrame(rows)
 
 
@@ -548,7 +555,7 @@ def ridge_step_lag_global_forecaster(
     sample_step_int = int(sample_step)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = Ridge(alpha=alpha_f)
@@ -616,9 +623,9 @@ def rf_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MUST_BE_AT_LEAST_ONE)
     if max_depth_int is not None and max_depth_int <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = RandomForestRegressor(
@@ -691,9 +698,9 @@ def extra_trees_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MUST_BE_AT_LEAST_ONE)
     if max_depth_int is not None and max_depth_int <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = ExtraTreesRegressor(
@@ -760,7 +767,7 @@ def decision_tree_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_depth_int is not None and max_depth_int <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = DecisionTreeRegressor(
@@ -828,7 +835,7 @@ def bagging_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MUST_BE_AT_LEAST_ONE)
     if not (0.0 < max_samples_f <= 1.0):
         raise ValueError("max_samples must be in (0,1]")
 
@@ -900,9 +907,9 @@ def gbrt_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MUST_BE_AT_LEAST_ONE)
     if learning_rate_f <= 0.0:
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_MUST_BE_POSITIVE)
     if max_depth_int <= 0:
         raise ValueError("max_depth must be >= 1")
 
@@ -971,9 +978,9 @@ def lasso_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = Lasso(alpha=alpha_f, max_iter=max_iter_int)
@@ -1037,11 +1044,11 @@ def elasticnet_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if not (0.0 <= l1_ratio_f <= 1.0):
         raise ValueError("l1_ratio must be in [0,1]")
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = ElasticNet(alpha=alpha_f, l1_ratio=l1_ratio_f, max_iter=max_iter_int)
@@ -1169,7 +1176,7 @@ def kernel_ridge_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if not kernel_s:
         raise ValueError("kernel must be a non-empty string")
 
@@ -1314,7 +1321,7 @@ def linear_svr_step_lag_global_forecaster(
     if epsilon_f < 0.0:
         raise ValueError(SVR_EPSILON_ERROR)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = LinearSVR(
@@ -1385,9 +1392,9 @@ def huber_step_lag_global_forecaster(
     if epsilon_f <= 1.0:
         raise ValueError("epsilon must be > 1.0")
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = HuberRegressor(epsilon=epsilon_f, alpha=alpha_f, max_iter=max_iter_int)
@@ -1457,7 +1464,7 @@ def bayesian_ridge_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
     if tol_f <= 0.0:
         raise ValueError("tol must be > 0")
     if alpha_1_f <= 0.0 or alpha_2_f <= 0.0 or lambda_1_f <= 0.0 or lambda_2_f <= 0.0:
@@ -1540,7 +1547,7 @@ def ard_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
     if tol_f <= 0.0:
         raise ValueError("tol must be > 0")
     if alpha_1_f <= 0.0 or alpha_2_f <= 0.0 or lambda_1_f <= 0.0 or lambda_2_f <= 0.0:
@@ -1692,7 +1699,7 @@ def passive_aggressive_step_lag_global_forecaster(
     if epsilon_f < 0.0:
         raise ValueError(SVR_EPSILON_ERROR)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = PassiveAggressiveRegressor(
@@ -1760,9 +1767,9 @@ def poisson_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         if np.any(y_train < 0.0):
@@ -1826,9 +1833,9 @@ def gamma_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         if np.any(y_train <= 0.0):
@@ -1896,9 +1903,9 @@ def tweedie_step_lag_global_forecaster(
     if 0.0 < power_f < 1.0:
         raise ValueError("power must be <= 0 or >= 1")
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         _validate_tweedie_targets(power=power_f, y_train=y_train)
@@ -1962,7 +1969,7 @@ def quantile_step_lag_global_forecaster(
     if not (0.0 < quantile_f < 1.0):
         raise ValueError("quantile must be in (0,1)")
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = QuantileRegressor(quantile=quantile_f, alpha=alpha_f, fit_intercept=True)
@@ -2027,11 +2034,11 @@ def sgd_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if penalty_s not in {"l2", "l1", "elasticnet"}:
         raise ValueError("penalty must be one of: l2, l1, elasticnet")
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = SGDRegressor(
@@ -2100,9 +2107,9 @@ def adaboost_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if n_estimators_int <= 0:
-        raise ValueError("n_estimators must be >= 1")
+        raise ValueError(N_ESTIMATORS_MUST_BE_AT_LEAST_ONE)
     if learning_rate_f <= 0.0:
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_MUST_BE_POSITIVE)
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
         model = AdaBoostRegressor(
@@ -2181,9 +2188,9 @@ def mlp_step_lag_global_forecaster(
     if not sizes or any(s <= 0 for s in sizes):
         raise ValueError("hidden_layer_sizes must contain positive integers")
     if alpha_f < 0.0:
-        raise ValueError("alpha must be >= 0")
+        raise ValueError(ALPHA_MUST_BE_NON_NEGATIVE)
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
     if learning_rate_init_f <= 0.0:
         raise ValueError("learning_rate_init must be > 0")
 
@@ -2257,11 +2264,11 @@ def hgb_step_lag_global_forecaster(
     lag_role_params = _extract_step_lag_role_params(_params)
 
     if max_iter_int <= 0:
-        raise ValueError("max_iter must be >= 1")
+        raise ValueError(MAX_ITER_MUST_BE_AT_LEAST_ONE)
     if lr_f <= 0.0:
-        raise ValueError("learning_rate must be > 0")
+        raise ValueError(LEARNING_RATE_MUST_BE_POSITIVE)
     if max_depth_int is not None and max_depth_int <= 0:
-        raise ValueError("max_depth must be >= 1 or None")
+        raise ValueError(MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE)
 
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
         df = _validate_long_df(long_df, x_cols=x_cols_tup)
@@ -2316,12 +2323,12 @@ def hgb_step_lag_global_forecaster(
             pred = model.predict(X_pred)
             pred = np.asarray(pred, dtype=float).reshape(-1)
             if pred.shape[0] != int(horizon):
-                raise RuntimeError("Unexpected prediction shape")
+                raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
             for i in range(int(horizon)):
                 rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
-            raise ValueError("Global model produced 0 predictions at this cutoff")
+            raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
         return pd.DataFrame(rows)
 
     return _f
@@ -2521,7 +2528,7 @@ def _xgb_step_lag_global_forecaster_impl(
                 for q, m in models_by_q.items():
                     p = np.asarray(m.predict(X_pred), dtype=float).reshape(-1)
                     if p.shape[0] != int(horizon):
-                        raise RuntimeError("Unexpected prediction shape")
+                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
 
                 assert point_q is not None
@@ -2537,12 +2544,12 @@ def _xgb_step_lag_global_forecaster_impl(
                 assert point_model is not None
                 pred = np.asarray(point_model.predict(X_pred), dtype=float).reshape(-1)
                 if pred.shape[0] != int(horizon):
-                    raise RuntimeError("Unexpected prediction shape")
+                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):
                     rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
-            raise ValueError("Global model produced 0 predictions at this cutoff")
+            raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
         return pd.DataFrame(rows)
 
     return _f
@@ -3393,7 +3400,7 @@ def lgbm_step_lag_global_forecaster(
                 for q, m in models_by_q.items():
                     p = _predict(m, X_pred)
                     if p.shape[0] != int(horizon):
-                        raise RuntimeError("Unexpected prediction shape")
+                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
 
                 assert point_q is not None
@@ -3409,12 +3416,12 @@ def lgbm_step_lag_global_forecaster(
                 assert point_model is not None
                 pred = _predict(point_model, X_pred)
                 if pred.shape[0] != int(horizon):
-                    raise RuntimeError("Unexpected prediction shape")
+                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):
                     rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
-            raise ValueError("Global model produced 0 predictions at this cutoff")
+            raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
         return pd.DataFrame(rows)
 
     return _f
@@ -3563,7 +3570,7 @@ def catboost_step_lag_global_forecaster(
                 for q, m in models_by_q.items():
                     p = np.asarray(m.predict(X_pred), dtype=float).reshape(-1)
                     if p.shape[0] != int(horizon):
-                        raise RuntimeError("Unexpected prediction shape")
+                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                     preds_q[float(q)] = p
 
                 assert point_q is not None
@@ -3579,12 +3586,12 @@ def catboost_step_lag_global_forecaster(
                 assert point_model is not None
                 pred = np.asarray(point_model.predict(X_pred), dtype=float).reshape(-1)
                 if pred.shape[0] != int(horizon):
-                    raise RuntimeError("Unexpected prediction shape")
+                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
                 for i in range(int(horizon)):
                     rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
-            raise ValueError("Global model produced 0 predictions at this cutoff")
+            raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
         return pd.DataFrame(rows)
 
     return _f
