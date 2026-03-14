@@ -56,6 +56,12 @@ def test_xgb_lag_recursive_forecast_has_no_mergeable_nested_ifs() -> None:
     ) == []
 
 
+def test_xgb_objective_label_validation_has_no_mergeable_nested_ifs() -> None:
+    assert _mergeable_nested_if_lines(
+        "src/foresight/models/regression.py", "_xgb_validate_objective_label_constraints"
+    ) == []
+
+
 def test_xgb_common_regressor_param_validation_has_no_mergeable_nested_ifs() -> None:
     assert _mergeable_nested_if_lines(
         "src/foresight/models/regression.py", "_xgb_validate_common_regressor_params"

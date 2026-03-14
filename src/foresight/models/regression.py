@@ -3574,15 +3574,12 @@ def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
 
     We validate these early to surface a clearer error than the underlying trainer.
     """
-    if obj in {"count:poisson", "reg:tweedie", "reg:squaredlogerror"}:
-        if np.any(x < 0.0):
-            raise ValueError(f"{obj} requires non-negative series values")
-    if obj == "reg:gamma":
-        if np.any(x <= 0.0):
-            raise ValueError("reg:gamma requires strictly positive series values")
-    if obj == "reg:logistic":
-        if np.any((x < 0.0) | (x > 1.0)):
-            raise ValueError("reg:logistic requires series values in [0,1]")
+    if obj in {"count:poisson", "reg:tweedie", "reg:squaredlogerror"} and np.any(x < 0.0):
+        raise ValueError(f"{obj} requires non-negative series values")
+    if obj == "reg:gamma" and np.any(x <= 0.0):
+        raise ValueError("reg:gamma requires strictly positive series values")
+    if obj == "reg:logistic" and np.any((x < 0.0) | (x > 1.0)):
+        raise ValueError("reg:logistic requires series values in [0,1]")
 
 
 def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
