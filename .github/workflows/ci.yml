@@ -100,6 +100,10 @@ jobs:
             tests/test_root_import.py \
             tests/test_sonar_coverage_recent_fixes.py \
             tests/test_sonar_torch_rename_coverage_smoke.py \
+            tests/test_features_lag.py \
+            tests/test_features_tabular.py \
+            tests/test_features_time.py \
+            tests/test_no_sonar_low_hanging_smells.py \
             tests/test_torch_global_validation_messages.py \
             --cov=foresight \
             --cov-report=xml:coverage.xml
