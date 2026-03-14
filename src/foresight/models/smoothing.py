@@ -4,6 +4,10 @@ from typing import Any
 
 import numpy as np
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+GRID_SIZE_MIN_ERROR = "grid_size must be >= 2"
+SEASON_LENGTH_MIN_ERROR = "season_length must be >= 1"
+
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
@@ -25,7 +29,7 @@ def ses_forecast(train: Any, horizon: int, *, alpha: float) -> np.ndarray:
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size == 0:
         raise ValueError("ses_forecast requires at least 1 training point")
     a = _require_01("alpha", alpha)
@@ -55,11 +59,11 @@ def ses_auto_forecast(train: Any, horizon: int, *, grid_size: int = 19) -> np.nd
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size < 2:
         raise ValueError("ses_auto_forecast requires at least 2 training points")
     if grid_size <= 1:
-        raise ValueError("grid_size must be >= 2")
+        raise ValueError(GRID_SIZE_MIN_ERROR)
 
     grid = np.linspace(0.05, 0.95, int(grid_size), dtype=float)
     best_alpha = float(grid[0])
@@ -79,7 +83,7 @@ def holt_forecast(train: Any, horizon: int, *, alpha: float, beta: float) -> np.
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size < 2:
         raise ValueError("holt_forecast requires at least 2 training points")
     a = _require_01("alpha", alpha)
@@ -112,7 +116,7 @@ def holt_damped_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size < 2:
         raise ValueError("holt_damped_forecast requires at least 2 training points")
     a = _require_01("alpha", alpha)
@@ -164,11 +168,11 @@ def holt_auto_forecast(train: Any, horizon: int, *, grid_size: int = 10) -> np.n
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if x.size < 3:
         raise ValueError("holt_auto_forecast requires at least 3 training points")
     if grid_size <= 1:
-        raise ValueError("grid_size must be >= 2")
+        raise ValueError(GRID_SIZE_MIN_ERROR)
 
     grid = np.linspace(0.1, 0.9, int(grid_size), dtype=float)
     best_alpha = float(grid[0])
@@ -202,9 +206,9 @@ def holt_winters_additive_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < 2 * season_length:
         raise ValueError(
             f"holt_winters_additive_forecast requires at least 2*season_length={2 * season_length} points, got {x.size}"
@@ -288,15 +292,15 @@ def holt_winters_additive_auto_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < 2 * int(season_length):
         raise ValueError(
             "holt_winters_additive_auto_forecast requires at least 2 full seasons of data"
         )
     if grid_size <= 1:
-        raise ValueError("grid_size must be >= 2")
+        raise ValueError(GRID_SIZE_MIN_ERROR)
 
     grid = np.linspace(0.1, 0.9, int(grid_size), dtype=float)
     best = (float(grid[0]), float(grid[0]), float(grid[0]))
@@ -346,9 +350,9 @@ def holt_winters_multiplicative_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < 2 * int(season_length):
         raise ValueError(
             "holt_winters_multiplicative_forecast requires at least "
@@ -454,15 +458,15 @@ def holt_winters_multiplicative_auto_forecast(
     """
     x = _as_1d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
-        raise ValueError("season_length must be >= 1")
+        raise ValueError(SEASON_LENGTH_MIN_ERROR)
     if x.size < 2 * int(season_length):
         raise ValueError(
             "holt_winters_multiplicative_auto_forecast requires at least 2 full seasons of data"
         )
     if grid_size <= 1:
-        raise ValueError("grid_size must be >= 2")
+        raise ValueError(GRID_SIZE_MIN_ERROR)
 
     grid = np.linspace(0.1, 0.9, int(grid_size), dtype=float)
     best = (float(grid[0]), float(grid[0]), float(grid[0]))

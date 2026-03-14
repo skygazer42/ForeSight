@@ -4,20 +4,22 @@ from typing import Any
 
 import numpy as np
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+
 
 def naive_last(train: Any, horizon: int) -> np.ndarray:
     x = np.asarray(train, dtype=float)
     if x.size == 0:
         raise ValueError("naive_last requires at least 1 training point")
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     return np.full(shape=(horizon,), fill_value=float(x[-1]), dtype=float)
 
 
 def seasonal_naive(train: Any, horizon: int, *, season_length: int) -> np.ndarray:
     x = np.asarray(train, dtype=float)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if season_length <= 0:
         raise ValueError("season_length must be >= 1")
     if x.size < season_length:
@@ -63,7 +65,7 @@ def seasonal_naive_auto(
     if x.size == 0:
         raise ValueError("seasonal_naive_auto requires at least 1 training point")
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
 
     min_s = int(min_season_length)
     max_s = int(max_season_length)

@@ -8,6 +8,12 @@ import pandas as pd
 
 from .torch_nn import TorchTrainConfig, _normalize_series, _require_torch, _train_loop
 
+HORIZON_MIN_ERROR = "horizon must be >= 1"
+LAGS_MIN_ERROR = "lags must be >= 1"
+D_MODEL_MIN_ERROR = "d_model must be >= 1"
+NUM_BLOCKS_MIN_ERROR = "num_blocks must be >= 1"
+DROPOUT_RANGE_ERROR = "dropout must be in [0,1)"
+
 
 def _as_2d_float_array(train: Any) -> np.ndarray:
     if isinstance(train, pd.DataFrame):
@@ -32,9 +38,9 @@ def _make_lagged_xy_multivariate(
     lag_count = int(lags)
     h = int(horizon)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if n < lag_count + h:
         raise ValueError(f"Need >= lags+horizon rows (lags={lag_count}, horizon={h}), got {n}")
 
@@ -71,7 +77,7 @@ def var_forecast(
 
     x = _as_2d_float_array(train)
     if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
 
     maxlags_int = int(maxlags)
     if maxlags_int <= 0:
@@ -136,11 +142,11 @@ def torch_stid_forecast(
     blocks = int(num_blocks)
     drop = float(dropout)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(D_MODEL_MIN_ERROR)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(NUM_BLOCKS_MIN_ERROR)
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x.astype(float, copy=False)
     mean = np.zeros((int(x.shape[1]),), dtype=float)
@@ -358,17 +364,17 @@ def torch_stgcn_forecast(
     k = int(kernel_size)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(D_MODEL_MIN_ERROR)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(NUM_BLOCKS_MIN_ERROR)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = np.zeros((int(x.shape[1]),), dtype=float)
@@ -503,13 +509,13 @@ def torch_graphwavenet_forecast(
     base = int(dilation_base)
     drop = float(dropout)
     if h <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
+        raise ValueError(LAGS_MIN_ERROR)
     if d <= 0:
-        raise ValueError("d_model must be >= 1")
+        raise ValueError(D_MODEL_MIN_ERROR)
     if blocks <= 0:
-        raise ValueError("num_blocks must be >= 1")
+        raise ValueError(NUM_BLOCKS_MIN_ERROR)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
     if base <= 0:
@@ -517,7 +523,7 @@ def torch_graphwavenet_forecast(
     if int(adj_emb_dim) <= 0:
         raise ValueError("adj_emb_dim must be >= 1")
     if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
+        raise ValueError(DROPOUT_RANGE_ERROR)
 
     x_work = x
     mean = np.zeros((int(x.shape[1]),), dtype=float)
