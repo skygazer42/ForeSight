@@ -12,6 +12,7 @@ import pytest
 from foresight.docsgen.rnn import _metadata_primary_url, render_rnn_paper_zoo_doc, render_rnn_zoo_doc
 from foresight.models.regression import (
     _augment_lag_feat_row,
+    _lgbm_validate_common_regressor_params,
     _xgb_lag_direct_forecast,
     _xgb_lag_recursive_forecast,
     _xgb_validate_common_regressor_params,
@@ -234,6 +235,20 @@ def test_xgb_common_regressor_params_reject_invalid_scalars(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         _xgb_validate_common_regressor_params(params)
+
+
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({"subsample": 0.0}, "subsample must be in \\(0,1\\]"),
+        ({"colsample_bytree": 0.0}, "colsample_bytree must be in \\(0,1\\]"),
+    ],
+)
+def test_lgbm_common_regressor_params_reject_invalid_scalars(
+    params: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _lgbm_validate_common_regressor_params(params)
 
 
 def test_xgb_lag_direct_forecast_validates_labels_before_training(

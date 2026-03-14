@@ -69,3 +69,12 @@ def test_xgb_common_regressor_param_validation_avoids_nested_bound_checks() -> N
 
     assert 'if "subsample" in params and params["subsample"] is not None:' not in source
     assert 'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
+
+
+def test_lgbm_common_regressor_param_validation_avoids_nested_bound_checks() -> None:
+    source = _function_source(
+        "src/foresight/models/regression.py", "_lgbm_validate_common_regressor_params"
+    )
+
+    assert 'if "subsample" in params and params["subsample"] is not None:' not in source
+    assert 'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
