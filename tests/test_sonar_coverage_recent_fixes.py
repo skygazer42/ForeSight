@@ -15,6 +15,7 @@ from foresight.cli import build_parser
 from foresight.metrics import _validate_seasonal_training_window, mase, msis, rmsse
 from foresight.models import global_regression as global_regression_mod
 from foresight.models import regression as regression_mod
+from foresight.models import statsmodels_wrap as statsmodels_wrap_mod
 from foresight.models.global_regression import (
     decision_tree_step_lag_global_forecaster,
     rf_step_lag_global_forecaster,
@@ -73,6 +74,145 @@ def _install_fake_statsmodels(
     monkeypatch.setitem(sys.modules, "statsmodels", statsmodels)
     monkeypatch.setitem(sys.modules, "statsmodels.tsa", tsa)
     monkeypatch.setitem(sys.modules, "statsmodels.tsa.holtwinters", holtwinters)
+
+
+def _install_fake_statsmodels_suite(monkeypatch: pytest.MonkeyPatch) -> None:
+    statsmodels = types.ModuleType("statsmodels")
+    tsa = types.ModuleType("statsmodels.tsa")
+    ar_model = types.ModuleType("statsmodels.tsa.ar_model")
+    arima = types.ModuleType("statsmodels.tsa.arima")
+    arima_model = types.ModuleType("statsmodels.tsa.arima.model")
+    forecasting = types.ModuleType("statsmodels.tsa.forecasting")
+    forecasting_stl = types.ModuleType("statsmodels.tsa.forecasting.stl")
+    holtwinters = types.ModuleType("statsmodels.tsa.holtwinters")
+    seasonal = types.ModuleType("statsmodels.tsa.seasonal")
+    statespace = types.ModuleType("statsmodels.tsa.statespace")
+    sarimax = types.ModuleType("statsmodels.tsa.statespace.sarimax")
+    structural = types.ModuleType("statsmodels.tsa.statespace.structural")
+
+    class _FakePredictionResult:
+        def __init__(self, steps: int) -> None:
+            self.predicted_mean = np.arange(int(steps), dtype=float)
+            self._steps = int(steps)
+
+        def conf_int(self, *, alpha: float) -> np.ndarray:
+            return np.column_stack(
+                (
+                    np.full((self._steps,), -float(alpha), dtype=float),
+                    np.full((self._steps,), float(alpha), dtype=float),
+                )
+            )
+
+    class _FakeFitResult:
+        def __init__(self, scale: float) -> None:
+            self.aic = float(scale)
+            self.bic = float(scale) + 1.0
+
+        def forecast(self, *, steps: int, exog: np.ndarray | None = None) -> np.ndarray:
+            return np.full((int(steps),), 1.0, dtype=float)
+
+        def get_forecast(
+            self, *, steps: int, exog: np.ndarray | None = None
+        ) -> _FakePredictionResult:
+            return _FakePredictionResult(int(steps))
+
+    class _FakeARIMA:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeAutoReg:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeSARIMAX:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self, *, disp: bool) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeUnobservedComponents:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self, *, disp: bool = False) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeExponentialSmoothing:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self, *, optimized: bool = True) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeSTLForecast:
+        def __init__(self, data: np.ndarray, model_class: object, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self) -> _FakeFitResult:
+            return _FakeFitResult(scale=float(self.data.size))
+
+    class _FakeSTLResult:
+        def __init__(self, data: np.ndarray) -> None:
+            self.seasonal = np.zeros((int(data.size),), dtype=float)
+
+    class _FakeSTL:
+        def __init__(self, data: np.ndarray, **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+
+        def fit(self) -> _FakeSTLResult:
+            return _FakeSTLResult(self.data)
+
+    class _FakeMSTLResult:
+        def __init__(self, data: np.ndarray, periods: tuple[int, ...]) -> None:
+            self.seasonal = np.zeros((int(data.size), len(periods)), dtype=float)
+
+    class _FakeMSTL:
+        def __init__(self, data: np.ndarray, *, periods: tuple[int, ...], **kwargs: object) -> None:
+            self.data = np.asarray(data, dtype=float)
+            self.periods = tuple(int(p) for p in periods)
+
+        def fit(self) -> _FakeMSTLResult:
+            return _FakeMSTLResult(self.data, self.periods)
+
+    ar_model.AutoReg = _FakeAutoReg
+    arima.model = arima_model
+    arima_model.ARIMA = _FakeARIMA
+    forecasting.stl = forecasting_stl
+    forecasting_stl.STLForecast = _FakeSTLForecast
+    holtwinters.ExponentialSmoothing = _FakeExponentialSmoothing
+    sarimax.SARIMAX = _FakeSARIMAX
+    seasonal.MSTL = _FakeMSTL
+    seasonal.STL = _FakeSTL
+    statespace.sarimax = sarimax
+    statespace.structural = structural
+    structural.UnobservedComponents = _FakeUnobservedComponents
+    tsa.ar_model = ar_model
+    tsa.arima = arima
+    tsa.forecasting = forecasting
+    tsa.holtwinters = holtwinters
+    tsa.seasonal = seasonal
+    tsa.statespace = statespace
+    statsmodels.tsa = tsa
+
+    monkeypatch.setitem(sys.modules, "statsmodels", statsmodels)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa", tsa)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.ar_model", ar_model)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.arima", arima)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.arima.model", arima_model)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.forecasting", forecasting)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.forecasting.stl", forecasting_stl)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.holtwinters", holtwinters)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.seasonal", seasonal)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.statespace", statespace)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.statespace.sarimax", sarimax)
+    monkeypatch.setitem(sys.modules, "statsmodels.tsa.statespace.structural", structural)
 
 
 def _install_fake_xgboost(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1015,6 +1155,98 @@ def test_metrics_scaled_error_helpers_cover_recent_refactor_branches() -> None:
         )
         > 0.0
     )
+
+
+def test_statsmodels_refactor_wrappers_cover_core_horizon_and_exog_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_statsmodels_suite(monkeypatch)
+    train = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=float)
+    train_exog = np.arange(10, dtype=float).reshape(5, 2)
+    future_exog = np.arange(4, dtype=float).reshape(2, 2)
+
+    assert statsmodels_wrap_mod.sarimax_forecast(
+        train,
+        2,
+        order=(1, 0, 0),
+        seasonal_order=(0, 0, 0, 0),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    ).shape == (2,)
+    assert statsmodels_wrap_mod.auto_arima_forecast(
+        train,
+        2,
+        max_P=1,
+        seasonal_period=2,
+        train_exog=train_exog,
+        future_exog=future_exog,
+    ).shape == (2,)
+    assert statsmodels_wrap_mod.arima_forecast(
+        train,
+        2,
+        order=(1, 0, 0),
+        train_exog=train_exog,
+        future_exog=future_exog,
+    ).shape == (2,)
+    assert statsmodels_wrap_mod.autoreg_forecast(
+        train,
+        2,
+        lags=1,
+        train_exog=train_exog,
+        future_exog=future_exog,
+    ).shape == (2,)
+
+    with pytest.raises(ValueError, match="seasonal_period must be at least 2"):
+        statsmodels_wrap_mod.auto_arima_forecast(train, 2, max_P=1, seasonal_period=1)
+
+
+def test_statsmodels_refactor_wrappers_cover_stl_and_fourier_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_statsmodels_suite(monkeypatch)
+    train = np.arange(1.0, 13.0, dtype=float)
+
+    assert statsmodels_wrap_mod.unobserved_components_forecast(train[:5], 2).shape == (2,)
+    assert statsmodels_wrap_mod.stl_arima_forecast(train[:6], 2, period=2).shape == (2,)
+    assert statsmodels_wrap_mod.stl_ets_forecast(train[:6], 2, period=2).shape == (2,)
+    assert statsmodels_wrap_mod.stl_autoreg_forecast(train[:6], 2, period=2, lags=1).shape == (2,)
+    assert statsmodels_wrap_mod.stl_uc_forecast(train[:6], 2, period=2).shape == (2,)
+    assert statsmodels_wrap_mod.stl_sarimax_forecast(train[:6], 2, period=2).shape == (2,)
+    assert statsmodels_wrap_mod.stl_auto_arima_forecast(train[:6], 2, period=2).shape == (2,)
+
+    assert statsmodels_wrap_mod.fourier_auto_arima_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.fourier_arima_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.fourier_sarimax_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.fourier_ets_forecast(train[:6], 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.fourier_uc_forecast(train[:6], 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.fourier_autoreg_forecast(
+        train[:6], 2, periods=(2, 3), lags=1
+    ).shape == (2,)
+
+
+def test_statsmodels_refactor_wrappers_cover_mstl_and_tbats_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_statsmodels_suite(monkeypatch)
+    train = np.arange(1.0, 13.0, dtype=float)
+
+    assert statsmodels_wrap_mod.mstl_arima_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_autoreg_forecast(train, 2, periods=(2, 3), lags=1).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_ets_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_uc_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_sarimax_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.mstl_auto_arima_forecast(train, 2, periods=(2, 3)).shape == (2,)
+
+    assert statsmodels_wrap_mod.tbats_lite_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.tbats_lite_autoreg_forecast(
+        train, 2, periods=(2, 3), lags=1
+    ).shape == (2,)
+    assert statsmodels_wrap_mod.tbats_lite_ets_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.tbats_lite_sarimax_forecast(train, 2, periods=(2, 3)).shape == (2,)
+    assert statsmodels_wrap_mod.tbats_lite_auto_arima_forecast(train, 2, periods=(2, 3)).shape == (
+        2,
+    )
+    assert statsmodels_wrap_mod.tbats_lite_uc_forecast(train, 2, periods=(2, 3)).shape == (2,)
 
 
 def test_docsgen_rnn_source_extracts_repeated_literals() -> None:
