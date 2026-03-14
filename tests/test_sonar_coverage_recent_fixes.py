@@ -1073,6 +1073,22 @@ def test_statsmodels_wrap_source_extracts_repeated_validation_literals() -> None
         assert _literal_occurrence_count(path, literal) <= 1
 
 
+def test_torch_nn_source_extracts_repeated_validation_literals() -> None:
+    path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "models" / "torch_nn.py"
+    literals = [
+        "ffn_dim must be >= 1",
+        "kernel_size must be >= 1",
+        "ma_window must be >= 2",
+        "input_size must be >= 1",
+        "stride must be >= 1",
+        "pool must be one of: last, mean, max",
+        "channels must be >= 1",
+    ]
+
+    for literal in literals:
+        assert _literal_occurrence_count(path, literal) <= 1
+
+
 def test_metrics_source_extracts_repeated_seasonality_literals() -> None:
     path = Path(__file__).resolve().parents[1] / "src" / "foresight" / "metrics.py"
     literals = [

@@ -21,6 +21,13 @@ _DIM_FEEDFORWARD_MIN_MSG = "dim_feedforward must be >= 1"
 _PATCH_LEN_MIN_MSG = "patch_len must be >= 1"
 _SEGMENT_LEN_MIN_MSG = "segment_len must be >= 1"
 _SEGMENT_LEN_MAX_LAGS_MSG = "segment_len must be <= lags"
+_INPUT_SIZE_MIN_MSG = "input_size must be >= 1"
+_KERNEL_SIZE_MIN_MSG = "kernel_size must be >= 1"
+_MA_WINDOW_MIN_MSG = "ma_window must be >= 2"
+_STRIDE_MIN_MSG = "stride must be >= 1"
+_POOL_MODE_MSG = "pool must be one of: last, mean, max"
+_CHANNELS_MIN_MSG = "channels must be >= 1"
+_FFN_DIM_MIN_MSG = "ffn_dim must be >= 1"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -48,7 +55,7 @@ def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
     in_dim = int(input_size)
     hid = int(hidden_size)
     if in_dim <= 0:
-        raise ValueError("input_size must be >= 1")
+        raise ValueError(_INPUT_SIZE_MIN_MSG)
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
@@ -78,7 +85,7 @@ def _make_manual_lstm_cell(*, input_size: int, hidden_size: int) -> Any:
     in_dim = int(input_size)
     hid = int(hidden_size)
     if in_dim <= 0:
-        raise ValueError("input_size must be >= 1")
+        raise ValueError(_INPUT_SIZE_MIN_MSG)
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
 
@@ -120,7 +127,7 @@ def _make_manual_gru(
     drop = float(dropout)
     bidir = bool(bidirectional)
     if in_dim <= 0:
-        raise ValueError("input_size must be >= 1")
+        raise ValueError(_INPUT_SIZE_MIN_MSG)
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
@@ -250,7 +257,7 @@ def _make_manual_lstm(
     drop = float(dropout)
     bidir = bool(bidirectional)
     if in_dim <= 0:
-        raise ValueError("input_size must be >= 1")
+        raise ValueError(_INPUT_SIZE_MIN_MSG)
     if hid <= 0:
         raise ValueError(_HIDDEN_SIZE_MIN_MSG)
     if layers <= 0:
@@ -1153,7 +1160,7 @@ def torch_tcn_direct_forecast(
     if int(lags) <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if int(kernel_size) <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -1504,7 +1511,7 @@ def torch_dlinear_direct_forecast(
     if lag_count <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if int(ma_window) <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
 
     x_work = x
     mean = 0.0
@@ -1845,7 +1852,7 @@ def torch_autoformer_direct_forecast(
     if ff_dim <= 0:
         raise ValueError(_DIM_FEEDFORWARD_MIN_MSG)
     if ma <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -2128,11 +2135,11 @@ def torch_fedformer_direct_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ff_dim <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     if mode_count <= 0:
         raise ValueError("modes must be >= 1")
     if ma <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -3123,9 +3130,9 @@ def torch_film_direct_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
     if k <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
     if k % 2 == 0:
         raise ValueError("kernel_size must be odd for same-length filtering")
     if not (0.0 <= drop < 1.0):
@@ -3249,7 +3256,7 @@ def torch_micn_direct_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if ma <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
     if any(int(v) % 2 == 0 for v in ks):
         raise ValueError("kernel_sizes must be odd for same-length convolutions")
     if not (0.0 <= drop < 1.0):
@@ -3378,7 +3385,7 @@ def torch_koopa_direct_forecast(
     if blocks <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if ma <= 1:
-        raise ValueError("ma_window must be >= 2")
+        raise ValueError(_MA_WINDOW_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -3643,7 +3650,7 @@ def torch_retnet_direct_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -3809,7 +3816,7 @@ def torch_retnet_recursive_forecast(
     if layers <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if hidden <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
 
@@ -4150,7 +4157,7 @@ def torch_patchtst_direct_forecast(
     if p <= 0:
         raise ValueError(_PATCH_LEN_MIN_MSG)
     if s <= 0:
-        raise ValueError("stride must be >= 1")
+        raise ValueError(_STRIDE_MIN_MSG)
     if p > lag_count:
         raise ValueError("patch_len must be <= lags")
 
@@ -4292,7 +4299,7 @@ def torch_crossformer_direct_forecast(
     if base_seg <= 0:
         raise ValueError(_SEGMENT_LEN_MIN_MSG)
     if base_stride <= 0:
-        raise ValueError("stride must be >= 1")
+        raise ValueError(_STRIDE_MIN_MSG)
     if n_scales_req <= 0:
         raise ValueError("num_scales must be >= 1")
     if base_seg > lag_count:
@@ -4473,7 +4480,7 @@ def torch_pyraformer_direct_forecast(
     if seg <= 0:
         raise ValueError(_SEGMENT_LEN_MIN_MSG)
     if step <= 0:
-        raise ValueError("stride must be >= 1")
+        raise ValueError(_STRIDE_MIN_MSG)
     if levels_req <= 0:
         raise ValueError("num_levels must be >= 1")
     if seg > lag_count:
@@ -4945,7 +4952,7 @@ def torch_cnn_direct_forecast(
     if lag_count <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if int(kernel_size) <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
 
     if isinstance(channels, int):
         chans = (int(channels),)
@@ -4966,7 +4973,7 @@ def torch_cnn_direct_forecast(
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
-        raise ValueError("pool must be one of: last, mean, max")
+        raise ValueError(_POOL_MODE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5088,11 +5095,11 @@ def torch_resnet1d_direct_forecast(
     if lag_count <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
-        raise ValueError("channels must be >= 1")
+        raise ValueError(_CHANNELS_MIN_MSG)
     if int(num_blocks) <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(kernel_size) <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -5100,7 +5107,7 @@ def torch_resnet1d_direct_forecast(
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
-        raise ValueError("pool must be one of: last, mean, max")
+        raise ValueError(_POOL_MODE_MSG)
 
     x_work = x
     mean = 0.0
@@ -5224,11 +5231,11 @@ def torch_wavenet_direct_forecast(
     if lag_count <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
-        raise ValueError("channels must be >= 1")
+        raise ValueError(_CHANNELS_MIN_MSG)
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(kernel_size) <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -6967,7 +6974,7 @@ def torch_gmlp_direct_forecast(
     if int(num_layers) <= 0:
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if int(ffn_dim) <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
 
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
@@ -7792,11 +7799,11 @@ def torch_inception_direct_forecast(
     if lag_count <= 0:
         raise ValueError(_LAGS_MIN_MSG)
     if c <= 0:
-        raise ValueError("channels must be >= 1")
+        raise ValueError(_CHANNELS_MIN_MSG)
     if int(num_blocks) <= 0:
         raise ValueError(_NUM_BLOCKS_MIN_MSG)
     if int(bottleneck_channels) <= 0:
-        raise ValueError("bottleneck_channels must be >= 1")
+        raise ValueError("bottleneck_channels must be at least 1")
 
     if isinstance(kernel_sizes, int):
         ks = (int(kernel_sizes),)
@@ -7817,7 +7824,7 @@ def torch_inception_direct_forecast(
 
     pool_s = str(pool).lower().strip()
     if pool_s not in {"last", "mean", "max"}:
-        raise ValueError("pool must be one of: last, mean, max")
+        raise ValueError(_POOL_MODE_MSG)
 
     x_work = x
     mean = 0.0
@@ -8112,7 +8119,7 @@ def torch_rwkv_direct_forecast(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     ffn = int(ffn_dim)
     if ffn <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
@@ -8325,10 +8332,10 @@ def torch_hyena_direct_forecast(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     hidden = int(ffn_dim)
     if hidden <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     k = int(kernel_size)
     if k <= 0:
-        raise ValueError("kernel_size must be >= 1")
+        raise ValueError(_KERNEL_SIZE_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
@@ -8792,7 +8799,7 @@ def torch_scinet_direct_forecast(
         raise ValueError("conv_kernel must be >= 1")
     hidden = int(ffn_dim)
     if hidden <= 0:
-        raise ValueError("ffn_dim must be >= 1")
+        raise ValueError(_FFN_DIM_MIN_MSG)
     drop = float(dropout)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
