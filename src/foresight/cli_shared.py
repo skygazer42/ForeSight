@@ -121,7 +121,8 @@ def _write_output(text: str, *, output: str) -> None:
         raise ValueError("Output path must be a file, got directory")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     payload = "" if not text else text.rstrip("\n") + "\n"
-    out_path.write_text(payload, encoding="utf-8")  # NOSONAR(S2083): CLI caller explicitly selects the output file path.
+    # CLI callers explicitly choose the output path.
+    out_path.write_text(payload, encoding="utf-8")  # NOSONAR
 
 
 def _emit_text(text: str, *, output: str) -> None:
