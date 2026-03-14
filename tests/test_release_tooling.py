@@ -86,6 +86,13 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "tests/test_model_validation_messages.py" in test_step["run"]
     assert "tests/test_forecasting_internals.py" in test_step["run"]
     assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
+    scan_args = str(scan_step["with"]["args"])
+    assert "-Dsonar.issue.ignore.multicriteria=e1,e2" in scan_args
+    assert "-Dsonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in scan_args
+    assert (
+        "-Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py"
+        in scan_args
+    )
     assert (
         scan_step["uses"]
         == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
@@ -109,8 +116,13 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "src/foresight/cli_leaderboard.py" in config
     assert "src/foresight/models/runtime.py" in config
     assert "src/foresight/models/catalog/**" in config
-    assert "sonar.issue.ignore.multicriteria=e1" in config
+    assert "sonar.issue.ignore.multicriteria=e1,e2" in config
     assert "sonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083" in config
+    assert "sonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in config
+    assert (
+        "sonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py"
+        in config
+    )
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
