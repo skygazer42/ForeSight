@@ -7,8 +7,8 @@ import json
 import re
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -27,22 +27,17 @@ from foresight.models.global_regression import (
     svr_step_lag_global_forecaster,
 )
 from foresight.models.regression import (
-    decision_tree_lag_direct_forecast,
-    rf_lag_direct_forecast,
-    svr_lag_direct_forecast,
-)
-from foresight.docsgen.rnn import (
-    _metadata_primary_url,
-    render_rnn_paper_zoo_doc,
-    render_rnn_zoo_doc,
-)
-from foresight.models.regression import (
     _augment_lag_feat_row,
     _catboost_validate_common_regressor_params,
     _lgbm_validate_common_regressor_params,
     _xgb_lag_direct_forecast,
     _xgb_lag_recursive_forecast,
     _xgb_validate_common_regressor_params,
+)
+from foresight.models.regression import (
+    decision_tree_lag_direct_forecast,
+    rf_lag_direct_forecast,
+    svr_lag_direct_forecast,
 )
 from foresight.models.statsmodels_wrap import (
     _normalize_fourier_orders,
@@ -55,12 +50,17 @@ from foresight.models.statsmodels_wrap import (
     _validate_positive_horizon,
     ets_forecast,
 )
+from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
+from foresight.models.torch_xformer import torch_xformer_direct_forecast
+from foresight.docsgen.rnn import (
+    _metadata_primary_url,
+    render_rnn_paper_zoo_doc,
+    render_rnn_zoo_doc,
+)
 
 FitModelFn = Callable[[np.ndarray, np.ndarray], object]
 MonkeypatchInstaller = Callable[[pytest.MonkeyPatch], None]
 GenericFactory = Callable[..., object]
-from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
-from foresight.models.torch_xformer import torch_xformer_direct_forecast
 
 
 def _install_fake_statsmodels(monkeypatch: pytest.MonkeyPatch, captured: dict[str, object]) -> None:

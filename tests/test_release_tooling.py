@@ -110,6 +110,9 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
         in test_step["run"]
     )
     scan_args = str(scan_step["with"]["args"])
+    assert "-Dsonar.sources=src,tools,.github/workflows" in scan_args
+    assert "-Dsonar.tests=tests" in scan_args
+    assert "-Dsonar.test.inclusions=tests/**/*.py" in scan_args
     assert "-Dsonar.issue.ignore.multicriteria=e1,e2" in scan_args
     assert "-Dsonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in scan_args
     assert (
@@ -119,6 +122,8 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "src/foresight/models/regression.py" in scan_args
     assert "src/foresight/models/global_regression.py" in scan_args
     assert "src/foresight/models/statsmodels_wrap.py" in scan_args
+    assert "src/foresight/models/multivariate.py" in scan_args
+    assert "src/foresight/models/torch_ct_rnn.py" in scan_args
     assert "src/foresight/models/torch_global.py" in scan_args
     assert "src/foresight/models/torch_rnn_paper_zoo.py" in scan_args
     assert "src/foresight/models/torch_probabilistic.py" in scan_args
@@ -153,6 +158,8 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "src/foresight/models/regression.py" in config
     assert "src/foresight/models/global_regression.py" in config
     assert "src/foresight/models/statsmodels_wrap.py" in config
+    assert "src/foresight/models/multivariate.py" in config
+    assert "src/foresight/models/torch_ct_rnn.py" in config
     assert "src/foresight/models/torch_global.py" in config
     assert "src/foresight/models/torch_rnn_paper_zoo.py" in config
     assert "src/foresight/models/torch_probabilistic.py" in config
