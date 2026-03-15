@@ -78,7 +78,7 @@ num_lags = 12
 plt.bar(range(num_lags), pacf_vals[:num_lags])
 
 # %%
-pacf_vals[:num_lags]
+print(pacf_vals[:num_lags])
 
 # %% [markdown]
 # 绝对值大于等于0.2的自相关系数或偏自相关系数可以被认为是显著的（即具有相关性），而绝对值小于0.2的自相关系数或偏自相关系数可以被认为是不显著的（即可能是白噪声）。

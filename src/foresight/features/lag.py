@@ -91,6 +91,64 @@ def make_lagged_xy_multi(
     return X, Y, t_index
 
 
+def _validated_target_indices(arr: np.ndarray, t: Any) -> np.ndarray:
+    tt = np.asarray(t, dtype=int).reshape(-1)
+    if tt.size == 0:
+        return tt
+    if np.any(tt < 0):
+        raise ValueError("t indices must be >= 0")
+    if int(np.max(tt)) > int(arr.size):
+        raise ValueError("t indices must be <= len(series)")
+    return tt
+
+
+def _normalized_positive_periods(values: Any, *, arg_name: str) -> tuple[int, ...]:
+    periods = tuple(sorted(set(normalize_int_tuple(values))))
+    if any(int(period) <= 0 for period in periods):
+        raise ValueError(f"{arg_name} must be >= 1")
+    return periods
+
+
+def _seasonal_lag_feature_columns(
+    arr: np.ndarray,
+    tt: np.ndarray,
+    lags_tup: tuple[int, ...],
+) -> tuple[list[np.ndarray], list[str]]:
+    feats: list[np.ndarray] = []
+    names: list[str] = []
+    for period in lags_tup:
+        idx = tt - int(period)
+        if np.any(idx < 0):
+            raise ValueError("seasonal_lags require t >= lag")
+        feats.append(arr[idx].reshape(-1, 1))
+        names.append(f"season_lag_{int(period)}")
+    return feats, names
+
+
+def _seasonal_diff_feature_columns(
+    arr: np.ndarray,
+    tt: np.ndarray,
+    diffs_tup: tuple[int, ...],
+) -> tuple[list[np.ndarray], list[str]]:
+    if not diffs_tup:
+        return [], []
+
+    idx1 = tt - 1
+    if np.any(idx1 < 0):
+        raise ValueError("seasonal_diff_lags require t >= 1")
+    last = arr[idx1]
+
+    feats: list[np.ndarray] = []
+    names: list[str] = []
+    for period in diffs_tup:
+        idx0 = tt - 1 - int(period)
+        if np.any(idx0 < 0):
+            raise ValueError("seasonal_diff_lags require t >= lag+1")
+        feats.append((last - arr[idx0]).reshape(-1, 1))
+        names.append(f"season_diff_{int(period)}")
+    return feats, names
+
+
 def build_seasonal_lag_features(
     y: Any,
     *,
@@ -117,44 +175,22 @@ def build_seasonal_lag_features(
     if not np.all(np.isfinite(arr)):
         raise ValueError("Non-finite values in series")
 
-    tt = np.asarray(t, dtype=int).reshape(-1)
+    tt = _validated_target_indices(arr, t)
     if tt.size == 0:
         return np.empty((0, 0), dtype=float), []
-    if np.any(tt < 0):
-        raise ValueError("t indices must be >= 0")
-    if int(np.max(tt)) > int(arr.size):
-        raise ValueError("t indices must be <= len(series)")
 
-    lags_tup = tuple(sorted(set(normalize_int_tuple(seasonal_lags))))
-    diffs_tup = tuple(sorted(set(normalize_int_tuple(seasonal_diff_lags))))
+    lags_tup = _normalized_positive_periods(seasonal_lags, arg_name="seasonal_lags")
+    diffs_tup = _normalized_positive_periods(
+        seasonal_diff_lags,
+        arg_name="seasonal_diff_lags",
+    )
     if not lags_tup and not diffs_tup:
         return np.empty((int(tt.size), 0), dtype=float), []
-    if any(int(p) <= 0 for p in lags_tup):
-        raise ValueError("seasonal_lags must be >= 1")
-    if any(int(p) <= 0 for p in diffs_tup):
-        raise ValueError("seasonal_diff_lags must be >= 1")
 
-    feats: list[np.ndarray] = []
-    names: list[str] = []
-
-    for p in lags_tup:
-        idx = tt - int(p)
-        if np.any(idx < 0):
-            raise ValueError("seasonal_lags require t >= lag")
-        feats.append(arr[idx].reshape(-1, 1))
-        names.append(f"season_lag_{int(p)}")
-
-    if diffs_tup:
-        idx1 = tt - 1
-        if np.any(idx1 < 0):
-            raise ValueError("seasonal_diff_lags require t >= 1")
-        last = arr[idx1]
-        for p in diffs_tup:
-            idx0 = tt - 1 - int(p)
-            if np.any(idx0 < 0):
-                raise ValueError("seasonal_diff_lags require t >= lag+1")
-            feats.append((last - arr[idx0]).reshape(-1, 1))
-            names.append(f"season_diff_{int(p)}")
+    lag_feats, lag_names = _seasonal_lag_feature_columns(arr, tt, lags_tup)
+    diff_feats, diff_names = _seasonal_diff_feature_columns(arr, tt, diffs_tup)
+    feats = [*lag_feats, *diff_feats]
+    names = [*lag_names, *diff_names]
 
     X = np.concatenate(feats, axis=1) if feats else np.empty((int(tt.size), 0), dtype=float)
     X = X.astype(float, copy=False)

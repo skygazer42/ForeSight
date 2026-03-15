@@ -51,7 +51,7 @@ class Model(nn.Module):
                     configs.d_ff,
                     dropout=configs.dropout,
                     activation=configs.activation
-                ) for l in range(configs.e_layers)
+                ) for _ in range(configs.e_layers)
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
@@ -86,7 +86,7 @@ class Model(nn.Module):
 
         # Encoder
         # z: [bs * nvars x patch_num x d_model]
-        enc_out, attns = self.encoder(enc_out)
+        enc_out, _ = self.encoder(enc_out)
         # z: [bs x nvars x patch_num x d_model]
         enc_out = torch.reshape(
             enc_out, (-1, n_vars, enc_out.shape[-2], enc_out.shape[-1]))
@@ -122,7 +122,7 @@ class Model(nn.Module):
 
         # Encoder
         # z: [bs * nvars x patch_num x d_model]
-        enc_out, attns = self.encoder(enc_out)
+        enc_out, _ = self.encoder(enc_out)
         # z: [bs x nvars x patch_num x d_model]
         enc_out = torch.reshape(
             enc_out, (-1, n_vars, enc_out.shape[-2], enc_out.shape[-1]))
@@ -155,7 +155,7 @@ class Model(nn.Module):
 
         # Encoder
         # z: [bs * nvars x patch_num x d_model]
-        enc_out, attns = self.encoder(enc_out)
+        enc_out, _ = self.encoder(enc_out)
         # z: [bs x nvars x patch_num x d_model]
         enc_out = torch.reshape(
             enc_out, (-1, n_vars, enc_out.shape[-2], enc_out.shape[-1]))
@@ -188,7 +188,7 @@ class Model(nn.Module):
 
         # Encoder
         # z: [bs * nvars x patch_num x d_model]
-        enc_out, attns = self.encoder(enc_out)
+        enc_out, _ = self.encoder(enc_out)
         # z: [bs x nvars x patch_num x d_model]
         enc_out = torch.reshape(
             enc_out, (-1, n_vars, enc_out.shape[-2], enc_out.shape[-1]))
@@ -205,15 +205,15 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(
                 x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, N]
+            return dec_out
         return None

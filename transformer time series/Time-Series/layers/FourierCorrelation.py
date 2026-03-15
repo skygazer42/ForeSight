@@ -1,7 +1,3 @@
-# coding=utf-8
-# author=maziqing
-# email=maziqing.mzq@alibaba-inc.com
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -60,7 +56,6 @@ class FourierBlock(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, q, k, v, mask):
-        # size = [B, L, H, E]
         B, L, H, E = q.shape
         x = q.permute(0, 2, 3, 1)
         # Compute Fourier coefficients
@@ -119,12 +114,9 @@ class FourierCrossAttention(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, q, k, v, mask):
-        # size = [B, L, H, E]
         B, L, H, E = q.shape
         xq = q.permute(0, 2, 3, 1)  # size = [B, H, E, L]
         xk = k.permute(0, 2, 3, 1)
-        xv = v.permute(0, 2, 3, 1)
-
         # Compute Fourier coefficients
         xq_ft_ = torch.zeros(B, H, E, len(self.index_q), device=xq.device, dtype=torch.cfloat)
         xq_ft = torch.fft.rfft(xq, dim=-1)

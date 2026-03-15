@@ -159,6 +159,69 @@ def _format_summary(rows: list[dict[str, Any]], *, conformal_levels: list[int], 
     raise ValueError(f"Unknown format: {fmt!r}")
 
 
+def _benchmark_dataset_case_fields(dataset_case: Any) -> dict[str, int | str]:
+    return {
+        "dataset_key": str(dataset_case["key"]),
+        "y_col": str(dataset_case["y_col"]),
+        "horizon": int(dataset_case["horizon"]),
+        "step": int(dataset_case["step"]),
+        "min_train_size": int(dataset_case["min_train_size"]),
+        "max_windows": int(dataset_case["max_windows"]),
+    }
+
+
+def _benchmark_result_row(
+    eval_model: Any,
+    dataset_fields: dict[str, int | str],
+    model_case: Any,
+    *,
+    data_dir: str | Path | None,
+    conformal_levels: list[int],
+    conformal_per_step: bool,
+) -> dict[str, Any]:
+    model_key = str(model_case["key"])
+    params = dict(model_case.get("params", {}))
+    started = time.perf_counter()
+    payload = eval_model(
+        model=model_key,
+        dataset=str(dataset_fields["dataset_key"]),
+        y_col=str(dataset_fields["y_col"]),
+        horizon=int(dataset_fields["horizon"]),
+        step=int(dataset_fields["step"]),
+        min_train_size=int(dataset_fields["min_train_size"]),
+        max_windows=int(dataset_fields["max_windows"]),
+        model_params=params,
+        data_dir=data_dir,
+        conformal_levels=conformal_levels,
+        conformal_per_step=conformal_per_step,
+    )
+    elapsed = time.perf_counter() - started
+
+    row: dict[str, Any] = {
+        "model": model_key,
+        "dataset": str(dataset_fields["dataset_key"]),
+        "y_col": str(dataset_fields["y_col"]),
+        "horizon": int(dataset_fields["horizon"]),
+        "step": int(dataset_fields["step"]),
+        "min_train_size": int(dataset_fields["min_train_size"]),
+        "max_windows": int(dataset_fields["max_windows"]),
+        "n_series": int(payload["n_series"]),
+        "n_series_skipped": int(payload["n_series_skipped"]),
+        "n_points": int(payload["n_points"]),
+        "mae": float(payload["mae"]),
+        "rmse": float(payload["rmse"]),
+        "mape": float(payload["mape"]),
+        "smape": float(payload["smape"]),
+        "wall_clock_seconds": round(float(elapsed), 6),
+    }
+    for suffix in conformal_levels:
+        for metric in ("coverage", "mean_width", "interval_score"):
+            payload_key = f"{metric}_{suffix}"
+            if payload_key in payload:
+                row[payload_key] = float(payload[payload_key])
+    return row
+
+
 def run_benchmark_suite(
     *,
     config_name: str,
@@ -181,69 +244,30 @@ def run_benchmark_suite(
 
     datasets = config.get("datasets", [])
     models = config.get("models", [])
+    dataset_fields_list = [_benchmark_dataset_case_fields(case) for case in datasets]
     conformal_levels = [int(float(level)) for level in list(config.get("conformal_levels", []))]
     conformal_per_step = bool(config.get("conformal_per_step", False))
 
     rows: list[dict[str, Any]] = []
-    for dataset_case in datasets:
-        dataset_key = str(dataset_case["key"])
-        y_col = str(dataset_case["y_col"])
-        horizon = int(dataset_case["horizon"])
-        step = int(dataset_case["step"])
-        min_train_size = int(dataset_case["min_train_size"])
-        max_windows = int(dataset_case["max_windows"])
-
+    for dataset_fields in dataset_fields_list:
         for model_case in models:
-            model_key = str(model_case["key"])
-            params = dict(model_case.get("params", {}))
-
-            started = time.perf_counter()
-            payload = eval_model(
-                model=model_key,
-                dataset=dataset_key,
-                y_col=y_col,
-                horizon=horizon,
-                step=step,
-                min_train_size=min_train_size,
-                max_windows=max_windows,
-                model_params=params,
-                data_dir=data_dir,
-                conformal_levels=conformal_levels,
-                conformal_per_step=conformal_per_step,
+            rows.append(
+                _benchmark_result_row(
+                    eval_model,
+                    dataset_fields,
+                    model_case,
+                    data_dir=data_dir,
+                    conformal_levels=conformal_levels,
+                    conformal_per_step=conformal_per_step,
+                )
             )
-            elapsed = time.perf_counter() - started
-
-            row: dict[str, Any] = {
-                "model": model_key,
-                "dataset": dataset_key,
-                "y_col": y_col,
-                "horizon": horizon,
-                "step": step,
-                "min_train_size": min_train_size,
-                "max_windows": max_windows,
-                "n_series": int(payload["n_series"]),
-                "n_series_skipped": int(payload["n_series_skipped"]),
-                "n_points": int(payload["n_points"]),
-                "mae": float(payload["mae"]),
-                "rmse": float(payload["rmse"]),
-                "mape": float(payload["mape"]),
-                "smape": float(payload["smape"]),
-                "wall_clock_seconds": round(float(elapsed), 6),
-            }
-            for suffix in conformal_levels:
-                for metric in ("coverage", "mean_width", "interval_score"):
-                    payload_key = f"{metric}_{suffix}"
-                    if payload_key in payload:
-                        row[payload_key] = float(payload[payload_key])
-
-            rows.append(row)
 
     rows.sort(key=lambda row: (str(row["dataset"]), str(row["model"])))
     summary = _summarize_rows(rows, conformal_levels=conformal_levels)
     return {
         "config": config_name,
         "description": str(config.get("description", "")),
-        "datasets": [str(item["key"]) for item in datasets],
+        "datasets": [str(item["dataset_key"]) for item in dataset_fields_list],
         "models": [str(item["key"]) for item in models],
         "rows": rows,
         "summary": summary,

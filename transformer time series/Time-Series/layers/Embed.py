@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.utils import weight_norm
 import math
 
 
@@ -22,7 +20,6 @@ class PositionalEmbedding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term) # 所有行奇数列
 #pe张量加一维，在第0维插入了一个维度，变成了形状为[1, max_len, d_model]，然后将其注册为该类的一个缓存变量。
         pe = pe.unsqueeze(0) # batch max_len d_model
-#self.register_buffer('pe', pe) 是将 pe tensor 注册为一个 buffer，这样它会被视为模型参数的一部分，并在反向传播过程中自动更新。
      # 这是因为在 PyTorch 中，只有 nn.Module 类的属性才会被视为模型参数，在反向传播时会被自动更新，而不是像普通 tensor 一样只是记录数据。
         self.register_buffer('pe', pe)
 #用于计算输入序列的位置嵌入向量。输入x是形状为[batch_size, seq_len, d_model]的张量，它的第二个
@@ -50,11 +47,6 @@ class TokenEmbedding(nn.Module):
                     m.weight, mode='fan_in', nonlinearity='leaky_relu')
 
     def forward(self, x):
-      # print(x.shape) #torch.Size([2, 10, 5])
-      #   print(x.permute(0, 2, 1).shape) #torch.Size([2, 5, 10])
-      #   exit()
-      #   print(self.tokenConv(x.permute(0, 2, 1)).shape) #10-3+4 10   torch.Size([2, 16, 10])
-      #   exit()
         x = self.tokenConv(x.permute(0, 2, 1)).transpose(1, 2)
         return x
 
@@ -107,12 +99,11 @@ class TemporalEmbedding(nn.Module):
 
     def forward(self, x):
 
-        x = x.long() #torch.Size([2, 10, 5])
-        #print(x[:, :, 3].shape) #torch.Size([2, 10])
+        x = x.long()
         # #x[:, :, 4]表示选取x张量中的所有batch的所有时间步的第5个特征，即第5列数据。结果是一个二维张量，维度为(batch_size, seq_len)。
         minute_x = self.minute_embed(x[:, :, 4]) if hasattr(  #0
             self, 'minute_embed') else 0.
-        hour_x = self.hour_embed(x[:,:,3]) #torch.Size([2, 10, 16])
+        hour_x = self.hour_embed(x[:,:,3])
         weekday_x = self.weekday_embed(x[:, :, 2])
         day_x = self.day_embed(x[:, :, 1])
         month_x = self.month_embed(x[:, :, 0])
@@ -203,119 +194,59 @@ class PatchEmbedding(nn.Module):
     def forward(self, x):
         # do patching
         n_vars = x.shape[1]
-#，输入通常是一个1D的序列，每个元素代表一个特征。因此，padding操作需要在这个维度上进行。
-# 而在图像的情况下，padding操作通常是在width和height这两个维度上进行，因为图像是由一个个像素组成的。
-        x = self.padding_patch_layer(x) #torch.Size([2, 10, 256])
+        x = self.padding_patch_layer(x)
  # 最后一个维度即上，步长为
-        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride) #torch.Size([2, 10, 31, 16])
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
 
         x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3])) #orch.Size([20, 31, 16])
 
         # Input encoding
-        x = self.value_embedding(x) + self.position_embedding(x) #torch.Size([20, 31, 512])
+        x = self.value_embedding(x) + self.position_embedding(x)
         return self.dropout(x), n_vars
 if __name__ == '__main__':
     ########################################posembedding################################
-#     batch_size = 2
-#     seq_len = 10
-#     d_model = 6 # 得是偶数
-#     x = torch.randn(batch_size, seq_len, d_model)
 #     # pos_embedding = PositionalEmbedding(d_model)
 #     # pos_embed = pos_embedding(x)
 #     # print(pos_embed)
 # #######################Tokebembedding################################################################
     # # 实例化 TokenEmbedding 类
-    #  batch_size = 2
-    #  seq_len = 10
-    #  num_features=5
-    #  c_in= num_features
     # #c_in 是 input_channel
-    #  d_model = 16 #
-    #  x = torch.randn(batch_size, seq_len, num_features)
-    #  embe = TokenEmbedding(c_in=c_in,d_model=d_model) #torch.Size([2, 16, 10])
     # # 将输入数据传递给 TokenEmbedding 类的 forward() 方法
-    #  output = embe(x)
     #
     # # 查看输出张量的形状
-    #  print(output.shape)
 ########################################Fixembedding####################################
-    # c_in = 12  # 输入的词汇表大小
-    # d_model = 20  # 词向量的维度
     #
     # # 随机生成一个形状为 (2, 5) 的整数张量，模拟两个句子，每个句子长度为 5
-    # x = torch.randint(0, c_in, (2, 5)) #元素都是在 [0, c_in) 范围内随机生成的整数。
     #     #tensor([[7, 9, 6, 3, 8],
     #          # [7, 3, 3, 1, 8]])
     #
     # # 实例化 FixedEmbedding 类
-    # embedding = FixedEmbedding(c_in, d_model)
     #
     # # 对输入数据进行编码，得到输出张量
-    # output = embedding(x)
     #
     # # 输出张量的形状为 (2, 5, 20)
-    # print(output.shape)
 ##############################################TemporalEmbedding###########################
     # import torch
     # from torch import nn
     #
-    # d_model = 16
-    # embed_type = 'fixed'
-    # freq = 'h'
     #
-    # batch_size = 2
-    # seq_len = 10
-    # num_features = 5
     #
-    # x1 = torch.randint(0,4, (batch_size, seq_len)) #生成的数据不能超过表的大小
-    # x2 = torch.randint(0,24, (batch_size, seq_len))
-    # x3 = torch.randint(0,7, (batch_size, seq_len))
-    # x4 = torch.randint(0,32, (batch_size, seq_len))
-    # x5 = torch.randint(0, 13, (batch_size, seq_len))
-    # x = torch.zeros((batch_size, seq_len,num_features))
     # x[:,:,4]=x1
     # x[:,:,3]=x2
     # x[:,:,2]=x3
     # x[:, :, 1]=x4
     # x[:, :, 0]=x5
-    # temporal_embedding = TemporalEmbedding(d_model, embed_type, freq)
-    # output = temporal_embedding(x)
-    # print(output.shape)  # should be (batch_size, seq_len, d_model) ##torch.Size([2, 10, 16])
 ###################################################TimeFeatureEmbedding################################
     #
     # import torch
     #
-    # batch_size = 2
-    # seq_len = 3
-    # num_features = 4 # 表示 h  如果 5表示 t
     #
-    # x = torch.zeros((batch_size, seq_len, num_features))
-    # d_model = 8
-    # freq = 'h'
-    # time_embed = TimeFeatureEmbedding(d_model, freq)
     #
-    # output = time_embed(x)
-    # print(output.shape) #torch.Size([2, 3, 8])
 #################################################DataEmbedding#################################
         # import torch
         # from torch import nn
         #
-        # d_model = 16
-        # embed_type = 'fixed'
-        # freq = 'h'
         #
-        # batch_size = 2
-        # seq_len = 10
-        # num_features = 5
-        # c_in=num_features
-        # x=x = torch.randn(batch_size, seq_len, num_features)
-        # x_ = torch.zeros((batch_size, seq_len, num_features)) #时间信息
-        # x1 = torch.randint(0,4, (batch_size, seq_len)) #生成的数据不能超过表的大小
-        # x2 = torch.randint(0,24, (batch_size, seq_len))
-        # x3 = torch.randint(0,7, (batch_size, seq_len))
-        # x4 = torch.randint(0,32, (batch_size, seq_len))
-        # x5 = torch.randint(0, 13, (batch_size, seq_len))
-        # x = torch.zeros((batch_size, seq_len,num_features))
         # x_[:,:,4]=x1
         # x_[:,:,3]=x2
         # x_[:,:,2]=x3
@@ -323,19 +254,13 @@ if __name__ == '__main__':
         # x_[:, :, 0]=x5
         # # 随机生成额外的时间特征信息
         # # x_mark = None
-        # x_mark =x_
         #
         # # 实例化 DataEmbedding 类
-        # embedding = DataEmbedding(c_in=c_in, d_model=d_model, embed_type='fixed', freq='h', dropout=0.1)
         #
         # # 对输入数据进行嵌入操作
-        # embedded_x = embedding(x, x_mark)
         #
-        # print(embedded_x.shape) #torch.Size([2, 10, 16])
 
 ####################################PatchEmbedding######################################################
-    import torch
-
     d_model = 512
     patch_len = 16
     stride = 8

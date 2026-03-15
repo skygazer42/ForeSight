@@ -25,7 +25,6 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, required=True, default='Transformer',
                         help='model name, options: [Autoformer, Transformer, TimesNet]')
     # data loader
-    #required=True 表示这个参数是必需的，也就是说在使用脚本时必须要提供这个参数，否则程序就会报错并提醒用户需要提供这个参数。 不设置就是默认
     parser.add_argument('--data', type=str, required=True, default='ETTm1', help='dataset type')
     parser.add_argument('--root_path', type=str, default='./data/ETT/', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='ETTh1.csv', help='data file')

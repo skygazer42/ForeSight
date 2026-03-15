@@ -27,7 +27,7 @@ df_ice_cream.head()
 df_ice_cream.rename(columns={'DATE':'date', 'IPN31152N':'production'}, inplace=True)
 
 # %%
-df_ice_cream
+print(df_ice_cream)
 
 # %%
 #convert date column to datetime type
@@ -38,7 +38,7 @@ df_ice_cream['date'] = pd.to_datetime(df_ice_cream.date)
 df_ice_cream.set_index('date', inplace=True)
 
 # %%
-df_ice_cream
+print(df_ice_cream)
 
 # %%
 #just get data from 2010 onwards

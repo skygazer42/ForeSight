@@ -1,19 +1,13 @@
-import numpy as np
 #pyunpack 是一个 Python 库，用于解压缩文件（如 zip、rar、tar 等）。它提供了一个简单的接口，让你可以通过 Python 代码来执行解压缩操作，
 #而不需要手动解压缩文件。
-import pyunpack
-import math
 import json
 
-from data.data_download import Config, download_electricity
 from data_formatters.electricity import ElectricityFormatter
 from data_formatters.base import DataTypes, InputTypes
 
 from data.custom_dataset import TFTDataset
-from models import GatedLinearUnit
 from models import GateAddNormNetwork
 from models import GatedResidualNetwork
-from models import ScaledDotProductAttention
 from models import InterpretableMultiHeadAttention
 from models import VariableSelectionNetwork
 from models import ManualLSTM
@@ -23,45 +17,25 @@ from quantile_loss import NormalizedQuantileLossCalculator
 import warnings
 warnings.filterwarnings('ignore')
 import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torch import nn
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 from argparse import ArgumentParser
 import pandas as pd
-import matplotlib.pyplot as plt
-import pickle
 
 electricity = pd.read_csv('data/electricity.csv', index_col=0)
 data_formatter = ElectricityFormatter()
-# try:
-#     with open('train_data.pkl', 'rb') as f:
-#         train_data = pickle.load(f)
-#     with open('valid_data.pkl', 'rb') as f:
-#         valid_data = pickle.load(f)
-#     with open('test_data.pkl', 'rb') as f:
-#         test_data = pickle.load(f)
-# except  FileNotFoundError:
-    # config = Config('data','data/electricity.csv') 下载在data里被我注释了
-    # download_electricity(config)
 train, valid, test = data_formatter.split_data(electricity)
 train.days_from_start.value_counts().to_frame().reset_index().sort_values(by=['index'])
 valid.days_from_start.value_counts().to_frame().reset_index().sort_values(by=['index'])
 test.days_from_start.value_counts().to_frame().reset_index().sort_values(by=['index'])
 test = test.reset_index(drop=True)
-test[test.categorical_id == 0]
+print(test[test.categorical_id == 0])
 train_dataset = TFTDataset(train)
 valid_dataset = TFTDataset(valid)
 test_dataset = TFTDataset(test)
-    # 将train_data保存为pkl文件
-    # with open('train_data.pkl', 'wb') as f:
-    #     pickle.dump(train_dataset, f)
-    # with open('valid_data.pkl', 'wb') as f:
-    #     pickle.dump(valid_dataset, f)
-    # with open('test_data.pkl', 'wb') as f:
-    #     pickle.dump(test_dataset, f)
 DEVICE = torch.device("cuda: 0" if torch.cuda.is_available() else "cpu")
 
 params = data_formatter.get_experiment_params()
@@ -69,15 +43,11 @@ params.update(data_formatter.get_default_model_params())
 parser = ArgumentParser(add_help=False)
 for k in params:
     if type(params[k]) in [int, float]:
-        #if k == 'minibatch_size':
-        #    parser.add_argument('--{}'.format(k), type=type(params[k]), default = 256)
-        #else:
         parser.add_argument('--{}'.format(k), type=type(params[k]), default = params[k])
     else:
         parser.add_argument('--{}'.format(k), type=str, default = str(params[k]))
 hparams = parser.parse_known_args()[0]
-# print(hparams)
-# exit()
+
 class TemporalFusionTransformer(pl.LightningModule):
     def __init__(self, hparams):
         super(TemporalFusionTransformer, self).__init__()
@@ -120,7 +90,6 @@ class TemporalFusionTransformer(pl.LightningModule):
 
         # Network params
         self.quantiles = [0.1, 0.5, 0.9]
-        #         self.use_cudnn = use_cudnn  # Whether to use GPU optimised LSTM
         self.hidden_layer_size = int(hparams.hidden_layer_size)  # int(params['hidden_layer_size'])
         self.dropout_rate = float(hparams.dropout_rate)  # float(params['dropout_rate'])
         self.max_gradient_norm = float(hparams.max_gradient_norm)  # float(params['max_gradient_norm'])
@@ -132,10 +101,6 @@ class TemporalFusionTransformer(pl.LightningModule):
         self.num_encoder_steps = int(hparams.num_encoder_steps)  # int(params['num_encoder_steps'])
         self.num_stacks = int(hparams.stack_size)  # int(params['stack_size'])
         self.num_heads = int(hparams.num_heads)  # int(params['num_heads'])
-
-        # Serialisation options
-        #         self._temp_folder = os.path.join(params['model_folder'], 'tmp')
-        #         self.reset_temp_folder()
 
         # Extra components to store Tensorflow nodes for attention computations
         self._input_placeholder = None
@@ -183,17 +148,12 @@ class TemporalFusionTransformer(pl.LightningModule):
     def init_weights(self):
         for name, p in self.named_parameters():
             if ('lstm' in name and 'ih' in name) and 'bias' not in name:
-                # print(name)
-                # print(p.shape)
                 torch.nn.init.xavier_uniform_(p)
-            #                 torch.nn.init.kaiming_normal_(p, a=0, mode='fan_in', nonlinearity='sigmoid')
             elif ('lstm' in name and 'hh' in name) and 'bias' not in name:
 
                 torch.nn.init.orthogonal_(p)
 
             elif 'lstm' in name and 'bias' in name:
-                # print(name)
-                # print(p.shape)
                 torch.nn.init.zeros_(p)
 
     def get_historical_num_inputs(self):
@@ -332,15 +292,10 @@ class TemporalFusionTransformer(pl.LightningModule):
             static_regular_inputs = [self.regular_var_embeddings[i](regular_inputs[:, 0, i:i + 1])
                                      for i in range(self.num_regular_variables)
                                      if i in self._static_input_loc]
-            # print('static_regular_inputs')
-            # print([print(emb.shape) for emb in static_regular_inputs])
-            # exit()
 
             static_categorical_inputs = [self.categorical_var_embeddings[i](categorical_inputs[Ellipsis, i])[:, 0, :]
                                          for i in range(self.num_categorical_variables)
                                          if i + self.num_regular_variables in self._static_input_loc]
-            # print('static_categorical_inputs')
-            # print([print(emb.shape) for emb in static_categorical_inputs])
             static_inputs = torch.stack(static_regular_inputs + static_categorical_inputs, axis=1)
         else:
             static_inputs = None
@@ -373,35 +328,20 @@ class TemporalFusionTransformer(pl.LightningModule):
         known_regular_inputs = [self.regular_var_embeddings[i](regular_inputs[Ellipsis, i:i + 1])
                                 for i in self._known_regular_input_idx
                                 if i not in self._static_input_loc]
-        # print('known_regular_inputs')
-        # print([print(emb.shape) for emb in known_regular_inputs])
 
         known_categorical_inputs = [self.categorical_var_embeddings[i](categorical_inputs[Ellipsis, i])
                                     for i in self._known_categorical_input_idx
                                     if i + self.num_regular_variables not in self._static_input_loc]
-        # print('known_categorical_inputs')
-        # print([print(emb.shape) for emb in known_categorical_inputs])
 
         known_combined_layer = torch.stack(known_regular_inputs + known_categorical_inputs, axis=-1)
 
         return unknown_inputs, known_combined_layer, obs_inputs, static_inputs
 
     def forward(self, all_inputs):
-        # print(all_inputs[2,:,:].shape)#torch.Size([192, 5]) torch.Size([192, 5])
-        # exit()
     #，input_size表示每个时间步的特征向量维度，类似于文本任务中的词向量维度。而192则表示序列的长度，即时间步数，类似于文本任务中的句子长度。
-        # torch.Size([64, 192, 5]) minbatch_size   input_size=5, total_time_steps=192
         # 5个特征 4个  1分类
-        # print(all_inputs.shape)
-        # exit()
         regular_inputs = all_inputs[:, :, :self.num_regular_variables].to(torch.float) #拿出前 4个特征
-        # print('regular_inputs')
-        # print(regular_inputs.shape) #torch.Size([64, 192, 4])
-        # exit()
-        categorical_inputs = all_inputs[:, :, self.num_regular_variables:].to(torch.long) #torch.Size([64, 192, 1])
-        #print('categorical_inputs')
-        # print(categorical_inputs.shape)
-        # exit()
+        categorical_inputs = all_inputs[:, :, self.num_regular_variables:].to(torch.long)
 #首先通过 get_tft_embeddings 方法获取输入特征的嵌入向量，其中包括三种类型的特征：连续变量、类别变量、静态变量。这些嵌入向量在模型中被用来对每个时间步的输入进行编码。
         unknown_inputs, known_combined_layer, obs_inputs, static_inputs \
             = self.get_tft_embeddings(regular_inputs, categorical_inputs)
@@ -419,127 +359,65 @@ class TemporalFusionTransformer(pl.LightningModule):
                 obs_inputs[:, :self.num_encoder_steps, :]
             ], axis=-1)
 #这个张量可以表示64个样本的历史观测值，其中每个样本有168个时间步，每个时间步有160个特征，每个特征有4个维度。
-        # print('historical_inputs') # torch.Size([64, 168, 160, 4])
-        #
-        # print(historical_inputs.shape)
 
         # Isolate only known future inputs.
         future_inputs = known_combined_layer[:, self.num_encoder_steps:, :]
-        # print('future_inputs') #torch.Size([64, 24, 160, 3])
-        # print(future_inputs.shape)
-        #
-        # print('static_inputs') #torch.Size([64, 1, 160])
-        # print(static_inputs.shape)
-        # exit()
         static_encoder, sparse_weights = self.static_vsn(static_inputs)
 
-        # print('static_encoder')
-        # print(static_encoder.shape)
 
-        # print('sparse_weights')
-        # print(sparse_weights.shape)
 
         static_context_variable_selection = self.static_context_variable_selection_grn(static_encoder)
-        # print('static_context_variable_selection')
-        # print(static_context_variable_selection.shape)
         # （GRN表示Gated Recurrent Network）
         static_context_enrichment = self.static_context_enrichment_grn(static_encoder)
-        # print('static_context_enrichment')
-        # print(static_context_enrichment.shape)
         static_context_state_h = self.static_context_state_h_grn(static_encoder)
-        # print('static_context_state_h')
-        # print(static_context_state_h.shape)
         static_context_state_c = self.static_context_state_c_grn(static_encoder)
-        # print('static_context_state_c')
-        # print(static_context_state_c.shape)
 #将历史输入（包括未知的历史输入、已知的历史输入以及观察到的历史输入）和静态输入一起传入一个模型中进行处理，得到对历史和静态输入的表示。
         historical_features, historical_flags \
             = self.temporal_historical_vsn((historical_inputs,
                                             static_context_variable_selection))
-        # print('historical_features')
-        # print(historical_features.shape)
-        # print('historical_flags')
-        # print(historical_flags.shape)
 
         future_features, future_flags \
             = self.temporal_future_vsn((future_inputs,
                                         static_context_variable_selection))
-        # print('future_features')
-        # print(future_features.shape)
-        # print('future_flags')
-        # print(future_flags.shape)
 
         history_lstm, (state_h, state_c) \
             = self.historical_lstm(historical_features,
                                    (static_context_state_h.unsqueeze(0),
                                     static_context_state_c.unsqueeze(0)))
-        # print('history_lstm')
-        # print(history_lstm.shape)
-        # print('state_h')
-        # print(state_h.shape)
-        # print('state_c')
-        # print(state_c.shape)
 
         future_lstm, _ = self.future_lstm(future_features,
                                           (state_h,
                                            state_c))
-        # print('future_lstm')
-        # print(future_lstm.shape)
 
         # Apply gated skip connection
         input_embeddings = torch.cat((historical_features, future_features), axis=1)
-        # print('input_embeddings')
-        # print(input_embeddings.shape)
 
         lstm_layer = torch.cat((history_lstm, future_lstm), axis=1)
-        # print('lstm_layer')
-        # print(lstm_layer.shape)
 
         temporal_feature_layer = self.post_seq_encoder_gate_add_norm(lstm_layer, input_embeddings)
-        # print('temporal_feature_layer')
-        # print(temporal_feature_layer.shape)
 
         # Static enrichment layers
         expanded_static_context = static_context_enrichment.unsqueeze(1)
 
         enriched = self.static_enrichment((temporal_feature_layer, expanded_static_context))
-        # print('enriched')
-        # print(enriched.shape)
 
         # Decoder self attention
-        # self.mask = self.get_decoder_mask(enriched)
-        # print('enriched')
-        # print(enriched.shape)
         x, self_att = self.self_attn_layer(enriched,
                                            enriched,
                                            enriched,
                                            mask=self.get_decoder_mask(enriched))
-        # print('x')
-        # print(x.shape) #torch.Size([64, 192, 160])
-        # print('self_att')
-        # print(self_att.shape) #  torch.Size([64, 192, 4, 192])
 
 
 
         x = self.post_attn_gate_add_norm(x, enriched)
-        # print('x')
-        # print(x.shape)
 
         # Nonlinear processing on outputs
         decoder = self.GRN_positionwise(x)
-        # print('decoder')
-        # print(decoder.shape)
 
         # Final skip connection
         transformer_layer = self.post_tfd_gate_add_norm(decoder, temporal_feature_layer)
-        # print('transformer_layer')
-        # print(transformer_layer.shape)
 
         outputs = self.output_feed_forward(transformer_layer[Ellipsis, self.num_encoder_steps:, :])
-        # print('outputs')
-        # print(outputs.shape)
-
-        # ipdb.set_trace()
 
         return outputs
 
@@ -554,13 +432,8 @@ class TemporalFusionTransformer(pl.LightningModule):
 
         x = x.to(torch.float)
         y = y.to(torch.float)
-        #         print('y')
-        #         print(y.shape)
         y_hat = self.forward(x)
-        #         print('y_hat')
-        #         print(y_hat.shape)
         loss = self.loss(y_hat, torch.cat([y, y, y], dim=-1))
-        # print(loss.shape)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
@@ -569,10 +442,7 @@ class TemporalFusionTransformer(pl.LightningModule):
         x = x.to(torch.float)
         y = y.to(torch.float)
         y_hat = self.forward(x)
-        # print(y_hat.shape)
-        # print(torch.cat([y, y, y], dim = -1).shape)
         loss = self.loss(y_hat, torch.cat([y, y, y], dim=-1))
-        # print(loss)
         return {'val_loss': loss}
 
     def validation_end(self, outputs):
@@ -613,17 +483,6 @@ class TemporalFusionTransformer(pl.LightningModule):
             else:
                 print('{} - {}'.format(name, p.requires_grad))
 
-    #         # plt.plot(ave_grads, alpha=0.3, color="b")
-    #         plt.plot(*zip(*enumerate(ave_grads)), alpha=0.3, color="b")
-    #         plt.hlines(0, 0, len(ave_grads), linewidth=1, color="k" )
-    #         plt.xticks(list(range(0,len(ave_grads), 1)), layers, rotation='vertical')
-    #         plt.xlim(left=0, right=len(ave_grads))
-    #         plt.xlabel("Layers")
-    #         plt.ylabel("average gradient")
-    #         plt.title("Gradient flow")
-    #         plt.grid(True)
-    #         plt.rcParams["figure.figsize"] = (20, 5)
-
     def on_after_backward(self):
         # example to inspect gradient information in tensorboard
         if self.trainer.global_step % 25 == 0:
@@ -654,14 +513,8 @@ trainer = pl.Trainer(max_epochs = tft.num_epochs,
                      track_grad_norm = 2,
                      gradient_clip_val = tft.max_gradient_norm,
                      early_stop_callback = early_stop_callback,
-                     #train_percent_check = 0.01,
-                     #val_percent_check = 0.01,
-                     #test_percent_check = 0.01,
                      overfit_pct=0.01,
-                     #fast_dev_run=True,
                      profiler=True,
-                     #print_nan_grads = True,
-                     #distributed_backend='dp'
                     )
 trainer.fit(tft)
 trainer.test()

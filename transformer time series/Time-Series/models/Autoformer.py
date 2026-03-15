@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.Embed import DataEmbedding, DataEmbedding_wo_pos
+from layers.Embed import DataEmbedding_wo_pos
 from layers.AutoCorrelation import AutoCorrelation, AutoCorrelationLayer
 from layers.Autoformer_EncDec import Encoder, Decoder, EncoderLayer, DecoderLayer, my_Layernorm, series_decomp
-import math
-import numpy as np
 
 
 class Model(nn.Module):
@@ -43,7 +41,7 @@ class Model(nn.Module):
                     moving_avg=configs.moving_avg,
                     dropout=configs.dropout,
                     activation=configs.activation
-                ) for l in range(configs.e_layers)
+                ) for _ in range(configs.e_layers)
             ],
             norm_layer=my_Layernorm(configs.d_model)
         )
@@ -69,7 +67,7 @@ class Model(nn.Module):
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
-                    for l in range(configs.d_layers)
+                    for _ in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
                 projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -100,7 +98,7 @@ class Model(nn.Module):
             [seasonal_init[:, -self.label_len:, :], zeros], dim=1)
         # enc
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None)
         # dec
         dec_out = self.dec_embedding(seasonal_init, x_mark_dec)
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None,
@@ -112,7 +110,7 @@ class Model(nn.Module):
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # enc
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None)
         # final
         dec_out = self.projection(enc_out)
         return dec_out
@@ -120,7 +118,7 @@ class Model(nn.Module):
     def anomaly_detection(self, x_enc):
         # enc
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None)
         # final
         dec_out = self.projection(enc_out)
         return dec_out
@@ -128,7 +126,7 @@ class Model(nn.Module):
     def classification(self, x_enc, x_mark_enc):
         # enc
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None)
 
         # Output
         # the output transformer encoder/decoder embeddings don't include non-linearity
@@ -144,15 +142,15 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(
                 x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, N]
+            return dec_out
         return None

@@ -5,28 +5,60 @@ import sys
 from pathlib import Path
 
 
+def _self_source() -> str:
+    return Path(__file__).read_text(encoding="utf-8")
+
+
+def _bound_names_from_import_aliases(node: ast.Import) -> set[str]:
+    return {alias.asname or alias.name.split(".")[0] for alias in node.names}
+
+
+def _bound_names_from_import_from_aliases(node: ast.ImportFrom) -> set[str]:
+    if node.module == "__future__":
+        return set()
+    return {alias.asname or alias.name for alias in node.names if alias.name != "*"}
+
+
+def _import_bound_names(node: ast.AST) -> set[str]:
+    if isinstance(node, ast.Import):
+        return _bound_names_from_import_aliases(node)
+    if isinstance(node, ast.ImportFrom):
+        return _bound_names_from_import_from_aliases(node)
+    return set()
+
+
+def _assignment_bound_name(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    if isinstance(node, ast.Assign):
+        names.update(target.id for target in node.targets if isinstance(target, ast.Name))
+    elif isinstance(node, ast.AnnAssign):
+        if isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+    return names
+
+
+def _definition_bound_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return node.name
+    return None
+
+
+def _bound_names_for_node(node: ast.AST) -> set[str]:
+    names = _import_bound_names(node)
+    if names:
+        return names
+    names = _assignment_bound_name(node)
+    if names:
+        return names
+    definition_name = _definition_bound_name(node)
+    return {definition_name} if definition_name is not None else set()
+
+
 def _top_level_bound_names(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in tree.body:
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                names.add(alias.asname or alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.module == "__future__":
-                continue
-            for alias in node.names:
-                if alias.name != "*":
-                    names.add(alias.asname or alias.name)
-        elif isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    names.add(target.id)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name):
-                names.add(node.target.id)
-        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            names.add(node.name)
+        names.update(_bound_names_for_node(node))
     names.discard("__all__")
     return names
 
@@ -136,3 +168,13 @@ def test_cli_facade_does_not_bind_leaderboard_cli_helpers() -> None:
     }
 
     assert cli_names.isdisjoint(leaderboard_helpers)
+
+
+def test_source_extracts_top_level_binding_helpers() -> None:
+    tree = ast.parse(_self_source(), filename=__file__)
+    function_names = {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }
+
+    assert "_bound_names_from_import_aliases" in function_names
+    assert "_bound_names_from_import_from_aliases" in function_names

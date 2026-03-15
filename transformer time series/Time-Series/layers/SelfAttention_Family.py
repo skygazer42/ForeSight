@@ -35,29 +35,25 @@ class DSAttention(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L, H, E = queries.shape  # 获取输入张量的形状 torch.Size([4, 10, 4, 16])
-        _, S, _, D = values.shape #torch.Size([4, 10, 4, 16])
+        B, L, _, E = queries.shape  # 获取输入张量的形状
 
         scale = self.scale or 1. / sqrt(E)  # 计算缩放因子
 #假设tau的shape为(batch_size,)，则经过如下操作后，tau的shape会变成(batch_size, 1, 1)，
         # 以便与queries和keys的shape进行broadcasting后进行矩阵乘法。
         tau = 1.0 if tau is None else tau.unsqueeze(
-            1).unsqueeze(1)  # B x 1 x 1 x 1 # 将 tau 改变形状 torch.Size([4, 1, 1]) no MLP
+            1).unsqueeze(1)  # B x 1 x 1 x 1 # 将 tau 改变形状 no MLP
         delta = 0.0 if delta is None else delta.unsqueeze(
             1).unsqueeze(1)  # B x 1 x 1 x S  # 将 delta 改变形状 no MLP
 
         # De-stationary Attention, rescaling pre-softmax score with learned de-stationary factors
-        scores = torch.einsum("blhe,bshe->bhls", queries, keys) * tau + delta # 矩阵乘法，加法，求得 scores torch.Size([4, 4, 10, 10])
+        scores = torch.einsum("blhe,bshe->bhls", queries, keys) * tau + delta  # 矩阵乘法，加法，求得 scores
         if self.mask_flag:
             if attn_mask is None:
                 attn_mask = TriangularCausalMask(B, L, device=queries.device) # 如果有掩码则应用它 生成mask矩阵
-            # print(attn_mask.mask.shape) #torch.Size([4, 1, 10, 10])
-            # exit()
             scores.masked_fill_(attn_mask.mask, -np.inf)
 
         A = self.dropout(torch.softmax(scale * scores, dim=-1)) # 应用缩放因子并进行 softmax，随后进行 dropout
-        V = torch.einsum("bhls,bshd->blhd", A, values) # 矩阵乘法，得到输出特征 torch.Size([4, 10, 4, 16])
-# self.output_attention 是一个布尔值，表示是否需要输出attention。如果需要输出attention，则返回一个元组(V.contiguous(), A)，
+        V = torch.einsum("bhls,bshd->blhd", A, values)  # 矩阵乘法，得到输出特征
         # 其中 V.contiguous()表示对输出特征进行内存连续化，
         # A表示计算得到的注意力矩阵。如果不需要输出
         # attention，则只返回一个元组(V.contiguous(), None)，其中 None表示没有计算注意力矩阵。
@@ -76,8 +72,7 @@ class FullAttention(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L, H, E = queries.shape
-        _, S, _, D = values.shape
+        B, L, _, E = queries.shape
         scale = self.scale or 1. / sqrt(E)
 
         scores = torch.einsum("blhe,bshe->bhls", queries, keys)
@@ -116,7 +111,6 @@ class ProbAttention(nn.Module):
         #然后用 expand() 方法将其复制扩展为 (B, H, L_Q, L_K, E)
         K_expand = K.unsqueeze(-3).expand(B, H, L_Q, L_K, E)
         # real U = U_part(factor*ln(L_k))*L_q
-#torch.randint 函数从区间 [0, L_K) 中随机生成 L_Q x sample_k 个整数，
         index_sample = torch.randint(L_K, (L_Q, sample_k))
 #从K中抽取一些列作为样本，以构成一个大小为(L_Q, sample_k, E)的张量K_sample。具体来说，torch.arange(L_Q).unsqueeze(1）
         #(B, H, L_Q, sample_k, E)
@@ -125,7 +119,6 @@ class ProbAttention(nn.Module):
         Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze()
         #表示在 K_sample 中每个 query 对应的 top-k 的 attention scores 的最大值，
         # 即 Q 和 K_sample 中每个 query 和 top-k keys 的 attention score 的最大值。
-        #torch.div(Q_K_sample.sum(-1), L_K) 表示 Q 和 K_sample 中每个 query 和 top-k keys 的 attention score 的平均值。
         M = Q_K_sample.max(-1)[0] - torch.div(Q_K_sample.sum(-1), L_K)
 #是取M矩阵在最后一个维度上的前n_top个最大值，返回的是这些最大值在最后一个维度上的索引，即表示最相关的top-k个键值对的位置。
         M_top = M.topk(n_top, sorted=False)[1]
@@ -139,9 +132,8 @@ class ProbAttention(nn.Module):
         return Q_K, M_top
 
     def _get_initial_context(self, V, L_Q):
-        B, H, L_V, D = V.shape
+        B, H, L_V, _ = V.shape
         if not self.mask_flag:
-            # V_sum = V.sum(dim=-2)
             V_sum = V.mean(dim=-2)
             contex = V_sum.unsqueeze(-2).expand(B, H,
                                                 L_Q, V_sum.shape[-1]).clone()
@@ -152,7 +144,7 @@ class ProbAttention(nn.Module):
         return contex
 
     def _update_context(self, context_in, V, scores, index, L_Q, attn_mask):
-        B, H, L_V, D = V.shape
+        B, H, L_V, _ = V.shape
 
         if self.mask_flag:
             attn_mask = ProbMask(B, H, L_Q, index, scores, device=V.device)
@@ -173,8 +165,8 @@ class ProbAttention(nn.Module):
             return (context_in, None)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L_Q, H, D = queries.shape
-        _, L_K, _, _ = keys.shape
+        _, L_Q, _, _ = queries.shape
+        _, L_K, _, D = values.shape
 
         queries = queries.transpose(2, 1)
         keys = keys.transpose(2, 1)
@@ -260,18 +252,21 @@ class ReformerLayer(nn.Module):
 
     def fit_length(self, queries):
         # inside reformer: assert N % (bucket_size * 2) == 0
-        B, N, C = queries.shape
-        if N % (self.bucket_size * 2) == 0:
+        batch_size, num_steps, channels = queries.shape
+        if num_steps % (self.bucket_size * 2) == 0:
             return queries
         else:
             # fill the time series
-            fill_len = (self.bucket_size * 2) - (N % (self.bucket_size * 2))
-            return torch.cat([queries, torch.zeros([B, fill_len, C]).to(queries.device)], dim=1)
+            fill_len = (self.bucket_size * 2) - (num_steps % (self.bucket_size * 2))
+            return torch.cat(
+                [queries, torch.zeros([batch_size, fill_len, channels]).to(queries.device)],
+                dim=1,
+            )
 
     def forward(self, queries, keys, values, attn_mask, tau, delta):
         # in Reformer: defalut queries=keys
-        B, N, C = queries.shape
-        queries = self.attn(self.fit_length(queries))[:, :N, :]
+        _, num_steps, _ = queries.shape
+        queries = self.attn(self.fit_length(queries))[:, :num_steps, :]
         return queries, None
 
 
@@ -317,7 +312,7 @@ class TwoStageAttentionLayer(nn.Module):
         #rearrange(x, 'a b c -> (a c) b')
 
         time_in = rearrange(x, 'b ts_d seg_num d_model -> (b ts_d) seg_num d_model')
-        time_enc, attn = self.time_attention(
+        time_enc, _ = self.time_attention(
             time_in, time_in, time_in, attn_mask=None, tau=None, delta=None
         )
         dim_in = time_in + self.dropout(time_enc)
@@ -328,8 +323,8 @@ class TwoStageAttentionLayer(nn.Module):
         # Cross Dimension Stage: use a small set of learnable vectors to aggregate and distribute messages to build the D-to-D connection
         dim_send = rearrange(dim_in, '(b ts_d) seg_num d_model -> (b seg_num) ts_d d_model', b=batch)
         batch_router = repeat(self.router, 'seg_num factor d_model -> (repeat seg_num) factor d_model', repeat=batch)
-        dim_buffer, attn = self.dim_sender(batch_router, dim_send, dim_send, attn_mask=None, tau=None, delta=None)
-        dim_receive, attn = self.dim_receiver(dim_send, dim_buffer, dim_buffer, attn_mask=None, tau=None, delta=None)
+        dim_buffer, _ = self.dim_sender(batch_router, dim_send, dim_send, attn_mask=None, tau=None, delta=None)
+        dim_receive, _ = self.dim_receiver(dim_send, dim_buffer, dim_buffer, attn_mask=None, tau=None, delta=None)
         dim_enc = dim_send + self.dropout(dim_receive)
         dim_enc = self.norm3(dim_enc)
         dim_enc = dim_enc + self.dropout(self.MLP2(dim_enc))
@@ -343,49 +338,27 @@ if __name__ == '__main__':
 ########################################################DSAttention #####################################
     # import torch
     # # 模拟数据
-    # batch_size = 4
-    # seq_len = 10
-    # hidden_size = 16
-    # num_heads = 4
     #
-    # queries = torch.randn(batch_size, seq_len, num_heads, hidden_size) #torch.Size([4, 10, 4, 16])
-    # keys = torch.randn(batch_size, seq_len, num_heads, hidden_size)
-    # values = torch.randn(batch_size, seq_len, num_heads, hidden_size)
-    # attn_mask = None
     # # tau = torch.randn(batch_size)
     # # tau=1
     # # # delta = torch.randn(batch_size, seq_len, seq_len)
     # # delta=0
     #
     # # 实例化 DSAttention
-    # attention = DSAttention(mask_flag=True, factor=5, scale=None, attention_dropout=0.1, output_attention=False)
     #
     # # 使用 DSAttention 进行前向传播
-    # outputs = attention(queries, keys, values, attn_mask)
     #
-    # print(outputs[0].shape)  # 输出特征的形状
 ##########################################Fullattetion#####################################################
     # import torch
     #
     # # 模拟数据
-    # batch_size = 4
-    # seq_len = 10
-    # hidden_size = 16
-    # num_heads = 4
     #
-    # queries = torch.randn(batch_size, seq_len, num_heads, hidden_size)  # torch.Size([4, 10, 4, 16])
-    # keys = torch.randn(batch_size, seq_len, num_heads, hidden_size)
-    # values = torch.randn(batch_size, seq_len, num_heads, hidden_size)
-    # attn_mask = None
     # # tau = torch.randn(batch_size)
     # # tau=1
     # # # delta = torch.randn(batch_size, seq_len, seq_len)
     # # delta=0
     #
     # # 实例化 DSAttention
-    # attention = FullAttention(mask_flag=True, factor=5, scale=None, attention_dropout=0.1, output_attention=False)
     #
     # # 使用 DSAttention 进行前向传播
-    # outputs = attention(queries, keys, values, attn_mask) #torch.Size([4, 10, 4, 16])
-    # print(outputs[0].shape)  # 输出特征的形状
     pass

@@ -172,6 +172,156 @@ def _aggregate_series(parts: Sequence[pd.Series], *, agg: str) -> pd.Series:
     raise ValueError(f"Unknown aggregation: {agg!r}")
 
 
+def _missing_leaf_nodes_from_pivot(
+    pivot: pd.DataFrame,
+    *,
+    leaves: Sequence[str],
+) -> list[str]:
+    return [node for node in leaves if node not in pivot.columns]
+
+
+def _extra_node_series_from_pivot(
+    pivot: pd.DataFrame,
+    *,
+    nodes: Sequence[str] | set[str],
+) -> dict[str, pd.Series]:
+    node_set = {str(node) for node in nodes}
+    return {
+        str(node): pivot[node].astype(float)
+        for node in pivot.columns
+        if str(node) not in node_set
+    }
+
+
+def _frame_from_series_map(
+    series_by_node: Mapping[str, pd.Series],
+    *,
+    value_col: str,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for node, series in series_by_node.items():
+        for ds, value in series.items():
+            rows.append({"unique_id": str(node), "ds": ds, value_col: float(value)})
+    return pd.DataFrame(rows)
+
+
+def _bottom_up_series_map(
+    pivot: pd.DataFrame,
+    *,
+    hierarchy: dict[str, tuple[str, ...]],
+    node_order: Sequence[str],
+    agg: str,
+) -> dict[str, pd.Series]:
+    cache: dict[str, pd.Series] = {}
+
+    def _series(node: str) -> pd.Series:
+        if node in cache:
+            return cache[node]
+        if node in hierarchy:
+            parts = [_series(child) for child in hierarchy[node]]
+            cache[node] = _aggregate_series(parts, agg=agg)
+        else:
+            cache[node] = pivot[node].astype(float)
+        return cache[node]
+
+    for node in node_order:
+        _series(node)
+    return {str(node): cache[str(node)] for node in node_order}
+
+
+def _merged_reconciled_column_frame(
+    merged: pd.DataFrame | None,
+    column_df: pd.DataFrame,
+) -> pd.DataFrame:
+    if merged is None:
+        return column_df
+    return merged.merge(
+        column_df,
+        on=["unique_id", "ds"],
+        how="outer",
+        validate="one_to_one",
+    )
+
+
+def _bottom_up_reconciled_frame(
+    pivot: pd.DataFrame,
+    *,
+    hierarchy: dict[str, tuple[str, ...]],
+    node_order: Sequence[str],
+    nodes: set[str],
+    value_col: str,
+    agg: str,
+) -> pd.DataFrame:
+    ordered_series = _bottom_up_series_map(
+        pivot,
+        hierarchy=hierarchy,
+        node_order=node_order,
+        agg=agg,
+    )
+    out = _frame_from_series_map(ordered_series, value_col=value_col)
+    extra_series = _extra_node_series_from_pivot(pivot, nodes=nodes)
+    if extra_series:
+        out = pd.concat(
+            [out, _frame_from_series_map(extra_series, value_col=value_col)],
+            axis=0,
+            ignore_index=True,
+        )
+    return out.sort_values(["ds", "unique_id"], kind="mergesort").reset_index(drop=True)
+
+
+def _top_down_allocated_series(
+    pivot: pd.DataFrame,
+    *,
+    hierarchy: dict[str, tuple[str, ...]],
+    totals: dict[str, float],
+) -> dict[str, pd.Series]:
+    results: dict[str, pd.Series] = {}
+
+    def _allocate(node: str, values: pd.Series) -> None:
+        results[node] = values.astype(float)
+        children = hierarchy.get(node)
+        if not children:
+            return
+
+        denom = float(sum(totals[child] for child in children))
+        if abs(denom) < 1e-12:
+            raise ValueError(f"Cannot compute top_down proportions for parent {node!r}: zero history")
+
+        for child in children:
+            share = float(totals[child]) / denom
+            _allocate(child, values * share)
+
+    for root in _roots(hierarchy):
+        _allocate(root, pivot[root].astype(float))
+    return results
+
+
+def _top_down_reconciled_frame(
+    pivot: pd.DataFrame,
+    *,
+    hierarchy: dict[str, tuple[str, ...]],
+    node_order: Sequence[str],
+    nodes: set[str],
+    totals: dict[str, float],
+    value_col: str,
+) -> pd.DataFrame:
+    allocated = _top_down_allocated_series(
+        pivot,
+        hierarchy=hierarchy,
+        totals=totals,
+    )
+    ordered_series = {str(node): allocated[str(node)] for node in node_order}
+    out = _frame_from_series_map(ordered_series, value_col=value_col)
+    extra_series = _extra_node_series_from_pivot(pivot, nodes=nodes)
+    if extra_series:
+        out = pd.concat(
+            [out, _frame_from_series_map(extra_series, value_col=value_col)],
+            axis=0,
+            ignore_index=True,
+        )
+    return out.sort_values(["ds", "unique_id"], kind="mergesort").reset_index(drop=True)
+
+
 def _reconcile_exog_bottom_up(
     *,
     forecast_df: pd.DataFrame,
@@ -188,41 +338,22 @@ def _reconcile_exog_bottom_up(
 
     for col, agg in exog_agg.items():
         pivot = _pivot_values(forecast_df, value_col=col)
-        missing_leaves = [node for node in leaves if node not in pivot.columns]
+        missing_leaves = _missing_leaf_nodes_from_pivot(pivot, leaves=leaves)
         if missing_leaves:
-            raise ValueError(f"bottom_up exog aggregation for {col!r} requires leaf forecasts for: {missing_leaves}")
-
-        cache: dict[str, pd.Series] = {}
-
-        def _series(node: str) -> pd.Series:
-            if node in cache:
-                return cache[node]
-            if node in hierarchy:
-                cache[node] = _aggregate_series([_series(child) for child in hierarchy[node]], agg=agg)
-            else:
-                cache[node] = pivot[node].astype(float)
-            return cache[node]
-
-        rows: list[dict[str, Any]] = []
-        for node in node_order:
-            for ds, value in _series(node).items():
-                rows.append({"unique_id": node, "ds": ds, col: float(value)})
-
-        extras = [str(node) for node in pivot.columns if str(node) not in nodes]
-        for node in extras:
-            for ds, value in pivot[node].items():
-                rows.append({"unique_id": node, "ds": ds, col: float(value)})
-
-        col_df = pd.DataFrame(rows)
-        if merged is None:
-            merged = col_df
-        else:
-            merged = merged.merge(
-                col_df,
-                on=["unique_id", "ds"],
-                how="outer",
-                validate="one_to_one",
+            raise ValueError(
+                f"bottom_up exog aggregation for {col!r} requires leaf forecasts for: {missing_leaves}"
             )
+        merged = _merged_reconciled_column_frame(
+            merged,
+            _bottom_up_reconciled_frame(
+                pivot,
+                hierarchy=hierarchy,
+                node_order=node_order,
+                nodes=nodes,
+                value_col=col,
+                agg=agg,
+            ),
+        )
 
     if merged is None:
         return forecast_df.loc[:, ["unique_id", "ds"]].drop_duplicates().reset_index(drop=True)
@@ -265,38 +396,17 @@ def reconcile_hierarchical_forecasts(
 
     if method_key == "bottom_up":
         leaves = _leaf_nodes(hierarchy_norm)
-        missing_leaves = [node for node in leaves if node not in pivot.columns]
+        missing_leaves = _missing_leaf_nodes_from_pivot(pivot, leaves=leaves)
         if missing_leaves:
             raise ValueError(f"bottom_up requires leaf forecasts for: {missing_leaves}")
-
-        cache: dict[str, pd.Series] = {}
-
-        def _series(node: str) -> pd.Series:
-            if node in cache:
-                return cache[node]
-            if node in hierarchy_norm:
-                parts = [_series(child) for child in hierarchy_norm[node]]
-                total = parts[0].copy()
-                for part in parts[1:]:
-                    total = total.add(part, fill_value=0.0)
-                out = total
-            else:
-                out = pivot[node].astype(float)
-            cache[node] = out
-            return out
-
-        rows: list[dict[str, Any]] = []
-        for node in node_order:
-            series = _series(node)
-            for ds, value in series.items():
-                rows.append({"unique_id": node, "ds": ds, value_col: float(value)})
-
-        extras = [col for col in pivot.columns if col not in nodes]
-        for node in extras:
-            for ds, value in pivot[node].items():
-                rows.append({"unique_id": str(node), "ds": ds, value_col: float(value)})
-
-        out = pd.DataFrame(rows).sort_values(["ds", "unique_id"], kind="mergesort").reset_index(drop=True)
+        out = _bottom_up_reconciled_frame(
+            pivot,
+            hierarchy=hierarchy_norm,
+            node_order=node_order,
+            nodes=nodes,
+            value_col=value_col,
+            agg="sum",
+        )
         if exog_agg_norm:
             exog_df = _reconcile_exog_bottom_up(
                 forecast_df=fc,
@@ -315,42 +425,17 @@ def reconcile_hierarchical_forecasts(
     hist = _require_tidy_df(history_df, value_col="y")
     totals = _historical_totals(hist, hierarchy_norm)
 
-    provided_nodes = [str(col) for col in pivot.columns.tolist()]
     missing_roots = [root for root in _roots(hierarchy_norm) if root not in pivot.columns]
     if missing_roots:
         raise ValueError(f"top_down requires root forecasts for: {missing_roots}")
-
-    results: dict[str, pd.Series] = {}
-
-    def _allocate(node: str, values: pd.Series) -> None:
-        results[node] = values.astype(float)
-        children = hierarchy_norm.get(node)
-        if not children:
-            return
-
-        denom = float(sum(totals[child] for child in children))
-        if abs(denom) < 1e-12:
-            raise ValueError(f"Cannot compute top_down proportions for parent {node!r}: zero history")
-
-        for child in children:
-            share = float(totals[child]) / denom
-            _allocate(child, values * share)
-
-    for root in _roots(hierarchy_norm):
-        _allocate(root, pivot[root].astype(float))
-
-    rows = []
-    for node in node_order:
-        series = results[node]
-        for ds, value in series.items():
-            rows.append({"unique_id": node, "ds": ds, value_col: float(value)})
-
-    extras = [node for node in provided_nodes if node not in nodes]
-    for node in extras:
-        for ds, value in pivot[node].items():
-            rows.append({"unique_id": node, "ds": ds, value_col: float(value)})
-
-    return pd.DataFrame(rows).sort_values(["ds", "unique_id"], kind="mergesort").reset_index(drop=True)
+    return _top_down_reconciled_frame(
+        pivot,
+        hierarchy=hierarchy_norm,
+        node_order=node_order,
+        nodes=nodes,
+        totals=totals,
+        value_col=value_col,
+    )
 
 
 def check_hierarchical_consistency(

@@ -20,13 +20,13 @@ ice_cream_heater_df = pd.read_csv('ice_cream_vs_heater.csv', parse_dates=[0], in
 ice_cream_heater_df = ice_cream_heater_df.asfreq(pd.infer_freq(ice_cream_heater_df.index))
 
 # %%
-ice_cream_heater_df
+print(ice_cream_heater_df)
 
 # %%
 heater_series = ice_cream_heater_df.heater
 
 # %%
-heater_series
+print(heater_series)
 
 # %%
 def plot_series(series):
@@ -79,13 +79,13 @@ plt.axhline(0, linestyle='--', color='k', alpha=0.3)
 annual_volatility = heater_series.groupby(heater_series.index.year).std()
 
 # %%
-annual_volatility
+print(annual_volatility)
 
 # %%
 heater_annual_vol = heater_series.index.map(lambda d: annual_volatility.loc[d.year])
 
 # %%
-heater_annual_vol
+print(heater_annual_vol)
 
 # %%
 heater_series = heater_series / heater_annual_vol
@@ -101,13 +101,13 @@ plt.axhline(0, linestyle='--', color='k', alpha=0.3)
 month_avgs = heater_series.groupby(heater_series.index.month).mean()
 
 # %%
-month_avgs
+print(month_avgs)
 
 # %%
 heater_month_avg = heater_series.index.map(lambda d: month_avgs.loc[d.month])
 
 # %%
-heater_month_avg
+print(heater_month_avg)
 
 # %%
 heater_series = heater_series - heater_month_avg

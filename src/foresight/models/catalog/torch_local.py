@@ -2149,6 +2149,206 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
         ),
     }
 
+
+def _register_local_xformer_specs(add_local_xformer: Any) -> None:
+    # Local xFormer variants: (attn) x (norm) x (ffn)
+    for attn_s, attn_label in [
+        ("full", "full"),
+        ("local", "local-window"),
+        ("logsparse", "log-sparse"),
+        ("longformer", "longformer-windowed+global"),
+        ("bigbird", "bigbird-random+local+global"),
+        ("performer", "performer"),
+        ("linformer", "linformer"),
+        ("nystrom", "nystrom"),
+        ("probsparse", "prob-sparse"),
+        ("autocorr", "auto-correlation"),
+        ("reformer", "reformer-lsh"),
+    ]:
+        for norm_s, norm_label in [("layer", "LayerNorm"), ("rms", "RMSNorm")]:
+            for ffn_s, ffn_label in [("gelu", "GELU"), ("swiglu", "SwiGLU")]:
+                norm_short = "ln" if norm_s == "layer" else "rms"
+                key = f"torch-xformer-{attn_s}-{norm_short}-{ffn_s}-direct"
+                add_local_xformer(
+                    key,
+                    f"Torch xFormer ({attn_label} attention) with {norm_label}+{ffn_label} "
+                    "(direct multi-horizon). Requires PyTorch.",
+                    attn=attn_s,
+                    norm=norm_s,
+                    ffn=ffn_s,
+                )
+
+    # 41-44: RoPE positional variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        add_local_xformer(
+            f"torch-xformer-{attn_s}-rope-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with RoPE positional encoding (LN+GELU). "
+            "Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="rope",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 45-48: sincos pos variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        add_local_xformer(
+            f"torch-xformer-{attn_s}-sincos-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with sinusoidal positional encoding (LN+GELU). "
+            "Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="sincos",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 49-52: Time2Vec pos variants (LN+GELU)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        add_local_xformer(
+            f"torch-xformer-{attn_s}-time2vec-ln-gelu-direct",
+            f"Torch xFormer ({attn_s} attention) with Time2Vec positional features (LN+GELU). "
+            "Requires PyTorch.",
+            attn=attn_s,
+            pos_emb="time2vec",
+            norm="layer",
+            ffn="gelu",
+        )
+
+    # 53-56: RevIN variants
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        add_local_xformer(
+            f"torch-xformer-{attn_s}-revin-direct",
+            f"Torch xFormer ({attn_s} attention) with RevIN (direct multi-horizon). "
+            "Requires PyTorch.",
+            attn=attn_s,
+            revin=True,
+        )
+
+    # 57-60: deeper/wider configs
+    add_local_xformer(
+        "torch-xformer-full-deep-direct",
+        "Torch xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
+        attn="full",
+        num_layers=4,
+    )
+    add_local_xformer(
+        "torch-xformer-performer-deep-direct",
+        "Torch xFormer (performer attention) deeper config (4 layers). Requires PyTorch.",
+        attn="performer",
+        num_layers=4,
+    )
+    add_local_xformer(
+        "torch-xformer-full-wide-direct",
+        "Torch xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
+        attn="full",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+    add_local_xformer(
+        "torch-xformer-performer-wide-direct",
+        "Torch xFormer (performer attention) wider config (d_model=128). Requires PyTorch.",
+        attn="performer",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+
+
+def _register_global_xformer_specs(add_global_xformer: Any) -> None:
+    # 61-65: baseline attention variants
+    for attn_s in [
+        "full",
+        "local",
+        "logsparse",
+        "longformer",
+        "bigbird",
+        "performer",
+        "linformer",
+        "nystrom",
+        "probsparse",
+        "autocorr",
+        "reformer",
+    ]:
+        add_global_xformer(
+            f"torch-xformer-{attn_s}-global",
+            f"Torch global xFormer ({attn_s} attention) baseline. Requires PyTorch.",
+            attn=attn_s,
+        )
+
+    # 66-70: RMSNorm variants
+    for attn_s in [
+        "full",
+        "local",
+        "logsparse",
+        "longformer",
+        "bigbird",
+        "performer",
+        "linformer",
+        "nystrom",
+        "probsparse",
+        "autocorr",
+        "reformer",
+    ]:
+        add_global_xformer(
+            f"torch-xformer-{attn_s}-rms-global",
+            f"Torch global xFormer ({attn_s} attention) with RMSNorm. Requires PyTorch.",
+            attn=attn_s,
+            norm="rms",
+        )
+
+    # 71-74: SwiGLU variants (subset)
+    for attn_s in ["full", "performer", "linformer", "nystrom"]:
+        add_global_xformer(
+            f"torch-xformer-{attn_s}-swiglu-global",
+            f"Torch global xFormer ({attn_s} attention) with SwiGLU FFN. Requires PyTorch.",
+            attn=attn_s,
+            ffn="swiglu",
+        )
+
+    # 75-78: positional variants
+    add_global_xformer(
+        "torch-xformer-full-rope-global",
+        "Torch global xFormer (full attention) with RoPE positional encoding. Requires PyTorch.",
+        attn="full",
+        pos_emb="rope",
+    )
+    add_global_xformer(
+        "torch-xformer-performer-rope-global",
+        "Torch global xFormer (performer attention) with RoPE positional encoding. Requires PyTorch.",
+        attn="performer",
+        pos_emb="rope",
+    )
+    add_global_xformer(
+        "torch-xformer-full-sincos-global",
+        "Torch global xFormer (full attention) with sinusoidal positional encoding. Requires PyTorch.",
+        attn="full",
+        pos_emb="sincos",
+    )
+    add_global_xformer(
+        "torch-xformer-full-time2vec-global",
+        "Torch global xFormer (full attention) with Time2Vec positional features. Requires PyTorch.",
+        attn="full",
+        pos_emb="time2vec",
+    )
+
+    # 79-80: deeper/wider configs
+    add_global_xformer(
+        "torch-xformer-full-deep-global",
+        "Torch global xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
+        attn="full",
+        num_layers=4,
+    )
+    add_global_xformer(
+        "torch-xformer-full-wide-global",
+        "Torch global xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
+        attn="full",
+        d_model=128,
+        nhead=8,
+        dim_feedforward=512,
+    )
+
+
 def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     model_spec = context.ModelSpec
     _TORCH_COMMON_DEFAULTS = context._TORCH_COMMON_DEFAULTS
@@ -2228,103 +2428,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
             requires=("torch",),
         )
 
-    # Local xFormer variants: (attn) x (norm) x (ffn)
-    for attn_s, attn_label in [
-        ("full", "full"),
-        ("local", "local-window"),
-        ("logsparse", "log-sparse"),
-        ("longformer", "longformer-windowed+global"),
-        ("bigbird", "bigbird-random+local+global"),
-        ("performer", "performer"),
-        ("linformer", "linformer"),
-        ("nystrom", "nystrom"),
-        ("probsparse", "prob-sparse"),
-        ("autocorr", "auto-correlation"),
-        ("reformer", "reformer-lsh"),
-    ]:
-        for norm_s, norm_label in [("layer", "LayerNorm"), ("rms", "RMSNorm")]:
-            for ffn_s, ffn_label in [("gelu", "GELU"), ("swiglu", "SwiGLU")]:
-                norm_short = "ln" if norm_s == "layer" else "rms"
-                key = f"torch-xformer-{attn_s}-{norm_short}-{ffn_s}-direct"
-                _add_local_xformer(
-                    key,
-                    f"Torch xFormer ({attn_label} attention) with {norm_label}+{ffn_label} (direct multi-horizon). Requires PyTorch.",
-                    attn=attn_s,
-                    norm=norm_s,
-                    ffn=ffn_s,
-                )
-
-    # 41-44: RoPE positional variants (LN+GELU)
-    for attn_s in ["full", "performer", "linformer", "nystrom"]:
-        _add_local_xformer(
-            f"torch-xformer-{attn_s}-rope-ln-gelu-direct",
-            f"Torch xFormer ({attn_s} attention) with RoPE positional encoding (LN+GELU). Requires PyTorch.",
-            attn=attn_s,
-            pos_emb="rope",
-            norm="layer",
-            ffn="gelu",
-        )
-
-    # 45-48: sincos pos variants (LN+GELU)
-    for attn_s in ["full", "performer", "linformer", "nystrom"]:
-        _add_local_xformer(
-            f"torch-xformer-{attn_s}-sincos-ln-gelu-direct",
-            f"Torch xFormer ({attn_s} attention) with sinusoidal positional encoding (LN+GELU). Requires PyTorch.",
-            attn=attn_s,
-            pos_emb="sincos",
-            norm="layer",
-            ffn="gelu",
-        )
-
-    # 49-52: Time2Vec pos variants (LN+GELU)
-    for attn_s in ["full", "performer", "linformer", "nystrom"]:
-        _add_local_xformer(
-            f"torch-xformer-{attn_s}-time2vec-ln-gelu-direct",
-            f"Torch xFormer ({attn_s} attention) with Time2Vec positional features (LN+GELU). Requires PyTorch.",
-            attn=attn_s,
-            pos_emb="time2vec",
-            norm="layer",
-            ffn="gelu",
-        )
-
-    # 53-56: RevIN variants
-    for attn_s in ["full", "performer", "linformer", "nystrom"]:
-        _add_local_xformer(
-            f"torch-xformer-{attn_s}-revin-direct",
-            f"Torch xFormer ({attn_s} attention) with RevIN (direct multi-horizon). Requires PyTorch.",
-            attn=attn_s,
-            revin=True,
-        )
-
-    # 57-60: deeper/wider configs
-    _add_local_xformer(
-        "torch-xformer-full-deep-direct",
-        "Torch xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
-        attn="full",
-        num_layers=4,
-    )
-    _add_local_xformer(
-        "torch-xformer-performer-deep-direct",
-        "Torch xFormer (performer attention) deeper config (4 layers). Requires PyTorch.",
-        attn="performer",
-        num_layers=4,
-    )
-    _add_local_xformer(
-        "torch-xformer-full-wide-direct",
-        "Torch xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
-        attn="full",
-        d_model=128,
-        nhead=8,
-        dim_feedforward=512,
-    )
-    _add_local_xformer(
-        "torch-xformer-performer-wide-direct",
-        "Torch xFormer (performer attention) wider config (d_model=128). Requires PyTorch.",
-        attn="performer",
-        d_model=128,
-        nhead=8,
-        dim_feedforward=512,
-    )
+    _register_local_xformer_specs(_add_local_xformer)
 
     # ---- Local RNN family (Seq2Seq + LSTNet) ----
     seq2seq_help = {
@@ -2522,97 +2626,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
             interface="global",
         )
 
-    # 61-65: baseline attention variants
-    for attn_s in [
-        "full",
-        "local",
-        "logsparse",
-        "longformer",
-        "bigbird",
-        "performer",
-        "linformer",
-        "nystrom",
-        "probsparse",
-        "autocorr",
-        "reformer",
-    ]:
-        _add_global_xformer(
-            f"torch-xformer-{attn_s}-global",
-            f"Torch global xFormer ({attn_s} attention) baseline. Requires PyTorch.",
-            attn=attn_s,
-        )
-
-    # 66-70: RMSNorm variants
-    for attn_s in [
-        "full",
-        "local",
-        "logsparse",
-        "longformer",
-        "bigbird",
-        "performer",
-        "linformer",
-        "nystrom",
-        "probsparse",
-        "autocorr",
-        "reformer",
-    ]:
-        _add_global_xformer(
-            f"torch-xformer-{attn_s}-rms-global",
-            f"Torch global xFormer ({attn_s} attention) with RMSNorm. Requires PyTorch.",
-            attn=attn_s,
-            norm="rms",
-        )
-
-    # 71-74: SwiGLU variants (subset)
-    for attn_s in ["full", "performer", "linformer", "nystrom"]:
-        _add_global_xformer(
-            f"torch-xformer-{attn_s}-swiglu-global",
-            f"Torch global xFormer ({attn_s} attention) with SwiGLU FFN. Requires PyTorch.",
-            attn=attn_s,
-            ffn="swiglu",
-        )
-
-    # 75-78: positional variants
-    _add_global_xformer(
-        "torch-xformer-full-rope-global",
-        "Torch global xFormer (full attention) with RoPE positional encoding. Requires PyTorch.",
-        attn="full",
-        pos_emb="rope",
-    )
-    _add_global_xformer(
-        "torch-xformer-performer-rope-global",
-        "Torch global xFormer (performer attention) with RoPE positional encoding. Requires PyTorch.",
-        attn="performer",
-        pos_emb="rope",
-    )
-    _add_global_xformer(
-        "torch-xformer-full-sincos-global",
-        "Torch global xFormer (full attention) with sinusoidal positional encoding. Requires PyTorch.",
-        attn="full",
-        pos_emb="sincos",
-    )
-    _add_global_xformer(
-        "torch-xformer-full-time2vec-global",
-        "Torch global xFormer (full attention) with Time2Vec positional features. Requires PyTorch.",
-        attn="full",
-        pos_emb="time2vec",
-    )
-
-    # 79-80: deeper/wider configs
-    _add_global_xformer(
-        "torch-xformer-full-deep-global",
-        "Torch global xFormer (full attention) deeper config (4 layers). Requires PyTorch.",
-        attn="full",
-        num_layers=4,
-    )
-    _add_global_xformer(
-        "torch-xformer-full-wide-global",
-        "Torch global xFormer (full attention) wider config (d_model=128). Requires PyTorch.",
-        attn="full",
-        d_model=128,
-        nhead=8,
-        dim_feedforward=512,
-    )
+    _register_global_xformer_specs(_add_global_xformer)
 
     # ---- Global RNN variants ----
     rnn_global_help = {

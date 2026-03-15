@@ -4,6 +4,8 @@ import argparse
 import csv
 import io
 import json
+import math
+import statistics
 import sys
 from pathlib import Path
 from typing import Any
@@ -449,172 +451,219 @@ def _leaderboard_sweep_worker(
     return (rows, errors)
 
 
-def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
+def _resolve_leaderboard_sweep_model_keys(args: argparse.Namespace) -> list[str]:
     from .models.registry import get_model_spec, list_models
 
-    datasets = [d.strip() for d in str(args.datasets).split(",") if d.strip()]
-    if not datasets:
-        raise ValueError("--datasets must contain at least one dataset key")
-
-    y_col = str(args.y_col).strip() or None
-
     if str(args.models).strip():
-        keys = [k.strip() for k in str(args.models).split(",") if k.strip()]
-    else:
-        keys = [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
+        return [k.strip() for k in str(args.models).split(",") if k.strip()]
 
-    jobs = int(args.jobs)
-    if jobs <= 0:
-        raise ValueError("--jobs must be >= 1")
+    return [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
 
-    chunk_size = int(getattr(args, "chunk_size", 1))
-    if chunk_size < 0:
-        raise ValueError("--chunk-size must be >= 0")
-    strict = bool(getattr(args, "strict", False))
-    model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
 
-    resume_path = str(getattr(args, "resume", "")).strip()
+def _read_leaderboard_sweep_resume_rows(path: Path) -> list[dict[str, Any]]:
+    raw_text = path.read_text(encoding="utf-8")
+    lower = path.name.lower()
+    fmt = "csv" if lower.endswith(".csv") else "json"
+    if not (lower.endswith(".csv") or lower.endswith(".json")):
+        try:
+            json.loads(raw_text)
+            fmt = "json"
+        except Exception:  # noqa: BLE001
+            fmt = "csv"
+
+    if fmt == "json":
+        parsed = json.loads(raw_text) if str(raw_text).strip() else []
+        if isinstance(parsed, dict):
+            return [parsed]
+        if isinstance(parsed, list):
+            return [r for r in parsed if isinstance(r, dict)]
+        raise TypeError("--resume json must be a dict row or a list of dict rows")
+
+    reader = csv.DictReader(io.StringIO(raw_text))
+    return [dict(r) for r in reader]
+
+
+def _leaderboard_sweep_dataset_y_cols(
+    datasets: list[str],
+    y_col: str | None,
+) -> dict[str, str]:
+    from .datasets.registry import get_dataset_spec
+
+    dataset_y_cols: dict[str, str] = {}
+    for dataset in datasets:
+        spec = get_dataset_spec(str(dataset))
+        dataset_y_cols[str(dataset)] = str(y_col).strip() if y_col is not None else str(spec.default_y)
+    return dataset_y_cols
+
+
+def _leaderboard_resume_value_as_int(v: object) -> int | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return int(v)
+    if isinstance(v, float) and float(v).is_integer():
+        return int(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    lower_s = s.lower()
+    if lower_s in {"none", "null"}:
+        return None
+    try:
+        return int(float(s))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _leaderboard_resume_value_as_str(v: object) -> str:
+    if v is None:
+        return ""
+    return str(v).strip()
+
+
+def _leaderboard_resume_value_as_params_dict(v: object) -> dict[str, Any] | None:
+    if v is None:
+        return None
+    if isinstance(v, dict):
+        return {str(k): val for k, val in v.items()}
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(parsed, dict):
+            return {str(k): val for k, val in parsed.items()}
+    return None
+
+
+def _leaderboard_sweep_expected_resume_context(
+    *,
+    datasets: list[str],
+    keys: list[str],
+    y_col: str | None,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    max_windows: int | None,
+    data_dir: str,
+    model_params: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "datasets_set": set(datasets),
+        "keys_set": set(keys),
+        "dataset_y_cols": _leaderboard_sweep_dataset_y_cols(datasets, y_col),
+        "horizon_i": horizon,
+        "step_i": step,
+        "min_train_size_i": min_train_size,
+        "max_windows_i": max_windows,
+        "expected_data_dir": data_dir,
+        "expected_params_norm": json.loads(
+            json.dumps(model_params, ensure_ascii=False, sort_keys=True)
+        ),
+    }
+
+
+def _resume_row_matches_leaderboard_sweep(
+    row: dict[str, Any],
+    *,
+    datasets_set: set[str],
+    keys_set: set[str],
+    dataset_y_cols: dict[str, str],
+    horizon_i: int,
+    step_i: int,
+    min_train_size_i: int,
+    max_windows_i: int | None,
+    expected_data_dir: str,
+    expected_params_norm: dict[str, Any],
+) -> tuple[bool, str, str]:
+    ds = _leaderboard_resume_value_as_str(row.get("dataset"))
+    model = _leaderboard_resume_value_as_str(row.get("model"))
+    if not ds or not model:
+        return (False, ds, model)
+    if ds not in datasets_set or model not in keys_set:
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_str(row.get("y_col")) != dataset_y_cols.get(ds, ""):
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_int(row.get("horizon")) != horizon_i:
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_int(row.get("step")) != step_i:
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_int(row.get("min_train_size")) != min_train_size_i:
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_int(row.get("max_windows")) != max_windows_i:
+        return (False, ds, model)
+    if _leaderboard_resume_value_as_str(row.get("data_dir")) != expected_data_dir:
+        return (False, ds, model)
+
+    row_params = _leaderboard_resume_value_as_params_dict(row.get("model_params"))
+    if row_params is None:
+        return (not expected_params_norm, ds, model) if False else (not bool(expected_params_norm), ds, model)
+
+    row_params_norm = json.loads(json.dumps(row_params, ensure_ascii=False, sort_keys=True))
+    return (row_params_norm == expected_params_norm, ds, model)
+
+
+def _load_leaderboard_sweep_resume_state(
+    *,
+    resume_path: str,
+    datasets: list[str],
+    keys: list[str],
+    y_col: str | None,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    max_windows: int | None,
+    data_dir: str,
+    model_params: dict[str, Any],
+    progress: bool,
+) -> tuple[list[dict[str, Any]], set[tuple[str, str]]]:
+    if not resume_path:
+        return ([], set())
+
+    path = Path(resume_path)
+    if not path.exists():
+        raise FileNotFoundError(f"--resume path not found: {path}")
+
+    rows_raw = _read_leaderboard_sweep_resume_rows(path)
+    context = _leaderboard_sweep_expected_resume_context(
+        datasets=datasets,
+        keys=keys,
+        y_col=y_col,
+        horizon=horizon,
+        step=step,
+        min_train_size=min_train_size,
+        max_windows=max_windows,
+        data_dir=data_dir,
+        model_params=model_params,
+    )
+
     resume_rows: list[dict[str, Any]] = []
     done_pairs: set[tuple[str, str]] = set()
-    if resume_path:
-        from .datasets.registry import get_dataset_spec
+    for row in rows_raw:
+        matches, ds, model = _resume_row_matches_leaderboard_sweep(row, **context)
+        if not matches:
+            continue
+        resume_rows.append(row)
+        done_pairs.add((ds, model))
 
-        path = Path(resume_path)
-        if not path.exists():
-            raise FileNotFoundError(f"--resume path not found: {path}")
+    if progress:
+        print(f"RESUME keep={len(resume_rows)} skip={len(done_pairs)}", file=sys.stderr)
 
-        raw_text = path.read_text(encoding="utf-8")
-        lower = path.name.lower()
-        fmt = "csv" if lower.endswith(".csv") else "json"
-        if not (lower.endswith(".csv") or lower.endswith(".json")):
-            try:
-                json.loads(raw_text)
-                fmt = "json"
-            except Exception:  # noqa: BLE001
-                fmt = "csv"
+    return (resume_rows, done_pairs)
 
-        rows_raw: list[dict[str, Any]] = []
-        if fmt == "json":
-            parsed = json.loads(raw_text) if str(raw_text).strip() else []
-            if isinstance(parsed, dict):
-                rows_raw = [parsed]
-            elif isinstance(parsed, list):
-                rows_raw = [r for r in parsed if isinstance(r, dict)]
-            else:
-                raise TypeError("--resume json must be a dict row or a list of dict rows")
-        else:
-            reader = csv.DictReader(io.StringIO(raw_text))
-            rows_raw = [dict(r) for r in reader]
 
-        datasets_set = set(datasets)
-        keys_set = set(keys)
-
-        dataset_y_cols: dict[str, str] = {}
-        for dataset in datasets:
-            spec = get_dataset_spec(str(dataset))
-            dataset_y_cols[str(dataset)] = (
-                str(y_col).strip() if y_col is not None else str(spec.default_y)
-            )
-
-        horizon_i = int(args.horizon)
-        step_i = int(args.step)
-        min_train_size_i = int(args.min_train_size)
-        max_windows_i = None if args.max_windows is None else int(args.max_windows)
-        expected_data_dir = str(args.data_dir).strip()
-        expected_params_norm = json.loads(
-            json.dumps(model_params, ensure_ascii=False, sort_keys=True)
-        )
-
-        def _as_int(v: object) -> int | None:
-            if v is None:
-                return None
-            if isinstance(v, bool):
-                return None
-            if isinstance(v, int):
-                return int(v)
-            if isinstance(v, float) and float(v).is_integer():
-                return int(v)
-            s = str(v).strip()
-            if not s:
-                return None
-            lower_s = s.lower()
-            if lower_s in {"none", "null"}:
-                return None
-            try:
-                return int(float(s))
-            except Exception:  # noqa: BLE001
-                return None
-
-        def _as_str(v: object) -> str:
-            if v is None:
-                return ""
-            return str(v).strip()
-
-        def _as_params_dict(v: object) -> dict[str, Any] | None:
-            if v is None:
-                return None
-            if isinstance(v, dict):
-                out: dict[str, Any] = {}
-                for k, val in v.items():
-                    if isinstance(k, str):
-                        out[k] = val
-                    else:
-                        out[str(k)] = val
-                return out
-            if isinstance(v, str):
-                s = v.strip()
-                if not s:
-                    return None
-                try:
-                    parsed = json.loads(s)
-                except Exception:  # noqa: BLE001
-                    return None
-                if isinstance(parsed, dict):
-                    return {str(k): val for k, val in parsed.items()}
-                return None
-            return None
-
-        for row in rows_raw:
-            ds = _as_str(row.get("dataset"))
-            model = _as_str(row.get("model"))
-            if not ds or not model:
-                continue
-            if ds not in datasets_set or model not in keys_set:
-                continue
-
-            if _as_str(row.get("y_col")) != dataset_y_cols.get(ds, ""):
-                continue
-            if _as_int(row.get("horizon")) != horizon_i:
-                continue
-            if _as_int(row.get("step")) != step_i:
-                continue
-            if _as_int(row.get("min_train_size")) != min_train_size_i:
-                continue
-            if _as_int(row.get("max_windows")) != max_windows_i:
-                continue
-            if _as_str(row.get("data_dir")) != expected_data_dir:
-                continue
-
-            row_params = _as_params_dict(row.get("model_params"))
-            if row_params is None:
-                if expected_params_norm:
-                    continue
-            else:
-                row_params_norm = json.loads(
-                    json.dumps(row_params, ensure_ascii=False, sort_keys=True)
-                )
-                if row_params_norm != expected_params_norm:
-                    continue
-
-            resume_rows.append(row)
-            done_pairs.add((ds, model))
-
-        if args.progress:
-            print(
-                f"RESUME keep={len(resume_rows)} skip={len(done_pairs)}",
-                file=sys.stderr,
-            )
-
+def _build_leaderboard_sweep_tasks(
+    datasets: list[str],
+    keys: list[str],
+    done_pairs: set[tuple[str, str]],
+    *,
+    chunk_size: int,
+) -> list[tuple[str, tuple[str, ...]]]:
     tasks: list[tuple[str, tuple[str, ...]]] = []
     for dataset in datasets:
         remaining = [k for k in keys if (dataset, k) not in done_pairs]
@@ -627,6 +676,113 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             chunk = tuple(remaining[i : i + chunk_size])
             if chunk:
                 tasks.append((dataset, chunk))
+    return tasks
+
+
+def _leaderboard_sweep_mae_key(v: object) -> float:
+    try:
+        return float(v)
+    except Exception:  # noqa: BLE001
+        return float("inf")
+
+
+def _merge_leaderboard_sweep_rows(
+    resume_rows: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in resume_rows:
+        ds = str(row.get("dataset", "")).strip()
+        model = str(row.get("model", "")).strip()
+        if ds and model:
+            merged[(ds, model)] = row
+    for row in rows:
+        ds = str(row.get("dataset", "")).strip()
+        model = str(row.get("model", "")).strip()
+        if ds and model:
+            merged[(ds, model)] = row
+
+    final_rows = list(merged.values()) if merged else rows
+    final_rows.sort(
+        key=lambda row: (
+            str(row.get("dataset", "")),
+            _leaderboard_sweep_mae_key(row.get("mae", float("inf"))),
+        )
+    )
+    return final_rows
+
+
+def _write_leaderboard_sweep_summary(
+    args: argparse.Namespace,
+    final_rows: list[dict[str, Any]],
+) -> None:
+    summary_output = str(getattr(args, "summary_output", "")).strip()
+    if not summary_output:
+        return
+
+    summary_format = str(getattr(args, "summary_format", "json")).strip()
+    summary_sort = str(getattr(args, "summary_sort", "mae_rank_mean"))
+    summary_limit = int(getattr(args, "summary_limit", 0))
+    summary_min_datasets = int(getattr(args, "summary_min_datasets", 0))
+
+    summary_rows = (
+        []
+        if not final_rows
+        else _summarize_leaderboard_rows(
+            final_rows,
+            sort=summary_sort,
+            limit=summary_limit,
+            min_datasets=summary_min_datasets,
+        )
+    )
+    text = _cli_shared._format_table(
+        summary_rows,
+        columns=_leaderboard_summary_columns(),
+        fmt=summary_format,
+    )
+    _cli_shared._write_output(text, output=summary_output)
+
+
+def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
+    datasets = [d.strip() for d in str(args.datasets).split(",") if d.strip()]
+    if not datasets:
+        raise ValueError("--datasets must contain at least one dataset key")
+
+    y_col = str(args.y_col).strip() or None
+
+    keys = _resolve_leaderboard_sweep_model_keys(args)
+
+    jobs = int(args.jobs)
+    if jobs <= 0:
+        raise ValueError("--jobs must be >= 1")
+
+    chunk_size = int(getattr(args, "chunk_size", 1))
+    if chunk_size < 0:
+        raise ValueError("--chunk-size must be >= 0")
+    strict = bool(getattr(args, "strict", False))
+    model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
+
+    resume_path = str(getattr(args, "resume", "")).strip()
+    resume_rows, done_pairs = _load_leaderboard_sweep_resume_state(
+        resume_path=resume_path,
+        datasets=datasets,
+        keys=keys,
+        y_col=y_col,
+        horizon=int(args.horizon),
+        step=int(args.step),
+        min_train_size=int(args.min_train_size),
+        max_windows=None if args.max_windows is None else int(args.max_windows),
+        data_dir=str(args.data_dir).strip(),
+        model_params=model_params,
+        progress=bool(args.progress),
+    )
+
+    tasks = _build_leaderboard_sweep_tasks(
+        datasets,
+        keys,
+        done_pairs,
+        chunk_size=chunk_size,
+    )
 
     failure_lines: list[str] = []
     rows, _failures = _run_parallel_tasks(
@@ -649,55 +805,13 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
         errors_out=failure_lines,
     )
 
-    merged: dict[tuple[str, str], dict[str, Any]] = {}
-    for row in resume_rows:
-        ds = str(row.get("dataset", "")).strip()
-        model = str(row.get("model", "")).strip()
-        if ds and model:
-            merged[(ds, model)] = row
-    for row in rows:
-        ds = str(row.get("dataset", "")).strip()
-        model = str(row.get("model", "")).strip()
-        if ds and model:
-            merged[(ds, model)] = row
-
-    final_rows = list(merged.values()) if merged else rows
-
-    def _mae_key(v: object) -> float:
-        try:
-            return float(v)
-        except Exception:  # noqa: BLE001
-            return float("inf")
-
-    final_rows.sort(key=lambda row: (str(row.get("dataset", "")), _mae_key(row.get("mae", float("inf")))))
+    final_rows = _merge_leaderboard_sweep_rows(resume_rows, rows)
 
     failures_output = str(getattr(args, "failures_output", "")).strip()
     if failures_output:
         _cli_shared._write_output("\n".join(failure_lines), output=failures_output)
 
-    summary_output = str(getattr(args, "summary_output", "")).strip()
-    if summary_output:
-        summary_format = str(getattr(args, "summary_format", "json")).strip()
-        summary_sort = str(getattr(args, "summary_sort", "mae_rank_mean"))
-        summary_limit = int(getattr(args, "summary_limit", 0))
-        summary_min_datasets = int(getattr(args, "summary_min_datasets", 0))
-
-        summary_rows = (
-            []
-            if not final_rows
-            else _summarize_leaderboard_rows(
-                final_rows,
-                sort=summary_sort,
-                limit=summary_limit,
-                min_datasets=summary_min_datasets,
-            )
-        )
-        text = _cli_shared._format_table(
-            summary_rows,
-            columns=_leaderboard_summary_columns(),
-            fmt=summary_format,
-        )
-        _cli_shared._write_output(text, output=summary_output)
+    _write_leaderboard_sweep_summary(args, final_rows)
 
     _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
     return 0
@@ -707,39 +821,9 @@ def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
     input_path = str(getattr(args, "input", "-")).strip() or "-"
     input_fmt = str(getattr(args, "input_format", "auto")).strip().lower()
 
-    if input_path == "-":
-        raw_text = sys.stdin.read()
-    else:
-        raw_text = Path(input_path).read_text(encoding="utf-8")
-
-    fmt = input_fmt
-    if fmt == "auto":
-        lower = input_path.lower()
-        if input_path != "-" and lower.endswith(".csv"):
-            fmt = "csv"
-        elif input_path != "-" and lower.endswith(".json"):
-            fmt = "json"
-        else:
-            try:
-                json.loads(raw_text)
-                fmt = "json"
-            except Exception:  # noqa: BLE001
-                fmt = "csv"
-
-    rows_raw: list[dict[str, Any]] = []
-    if fmt == "json":
-        parsed = json.loads(raw_text) if str(raw_text).strip() else []
-        if isinstance(parsed, dict):
-            rows_raw = [parsed]
-        elif isinstance(parsed, list):
-            rows_raw = [r for r in parsed if isinstance(r, dict)]
-        else:
-            raise TypeError("JSON input must be a dict row or a list of dict rows")
-    elif fmt == "csv":
-        reader = csv.DictReader(io.StringIO(raw_text))
-        rows_raw = [dict(r) for r in reader]
-    else:
-        raise ValueError("--input-format must be one of: auto, json, csv")
+    raw_text = _read_leaderboard_summarize_input_text(input_path)
+    fmt = _detect_leaderboard_summarize_input_format(input_path, input_fmt, raw_text)
+    rows_raw = _parse_leaderboard_summarize_rows(raw_text, fmt)
 
     if not rows_raw:
         raise ValueError("No rows found in input")
@@ -759,55 +843,98 @@ def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
     return 0
 
 
-def _summarize_leaderboard_rows(
-    rows_raw: list[dict[str, Any]],
+def _read_leaderboard_summarize_input_text(input_path: str) -> str:
+    if input_path == "-":
+        return sys.stdin.read()
+    return Path(input_path).read_text(encoding="utf-8")
+
+
+def _detect_leaderboard_summarize_input_format(
+    input_path: str,
+    input_fmt: str,
+    raw_text: str,
+) -> str:
+    fmt = input_fmt
+    if fmt != "auto":
+        return fmt
+
+    lower = input_path.lower()
+    if input_path != "-" and lower.endswith(".csv"):
+        return "csv"
+    if input_path != "-" and lower.endswith(".json"):
+        return "json"
+
+    try:
+        json.loads(raw_text)
+        return "json"
+    except Exception:  # noqa: BLE001
+        return "csv"
+
+
+def _parse_leaderboard_summarize_rows(raw_text: str, fmt: str) -> list[dict[str, Any]]:
+    if fmt == "json":
+        parsed = json.loads(raw_text) if str(raw_text).strip() else []
+        if isinstance(parsed, dict):
+            return [parsed]
+        if isinstance(parsed, list):
+            return [r for r in parsed if isinstance(r, dict)]
+        raise TypeError("JSON input must be a dict row or a list of dict rows")
+
+    if fmt == "csv":
+        reader = csv.DictReader(io.StringIO(raw_text))
+        return [dict(r) for r in reader]
+
+    raise ValueError("--input-format must be one of: auto, json, csv")
+
+
+def _leaderboard_summary_as_float(v: object) -> float | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int | float):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _leaderboard_summary_as_int(v: object) -> int | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return int(v)
+    if isinstance(v, float) and float(v).is_integer():
+        return int(v)
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return int(float(s))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _leaderboard_summary_relative_metric_to_best(
+    value: float,
+    best: float,
     *,
-    sort: str,
-    limit: int,
-    min_datasets: int = 0,
-) -> list[dict[str, Any]]:
-    import math
-    import statistics
+    zero_tol: float = 1e-12,
+) -> float:
+    if math.isclose(best, 0.0, abs_tol=zero_tol):
+        return 1.0 if math.isclose(value, 0.0, abs_tol=zero_tol) else float("inf")
+    return float(value / best)
 
-    zero_tol = 1e-12
 
-    def _as_float(v: object) -> float | None:
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return None
-        if isinstance(v, int | float):
-            return float(v)
-        s = str(v).strip()
-        if not s:
-            return None
-        try:
-            return float(s)
-        except Exception:  # noqa: BLE001
-            return None
-
-    def _as_int(v: object) -> int | None:
-        if v is None:
-            return None
-        if isinstance(v, bool):
-            return None
-        if isinstance(v, int):
-            return int(v)
-        if isinstance(v, float) and float(v).is_integer():
-            return int(v)
-        s = str(v).strip()
-        if not s:
-            return None
-        try:
-            return int(float(s))
-        except Exception:  # noqa: BLE001
-            return None
-
-    def _relative_metric_to_best(value: float, best: float) -> float:
-        if math.isclose(best, 0.0, abs_tol=zero_tol):
-            return 1.0 if math.isclose(value, 0.0, abs_tol=zero_tol) else float("inf")
-        return float(value / best)
-
+def _clean_leaderboard_summary_rows(
+    rows_raw: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
     cleaned: list[dict[str, Any]] = []
     bad = 0
     for row in rows_raw:
@@ -821,35 +948,38 @@ def _summarize_leaderboard_rows(
             {
                 "model": model,
                 "dataset": dataset,
-                "mae": _as_float(row.get("mae")),
-                "rmse": _as_float(row.get("rmse")),
-                "mape": _as_float(row.get("mape")),
-                "smape": _as_float(row.get("smape")),
-                "n_points": _as_int(row.get("n_points")),
+                "mae": _leaderboard_summary_as_float(row.get("mae")),
+                "rmse": _leaderboard_summary_as_float(row.get("rmse")),
+                "mape": _leaderboard_summary_as_float(row.get("mape")),
+                "smape": _leaderboard_summary_as_float(row.get("smape")),
+                "n_points": _leaderboard_summary_as_int(row.get("n_points")),
             }
         )
+    return (cleaned, bad)
 
-    if not cleaned:
-        raise ValueError(f"No valid rows found (bad_rows={bad})")
 
-    by_model: dict[str, list[dict[str, Any]]] = {}
-    for row in cleaned:
-        by_model.setdefault(str(row["model"]), []).append(row)
-
-    n_datasets_total = int(len({str(row["dataset"]) for row in cleaned}))
-
-    metrics = ["mae", "rmse", "mape", "smape"]
+def _leaderboard_summary_best_by_dataset_metric(
+    cleaned: list[dict[str, Any]],
+    metrics: list[str],
+) -> dict[tuple[str, str], float]:
     best_by_dataset_metric: dict[tuple[str, str], float] = {}
-    for dataset in sorted({str(row["dataset"]) for row in cleaned}):
+    datasets = sorted({str(row["dataset"]) for row in cleaned})
+    for dataset in datasets:
         rows_ds = [row for row in cleaned if str(row["dataset"]) == dataset]
         for metric in metrics:
             values = [float(row[metric]) for row in rows_ds if row.get(metric) is not None]
-            if not values:
-                continue
-            best_by_dataset_metric[(dataset, metric)] = float(min(values))
+            if values:
+                best_by_dataset_metric[(dataset, metric)] = float(min(values))
+    return best_by_dataset_metric
 
+
+def _leaderboard_summary_rank_by_dataset_metric_model(
+    cleaned: list[dict[str, Any]],
+    metrics: list[str],
+) -> dict[tuple[str, str, str], float]:
     rank_by_dataset_metric_model: dict[tuple[str, str, str], float] = {}
-    for dataset in sorted({str(row["dataset"]) for row in cleaned}):
+    datasets = sorted({str(row["dataset"]) for row in cleaned})
+    for dataset in datasets:
         rows_ds = [row for row in cleaned if str(row["dataset"]) == dataset]
         for metric in metrics:
             vals = [
@@ -868,172 +998,344 @@ def _summarize_leaderboard_rows(
                     rank += 1
                     prev = v
                 rank_by_dataset_metric_model[(dataset, metric, model)] = float(rank)
+    return rank_by_dataset_metric_model
 
-    out: list[dict[str, Any]] = []
-    for model, items in by_model.items():
-        datasets = {str(item["dataset"]) for item in items}
-        row: dict[str, Any] = {
-            "model": model,
-            "n_datasets": int(len(datasets)),
-            "n_datasets_total": int(n_datasets_total),
-            "dataset_coverage": (
-                None
-                if n_datasets_total <= 0
-                else float(int(len(datasets)) / float(int(n_datasets_total)))
-            ),
-            "n_rows": int(len(items)),
-        }
 
-        for metric in metrics:
-            vals = [float(item[metric]) for item in items if item.get(metric) is not None]
-            row[f"{metric}_mean"] = None if not vals else float(sum(vals) / float(len(vals)))
-            row[f"{metric}_median"] = None if not vals else float(statistics.median(vals))
+def _leaderboard_summary_mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return float(sum(values) / float(len(values)))
 
-            pairs = [
-                (float(item[metric]), int(item["n_points"]))
-                for item in items
-                if item.get(metric) is not None
-                and item.get("n_points") is not None
-                and int(item["n_points"]) > 0
-            ]
-            w_sum = float(sum(w for _v, w in pairs))
-            row[f"{metric}_wmean"] = (
-                None if w_sum <= 0 else float(sum(v * float(w) for v, w in pairs) / w_sum)
+
+def _leaderboard_summary_median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return float(statistics.median(values))
+
+
+def _leaderboard_summary_weighted_mean(pairs: list[tuple[float, int]]) -> float | None:
+    weight_sum = float(sum(weight for _value, weight in pairs))
+    if weight_sum <= 0:
+        return None
+    return float(sum(value * float(weight) for value, weight in pairs) / weight_sum)
+
+
+def _leaderboard_summary_metric_values(
+    items: list[dict[str, Any]],
+    metric: str,
+) -> list[float]:
+    return [float(item[metric]) for item in items if item.get(metric) is not None]
+
+
+def _leaderboard_summary_metric_weighted_pairs(
+    items: list[dict[str, Any]],
+    metric: str,
+) -> list[tuple[float, int]]:
+    return [
+        (float(item[metric]), int(item["n_points"]))
+        for item in items
+        if item.get(metric) is not None
+        and item.get("n_points") is not None
+        and int(item["n_points"]) > 0
+    ]
+
+
+def _leaderboard_summary_metric_relative_values(
+    items: list[dict[str, Any]],
+    metric: str,
+    *,
+    best_by_dataset_metric: dict[tuple[str, str], float],
+) -> list[float]:
+    rels: list[float] = []
+    for item in items:
+        v_obj = item.get(metric)
+        if v_obj is None:
+            continue
+        best = best_by_dataset_metric.get((str(item["dataset"]), metric))
+        if best is None:
+            continue
+        rels.append(
+            _leaderboard_summary_relative_metric_to_best(float(v_obj), float(best))
+        )
+    return rels
+
+
+def _leaderboard_summary_metric_relative_pairs(
+    items: list[dict[str, Any]],
+    metric: str,
+    *,
+    best_by_dataset_metric: dict[tuple[str, str], float],
+) -> list[tuple[float, int]]:
+    rel_pairs: list[tuple[float, int]] = []
+    for item in items:
+        v_obj = item.get(metric)
+        if v_obj is None:
+            continue
+        weight = item.get("n_points")
+        if weight is None or int(weight) <= 0:
+            continue
+        best = best_by_dataset_metric.get((str(item["dataset"]), metric))
+        if best is None:
+            continue
+        rel_pairs.append(
+            (
+                _leaderboard_summary_relative_metric_to_best(float(v_obj), float(best)),
+                int(weight),
             )
+        )
+    return rel_pairs
 
-            rels: list[float] = []
-            for item in items:
-                v_obj = item.get(metric)
-                if v_obj is None:
-                    continue
-                best = best_by_dataset_metric.get((str(item["dataset"]), metric))
-                if best is None:
-                    continue
-                v = float(v_obj)
-                rel = _relative_metric_to_best(v, float(best))
-                rels.append(rel)
 
-            row[f"{metric}_rel_mean"] = None if not rels else float(sum(rels) / float(len(rels)))
-            row[f"{metric}_rel_median"] = None if not rels else float(statistics.median(rels))
+def _leaderboard_summary_metric_ranks(
+    items: list[dict[str, Any]],
+    metric: str,
+    *,
+    model: str,
+    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+) -> list[float]:
+    return [
+        float(rank_by_dataset_metric_model[(str(item["dataset"]), metric, model)])
+        for item in items
+        if (str(item["dataset"]), metric, model) in rank_by_dataset_metric_model
+    ]
 
-            rel_pairs = []
-            for item in items:
-                v_obj = item.get(metric)
-                if v_obj is None:
-                    continue
-                w = item.get("n_points")
-                if w is None or int(w) <= 0:
-                    continue
-                best = best_by_dataset_metric.get((str(item["dataset"]), metric))
-                if best is None:
-                    continue
-                v = float(v_obj)
-                rel = _relative_metric_to_best(v, float(best))
-                rel_pairs.append((rel, int(w)))
 
-            rel_wsum = float(sum(w for _r, w in rel_pairs))
-            row[f"{metric}_rel_wmean"] = (
-                None if rel_wsum <= 0 else float(sum(r * float(w) for r, w in rel_pairs) / rel_wsum)
-            )
+def _leaderboard_summary_metric_rank_pairs(
+    items: list[dict[str, Any]],
+    metric: str,
+    *,
+    model: str,
+    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+) -> list[tuple[float, int]]:
+    return [
+        (
+            float(rank_by_dataset_metric_model[(str(item["dataset"]), metric, model)]),
+            int(item["n_points"]),
+        )
+        for item in items
+        if (str(item["dataset"]), metric, model) in rank_by_dataset_metric_model
+        and item.get("n_points") is not None
+        and int(item["n_points"]) > 0
+    ]
 
-            ranks = [
-                rank_by_dataset_metric_model.get((str(item["dataset"]), metric, model))
-                for item in items
-                if rank_by_dataset_metric_model.get((str(item["dataset"]), metric, model)) is not None
-            ]
-            row[f"{metric}_rank_mean"] = None if not ranks else float(sum(ranks) / float(len(ranks)))
 
-            rank_pairs = [
-                (
-                    float(rank_by_dataset_metric_model[(str(item["dataset"]), metric, model)]),
-                    int(item["n_points"]),
-                )
-                for item in items
-                if (str(item["dataset"]), metric, model) in rank_by_dataset_metric_model
-                and item.get("n_points") is not None
-                and int(item["n_points"]) > 0
-            ]
-            rank_wsum = float(sum(w for _r, w in rank_pairs))
-            row[f"{metric}_rank_wmean"] = (
-                None
-                if rank_wsum <= 0
-                else float(sum(r * float(w) for r, w in rank_pairs) / rank_wsum)
-            )
+def _populate_leaderboard_metric_summary(
+    row: dict[str, Any],
+    items: list[dict[str, Any]],
+    *,
+    metric: str,
+    model: str,
+    best_by_dataset_metric: dict[tuple[str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+) -> None:
+    values = _leaderboard_summary_metric_values(items, metric)
+    row[f"{metric}_mean"] = _leaderboard_summary_mean(values)
+    row[f"{metric}_median"] = _leaderboard_summary_median(values)
+    row[f"{metric}_wmean"] = _leaderboard_summary_weighted_mean(
+        _leaderboard_summary_metric_weighted_pairs(items, metric)
+    )
 
-        score_rank_items = [row.get(f"{metric}_rank_mean") for metric in metrics]
-        score_rank_vals = [float(v) for v in score_rank_items if v is not None]
-        row["score_rank_mean"] = (
-            None if len(score_rank_vals) != len(metrics) else float(sum(score_rank_vals) / 4.0)
+    rel_values = _leaderboard_summary_metric_relative_values(
+        items,
+        metric,
+        best_by_dataset_metric=best_by_dataset_metric,
+    )
+    row[f"{metric}_rel_mean"] = _leaderboard_summary_mean(rel_values)
+    row[f"{metric}_rel_median"] = _leaderboard_summary_median(rel_values)
+    row[f"{metric}_rel_wmean"] = _leaderboard_summary_weighted_mean(
+        _leaderboard_summary_metric_relative_pairs(
+            items,
+            metric,
+            best_by_dataset_metric=best_by_dataset_metric,
+        )
+    )
+
+    ranks = _leaderboard_summary_metric_ranks(
+        items,
+        metric,
+        model=model,
+        rank_by_dataset_metric_model=rank_by_dataset_metric_model,
+    )
+    row[f"{metric}_rank_mean"] = _leaderboard_summary_mean(ranks)
+    row[f"{metric}_rank_wmean"] = _leaderboard_summary_weighted_mean(
+        _leaderboard_summary_metric_rank_pairs(
+            items,
+            metric,
+            model=model,
+            rank_by_dataset_metric_model=rank_by_dataset_metric_model,
+        )
+    )
+
+
+def _leaderboard_summary_metric_group_average(
+    row: dict[str, Any],
+    metrics: list[str],
+    suffix: str,
+) -> float | None:
+    values = [row.get(f"{metric}_{suffix}") for metric in metrics]
+    present = [float(v) for v in values if v is not None]
+    if len(present) != len(metrics):
+        return None
+    return float(sum(present) / float(len(metrics)))
+
+
+def _leaderboard_model_summary_row(
+    model: str,
+    items: list[dict[str, Any]],
+    *,
+    metrics: list[str],
+    n_datasets_total: int,
+    best_by_dataset_metric: dict[tuple[str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+) -> dict[str, Any]:
+    datasets = {str(item["dataset"]) for item in items}
+    row: dict[str, Any] = {
+        "model": model,
+        "n_datasets": int(len(datasets)),
+        "n_datasets_total": int(n_datasets_total),
+        "dataset_coverage": (
+            None
+            if n_datasets_total <= 0
+            else float(int(len(datasets)) / float(int(n_datasets_total)))
+        ),
+        "n_rows": int(len(items)),
+    }
+
+    for metric in metrics:
+        _populate_leaderboard_metric_summary(
+            row,
+            items,
+            metric=metric,
+            model=model,
+            best_by_dataset_metric=best_by_dataset_metric,
+            rank_by_dataset_metric_model=rank_by_dataset_metric_model,
         )
 
-        score_rank_w_items = [row.get(f"{metric}_rank_wmean") for metric in metrics]
-        score_rank_w_vals = [float(v) for v in score_rank_w_items if v is not None]
-        row["score_rank_wmean"] = (
-            None if len(score_rank_w_vals) != len(metrics) else float(sum(score_rank_w_vals) / 4.0)
-        )
+    row["score_rank_mean"] = _leaderboard_summary_metric_group_average(
+        row, metrics, "rank_mean"
+    )
+    row["score_rank_wmean"] = _leaderboard_summary_metric_group_average(
+        row, metrics, "rank_wmean"
+    )
+    row["score_rel_mean"] = _leaderboard_summary_metric_group_average(
+        row, metrics, "rel_mean"
+    )
+    row["score_rel_wmean"] = _leaderboard_summary_metric_group_average(
+        row, metrics, "rel_wmean"
+    )
+    return row
 
-        score_rel_items = [row.get(f"{metric}_rel_mean") for metric in metrics]
-        score_rel_vals = [float(v) for v in score_rel_items if v is not None]
-        row["score_rel_mean"] = (
-            None if len(score_rel_vals) != len(metrics) else float(sum(score_rel_vals) / 4.0)
-        )
 
-        score_rel_w_items = [row.get(f"{metric}_rel_wmean") for metric in metrics]
-        score_rel_w_vals = [float(v) for v in score_rel_w_items if v is not None]
-        row["score_rel_wmean"] = (
-            None if len(score_rel_w_vals) != len(metrics) else float(sum(score_rel_w_vals) / 4.0)
-        )
+def _leaderboard_summary_sort_number(v: object) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except Exception:  # noqa: BLE001
+        return None
 
-        out.append(row)
+
+def _leaderboard_summary_sort_value_key(
+    v: float | None,
+    *,
+    descending: bool,
+) -> tuple[int, float]:
+    if v is None:
+        return (1, 0.0)
+
+    value = float(v)
+    if descending:
+        value = -value
+    return (0, value)
+
+
+def _sort_leaderboard_summary_rows(
+    rows: list[dict[str, Any]],
+    *,
+    sort: str,
+    limit: int,
+    min_datasets: int,
+) -> list[dict[str, Any]]:
+    if not rows:
+        return rows
 
     sort_s = str(sort).strip() or "mae_rank_mean"
     descending = False
     if sort_s.startswith("-"):
         descending = True
         sort_s = sort_s[1:].strip()
-    if sort_s not in out[0]:
+    if sort_s not in rows[0]:
         raise ValueError(f"--sort must be a known summary column, got: {sort_s!r}")
 
-    secondary = "mae_mean" if "mae_mean" in out[0] else ""
-
-    def _num(v: object) -> float | None:
-        if v is None:
-            return None
-        try:
-            return float(v)
-        except Exception:  # noqa: BLE001
-            return None
-
-    def _sort_value_key(v: float | None) -> tuple[int, float]:
-        if v is None:
-            return (1, 0.0)
-
-        value = float(v)
-        if descending:
-            value = -value
-        return (0, value)
+    secondary = "mae_mean" if "mae_mean" in rows[0] else ""
 
     def _sort_key(row: dict[str, Any]) -> tuple[int, float, int, float, str]:
-        missing, val_key = _sort_value_key(_num(row.get(sort_s)))
-
-        secondary_value = None
-        if secondary:
-            secondary_value = _num(row.get(secondary))
-        smissing, sval_key = _sort_value_key(secondary_value)
-
+        missing, val_key = _leaderboard_summary_sort_value_key(
+            _leaderboard_summary_sort_number(row.get(sort_s)),
+            descending=descending,
+        )
+        secondary_value = _leaderboard_summary_sort_number(row.get(secondary)) if secondary else None
+        smissing, sval_key = _leaderboard_summary_sort_value_key(
+            secondary_value,
+            descending=descending,
+        )
         return (missing, val_key, smissing, sval_key, str(row.get("model", "")))
 
-    out.sort(key=_sort_key)
+    rows.sort(key=_sort_key)
 
     min_datasets_i = int(min_datasets)
     if min_datasets_i > 0:
-        out = [row for row in out if int(row.get("n_datasets", 0) or 0) >= min_datasets_i]
+        rows = [row for row in rows if int(row.get("n_datasets", 0) or 0) >= min_datasets_i]
 
     limit_i = int(limit)
     if limit_i > 0:
-        out = out[:limit_i]
+        rows = rows[:limit_i]
 
-    return out
+    return rows
+
+
+def _summarize_leaderboard_rows(
+    rows_raw: list[dict[str, Any]],
+    *,
+    sort: str,
+    limit: int,
+    min_datasets: int = 0,
+) -> list[dict[str, Any]]:
+    cleaned, bad = _clean_leaderboard_summary_rows(rows_raw)
+    if not cleaned:
+        raise ValueError(f"No valid rows found (bad_rows={bad})")
+
+    by_model: dict[str, list[dict[str, Any]]] = {}
+    for row in cleaned:
+        by_model.setdefault(str(row["model"]), []).append(row)
+
+    n_datasets_total = int(len({str(row["dataset"]) for row in cleaned}))
+
+    metrics = ["mae", "rmse", "mape", "smape"]
+    best_by_dataset_metric = _leaderboard_summary_best_by_dataset_metric(cleaned, metrics)
+    rank_by_dataset_metric_model = _leaderboard_summary_rank_by_dataset_metric_model(
+        cleaned,
+        metrics,
+    )
+
+    out = [
+        _leaderboard_model_summary_row(
+            model,
+            items,
+            metrics=metrics,
+            n_datasets_total=n_datasets_total,
+            best_by_dataset_metric=best_by_dataset_metric,
+            rank_by_dataset_metric_model=rank_by_dataset_metric_model,
+        )
+        for model, items in by_model.items()
+    ]
+
+    return _sort_leaderboard_summary_rows(
+        out,
+        sort=sort,
+        limit=limit,
+        min_datasets=min_datasets,
+    )
 
 
 def _leaderboard_summary_columns() -> list[str]:
@@ -1093,55 +1395,25 @@ def _run_parallel_tasks(
     worker_args: tuple[Any, ...] = (),
     errors_out: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    import concurrent.futures
-    import multiprocessing
-
     n = len(tasks)
     if n <= 0:
         return ([], 0)
 
-    def _task_label(dataset: str, model_keys: tuple[str, ...]) -> str:
-        if len(model_keys) == 1:
-            return f"{dataset}/{model_keys[0]}"
-        return f"{dataset}/[{len(model_keys)} models]"
-
     if jobs <= 1:
-        out: list[dict[str, Any]] = []
-        failures = 0
-        for i, (dataset, model_keys) in enumerate(tasks, start=1):
-            label = _task_label(dataset, model_keys)
-            try:
-                rows, errors = worker(dataset, model_keys, *worker_args)
-                out.extend(rows)
-                for err in errors:
-                    failures += 1
-                    print(err, file=sys.stderr)
-                    if errors_out is not None:
-                        errors_out.append(str(err))
-            except Exception as e:  # noqa: BLE001
-                if strict:
-                    raise
-                failures += 1
-                line = f"SKIP {label}: {type(e).__name__}: {e}"
-                print(line, file=sys.stderr)
-                if errors_out is not None:
-                    errors_out.append(line)
-            if progress:
-                print(f"DONE {i}/{n} {label}", file=sys.stderr)
-        return (out, failures)
+        return _run_parallel_tasks_sequential(
+            tasks,
+            progress=progress,
+            strict=strict,
+            worker=worker,
+            worker_args=worker_args,
+            errors_out=errors_out,
+        )
 
     max_workers = min(int(jobs), max(1, n))
     backend_s = str(backend).strip().lower()
-    if backend_s not in {"thread", "process"}:
-        raise ValueError("--backend must be one of: thread, process")
+    executor = _build_parallel_task_executor(backend_s=backend_s, max_workers=max_workers)
 
-    if backend_s == "process":
-        ctx = multiprocessing.get_context("spawn")
-        executor: Any = concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers, mp_context=ctx
-        )
-    else:
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    import concurrent.futures
 
     done = 0
     failures = 0
@@ -1153,26 +1425,16 @@ def _run_parallel_tasks(
         }
         for fut in concurrent.futures.as_completed(fut_to_task):
             dataset, model_keys = fut_to_task[fut]
-            label = _task_label(dataset, model_keys)
-            try:
-                rows, errors = fut.result()
-                out.extend(rows)
-                for err in errors:
-                    failures += 1
-                    print(err, file=sys.stderr)
-                    if errors_out is not None:
-                        errors_out.append(str(err))
-            except Exception as e:  # noqa: BLE001
-                if strict:
-                    for other in fut_to_task:
-                        if other is not fut:
-                            other.cancel()
-                    raise RuntimeError(f"{label}: {type(e).__name__}: {e}") from e
-                failures += 1
-                line = f"SKIP {label}: {type(e).__name__}: {e}"
-                print(line, file=sys.stderr)
-                if errors_out is not None:
-                    errors_out.append(line)
+            label = _parallel_task_label(dataset, model_keys)
+            rows, task_failures = _resolve_parallel_task_result(
+                fut,
+                label=label,
+                strict=strict,
+                sibling_futures=fut_to_task.keys(),
+                errors_out=errors_out,
+            )
+            out.extend(rows)
+            failures += task_failures
             done += 1
             if progress:
                 print(f"DONE {done}/{n} {label}", file=sys.stderr)
@@ -1180,3 +1442,96 @@ def _run_parallel_tasks(
         executor.shutdown(cancel_futures=True)
 
     return (out, failures)
+
+
+def _parallel_task_label(dataset: str, model_keys: tuple[str, ...]) -> str:
+    if len(model_keys) == 1:
+        return f"{dataset}/{model_keys[0]}"
+    return f"{dataset}/[{len(model_keys)} models]"
+
+
+def _record_parallel_task_errors(
+    errors: list[str],
+    *,
+    errors_out: list[str] | None,
+) -> int:
+    failures = 0
+    for err in errors:
+        failures += 1
+        print(err, file=sys.stderr)
+        if errors_out is not None:
+            errors_out.append(str(err))
+    return failures
+
+
+def _run_parallel_tasks_sequential(
+    tasks: list[tuple[str, tuple[str, ...]]],
+    *,
+    progress: bool,
+    strict: bool,
+    worker: Any,
+    worker_args: tuple[Any, ...],
+    errors_out: list[str] | None,
+) -> tuple[list[dict[str, Any]], int]:
+    out: list[dict[str, Any]] = []
+    failures = 0
+    n = len(tasks)
+    for i, (dataset, model_keys) in enumerate(tasks, start=1):
+        label = _parallel_task_label(dataset, model_keys)
+        try:
+            rows, errors = worker(dataset, model_keys, *worker_args)
+            out.extend(rows)
+            failures += _record_parallel_task_errors(errors, errors_out=errors_out)
+        except Exception as e:  # noqa: BLE001
+            if strict:
+                raise
+            failures += 1
+            line = f"SKIP {label}: {type(e).__name__}: {e}"
+            print(line, file=sys.stderr)
+            if errors_out is not None:
+                errors_out.append(line)
+        if progress:
+            print(f"DONE {i}/{n} {label}", file=sys.stderr)
+    return (out, failures)
+
+
+def _build_parallel_task_executor(*, backend_s: str, max_workers: int) -> Any:
+    import concurrent.futures
+    import multiprocessing
+
+    if backend_s not in {"thread", "process"}:
+        raise ValueError("--backend must be one of: thread, process")
+
+    if backend_s == "process":
+        ctx = multiprocessing.get_context("spawn")
+        return concurrent.futures.ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=ctx,
+        )
+
+    return concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+
+def _resolve_parallel_task_result(
+    fut: Any,
+    *,
+    label: str,
+    strict: bool,
+    sibling_futures: Any,
+    errors_out: list[str] | None,
+) -> tuple[list[dict[str, Any]], int]:
+    try:
+        rows, errors = fut.result()
+        return rows, _record_parallel_task_errors(errors, errors_out=errors_out)
+    except Exception as e:  # noqa: BLE001
+        if strict:
+            for other in sibling_futures:
+                if other is not fut:
+                    other.cancel()
+            raise RuntimeError(f"{label}: {type(e).__name__}: {e}") from e
+
+        line = f"SKIP {label}: {type(e).__name__}: {e}"
+        print(line, file=sys.stderr)
+        if errors_out is not None:
+            errors_out.append(line)
+        return [], 1

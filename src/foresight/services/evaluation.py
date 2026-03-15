@@ -323,7 +323,7 @@ def _eval_global_model_long_df(
     conformal_per_step: bool,
 ) -> dict[str, Any]:
     from ..cv import cross_validation_predictions_long_df
-    from ..eval_predictions import evaluate_predictions, evaluate_quantile_predictions
+    from ..eval_predictions import evaluate_predictions
 
     pred_df = cross_validation_predictions_long_df(
         model=str(model),
@@ -337,7 +337,39 @@ def _eval_global_model_long_df(
     )
 
     metrics_payload = evaluate_predictions(pred_df)
-    out: dict[str, Any] = {
+    out = _global_eval_metrics_payload(
+        pred_df,
+        metrics_payload=metrics_payload,
+        model=model,
+        horizon=horizon,
+        step=step,
+        min_train_size=min_train_size,
+        max_windows=max_windows,
+        max_train_size=max_train_size,
+    )
+    _update_global_eval_quantile_payload(out, pred_df)
+    _update_global_eval_conformal_payload(
+        out,
+        pred_df,
+        conformal_levels=conformal_levels,
+        conformal_per_step=conformal_per_step,
+    )
+
+    return out
+
+
+def _global_eval_metrics_payload(
+    pred_df: pd.DataFrame,
+    *,
+    metrics_payload: dict[str, Any],
+    model: str,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    max_windows: int | None,
+    max_train_size: int | None,
+) -> dict[str, Any]:
+    return {
         "model": str(model),
         "horizon": int(horizon),
         "step": int(step),
@@ -357,11 +389,26 @@ def _eval_global_model_long_df(
         "smape_by_step": list(metrics_payload.get("smape_by_step", [])),
     }
 
+
+def _update_global_eval_quantile_payload(
+    out: dict[str, Any],
+    pred_df: pd.DataFrame,
+) -> None:
+    from ..eval_predictions import evaluate_quantile_predictions
+
     q_payload = evaluate_quantile_predictions(pred_df)
     if q_payload.get("quantiles"):
         for k, v in q_payload.items():
             out[f"q_{k}"] = v
 
+
+def _update_global_eval_conformal_payload(
+    out: dict[str, Any],
+    pred_df: pd.DataFrame,
+    *,
+    conformal_levels: Any,
+    conformal_per_step: bool,
+) -> None:
     levels = _parse_levels(conformal_levels)
     if levels:
         out.update(
@@ -375,7 +422,116 @@ def _eval_global_model_long_df(
             )
         )
 
-    return out
+
+def _local_xreg_eval_arrays(
+    g: pd.DataFrame,
+    *,
+    x_cols: tuple[str, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    missing_x_cols = [col for col in x_cols if col not in g.columns]
+    if missing_x_cols:
+        raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
+
+    y = g["y"].to_numpy(dtype=float, copy=False)
+    x = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    if np.isnan(y).any():
+        raise ValueError("eval_model_long_df does not support missing y values")
+    if np.isnan(x).any():
+        raise ValueError("eval_model_long_df does not support missing x_cols values")
+    return y, x
+
+
+def _append_eval_window_results(
+    results: dict[str, Any],
+    *,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> None:
+    results["y_true_all"].append(y_true.reshape(-1))
+    results["y_pred_all"].append(y_pred.reshape(-1))
+
+    if y_true.ndim == 1:
+        for i in range(y_true.size):
+            results["y_true_by_step"][i].append(y_true[i : i + 1])
+            results["y_pred_by_step"][i].append(y_pred[i : i + 1])
+        return
+
+    for i in range(y_true.shape[1]):
+        results["y_true_by_step"][i].append(y_true[:, i])
+        results["y_pred_by_step"][i].append(y_pred[:, i])
+
+
+def _validated_eval_long_df_request(
+    *,
+    model: str,
+    long_df: Any,
+    model_params: dict[str, Any] | None,
+) -> tuple[pd.DataFrame, str, dict[str, Any], dict[str, Any], tuple[str, ...]]:
+    df = _require_long_df(long_df)
+    if df.empty:
+        raise ValueError("long_df is empty")
+
+    df = df.sort_values(["unique_id", "ds"], kind="mergesort")
+    model_spec = _model_execution.get_model_spec(str(model))
+    interface = str(model_spec.interface).lower().strip()
+    params = dict(model_params or {})
+    capabilities = dict(model_spec.capabilities)
+    historic_x_cols, x_cols = _normalize_covariate_roles(params)
+
+    _require_x_cols_if_needed(
+        model=str(model),
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context="eval_model_long_df",
+    )
+    if historic_x_cols:
+        raise ValueError("historic_x_cols are not yet supported in eval_model_long_df")
+    if interface == "multivariate":
+        raise ValueError(
+            f"Model {model!r} is multivariate and cannot be evaluated with `eval_model_long_df()`. "
+            "Use `eval_multivariate_model_df()` with a wide DataFrame and explicit target columns instead."
+        )
+    return df, interface, params, capabilities, x_cols
+
+
+def _local_eval_model_long_df_results(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    params: dict[str, Any],
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    max_windows: int | None,
+    max_train_size: int | None,
+) -> dict[str, Any]:
+    if x_cols:
+        if not bool(capabilities.get("supports_x_cols", False)):
+            raise ValueError(f"Model {model!r} does not support x_cols in eval_model_long_df")
+        return _eval_local_xreg_model_long_df(
+            model=str(model),
+            df=df,
+            horizon=int(horizon),
+            step=int(step),
+            min_train_size=int(min_train_size),
+            params=params,
+            x_cols=x_cols,
+            max_windows=max_windows,
+            max_train_size=max_train_size,
+        )
+
+    return _eval_local_univariate_model_long_df(
+        model=str(model),
+        df=df,
+        horizon=int(horizon),
+        step=int(step),
+        min_train_size=int(min_train_size),
+        params=params,
+        max_windows=max_windows,
+        max_train_size=max_train_size,
+    )
 
 
 def _eval_local_xreg_model_long_df(
@@ -403,16 +559,7 @@ def _eval_local_xreg_model_long_df(
 
     for _uid, g in df.groupby("unique_id", sort=False):
         results["n_series"] += 1
-        missing_x_cols = [col for col in x_cols if col not in g.columns]
-        if missing_x_cols:
-            raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
-
-        y = g["y"].to_numpy(dtype=float, copy=False)
-        x = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-        if np.isnan(y).any():
-            raise ValueError("eval_model_long_df does not support missing y values")
-        if np.isnan(x).any():
-            raise ValueError("eval_model_long_df does not support missing x_cols values")
+        y, x = _local_xreg_eval_arrays(g, x_cols=x_cols)
 
         min_required = int(min_train_size) + int(horizon)
         if y.size < min_required:
@@ -436,11 +583,7 @@ def _eval_local_xreg_model_long_df(
                 model_params=local_xreg_params,
             )
             y_true = y[split.test_start : split.test_end]
-            results["y_true_all"].append(y_true.reshape(-1))
-            results["y_pred_all"].append(pred.reshape(-1))
-            for i in range(int(horizon)):
-                results["y_true_by_step"][i].append(y_true[i : i + 1])
-                results["y_pred_by_step"][i].append(pred[i : i + 1])
+            _append_eval_window_results(results, y_true=y_true, y_pred=pred)
 
             windows_run += 1
             if max_windows is not None and windows_run >= int(max_windows):
@@ -487,12 +630,7 @@ def _eval_local_univariate_model_long_df(
             forecaster=forecaster,
         )
 
-        results["y_true_all"].append(res.y_true.reshape(-1))
-        results["y_pred_all"].append(res.y_pred.reshape(-1))
-
-        for i in range(res.horizon):
-            results["y_true_by_step"][i].append(res.y_true[:, i])
-            results["y_pred_by_step"][i].append(res.y_pred[:, i])
+        _append_eval_window_results(results, y_true=res.y_true, y_pred=res.y_pred)
 
     return results
 
@@ -600,31 +738,11 @@ def eval_model_long_df(
 
     The input must have columns: unique_id, ds, y.
     """
-    df = _require_long_df(long_df)
-    if df.empty:
-        raise ValueError("long_df is empty")
-
-    df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-    model_spec = _model_execution.get_model_spec(str(model))
-    interface = str(model_spec.interface).lower().strip()
-    params = dict(model_params or {})
-    capabilities = dict(model_spec.capabilities)
-    historic_x_cols, x_cols = _normalize_covariate_roles(params)
-
-    _require_x_cols_if_needed(
+    df, interface, params, capabilities, x_cols = _validated_eval_long_df_request(
         model=str(model),
-        capabilities=capabilities,
-        x_cols=x_cols,
-        context="eval_model_long_df",
+        long_df=long_df,
+        model_params=model_params,
     )
-    if historic_x_cols:
-        raise ValueError("historic_x_cols are not yet supported in eval_model_long_df")
-
-    if interface == "multivariate":
-        raise ValueError(
-            f"Model {model!r} is multivariate and cannot be evaluated with `eval_model_long_df()`. "
-            "Use `eval_multivariate_model_df()` with a wide DataFrame and explicit target columns instead."
-        )
 
     if interface == "global":
         return _eval_global_model_long_df(
@@ -640,31 +758,18 @@ def eval_model_long_df(
             conformal_per_step=bool(conformal_per_step),
         )
 
-    if x_cols:
-        if not bool(capabilities.get("supports_x_cols", False)):
-            raise ValueError(f"Model {model!r} does not support x_cols in eval_model_long_df")
-        results = _eval_local_xreg_model_long_df(
-            model=str(model),
-            df=df,
-            horizon=int(horizon),
-            step=int(step),
-            min_train_size=int(min_train_size),
-            params=params,
-            x_cols=x_cols,
-            max_windows=max_windows,
-            max_train_size=max_train_size,
-        )
-    else:
-        results = _eval_local_univariate_model_long_df(
-            model=str(model),
-            df=df,
-            horizon=int(horizon),
-            step=int(step),
-            min_train_size=int(min_train_size),
-            params=params,
-            max_windows=max_windows,
-            max_train_size=max_train_size,
-        )
+    results = _local_eval_model_long_df_results(
+        model=str(model),
+        df=df,
+        horizon=int(horizon),
+        step=int(step),
+        min_train_size=int(min_train_size),
+        params=params,
+        capabilities=capabilities,
+        x_cols=x_cols,
+        max_windows=max_windows,
+        max_train_size=max_train_size,
+    )
 
     return _summarize_eval_model_long_df_results(
         model=str(model),

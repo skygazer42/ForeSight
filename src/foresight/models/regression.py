@@ -21,9 +21,17 @@ LEARNING_RATE_POSITIVE_ERROR = "learning_rate must be > 0"
 SUBSAMPLE_RANGE_ERROR = "subsample must be in (0,1]"
 COLSAMPLE_BYTREE_RANGE_ERROR = "colsample_bytree must be in (0,1]"
 N_JOBS_NON_ZERO_ERROR = "n_jobs must be non-zero"
+REG_ALPHA_NON_NEGATIVE_ERROR = "reg_alpha must be >= 0"
 REG_LAMBDA_NON_NEGATIVE_ERROR = "reg_lambda must be >= 0"
 MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR = "min_child_weight must be >= 0"
 GAMMA_NON_NEGATIVE_ERROR = "gamma must be >= 0"
+NUM_LEAVES_MIN_ERROR = "num_leaves must be >= 2"
+LGBM_MAX_DEPTH_LIMIT_ERROR = "max_depth must be -1 or >= 1"
+MIN_SPLIT_GAIN_NON_NEGATIVE_ERROR = "min_split_gain must be >= 0"
+ITERATIONS_MIN_ERROR = "iterations must be >= 1"
+DEPTH_MIN_ERROR = "depth must be >= 1"
+L2_LEAF_REG_NON_NEGATIVE_ERROR = "l2_leaf_reg must be >= 0"
+THREAD_COUNT_NON_ZERO_ERROR = "thread_count must be non-zero"
 SVR_C_ERROR = "C must be > 0"
 SVR_EPSILON_ERROR = "epsilon must be >= 0"
 XGB_INSTALL_ERROR = 'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
@@ -52,6 +60,56 @@ def _pop_legacy_keyword(kwargs: dict[str, Any], *, legacy_name: str, value: Any)
 def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
     if kwargs:
         raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
+
+
+def _require_optional_int_min_param(
+    params: dict[str, Any],
+    key: str,
+    *,
+    minimum: int,
+    error: str,
+) -> None:
+    if key in params and params[key] is not None and int(params[key]) < int(minimum):
+        raise ValueError(error)
+
+
+def _require_optional_positive_float_param(
+    params: dict[str, Any],
+    key: str,
+    *,
+    error: str,
+) -> None:
+    if key in params and params[key] is not None and float(params[key]) <= 0:
+        raise ValueError(error)
+
+
+def _require_optional_fraction_param(
+    params: dict[str, Any],
+    key: str,
+    *,
+    error: str,
+) -> None:
+    if key in params and params[key] is not None and not (0.0 < float(params[key]) <= 1.0):
+        raise ValueError(error)
+
+
+def _require_optional_non_negative_params(
+    params: dict[str, Any],
+    messages: dict[str, str],
+) -> None:
+    for key, error in messages.items():
+        if key in params and params[key] is not None and float(params[key]) < 0:
+            raise ValueError(error)
+
+
+def _require_optional_non_zero_int_param(
+    params: dict[str, Any],
+    key: str,
+    *,
+    error: str,
+) -> None:
+    if key in params and params[key] is not None and int(params[key]) == 0:
+        raise ValueError(error)
 
 
 def _wants_lag_derived_features(*, roll_windows: Any, roll_stats: Any, diff_lags: Any) -> bool:
@@ -134,6 +192,40 @@ def _augment_lag_matrix(
         if derived.shape[1] > 0:
             parts.append(derived)
 
+    t_index = _validated_lag_matrix_time_index(
+        lag_matrix,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        t_index=t_index,
+    )
+    _append_matrix_seasonal_features(
+        parts,
+        series=series,
+        t_index=t_index,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+    )
+    _append_matrix_fourier_features(
+        parts,
+        t_index=t_index,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+    )
+
+    if len(parts) == 1:
+        return lag_matrix
+    return np.concatenate(parts, axis=1)
+
+
+def _validated_lag_matrix_time_index(
+    lag_matrix: np.ndarray,
+    *,
+    seasonal_lags: Any,
+    seasonal_diff_lags: Any,
+    fourier_periods: Any,
+    t_index: np.ndarray | None,
+) -> np.ndarray | None:
     if _wants_seasonal_or_fourier_features(
         seasonal_lags=seasonal_lags,
         seasonal_diff_lags=seasonal_diff_lags,
@@ -143,27 +235,43 @@ def _augment_lag_matrix(
             raise ValueError("t_index is required for seasonal/fourier features")
         if int(t_index.shape[0]) != int(lag_matrix.shape[0]):
             raise ValueError("t_index must have the same number of rows as X_base")
+    return t_index
 
-    if bool(seasonal_lags) or bool(seasonal_diff_lags):
-        if series is None:
-            raise ValueError("series is required for seasonal lag features")
-        seasonal, _ = build_seasonal_lag_features(
-            series,
-            t=t_index,
-            seasonal_lags=seasonal_lags,
-            seasonal_diff_lags=seasonal_diff_lags,
-        )
-        if seasonal.shape[1] > 0:
-            parts.append(seasonal)
 
-    if bool(fourier_periods):
-        fourier, _ = build_fourier_features(t_index, periods=fourier_periods, orders=fourier_orders)
-        if fourier.shape[1] > 0:
-            parts.append(fourier)
+def _append_matrix_seasonal_features(
+    parts: list[np.ndarray],
+    *,
+    series: np.ndarray | None,
+    t_index: np.ndarray | None,
+    seasonal_lags: Any,
+    seasonal_diff_lags: Any,
+) -> None:
+    if not (bool(seasonal_lags) or bool(seasonal_diff_lags)):
+        return
+    if series is None:
+        raise ValueError("series is required for seasonal lag features")
+    seasonal, _ = build_seasonal_lag_features(
+        series,
+        t=t_index,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+    )
+    if seasonal.shape[1] > 0:
+        parts.append(seasonal)
 
-    if len(parts) == 1:
-        return lag_matrix
-    return np.concatenate(parts, axis=1)
+
+def _append_matrix_fourier_features(
+    parts: list[np.ndarray],
+    *,
+    t_index: np.ndarray | None,
+    fourier_periods: Any,
+    fourier_orders: Any,
+) -> None:
+    if not bool(fourier_periods):
+        return
+    fourier, _ = build_fourier_features(t_index, periods=fourier_periods, orders=fourier_orders)
+    if fourier.shape[1] > 0:
+        parts.append(fourier)
 
 
 def _augment_lag_feat_row(
@@ -220,6 +328,54 @@ def _augment_lag_feat_row(
     if len(parts) == 1:
         return lag_row
     return np.concatenate(parts, axis=1)
+
+
+def _dirrec_step_training_features(
+    x_base_aug: np.ndarray,
+    Y: np.ndarray,
+    *,
+    step_idx: int,
+    t_idx: np.ndarray,
+    fourier_periods: Any,
+    fourier_orders: Any,
+) -> np.ndarray:
+    if bool(fourier_periods):
+        fourier_train, _ = build_fourier_features(
+            t_idx + int(step_idx),
+            periods=fourier_periods,
+            orders=fourier_orders,
+        )
+        x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
+    else:
+        x_step = x_base_aug
+
+    if int(step_idx) == 0:
+        return x_step
+    return np.concatenate([x_step, Y[:, : int(step_idx)]], axis=1)
+
+
+def _dirrec_step_prediction_features(
+    base_feat_aug: np.ndarray,
+    out: list[float],
+    *,
+    step_idx: int,
+    history_size: int,
+    fourier_periods: Any,
+    fourier_orders: Any,
+) -> np.ndarray:
+    if bool(fourier_periods):
+        fourier_pred, _ = build_fourier_features(
+            [int(history_size) + int(step_idx)],
+            periods=fourier_periods,
+            orders=fourier_orders,
+        )
+        feat_step = np.concatenate([base_feat_aug, fourier_pred.reshape(-1)], axis=0)
+    else:
+        feat_step = base_feat_aug
+
+    if int(step_idx) == 0:
+        return feat_step
+    return np.concatenate([feat_step, np.asarray(out, dtype=float)], axis=0)
 
 
 def lr_lag_forecast(
@@ -1872,26 +2028,20 @@ def _xgb_lag_direct_forecast(
         raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if n_estimators <= 0:
-        raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if max_depth <= 0:
-        raise ValueError(MAX_DEPTH_MIN_ERROR)
-    if float(learning_rate) <= 0:
-        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
-    if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    if float(reg_alpha) < 0:
-        raise ValueError("reg_alpha must be >= 0")
-    if float(reg_lambda) < 0:
-        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
-    if float(min_child_weight) < 0:
-        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
-    if float(gamma) < 0:
-        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
-    if n_jobs == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _xgb_validate_common_regressor_params(
+        {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "learning_rate": learning_rate,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "min_child_weight": min_child_weight,
+            "gamma": gamma,
+            "n_jobs": n_jobs,
+        }
+    )
 
     obj = str(objective).strip()
     if not obj:
@@ -2022,26 +2172,20 @@ def _xgb_lag_recursive_forecast(
         raise ValueError(
             f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
         )
-    if n_estimators <= 0:
-        raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if max_depth <= 0:
-        raise ValueError(MAX_DEPTH_MIN_ERROR)
-    if float(learning_rate) <= 0:
-        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
-    if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    if float(reg_alpha) < 0:
-        raise ValueError("reg_alpha must be >= 0")
-    if float(reg_lambda) < 0:
-        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
-    if float(min_child_weight) < 0:
-        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
-    if float(gamma) < 0:
-        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
-    if n_jobs == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _xgb_validate_common_regressor_params(
+        {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "learning_rate": learning_rate,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "reg_alpha": reg_alpha,
+            "reg_lambda": reg_lambda,
+            "min_child_weight": min_child_weight,
+            "gamma": gamma,
+            "n_jobs": n_jobs,
+        }
+    )
 
     obj = str(objective).strip()
     if not obj:
@@ -3623,38 +3767,57 @@ def _xgb_validate_objective_label_constraints(obj: str, x: np.ndarray) -> None:
         raise ValueError(f"{XGB_OBJECTIVE_LOGISTIC} requires series values in [0,1]")
 
 
+def _validate_lgbm_max_depth_param(params: dict[str, Any]) -> None:
+    if "max_depth" not in params or params["max_depth"] is None:
+        return
+    max_depth = int(params["max_depth"])
+    # LightGBM convention: -1 means "no limit".
+    if max_depth == 0 or max_depth < -1:
+        raise ValueError(LGBM_MAX_DEPTH_LIMIT_ERROR)
+
+
 def _xgb_validate_common_regressor_params(params: dict[str, Any]) -> None:
-    if (
-        "n_estimators" in params
-        and params["n_estimators"] is not None
-        and int(params["n_estimators"]) <= 0
-    ):
-        raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if "max_depth" in params and params["max_depth"] is not None and int(params["max_depth"]) <= 0:
-        raise ValueError(MAX_DEPTH_MIN_ERROR)
-    if (
-        "learning_rate" in params
-        and params["learning_rate"] is not None
-        and float(params["learning_rate"]) <= 0
-    ):
-        raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
-    if (
-        "subsample" in params
-        and params["subsample"] is not None
-        and not (0.0 < float(params["subsample"]) <= 1.0)
-    ):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if (
-        "colsample_bytree" in params
-        and params["colsample_bytree"] is not None
-        and not (0.0 < float(params["colsample_bytree"]) <= 1.0)
-    ):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    for key in ("reg_alpha", "reg_lambda", "min_child_weight", "gamma"):
-        if key in params and params[key] is not None and float(params[key]) < 0:
-            raise ValueError(f"{key} must be >= 0")
-    if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _require_optional_int_min_param(
+        params,
+        "n_estimators",
+        minimum=1,
+        error=N_ESTIMATORS_MIN_ERROR,
+    )
+    _require_optional_int_min_param(
+        params,
+        "max_depth",
+        minimum=1,
+        error=MAX_DEPTH_MIN_ERROR,
+    )
+    _require_optional_positive_float_param(
+        params,
+        "learning_rate",
+        error=LEARNING_RATE_POSITIVE_ERROR,
+    )
+    _require_optional_fraction_param(
+        params,
+        "subsample",
+        error=SUBSAMPLE_RANGE_ERROR,
+    )
+    _require_optional_fraction_param(
+        params,
+        "colsample_bytree",
+        error=COLSAMPLE_BYTREE_RANGE_ERROR,
+    )
+    _require_optional_non_negative_params(
+        params,
+        {
+            "reg_alpha": REG_ALPHA_NON_NEGATIVE_ERROR,
+            "reg_lambda": REG_LAMBDA_NON_NEGATIVE_ERROR,
+            "min_child_weight": MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR,
+            "gamma": GAMMA_NON_NEGATIVE_ERROR,
+        },
+    )
+    _require_optional_non_zero_int_param(
+        params,
+        "n_jobs",
+        error=N_JOBS_NON_ZERO_ERROR,
+    )
 
 
 def _xgb_lag_direct_forecast_kwargs(
@@ -4000,20 +4163,14 @@ def _xgb_lag_dirrec_forecast_kwargs(
 
     models: list[Any] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_train, _ = build_fourier_features(
-                t_idx + int(j),
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
-        else:
-            x_step = x_base_aug
-
-        if j == 0:
-            x_j = x_step
-        else:
-            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
+        x_j = _dirrec_step_training_features(
+            x_base_aug,
+            Y,
+            step_idx=j,
+            t_idx=t_idx,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yj = Y[:, j]
         model = xgb.XGBRegressor(**params)
         model.fit(x_j, yj)
@@ -4034,20 +4191,14 @@ def _xgb_lag_dirrec_forecast_kwargs(
     ).reshape(-1)
     out: list[float] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_pred, _ = build_fourier_features(
-                [int(x.size) + int(j)],
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            feat_step = np.concatenate([base_feat_aug, fourier_pred.reshape(-1)], axis=0)
-        else:
-            feat_step = base_feat_aug
-
-        if j == 0:
-            feat = feat_step
-        else:
-            feat = np.concatenate([feat_step, np.asarray(out, dtype=float)], axis=0)
+        feat = _dirrec_step_prediction_features(
+            base_feat_aug,
+            out,
+            step_idx=j,
+            history_size=int(x.size),
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yhat = float(models[j].predict(feat.reshape(1, -1))[0])
         out.append(yhat)
     return np.asarray(out, dtype=float)
@@ -4306,37 +4457,48 @@ def xgb_custom_lag_recursive_forecast(
 
 
 def _lgbm_validate_common_regressor_params(params: dict[str, Any]) -> None:
-    if "n_estimators" in params and params["n_estimators"] is not None:
-        if int(params["n_estimators"]) <= 0:
-            raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if "learning_rate" in params and params["learning_rate"] is not None:
-        if float(params["learning_rate"]) <= 0:
-            raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
-    if "max_depth" in params and params["max_depth"] is not None:
-        max_depth = int(params["max_depth"])
-        # LightGBM convention: -1 means "no limit".
-        if max_depth == 0 or max_depth < -1:
-            raise ValueError("max_depth must be -1 or >= 1")
-    if "num_leaves" in params and params["num_leaves"] is not None:
-        if int(params["num_leaves"]) < 2:
-            raise ValueError("num_leaves must be >= 2")
-    if (
-        "subsample" in params
-        and params["subsample"] is not None
-        and not (0.0 < float(params["subsample"]) <= 1.0)
-    ):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if (
-        "colsample_bytree" in params
-        and params["colsample_bytree"] is not None
-        and not (0.0 < float(params["colsample_bytree"]) <= 1.0)
-    ):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    for key in ("reg_alpha", "reg_lambda", "min_child_weight", "min_split_gain"):
-        if key in params and params[key] is not None and float(params[key]) < 0:
-            raise ValueError(f"{key} must be >= 0")
-    if "n_jobs" in params and params["n_jobs"] is not None and int(params["n_jobs"]) == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _require_optional_int_min_param(
+        params,
+        "n_estimators",
+        minimum=1,
+        error=N_ESTIMATORS_MIN_ERROR,
+    )
+    _require_optional_positive_float_param(
+        params,
+        "learning_rate",
+        error=LEARNING_RATE_POSITIVE_ERROR,
+    )
+    _validate_lgbm_max_depth_param(params)
+    _require_optional_int_min_param(
+        params,
+        "num_leaves",
+        minimum=2,
+        error=NUM_LEAVES_MIN_ERROR,
+    )
+    _require_optional_fraction_param(
+        params,
+        "subsample",
+        error=SUBSAMPLE_RANGE_ERROR,
+    )
+    _require_optional_fraction_param(
+        params,
+        "colsample_bytree",
+        error=COLSAMPLE_BYTREE_RANGE_ERROR,
+    )
+    _require_optional_non_negative_params(
+        params,
+        {
+            "reg_alpha": REG_ALPHA_NON_NEGATIVE_ERROR,
+            "reg_lambda": REG_LAMBDA_NON_NEGATIVE_ERROR,
+            "min_child_weight": MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR,
+            "min_split_gain": MIN_SPLIT_GAIN_NON_NEGATIVE_ERROR,
+        },
+    )
+    _require_optional_non_zero_int_param(
+        params,
+        "n_jobs",
+        error=N_JOBS_NON_ZERO_ERROR,
+    )
 
 
 def _require_lightgbm() -> Any:
@@ -4681,20 +4843,14 @@ def _lgbm_lag_dirrec_forecast_kwargs(
 
     models: list[Any] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_train, _ = build_fourier_features(
-                t_idx + int(j),
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
-        else:
-            x_step = x_base_aug
-
-        if j == 0:
-            x_j = x_step
-        else:
-            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
+        x_j = _dirrec_step_training_features(
+            x_base_aug,
+            Y,
+            step_idx=j,
+            t_idx=t_idx,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yj = Y[:, j]
         model = lgb.LGBMRegressor(**params)
         model.fit(x_j, yj)
@@ -4715,20 +4871,14 @@ def _lgbm_lag_dirrec_forecast_kwargs(
     ).reshape(-1)
     out: list[float] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_pred, _ = build_fourier_features(
-                [int(x.size) + int(j)],
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            feat_step = np.concatenate([base_feat_aug, fourier_pred.reshape(-1)], axis=0)
-        else:
-            feat_step = base_feat_aug
-
-        if j == 0:
-            feat = feat_step
-        else:
-            feat = np.concatenate([feat_step, np.asarray(out, dtype=float)], axis=0)
+        feat = _dirrec_step_prediction_features(
+            base_feat_aug,
+            out,
+            step_idx=j,
+            history_size=int(x.size),
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yhat = float(_lgbm_predict(models[j], feat.reshape(1, -1))[0])
         out.append(yhat)
     return np.asarray(out, dtype=float)
@@ -5103,24 +5253,32 @@ def lgbm_custom_dirrec_lag_forecast(
 
 
 def _catboost_validate_common_regressor_params(params: dict[str, Any]) -> None:
-    if "iterations" in params and params["iterations"] is not None:
-        if int(params["iterations"]) <= 0:
-            raise ValueError("iterations must be >= 1")
-    if "learning_rate" in params and params["learning_rate"] is not None:
-        if float(params["learning_rate"]) <= 0:
-            raise ValueError(LEARNING_RATE_POSITIVE_ERROR)
-    if "depth" in params and params["depth"] is not None:
-        if int(params["depth"]) <= 0:
-            raise ValueError("depth must be >= 1")
-    if "l2_leaf_reg" in params and params["l2_leaf_reg"] is not None:
-        if float(params["l2_leaf_reg"]) < 0:
-            raise ValueError("l2_leaf_reg must be >= 0")
-    if (
-        "thread_count" in params
-        and params["thread_count"] is not None
-        and int(params["thread_count"]) == 0
-    ):
-        raise ValueError("thread_count must be non-zero")
+    _require_optional_int_min_param(
+        params,
+        "iterations",
+        minimum=1,
+        error=ITERATIONS_MIN_ERROR,
+    )
+    _require_optional_positive_float_param(
+        params,
+        "learning_rate",
+        error=LEARNING_RATE_POSITIVE_ERROR,
+    )
+    _require_optional_int_min_param(
+        params,
+        "depth",
+        minimum=1,
+        error=DEPTH_MIN_ERROR,
+    )
+    _require_optional_non_negative_params(
+        params,
+        {"l2_leaf_reg": L2_LEAF_REG_NON_NEGATIVE_ERROR},
+    )
+    _require_optional_non_zero_int_param(
+        params,
+        "thread_count",
+        error=THREAD_COUNT_NON_ZERO_ERROR,
+    )
 
 
 def _require_catboost() -> Any:
@@ -5457,20 +5615,14 @@ def _catboost_lag_dirrec_forecast_kwargs(
 
     models: list[Any] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_train, _ = build_fourier_features(
-                t_idx + int(j),
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
-        else:
-            x_step = x_base_aug
-
-        if j == 0:
-            x_j = x_step
-        else:
-            x_j = np.concatenate([x_step, Y[:, :j]], axis=1)
+        x_j = _dirrec_step_training_features(
+            x_base_aug,
+            Y,
+            step_idx=j,
+            t_idx=t_idx,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yj = Y[:, j]
         model = cb.CatBoostRegressor(**params)
         model.fit(x_j, yj)
@@ -5491,20 +5643,14 @@ def _catboost_lag_dirrec_forecast_kwargs(
     ).reshape(-1)
     out: list[float] = []
     for j in range(h):
-        if bool(fourier_periods):
-            fourier_pred, _ = build_fourier_features(
-                [int(x.size) + int(j)],
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            feat_step = np.concatenate([base_feat_aug, fourier_pred.reshape(-1)], axis=0)
-        else:
-            feat_step = base_feat_aug
-
-        if j == 0:
-            feat = feat_step
-        else:
-            feat = np.concatenate([feat_step, np.asarray(out, dtype=float)], axis=0)
+        feat = _dirrec_step_prediction_features(
+            base_feat_aug,
+            out,
+            step_idx=j,
+            history_size=int(x.size),
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
         yhat = float(models[j].predict(feat.reshape(1, -1))[0])
         out.append(yhat)
     return np.asarray(out, dtype=float)

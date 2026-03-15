@@ -6,9 +6,6 @@ from torch import Tensor
 from typing import List, Tuple
 import math
 from functools import partial
-from torch import nn, einsum, diagonal
-from math import log2, ceil
-import pdb
 from sympy import Poly, legendre, Symbol, chebyshevt
 from scipy.special import eval_legendre
 
@@ -97,7 +94,6 @@ def get_phi_psi(k, base):
         kUse = 2 * k
         roots = Poly(chebyshevt(kUse, 2 * x - 1)).all_roots()
         x_m = np.array([rt.evalf(20) for rt in roots]).astype(np.float64)
-        # x_m[x_m==0.5] = 0.5 + 1e-8 # add small noise to avoid the case of 0.5 belonging to both phi(2x) and phi(2x-1)
         # not needed for our purpose here, we use even k always to avoid
         wm = np.pi / kUse / 2
 
@@ -173,7 +169,6 @@ def get_filter(base, k):
         kUse = 2 * k
         roots = Poly(chebyshevt(kUse, 2 * x - 1)).all_roots()
         x_m = np.array([rt.evalf(20) for rt in roots]).astype(np.float64)
-        # x_m[x_m==0.5] = 0.5 + 1e-8 # add small noise to avoid the case of 0.5 belonging to both phi(2x) and phi(2x-1)
         # not needed for our purpose here, we use even k always to avoid
         wm = np.pi / kUse / 2
 
@@ -214,13 +209,13 @@ class MultiWaveletTransform(nn.Module):
         self.Lk0 = nn.Linear(ich, c * k)
         self.Lk1 = nn.Linear(c * k, ich)
         self.ich = ich
-        self.MWT_CZ = nn.ModuleList(MWT_CZ1d(k, alpha, L, c, base) for i in range(nCZ))
+        self.MWT_CZ = nn.ModuleList(MWT_CZ1d(k, alpha, L, c, base) for _ in range(nCZ))
 
     def forward(self, queries, keys, values, attn_mask):
-        B, L, H, E = queries.shape
-        _, S, _, D = values.shape
-        if L > S:
-            zeros = torch.zeros_like(queries[:, :(L - S), :]).float()
+        B, L, _, _ = queries.shape
+        _, source_steps, _, D = values.shape
+        if L > source_steps:
+            zeros = torch.zeros_like(queries[:, :(L - source_steps), :]).float()
             values = torch.cat([values, zeros], dim=1)
             keys = torch.cat([keys, zeros], dim=1)
         else:
@@ -299,8 +294,8 @@ class MultiWaveletCross(nn.Module):
         self.modes1 = modes
 
     def forward(self, q, k, v, mask=None):
-        B, N, H, E = q.shape  # (B, N, H, E) torch.Size([3, 768, 8, 2])
-        _, S, _, _ = k.shape  # (B, S, H, E) torch.Size([3, 96, 8, 2])
+        B, N, _, _ = q.shape  # (B, N, H, E)
+        _, S, _, _ = k.shape  # (B, S, H, E)
 
         q = q.view(q.shape[0], q.shape[1], -1)
         k = k.view(k.shape[0], k.shape[1], -1)
@@ -341,16 +336,15 @@ class MultiWaveletCross(nn.Module):
         Us = torch.jit.annotate(List[Tensor], [])
 
         # decompose
-        for i in range(ns - self.L):
-            # print('q shape',q.shape)
+        for _ in range(ns - self.L):
             d, q = self.wavelet_transform(q)
             Ud_q += [tuple([d, q])]
             Us_q += [d]
-        for i in range(ns - self.L):
+        for _ in range(ns - self.L):
             d, k = self.wavelet_transform(k)
             Ud_k += [tuple([d, k])]
             Us_k += [d]
-        for i in range(ns - self.L):
+        for _ in range(ns - self.L):
             d, v = self.wavelet_transform(v)
             Ud_v += [tuple([d, v])]
             Us_v += [d]
@@ -419,7 +413,7 @@ class FourierCrossAttentionW(nn.Module):
     def forward(self, q, k, v, mask):
         B, L, E, H = q.shape
 
-        xq = q.permute(0, 3, 2, 1)  # size = [B, H, E, L] torch.Size([3, 8, 64, 512])
+        xq = q.permute(0, 3, 2, 1)  # size = [B, H, E, L]
         xk = k.permute(0, 3, 2, 1)
         xv = v.permute(0, 3, 2, 1)
         self.index_q = list(range(0, min(int(L // 2), self.modes1)))
@@ -451,7 +445,6 @@ class FourierCrossAttentionW(nn.Module):
             out_ft[:, :, :, j] = xqkvw[:, :, :, i]
 
         out = torch.fft.irfft(out_ft / self.in_channels / self.out_channels, n=xq.size(-1)).permute(0, 3, 2, 1)
-        # size = [B, L, H, E]
         return (out, None)
 
 
@@ -543,14 +536,14 @@ class MWT_CZ1d(nn.Module):
             np.concatenate((H1r, G1r), axis=0)))
 
     def forward(self, x):
-        B, N, c, k = x.shape  # (B, N, k)
+        _, N, _, _ = x.shape  # (B, N, k)
         ns = math.floor(np.log2(N))
         nl = pow(2, math.ceil(np.log2(N)))
         extra_x = x[:, 0:nl - N, :, :]
         x = torch.cat([x, extra_x], 1)
         Ud = torch.jit.annotate(List[Tensor], [])
         Us = torch.jit.annotate(List[Tensor], [])
-        for i in range(ns - self.L):
+        for _ in range(ns - self.L):
             d, x = self.wavelet_transform(x)
             Ud += [self.A(d) + self.B(x)]
             Us += [self.C(d)]

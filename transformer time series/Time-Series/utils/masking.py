@@ -40,7 +40,7 @@ if __name__ == '__main__':
     mask = TriangularCausalMask(B, L)
 
     # 输出掩码的形状
-    print(mask.mask.shape)  # torch.Size([2, 1, 4, 4])
+    print(mask.mask.shape) 
 
     # 实例化 ProbMask 类
     H = 2 #H 是指注意力头的数量，
@@ -50,4 +50,4 @@ if __name__ == '__main__':
     prob_mask = ProbMask(B, H, L, index, scores)
 
     # 输出掩码的形状
-    print(prob_mask.mask.shape)  # torch.Size([2, 2, 4, 4])
+    print(prob_mask.mask.shape) 

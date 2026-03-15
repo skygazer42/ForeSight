@@ -173,7 +173,7 @@ model.fit(x_train, y_train)
 y_pred = model.predict( x_test )
 
 # %%
-y_pred, y_test
+print(y_pred, y_test)
 
 # %% [markdown]
 # ## 预测1号店的所有部门， 以2012-07-30以前的数据做训练，往后预测一周
@@ -220,7 +220,7 @@ model.fit(x_train, y_train)
 y_pred = model.predict( x_test )
 
 # %%
-y_pred, y_test
+print(y_pred, y_test)
 
 # %%
 

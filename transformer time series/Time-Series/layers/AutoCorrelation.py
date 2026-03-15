@@ -1,11 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-import numpy as np
 import math
-from math import sqrt
-import os
 
 
 class AutoCorrelation(nn.Module):
@@ -101,8 +96,8 @@ class AutoCorrelation(nn.Module):
         return delays_agg
 
     def forward(self, queries, keys, values, attn_mask):
-        B, L, H, E = queries.shape
-        _, S, _, D = values.shape
+        _, L, _, _ = queries.shape
+        _, S, _, _ = values.shape
         if L > S:
             zeros = torch.zeros_like(queries[:, :(L - S), :]).float()
             values = torch.cat([values, zeros], dim=1)

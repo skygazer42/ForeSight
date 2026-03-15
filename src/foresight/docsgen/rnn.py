@@ -138,7 +138,7 @@ def _paper_impl_anchor(paper_id: str) -> str:
     )
 
 
-def _read_rnn_paper_metadata() -> dict[str, dict[str, object]]:
+def _rnn_paper_metadata_candidate_paths() -> list[Path]:
     env_path = str(os.environ.get("FORESIGHT_RNN_PAPER_METADATA", "")).strip()
 
     candidates: list[Path] = []
@@ -151,21 +151,32 @@ def _read_rnn_paper_metadata() -> dict[str, dict[str, object]]:
 
     candidates.append(Path.cwd() / "docs" / RNN_PAPER_METADATA_FILENAME)
     candidates.append(_package_root() / "data" / RNN_PAPER_METADATA_FILENAME)
+    return candidates
 
-    for path in candidates:
+
+def _normalize_rnn_paper_metadata(raw: object) -> dict[str, dict[str, object]] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    out: dict[str, dict[str, object]] = {}
+    for k, v in raw.items():
+        if isinstance(k, str) and isinstance(v, dict):
+            out[k] = v
+    return out
+
+
+def _read_rnn_paper_metadata() -> dict[str, dict[str, object]]:
+    for path in _rnn_paper_metadata_candidate_paths():
         if not (path.exists() and path.is_file()):
             continue
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             continue
-        if not isinstance(raw, dict):
+        normalized = _normalize_rnn_paper_metadata(raw)
+        if normalized is None:
             continue
-        out: dict[str, dict[str, object]] = {}
-        for k, v in raw.items():
-            if isinstance(k, str) and isinstance(v, dict):
-                out[k] = v
-        return out
+        return normalized
 
     return {}
 
@@ -198,6 +209,22 @@ def _metadata_primary_url(url: str, doi: str, arxiv_id: str) -> str:
         return _arxiv_abs_url(arxiv_value)
 
     return "-"
+
+
+def _metadata_entry_fields(meta_entry: object) -> tuple[str, str, str, str, str]:
+    if not isinstance(meta_entry, dict):
+        return "", "", "", "", ""
+    return (
+        str(meta_entry.get("title", "")).strip(),
+        str(meta_entry.get("year", "")).strip(),
+        str(meta_entry.get("doi", "")).strip(),
+        str(meta_entry.get("arxiv_id", "")).strip(),
+        str(meta_entry.get("url", "")).strip(),
+    )
+
+
+def _safe_doc_cell(value: object) -> str:
+    return str(value).replace("|", "\\|")
 
 
 def _rnnzoo_base_impl_anchor(base: str) -> str:
@@ -236,6 +263,93 @@ def _rnnzoo_variant_impl_anchor(variant: str) -> str:
         "src/foresight/models/torch_rnn_zoo.py",
         pattern=rf'["\']{re.escape(v)}["\']',
         start_after="class _RNNZooNet",
+    )
+
+
+def _rnn_paper_zoo_index_row(
+    paper_id: str,
+    desc: str,
+    meta_entry: object,
+) -> str:
+    title, year, doi, arxiv_id, url = _metadata_entry_fields(meta_entry)
+    key = f"torch-rnnpaper-{paper_id}-direct"
+    impl = _paper_impl_anchor(paper_id)
+    doi_link = _doi_url(doi)
+    ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
+    primary_url = _metadata_primary_url(url, doi, arxiv_id)
+    return (
+        f"| `{paper_id}` | `{key}` | {_safe_doc_cell(desc)} | {_safe_doc_cell(title) if title else ''} | "
+        f"{year} | {doi_link} | {ax} | {primary_url} | {impl} | "
+        f"{_semanticscholar_search_url(desc)} | {_crossref_search_url(desc)} |"
+    )
+
+
+def _rnnzoo_base_index_row(
+    base: str,
+    desc: str,
+    meta_entry: object,
+) -> str:
+    title, year, doi, arxiv_id, url = _metadata_entry_fields(meta_entry)
+    paper_id = _rnnzoo_base_to_paper_id(base)
+    impl = _rnnzoo_base_impl_anchor(base)
+    doi_link = _doi_url(doi)
+    ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
+    primary_url = _metadata_primary_url(url, doi, arxiv_id)
+    return (
+        f"| `{base}` | {_safe_doc_cell(desc)} | `{paper_id}` | "
+        f"{_safe_doc_cell(title) if title else ''} | {year} | {doi_link} | {ax} | "
+        f"{primary_url} | {impl} | {_semanticscholar_search_url(desc)} | {_crossref_search_url(desc)} |"
+    )
+
+
+def _rnnzoo_variant_index_row(
+    variant: str,
+    desc: str,
+    *,
+    variant_to_paper_id: dict[str, str],
+    meta_entry: object,
+) -> str:
+    impl = _rnnzoo_variant_impl_anchor(variant)
+    if variant == "direct":
+        return f"| `{variant}` | {_safe_doc_cell(desc)} | - |  |  | - | - | - | {impl} | - | - |"
+
+    title, year, doi, arxiv_id, url = _metadata_entry_fields(meta_entry)
+    paper_id = variant_to_paper_id.get(variant, "")
+    doi_link = _doi_url(doi)
+    ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
+    primary_url = _metadata_primary_url(url, doi, arxiv_id)
+    pid_cell = f"`{paper_id}`" if paper_id else "-"
+    return (
+        f"| `{variant}` | {_safe_doc_cell(desc)} | {pid_cell} | "
+        f"{_safe_doc_cell(title) if title else ''} | {year} | {doi_link} | {ax} | "
+        f"{primary_url} | {impl} | {_semanticscholar_search_url(desc)} | {_crossref_search_url(desc)} |"
+    )
+
+
+def _rnnzoo_model_index_row(
+    spec: object,
+    *,
+    base_descriptions: dict[str, str],
+    variant_descriptions: dict[str, str],
+    variant_to_paper_id: dict[str, str],
+    meta: dict[str, dict[str, object]],
+) -> str:
+    base_desc = base_descriptions[spec.base]
+    base_pid = _rnnzoo_base_to_paper_id(spec.base)
+    _, _, _, _, base_url = _metadata_entry_fields(meta.get(base_pid, {}))
+    if not base_url:
+        base_url = _semanticscholar_search_url(base_desc)
+
+    if spec.variant == "direct":
+        wrapper_url = "-"
+    else:
+        wrapper_pid = variant_to_paper_id.get(str(spec.variant), "")
+        _, _, _, _, wrapper_url = _metadata_entry_fields(meta.get(wrapper_pid, {}))
+        if not wrapper_url:
+            wrapper_url = _semanticscholar_search_url(variant_descriptions[spec.variant])
+
+    return (
+        f"| `{spec.key}` | `{spec.base}` | `{spec.variant}` | {base_url} | {wrapper_url} |"
     )
 
 
@@ -309,26 +423,7 @@ def render_rnn_paper_zoo_doc() -> str:
     )
     lines.append(RNN_DOC_TABLE_RULE)
     for paper_id, desc in _PAPER_DEFS:
-        key = f"torch-rnnpaper-{paper_id}-direct"
-        m = meta.get(paper_id, {})
-        title = str(m.get("title", "")).strip()
-        year = str(m.get("year", "")).strip()
-        doi = str(m.get("doi", "")).strip()
-        arxiv_id = str(m.get("arxiv_id", "")).strip()
-        url = str(m.get("url", "")).strip()
-
-        impl = _paper_impl_anchor(paper_id)
-        s2 = _semanticscholar_search_url(desc)
-        ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
-        doi_link = _doi_url(doi)
-        cr = _crossref_search_url(desc)
-        # Backward compatibility with older metadata dumps.
-        url = _metadata_primary_url(url, doi, arxiv_id)
-        safe_desc = desc.replace("|", "\\|")
-        safe_title = title.replace("|", "\\|") if title else ""
-        lines.append(
-            f"| `{paper_id}` | `{key}` | {safe_desc} | {safe_title} | {year} | {doi_link} | {ax} | {url} | {impl} | {s2} | {cr} |"
-        )
+        lines.append(_rnn_paper_zoo_index_row(paper_id, desc, meta.get(paper_id, {})))
     return "\n".join(lines) + "\n"
 
 
@@ -388,22 +483,7 @@ def render_rnn_zoo_doc() -> str:
     )
     lines.append(RNN_DOC_TABLE_RULE)
     for base, desc in _BASE_DESCRIPTIONS.items():
-        paper_id = _rnnzoo_base_to_paper_id(base)
-        m = meta.get(paper_id, {})
-        title = str(m.get("title", "")).strip() if isinstance(m, dict) else ""
-        year = str(m.get("year", "")).strip() if isinstance(m, dict) else ""
-        doi = str(m.get("doi", "")).strip() if isinstance(m, dict) else ""
-        arxiv_id = str(m.get("arxiv_id", "")).strip() if isinstance(m, dict) else ""
-        url = _metadata_primary_url(str(m.get("url", "")) if isinstance(m, dict) else "", doi, arxiv_id)
-
-        impl = _rnnzoo_base_impl_anchor(base)
-        doi_link = _doi_url(doi)
-        ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
-        safe_desc = str(desc).replace("|", "\\|")
-        safe_title = str(title).replace("|", "\\|") if title else ""
-        lines.append(
-            f"| `{base}` | {safe_desc} | `{paper_id}` | {safe_title} | {year} | {doi_link} | {ax} | {url} | {impl} | {_semanticscholar_search_url(desc)} | {_crossref_search_url(desc)} |"
-        )
+        lines.append(_rnnzoo_base_index_row(base, desc, meta.get(_rnnzoo_base_to_paper_id(base), {})))
     lines.append("")
     lines.append("## Variant Index (5)")
     lines.append("")
@@ -412,27 +492,13 @@ def render_rnn_zoo_doc() -> str:
     )
     lines.append(RNN_DOC_TABLE_RULE)
     for v, desc in _VARIANT_DESCRIPTIONS.items():
-        impl = _rnnzoo_variant_impl_anchor(v)
-        if v == "direct":
-            safe_desc = str(desc).replace("|", "\\|")
-            lines.append(f"| `{v}` | {safe_desc} | - |  |  | - | - | - | {impl} | - | - |")
-            continue
-
-        paper_id = variant_to_paper_id.get(v, "")
-        m = meta.get(paper_id, {}) if paper_id else {}
-        title = str(m.get("title", "")).strip() if isinstance(m, dict) else ""
-        year = str(m.get("year", "")).strip() if isinstance(m, dict) else ""
-        doi = str(m.get("doi", "")).strip() if isinstance(m, dict) else ""
-        arxiv_id = str(m.get("arxiv_id", "")).strip() if isinstance(m, dict) else ""
-        url = _metadata_primary_url(str(m.get("url", "")) if isinstance(m, dict) else "", doi, arxiv_id)
-
-        doi_link = _doi_url(doi)
-        ax = _arxiv_abs_url(arxiv_id) if arxiv_id else _arxiv_search_url(desc)
-        safe_desc = str(desc).replace("|", "\\|")
-        safe_title = str(title).replace("|", "\\|") if title else ""
-        pid_cell = f"`{paper_id}`" if paper_id else "-"
         lines.append(
-            f"| `{v}` | {safe_desc} | {pid_cell} | {safe_title} | {year} | {doi_link} | {ax} | {url} | {impl} | {_semanticscholar_search_url(desc)} | {_crossref_search_url(desc)} |"
+            _rnnzoo_variant_index_row(
+                v,
+                desc,
+                variant_to_paper_id=variant_to_paper_id,
+                meta_entry=meta.get(variant_to_paper_id.get(v, ""), {}),
+            )
         )
     lines.append("")
     lines.append("## Model Index (100)")
@@ -440,22 +506,15 @@ def render_rnn_zoo_doc() -> str:
     lines.append("| model_key | base | variant | base ref | wrapper ref |")
     lines.append("| --- | --- | --- | --- | --- |")
     for spec in list_rnnzoo_specs():
-        base_desc = _BASE_DESCRIPTIONS[spec.base]
-        base_pid = _rnnzoo_base_to_paper_id(spec.base)
-        base_meta = meta.get(base_pid, {})
-        base_url = str(base_meta.get("url", "")).strip() if isinstance(base_meta, dict) else ""
-        if not base_url:
-            base_url = _semanticscholar_search_url(base_desc)
-
-        if spec.variant == "direct":
-            w_url = "-"
-        else:
-            w_pid = variant_to_paper_id.get(str(spec.variant), "")
-            w_meta = meta.get(w_pid, {}) if w_pid else {}
-            w_url = str(w_meta.get("url", "")).strip() if isinstance(w_meta, dict) else ""
-            if not w_url:
-                w_url = _semanticscholar_search_url(_VARIANT_DESCRIPTIONS[spec.variant])
-        lines.append(f"| `{spec.key}` | `{spec.base}` | `{spec.variant}` | {base_url} | {w_url} |")
+        lines.append(
+            _rnnzoo_model_index_row(
+                spec,
+                base_descriptions=_BASE_DESCRIPTIONS,
+                variant_descriptions=_VARIANT_DESCRIPTIONS,
+                variant_to_paper_id=variant_to_paper_id,
+                meta=meta,
+            )
+        )
     return "\n".join(lines) + "\n"
 
 

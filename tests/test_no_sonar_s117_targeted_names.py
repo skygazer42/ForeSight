@@ -8,6 +8,10 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _self_source() -> str:
+    return Path(__file__).read_text(encoding="utf-8")
+
+
 TARGETED_BAD_NAMES: dict[str, set[str]] = {
     "src/foresight/models/ar.py": {"P"},
     "src/foresight/features/tabular.py": {"X_lags"},
@@ -131,82 +135,76 @@ TARGETED_RUNTIME_FUNCTION_BAD_NAMES: dict[str, set[str]] = {
 }
 
 
-def _assigned_names_in_functions(path: str) -> list[str]:
-    source = (_repo_root() / path).read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=path)
-    names: list[str] = []
+def _function_arg_names(node: ast.FunctionDef) -> list[str]:
+    arg_nodes = [
+        *node.args.posonlyargs,
+        *node.args.args,
+        *node.args.kwonlyargs,
+    ]
+    if node.args.vararg is not None:
+        arg_nodes.append(node.args.vararg)
+    if node.args.kwarg is not None:
+        arg_nodes.append(node.args.kwarg)
+    return [arg.arg for arg in arg_nodes]
 
-    class _Visitor(ast.NodeVisitor):
-        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-            arg_nodes = [
-                *node.args.posonlyargs,
-                *node.args.args,
-                *node.args.kwonlyargs,
-            ]
-            if node.args.vararg is not None:
-                arg_nodes.append(node.args.vararg)
-            if node.args.kwarg is not None:
-                arg_nodes.append(node.args.kwarg)
-            names.extend(arg.arg for arg in arg_nodes)
-            for sub in ast.walk(node):
-                targets: list[ast.AST] = []
-                if isinstance(sub, ast.Assign):
-                    targets.extend(sub.targets)
-                elif isinstance(sub, ast.AnnAssign):
-                    targets.append(sub.target)
-                elif isinstance(sub, ast.For):
-                    targets.append(sub.target)
-                elif isinstance(sub, ast.With):
-                    for item in sub.items:
-                        if item.optional_vars is not None:
-                            targets.append(item.optional_vars)
-                for target in targets:
-                    for leaf in ast.walk(target):
-                        if isinstance(leaf, ast.Name):
-                            names.append(leaf.id)
-            self.generic_visit(node)
 
-    _Visitor().visit(tree)
+def _assignment_target_nodes_from_stmt(node: ast.AST) -> list[ast.AST]:
+    if isinstance(node, ast.Assign):
+        return list(node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return [node.target]
+    if isinstance(node, ast.For):
+        return [node.target]
+    if isinstance(node, ast.With):
+        return [item.optional_vars for item in node.items if item.optional_vars is not None]
+    return []
+
+
+def _assignment_target_nodes(node: ast.FunctionDef) -> list[ast.AST]:
+    targets: list[ast.AST] = []
+    for sub in ast.walk(node):
+        targets.extend(_assignment_target_nodes_from_stmt(sub))
+    return targets
+
+
+def _leaf_assigned_names(target: ast.AST) -> list[str]:
+    return [leaf.id for leaf in ast.walk(target) if isinstance(leaf, ast.Name)]
+
+
+def _assigned_names_from_function_node(node: ast.FunctionDef) -> list[str]:
+    names = list(_function_arg_names(node))
+    for target in _assignment_target_nodes(node):
+        names.extend(_leaf_assigned_names(target))
     return names
 
 
-def _assigned_names_in_function(path: str, func_name: str) -> list[str]:
+def _parse_tree_for_path(path: str) -> ast.Module:
     source = (_repo_root() / path).read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=path)
+    return ast.parse(source, filename=path)
 
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name != func_name:
-            continue
-        names: list[str] = []
-        arg_nodes = [
-            *node.args.posonlyargs,
-            *node.args.args,
-            *node.args.kwonlyargs,
-        ]
-        if node.args.vararg is not None:
-            arg_nodes.append(node.args.vararg)
-        if node.args.kwarg is not None:
-            arg_nodes.append(node.args.kwarg)
-        names.extend(arg.arg for arg in arg_nodes)
-        for sub in ast.walk(node):
-            targets: list[ast.AST] = []
-            if isinstance(sub, ast.Assign):
-                targets.extend(sub.targets)
-            elif isinstance(sub, ast.AnnAssign):
-                targets.append(sub.target)
-            elif isinstance(sub, ast.For):
-                targets.append(sub.target)
-            elif isinstance(sub, ast.With):
-                for item in sub.items:
-                    if item.optional_vars is not None:
-                        targets.append(item.optional_vars)
-            for target in targets:
-                for leaf in ast.walk(target):
-                    if isinstance(leaf, ast.Name):
-                        names.append(leaf.id)
-        return names
 
-    raise AssertionError(f"Function {func_name!r} not found in {path}")
+def _function_def_nodes(tree: ast.AST) -> list[ast.FunctionDef]:
+    return [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+
+
+def _assigned_names_in_functions(path: str) -> list[str]:
+    tree = _parse_tree_for_path(path)
+    names: list[str] = []
+    for node in _function_def_nodes(tree):
+        names.extend(_assigned_names_from_function_node(node))
+    return names
+
+
+def _named_function_node(tree: ast.AST, func_name: str) -> ast.FunctionDef:
+    for node in _function_def_nodes(tree):
+        if node.name == func_name:
+            return node
+    raise AssertionError(f"Function {func_name!r} not found in parsed module")
+
+
+def _assigned_names_in_function(path: str, func_name: str) -> list[str]:
+    tree = _parse_tree_for_path(path)
+    return _assigned_names_from_function_node(_named_function_node(tree, func_name))
 
 
 def test_targeted_files_do_not_keep_s117_local_names() -> None:
@@ -222,3 +220,15 @@ def test_runtime_targeted_factories_do_not_keep_s117_local_names() -> None:
         names = set(_assigned_names_in_function(path, func_name))
         present = sorted(names.intersection(bad_names))
         assert present == [], f"{path}:{func_name} still contains Sonar S117 names: {present}"
+
+
+def test_source_extracts_ast_name_collection_helpers() -> None:
+    tree = ast.parse(_self_source(), filename=__file__)
+    function_names = {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }
+
+    assert "_parse_tree_for_path" in function_names
+    assert "_function_def_nodes" in function_names
+    assert "_assignment_target_nodes_from_stmt" in function_names
+    assert "_named_function_node" in function_names

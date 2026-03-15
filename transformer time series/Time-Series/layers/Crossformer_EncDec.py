@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from einops import rearrange, repeat
+from einops import rearrange
 from layers.SelfAttention_Family import TwoStageAttentionLayer
 
 
@@ -13,7 +13,7 @@ class SegMerging(nn.Module):
         self.norm = norm_layer(win_size * d_model)
 
     def forward(self, x):
-        batch_size, ts_d, seg_num, d_model = x.shape
+        _, _, seg_num, _ = x.shape
         pad_num = seg_num % self.win_size
         if pad_num != 0:
             pad_num = self.win_size - pad_num
@@ -42,13 +42,11 @@ class scale_block(nn.Module):
 
         self.encode_layers = nn.ModuleList()
 
-        for i in range(depth):
+        for _ in range(depth):
             self.encode_layers.append(TwoStageAttentionLayer(configs, seg_num, factor, d_model, n_heads, \
                                                              d_ff, dropout))
 
     def forward(self, x, attn_mask=None, tau=None, delta=None):
-        _, ts_dim, _, _ = x.shape
-
         if self.merge_layer is not None:
             x = self.merge_layer(x)
 
@@ -68,7 +66,7 @@ class Encoder(nn.Module):
         encode_x.append(x)
 
         for block in self.encode_blocks:
-            x, attns = block(x)
+            x, _ = block(x)
             encode_x.append(x)
 
         return encode_x, None
@@ -93,7 +91,7 @@ class DecoderLayer(nn.Module):
         x = rearrange(x, 'b ts_d out_seg_num d_model -> (b ts_d) out_seg_num d_model')
 
         cross = rearrange(cross, 'b ts_d in_seg_num d_model -> (b ts_d) in_seg_num d_model')
-        tmp, attn = self.cross_attention(x, cross, cross, None, None, None,)
+        tmp, _ = self.cross_attention(x, cross, cross, None, None, None,)
         x = x + self.dropout(tmp)
         y = x = self.norm1(x)
         y = self.MLP1(y)

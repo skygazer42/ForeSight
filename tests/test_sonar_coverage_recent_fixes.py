@@ -37,6 +37,7 @@ from foresight.docsgen.rnn import (
 )
 from foresight.models.regression import (
     _augment_lag_feat_row,
+    _catboost_validate_common_regressor_params,
     _lgbm_validate_common_regressor_params,
     _xgb_lag_direct_forecast,
     _xgb_lag_recursive_forecast,
@@ -714,6 +715,23 @@ def test_lgbm_common_regressor_params_reject_invalid_scalars(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         _lgbm_validate_common_regressor_params(params)
+
+
+@pytest.mark.parametrize(
+    ("params", "message"),
+    [
+        ({"iterations": 0}, "iterations must be >= 1"),
+        ({"learning_rate": 0.0}, "learning_rate must be > 0"),
+        ({"depth": 0}, "depth must be >= 1"),
+        ({"l2_leaf_reg": -0.1}, "l2_leaf_reg must be >= 0"),
+        ({"thread_count": 0}, "thread_count must be non-zero"),
+    ],
+)
+def test_catboost_common_regressor_params_reject_invalid_scalars(
+    params: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _catboost_validate_common_regressor_params(params)
 
 
 def test_rf_step_lag_global_forecaster_sets_explicit_rf_defaults(

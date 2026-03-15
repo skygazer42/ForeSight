@@ -23,7 +23,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
     def _build_model(self):
         if self.args.data == 'm4':
             self.args.pred_len = M4Meta.horizons_map[self.args.seasonal_patterns]  # Up to M4 config
-            self.args.seq_len = 2 * self.args.pred_len  # input_len = 2*pred_len
+            self.args.seq_len = 2 * self.args.pred_len
             self.args.label_len = self.args.pred_len
             self.args.frequency_map = M4Meta.frequency_map[self.args.seasonal_patterns]
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -51,8 +51,8 @@ class Exp_Short_Term_Forecast(Exp_Basic):
             return smape_loss()
 
     def train(self, setting):
-        train_data, train_loader = self._get_data(flag='train')
-        vali_data, vali_loader = self._get_data(flag='val')
+        _, train_loader = self._get_data(flag='train')
+        _, vali_loader = self._get_data(flag='val')
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -65,7 +65,6 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion(self.args.loss)
-        mse = nn.MSELoss()
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -93,7 +92,6 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
                 batch_y_mark = batch_y_mark[:, -self.args.pred_len:, f_dim:].to(self.device)
                 loss_value = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
-                loss_sharpness = mse((outputs[:, 1:, :] - outputs[:, :-1, :]), (batch_y[:, 1:, :] - batch_y[:, :-1, :]))
                 loss = loss_value  # + loss_sharpness * 1e-5
                 train_loss.append(loss.item())
 

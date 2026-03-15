@@ -22,7 +22,7 @@ ice_cream_interest.set_index('month', inplace=True)
 ice_cream_interest = ice_cream_interest.asfreq(pd.infer_freq(ice_cream_interest.index))
 
 # %%
-ice_cream_interest
+print(ice_cream_interest)
 
 # %%
 plt.figure(figsize=(10,4))
@@ -103,7 +103,7 @@ for year in range(2004,2021):
 plt.scatter(anomalies.index, anomalies.interest, color='r', marker='D')
 
 # %%
-anomalies
+print(anomalies)
 
 # %%
 

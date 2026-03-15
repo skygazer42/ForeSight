@@ -134,5 +134,3 @@ if __name__ == '__main__':
     config = Config('data1', 'data1/electricity.csv')
     download_electricity(config)
     electricity = pd.read_csv('data1/electricity.csv', index_col=0)
-    # data_formatter = ElectricityFormatter()
-    # train, valid, test = data_formatter.split_data(electricity)

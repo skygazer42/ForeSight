@@ -177,6 +177,91 @@ def _make_lagged_xy_multi(
     return X, Y, t_idx
 
 
+def _panel_step_lag_required_start(
+    *,
+    target_lag_steps: tuple[int, ...],
+    historic_lag_steps: tuple[int, ...],
+    future_lag_steps: tuple[int, ...],
+) -> int:
+    return max(
+        [
+            int(max(target_lag_steps)),
+            *([int(max(historic_lag_steps))] if historic_lag_steps else []),
+            *([int(max(future_lag_steps))] if future_lag_steps else []),
+        ]
+    )
+
+
+def _panel_step_lag_extra_parts(
+    g: pd.DataFrame,
+    *,
+    ds_arr: np.ndarray,
+    target_index: np.ndarray,
+    base_index: np.ndarray,
+    rows: int,
+    horizon: int,
+    x_cols: tuple[str, ...],
+    historic_lag_steps: tuple[int, ...],
+    future_lag_steps: tuple[int, ...],
+    add_time_features: bool,
+    id_mode: str,
+    uid_val: float,
+) -> list[np.ndarray]:
+    extra_parts: list[np.ndarray] = []
+    total_rows = int(rows) * int(horizon)
+
+    if id_mode == "ordinal":
+        extra_parts.append(np.full((total_rows, 1), float(uid_val), dtype=float))
+
+    if bool(add_time_features):
+        tf, _ = build_time_features(ds_arr)
+        extra_parts.append(tf[target_index, :].astype(float, copy=False))
+
+    if not x_cols:
+        return extra_parts
+
+    ex = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    if historic_lag_steps:
+        hist_block, _ = build_column_lag_features(
+            ex,
+            t=base_index,
+            lags=historic_lag_steps,
+            column_names=x_cols,
+            prefix="historic_x",
+        )
+        extra_parts.append(np.repeat(hist_block, repeats=int(horizon), axis=0))
+    if future_lag_steps:
+        futr_block, _ = build_column_lag_features(
+            ex,
+            t=target_index,
+            lags=future_lag_steps,
+            column_names=x_cols,
+            prefix="future_x",
+            allow_zero=True,
+        )
+        extra_parts.append(futr_block)
+    return extra_parts
+
+
+def _panel_step_lag_feature_matrix(
+    x_base: np.ndarray,
+    derived: np.ndarray,
+    step: np.ndarray,
+    *,
+    rows: int,
+    horizon: int,
+    extra_parts: list[np.ndarray],
+) -> np.ndarray:
+    x_rep = np.repeat(x_base, repeats=int(horizon), axis=0)
+    derived_rep = np.repeat(derived, repeats=int(horizon), axis=0)
+    step_rep = np.tile(step, (int(rows), 1))
+    x_core = np.concatenate([x_rep, derived_rep, step_rep], axis=1)
+    if not extra_parts:
+        return x_core
+    extra_mat = np.concatenate(extra_parts, axis=1)
+    return np.concatenate([x_core, extra_mat], axis=1)
+
+
 def _panel_step_lag_train_xy(
     df: pd.DataFrame,
     cutoff: Any,
@@ -210,6 +295,11 @@ def _panel_step_lag_train_xy(
     target_lag_steps = _resolve_target_lags(lags=lags, target_lags=target_lags)
     historic_lag_steps = _resolve_historic_x_lags(historic_x_lags)
     future_lag_steps = _resolve_future_x_lags(x_cols=x_cols, future_x_lags=future_x_lags)
+    required_start = _panel_step_lag_required_start(
+        target_lag_steps=target_lag_steps,
+        historic_lag_steps=historic_lag_steps,
+        future_lag_steps=future_lag_steps,
+    )
 
     uid_to_val: dict[str, float] = {}
     next_uid = 0
@@ -237,21 +327,14 @@ def _panel_step_lag_train_xy(
             train_start = max(0, train_end - int(max_train_size))
 
         y_train = y_arr[train_start:train_end]
-        min_required_t = max(
-            [
-                int(max(target_lag_steps)),
-                *([int(max(historic_lag_steps))] if historic_lag_steps else []),
-                *([int(max(future_lag_steps))] if future_lag_steps else []),
-            ]
-        )
-        if y_train.size < min_required_t + h:
+        if y_train.size < required_start + h:
             continue
 
         x_base, Y, t_idx = _make_lagged_xy_multi(
             y_train,
             lags=target_lag_steps,
             horizon=h,
-            start_t=min_required_t,
+            start_t=required_start,
         )
         if x_base.size == 0:
             continue
@@ -268,10 +351,6 @@ def _panel_step_lag_train_xy(
             roll_stats=roll_stats,
             diff_lags=diff_lags,
         )
-        # Expanded dataset across steps.
-        x_rep = np.repeat(x_base, repeats=h, axis=0)  # (rows*h, lags)
-        derived_rep = np.repeat(derived, repeats=h, axis=0)  # (rows*h, k)
-        step_rep = np.tile(step, (rows, 1))  # (rows*h, 1)
 
         # Target indices (global into g arrays) aligned with Y.reshape(-1)
         target_local = t_idx.reshape(-1, 1) + np.arange(h, dtype=int).reshape(1, -1)
@@ -279,44 +358,28 @@ def _panel_step_lag_train_xy(
         target_flat = target_global.reshape(-1)
         base_global = int(train_start) + t_idx
 
-        extra_parts: list[np.ndarray] = []
-
-        if id_mode == "ordinal":
-            id_val = float(uid_to_val[uid_s])
-            extra_parts.append(np.full((rows * h, 1), id_val, dtype=float))
-
-        if bool(add_time_features):
-            tf, _names = build_time_features(ds_arr)
-            extra_parts.append(tf[target_flat, :].astype(float, copy=False))
-
-        if x_cols:
-            ex = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-            if historic_lag_steps:
-                hist_block, _ = build_column_lag_features(
-                    ex,
-                    t=base_global,
-                    lags=historic_lag_steps,
-                    column_names=x_cols,
-                    prefix="historic_x",
-                )
-                extra_parts.append(np.repeat(hist_block, repeats=h, axis=0))
-            if future_lag_steps:
-                futr_block, _ = build_column_lag_features(
-                    ex,
-                    t=target_flat,
-                    lags=future_lag_steps,
-                    column_names=x_cols,
-                    prefix="future_x",
-                    allow_zero=True,
-                )
-                extra_parts.append(futr_block)
-
-        x_core = np.concatenate([x_rep, derived_rep, step_rep], axis=1)
-        if extra_parts:
-            extra_mat = np.concatenate(extra_parts, axis=1)
-            x_long = np.concatenate([x_core, extra_mat], axis=1)
-        else:
-            x_long = x_core
+        extra_parts = _panel_step_lag_extra_parts(
+            g,
+            ds_arr=ds_arr,
+            target_index=target_flat,
+            base_index=base_global,
+            rows=rows,
+            horizon=h,
+            x_cols=x_cols,
+            historic_lag_steps=historic_lag_steps,
+            future_lag_steps=future_lag_steps,
+            add_time_features=bool(add_time_features),
+            id_mode=id_mode,
+            uid_val=float(uid_to_val[uid_s]),
+        )
+        x_long = _panel_step_lag_feature_matrix(
+            x_base,
+            derived,
+            step,
+            rows=rows,
+            horizon=h,
+            extra_parts=extra_parts,
+        )
 
         y_long = Y.reshape(-1).astype(float, copy=False)
         if x_long.shape[0] != y_long.shape[0]:
@@ -373,6 +436,11 @@ def _panel_step_lag_predict_x(
     target_lag_steps = _resolve_target_lags(lags=lags, target_lags=target_lags)
     historic_lag_steps = _resolve_historic_x_lags(historic_x_lags)
     future_lag_steps = _resolve_future_x_lags(x_cols=x_cols_tup, future_x_lags=future_x_lags)
+    required_start = _panel_step_lag_required_start(
+        target_lag_steps=target_lag_steps,
+        historic_lag_steps=historic_lag_steps,
+        future_lag_steps=future_lag_steps,
+    )
 
     cutoff_idx = _find_cutoff_index(ds_arr, cutoff)
     if cutoff_idx is None:
@@ -384,65 +452,41 @@ def _panel_step_lag_predict_x(
 
     if pred_end > int(y_arr.size):
         return np.empty((0, 0), dtype=float), np.empty((0,), dtype=object)
-    required_start = max(
-        [
-            int(max(target_lag_steps)),
-            *([int(max(historic_lag_steps))] if historic_lag_steps else []),
-            *([int(max(future_lag_steps))] if future_lag_steps else []),
-        ]
-    )
     if pred_start < required_start:
         return np.empty((0, 0), dtype=float), np.empty((0,), dtype=object)
 
     base = np.asarray([[y_arr[pred_start - lag] for lag in target_lag_steps]], dtype=float)
-    x_rep = np.repeat(base, repeats=h, axis=0)
     derived, _derived_names = build_lag_derived_features(
         base,
         roll_windows=roll_windows,
         roll_stats=roll_stats,
         diff_lags=diff_lags,
     )
-    derived_rep = np.repeat(derived, repeats=h, axis=0)
     step = _step_vector(h, step_scale=str(step_scale))
 
     target_idx = np.arange(pred_start, pred_end, dtype=int)
-    extra_parts: list[np.ndarray] = []
-
-    if str(id_feature).lower().strip() == "ordinal":
-        extra_parts.append(np.full((h, 1), float(uid_val), dtype=float))
-
-    if bool(add_time_features):
-        tf, _ = build_time_features(ds_arr)
-        extra_parts.append(tf[target_idx, :].astype(float, copy=False))
-
-    if x_cols_tup:
-        ex = g.loc[:, list(x_cols_tup)].to_numpy(dtype=float, copy=False)
-        if historic_lag_steps:
-            hist_block, _ = build_column_lag_features(
-                ex,
-                t=[pred_start],
-                lags=historic_lag_steps,
-                column_names=x_cols_tup,
-                prefix="historic_x",
-            )
-            extra_parts.append(np.repeat(hist_block, repeats=h, axis=0))
-        if future_lag_steps:
-            futr_block, _ = build_column_lag_features(
-                ex,
-                t=target_idx,
-                lags=future_lag_steps,
-                column_names=x_cols_tup,
-                prefix="future_x",
-                allow_zero=True,
-            )
-            extra_parts.append(futr_block)
-
-    x_core = np.concatenate([x_rep, derived_rep, step], axis=1)
-    if extra_parts:
-        extra_mat = np.concatenate(extra_parts, axis=1)
-        x_pred = np.concatenate([x_core, extra_mat], axis=1)
-    else:
-        x_pred = x_core
+    extra_parts = _panel_step_lag_extra_parts(
+        g,
+        ds_arr=ds_arr,
+        target_index=target_idx,
+        base_index=np.asarray([pred_start], dtype=int),
+        rows=1,
+        horizon=h,
+        x_cols=x_cols_tup,
+        historic_lag_steps=historic_lag_steps,
+        future_lag_steps=future_lag_steps,
+        add_time_features=bool(add_time_features),
+        id_mode=str(id_feature).lower().strip(),
+        uid_val=float(uid_val),
+    )
+    x_pred = _panel_step_lag_feature_matrix(
+        base,
+        derived,
+        step,
+        rows=1,
+        horizon=h,
+        extra_parts=extra_parts,
+    )
 
     if not np.all(np.isfinite(x_pred)):
         raise ValueError("Non-finite values in prediction features")

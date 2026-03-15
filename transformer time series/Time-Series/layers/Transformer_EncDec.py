@@ -14,17 +14,13 @@ class ConvLayer(nn.Module):
                                   padding_mode='circular')
         self.norm = nn.BatchNorm1d(c_in)
         self.activation = nn.ELU()
-        #f(x) = x, x >= 0
-        # f(x) = alpha * (exp(x)-1), x < 0  默认alpha=1
         self.maxPool = nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
 
     def forward(self, x):
-        x = self.downConv(x.permute(0, 2, 1)) # (100-3+2x2)/s+1=102 torch.Size([1, 10, 102])
+        x = self.downConv(x.permute(0, 2, 1))  # (100 - 3 + 2x2) / s + 1 = 102
         x = self.norm(x)
-        x = self.activation(x) #torch.Size([1, 10, 102])
+        x = self.activation(x)
         x = self.maxPool(x)
-        # print(x.shape)#torch.Size([1, 10, 51]) #$(102+2x1-3)/2+1=51$。
-        # exit()
         x = x.transpose(1, 2)
         return x
 
@@ -145,37 +141,28 @@ if __name__ == '__main__':
 #######################convlayer##############################################################
     # 随机生成一个大小为(1, 10, 100)的tensor作为输入
     #入通道数为10表示该时间序列的每个时间步都有10个特征，序列长度为100表示该时间序列共有100个时间步。
-    import torch
 
     c_in = 10  # 输入通道数
     seq_len = 100  # 序列长度
     batch_size = 1  # 批次大小
     # 随机生成输入数据
-    x = torch.randn(batch_size,  seq_len,c_in)    #torch.Size([1, 100, 10]) 输入通道数为10，序列长度为100
+    x = torch.randn(batch_size,  seq_len,c_in)  # 输入通道数为10，序列长度为100
     # 实例化 ConvLayer 类
     conv_layer = ConvLayer(c_in)
     # 将输入数据通过 ConvLayer 的 forward 方法传递
     output = conv_layer(x)
     # 输出转换后的张量的形状
-    print(output.shape)  #torch.Size([1, 51, 10])
+    print(output.shape)
 #####BN
-    # y = torch.tensor([[[1, 2], #torch.Size([1, 3, 2]) 1batch，每个batch有3个时间步，每个时间步具有2个特征
     #              [3, 4],
     #              [5, 6]]])
     # 那么mean应该为(1 + 3 + 5) / 3 = 3，std为sqrt((1 - 3) ^ 2 + (3 - 3) ^ 2 + (5 - 3) ^ 2) / 3 = 1。
     #使用nn.BatchNorm1d(2)层进行标准化处理，它会计算每个特征维度的均值和标准差，并将其应用于相应的特征维度。假设在训练期间，通过对x计算得到均值和标准差：
-    # x_norm = (x - mean) / std
    ############################# 随机实例化EncoderLayer############################################
-    # attention = MultiHeadAttention(8, 128)
-    # encoder_layer = EncoderLayer(attention, 128)
     #
     # # 随机生成输入数据
-    # x = torch.randn(3, 10, 128)
-    # attn_mask = torch.ones((3, 10, 10))  # 随机生成注意力掩码
     #
     # # 输入数据进行前向传播
     # output, attn = encoder_layer(x, attn_mask=attn_mask)
     #
     # # 输出结果的形状
-    # print(output.shape)
-    # print(attn.shape)

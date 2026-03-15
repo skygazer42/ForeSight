@@ -129,10 +129,10 @@ if __name__ == '__main__':
     # 遍历数据集
     for batch in data_loader:
         inputs, outputs, active_entries = batch
-        print(inputs.shape)  # (batch_size, num_inputs, num_encoder_steps) torch.Size([64, 192, 5])
-        print(outputs.shape)  # (batch_size, num_decoder_steps, num_outputs) torch.Size([64, 24, 1])
-        print(active_entries.shape)  # (batch_size, num_decoder_steps, num_outputs) torch.Size([64, 24, 1])
-        break# 只打印第一个batch
+        print(inputs.shape)  # (batch_size, num_inputs, num_encoder_steps)
+        print(outputs.shape)  # (batch_size, num_decoder_steps, num_outputs)
+        print(active_entries.shape)  # (batch_size, num_decoder_steps, num_outputs)
+        break  # 只打印第一个batch
 
 
 

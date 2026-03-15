@@ -31,14 +31,14 @@ def parser(s):
 catfish_sales = pd.read_csv('catfish.csv', parse_dates=[0], index_col=0, squeeze=True, date_parser=parser)
 
 # %%
-catfish_sales
+print(catfish_sales)
 
 # %%
 #infer the frequency of the data
 catfish_sales = catfish_sales.asfreq(pd.infer_freq(catfish_sales.index))
 
 # %%
-catfish_sales.index
+print(catfish_sales.index)
 
 # %%
 #pd.infer_freq(catfish_sales.index) 来推断出该时间序列数据的采样频率（即时间间隔）
@@ -107,20 +107,20 @@ test_data = lim_catfish_sales[train_end + timedelta(days=1):test_end]
 # # Make Predictions
 
 # %%
-test_data 
+print(test_data)
 
 # %%
 my_order = (0,1,0)
 my_seasonal_order = (1, 0, 1, 12)
 
 # %%
-my_seasonal_order 
+print(my_seasonal_order)
 
 # %%
-test_data.index
+print(test_data.index)
 
 # %%
-lim_catfish_sales[:train_end-timedelta(days=1)] #从序列的开始位置到当前 train_end 时间点前一月的所有数据。
+print(lim_catfish_sales[: train_end - timedelta(days=1)])
 
 # %%
 #采用 SARIMA 模型，用于预测时间序列数据在未来若干时间点上的值。
@@ -134,13 +134,13 @@ for train_end in test_data.index:
     rolling_predictions[train_end] = pred
 
 # %%
-rolling_predictions
+print(rolling_predictions)
 
 # %%
-rolling_predictions
+print(rolling_predictions)
 
 # %%
-test_data
+print(test_data)
 
 # %%
 rolling_residuals = test_data - rolling_predictions
@@ -189,7 +189,7 @@ for year in range(start_date.year,end_date.year):
 rolling_deviations = pd.Series(dtype=float, index = lim_catfish_sales.index)
 
 # %%
-rolling_deviations
+print(rolling_deviations)
 
 # %%
 for date in rolling_deviations.index:
@@ -231,7 +231,7 @@ plt.ylabel('Sales', fontsize=16)
 december_data = lim_catfish_sales[lim_catfish_sales.index.month == 12]
 
 # %%
-december_data
+print(december_data)
 
 # %%
 min_dev = 9999999
@@ -244,7 +244,7 @@ for date in december_data.index:
         curr_anomaly = date
 
 # %%
-curr_anomaly
+print(curr_anomaly)
 
 # %% [markdown]
 # # What to do about the anomaly? 如何处理这个异常现象
@@ -315,4 +315,5 @@ print('Mean Absolute Percent Error:', round(np.mean(abs(rolling_residuals/test_d
 print('Root Mean Squared Error:', np.sqrt(np.mean(rolling_residuals**2)))
 
 # %%
+
 

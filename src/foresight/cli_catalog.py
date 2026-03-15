@@ -404,13 +404,301 @@ def _paper_payload_for_model_key(key: str) -> dict[str, Any] | None:
     return None
 
 
+def _validated_model_interface_filter(raw: object) -> str:
+    interface_filter = str(raw).strip().lower()
+    if interface_filter not in {"any", "local", "global"}:
+        raise ValueError("--interface must be one of: any, local, global")
+    return interface_filter
+
+
+def _matches_required_model_requires(
+    reqs: set[str],
+    *,
+    req_set: set[str],
+    include_core: bool,
+) -> bool:
+    if not (req_set or include_core):
+        return True
+    if include_core and not reqs:
+        return True
+    return bool(req_set and reqs.intersection(req_set))
+
+
+def _matches_excluded_model_requires(
+    reqs: set[str],
+    *,
+    exc_set: set[str],
+    exclude_core: bool,
+) -> bool:
+    if exclude_core and not reqs:
+        return False
+    if exc_set and reqs.intersection(exc_set):
+        return False
+    return True
+
+
+def _model_spec_matches_filters(
+    spec: Any,
+    *,
+    prefix: str,
+    interface_filter: str,
+    req_set: set[str],
+    include_core: bool,
+    exc_set: set[str],
+    exclude_core: bool,
+) -> bool:
+    if prefix and not str(spec.key).startswith(prefix):
+        return False
+    if interface_filter != "any" and str(spec.interface) != interface_filter:
+        return False
+
+    reqs = set(spec.requires)
+    if not _matches_required_model_requires(
+        reqs,
+        req_set=req_set,
+        include_core=include_core,
+    ):
+        return False
+    if not _matches_excluded_model_requires(
+        reqs,
+        exc_set=exc_set,
+        exclude_core=exclude_core,
+    ):
+        return False
+
+    return True
+
+
+def _catalog_model_row_from_spec(spec: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "key": spec.key,
+        "interface": str(spec.interface),
+        "requires": ",".join(spec.requires),
+        "description": spec.description,
+        "default_params": dict(spec.default_params),
+        "capabilities": dict(spec.capabilities),
+    }
+    paper = _paper_payload_for_model_key(spec.key)
+    if paper:
+        row["paper"] = paper
+    wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+    if wrapper_pid:
+        wrapper = _paper_payload_for_paper_id(wrapper_pid)
+        if wrapper:
+            row["wrapper_paper"] = wrapper
+    return row
+
+
+def _models_list_sort_value(row: dict[str, Any], sort_key: str) -> object | None:
+    paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
+    wrapper = row.get("wrapper_paper") if isinstance(row.get("wrapper_paper"), dict) else {}
+
+    if sort_key == "key":
+        return str(row.get("key", "")).lower()
+    if sort_key == "interface":
+        return str(row.get("interface", "")).lower()
+    if sort_key == "requires":
+        return str(row.get("requires", "")).lower()
+    if sort_key == "description":
+        return str(row.get("description", "")).lower()
+    if sort_key == "paper_id":
+        return str(paper.get("paper_id", "")).lower()
+    if sort_key == "paper_year":
+        year = paper.get("year", None)
+        return int(year) if isinstance(year, int) else None
+    if sort_key == "wrapper_paper_id":
+        return str(wrapper.get("paper_id", "")).lower()
+    if sort_key == "wrapper_year":
+        year = wrapper.get("year", None)
+        return int(year) if isinstance(year, int) else None
+    raise ValueError(
+        "--sort must be one of: key, interface, requires, description, paper_id, paper_year, wrapper_paper_id, wrapper_year"
+    )
+
+
+def _sort_catalog_model_rows(
+    rows: list[dict[str, Any]],
+    *,
+    sort_key: str,
+    descending: bool,
+) -> list[dict[str, Any]]:
+    if sort_key in {"paper_year", "wrapper_year"}:
+        present = []
+        missing = []
+        for row in rows:
+            if _models_list_sort_value(row, sort_key) is None:
+                missing.append(row)
+            else:
+                present.append(row)
+        present.sort(
+            key=lambda row: int(_models_list_sort_value(row, sort_key)),
+            reverse=descending,
+        )
+        return present + missing
+
+    rows.sort(
+        key=lambda row: str(_models_list_sort_value(row, sort_key)),
+        reverse=descending,
+    )
+    return rows
+
+
+def _models_list_column_value(row: dict[str, Any], col: str) -> object:
+    paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
+    wrapper = row.get("wrapper_paper") if isinstance(row.get("wrapper_paper"), dict) else {}
+
+    if col == "key":
+        return row.get("key", "")
+    if col == "interface":
+        return row.get("interface", "")
+    if col == "requires":
+        return row.get("requires", "")
+    if col == "description":
+        return row.get("description", "")
+    if col == "paper_id":
+        return paper.get("paper_id", "")
+    if col == "paper_year":
+        return paper.get("year", "")
+    if col == "paper_title":
+        return paper.get("title", "")
+    if col == "wrapper_paper_id":
+        return wrapper.get("paper_id", "")
+    if col == "wrapper_year":
+        return wrapper.get("year", "")
+    if col == "wrapper_title":
+        return wrapper.get("title", "")
+    raise ValueError(
+        "--columns must be a comma-separated list of: key, interface, requires, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
+    )
+
+
+def _models_list_tsv_lines(
+    rows: list[dict[str, Any]],
+    *,
+    columns: list[str],
+    include_header: bool,
+) -> list[str]:
+    lines: list[str] = []
+    if include_header:
+        lines.append("\t".join(columns))
+    for row in rows:
+        lines.append(
+            "\t".join(
+                _cli_shared._sanitize_tsv_cell(_models_list_column_value(row, col))
+                for col in columns
+            )
+        )
+    return lines
+
+
+def _score_model_search_token(
+    token: str,
+    *,
+    key_l: str,
+    desc_l: str,
+    requires_l: str,
+    paper_id_l: str,
+    paper_title_l: str,
+    paper_year: int | None,
+    wrapper_id_l: str,
+    wrapper_title_l: str,
+    wrapper_year: int | None,
+) -> int:
+    best = 0
+    if token in key_l:
+        best = max(best, 10)
+    if token in desc_l:
+        best = max(best, 4)
+    if token in requires_l:
+        best = max(best, 2)
+    if token in paper_id_l:
+        best = max(best, 8)
+    if token in paper_title_l:
+        best = max(best, 6)
+    if token in wrapper_id_l:
+        best = max(best, 7)
+    if token in wrapper_title_l:
+        best = max(best, 5)
+    if token.isdigit():
+        year = int(token)
+        if paper_year is not None and int(paper_year) == year:
+            best = max(best, 6)
+        if wrapper_year is not None and int(wrapper_year) == year:
+            best = max(best, 5)
+    return best
+
+
+def _model_search_metadata(spec: Any) -> dict[str, Any]:
+    paper = _paper_payload_for_model_key(spec.key) or {}
+    wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+    wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
+    wrapper = wrapper or {}
+
+    paper_year = paper.get("year", None)
+    wrapper_year = wrapper.get("year", None)
+
+    return {
+        "paper": paper,
+        "wrapper": wrapper,
+        "key_l": str(spec.key).lower(),
+        "desc_l": str(spec.description).lower(),
+        "requires_l": ",".join(spec.requires).lower(),
+        "paper_id_l": str(paper.get("paper_id", "")).lower(),
+        "paper_title_l": str(paper.get("title", "")).lower(),
+        "paper_year": int(paper_year) if isinstance(paper_year, int) else None,
+        "wrapper_id_l": str(wrapper.get("paper_id", "")).lower(),
+        "wrapper_title_l": str(wrapper.get("title", "")).lower(),
+        "wrapper_year": int(wrapper_year) if isinstance(wrapper_year, int) else None,
+    }
+
+
+def _model_search_row(
+    spec: Any,
+    *,
+    score: int,
+    paper: dict[str, Any],
+    wrapper: dict[str, Any],
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "key": spec.key,
+        "score": score,
+        "requires": ",".join(spec.requires),
+        "description": spec.description,
+    }
+    if paper:
+        row["paper"] = paper
+    if wrapper and str(wrapper.get("paper_id", "")).strip():
+        row["wrapper_paper"] = wrapper
+    return row
+
+
+def _models_search_tsv_lines(rows: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for row in rows:
+        paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
+        pid = str(paper.get("paper_id", "")).strip()
+        year = paper.get("year", None)
+        year_s = str(year) if isinstance(year, int) else ""
+
+        lines.append(
+            "\t".join(
+                [
+                    _cli_shared._sanitize_tsv_cell(row.get("key", "")),
+                    _cli_shared._sanitize_tsv_cell(row.get("score", "")),
+                    _cli_shared._sanitize_tsv_cell(pid),
+                    _cli_shared._sanitize_tsv_cell(year_s),
+                    _cli_shared._sanitize_tsv_cell(row.get("requires", "")),
+                    _cli_shared._sanitize_tsv_cell(row.get("description", "")),
+                ]
+            )
+        )
+    return lines
+
+
 def _cmd_models_list(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
-    interface_filter = str(getattr(args, "interface", "any")).strip().lower()
-    if interface_filter not in {"any", "local", "global"}:
-        raise ValueError("--interface must be one of: any, local, global")
-
+    interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
     req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
@@ -419,46 +707,17 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     rows: list[dict[str, Any]] = []
     prefix = str(args.prefix).strip()
     for key in list_models():
-        if prefix and not str(key).startswith(prefix):
-            continue
         spec = get_model_spec(key)
-
-        if interface_filter != "any" and str(spec.interface) != interface_filter:
-            continue
-
-        reqs = set(spec.requires)
-        if req_set or include_core:
-            ok = False
-            if include_core and not reqs:
-                ok = True
-            if req_set and reqs.intersection(req_set):
-                ok = True
-            if not ok:
-                continue
-
-        if exc_set or exclude_core:
-            if exclude_core and not reqs:
-                continue
-            if exc_set and reqs.intersection(exc_set):
-                continue
-
-        row: dict[str, Any] = {
-            "key": spec.key,
-            "interface": str(spec.interface),
-            "requires": ",".join(spec.requires),
-            "description": spec.description,
-            "default_params": dict(spec.default_params),
-            "capabilities": dict(spec.capabilities),
-        }
-        paper = _paper_payload_for_model_key(spec.key)
-        if paper:
-            row["paper"] = paper
-        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
-        if wrapper_pid:
-            wrapper = _paper_payload_for_paper_id(wrapper_pid)
-            if wrapper:
-                row["wrapper_paper"] = wrapper
-        rows.append(row)
+        if _model_spec_matches_filters(
+            spec,
+            prefix=prefix,
+            interface_filter=interface_filter,
+            req_set=req_set,
+            include_core=include_core,
+            exc_set=exc_set,
+            exclude_core=exclude_core,
+        ):
+            rows.append(_catalog_model_row_from_spec(spec))
 
     sort = str(args.sort).strip() or "key"
     descending = bool(getattr(args, "desc", False))
@@ -467,44 +726,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
         sort = sort[1:]
     sort_key = sort.strip() or "key"
 
-    def _sort_value(r: dict[str, Any]) -> object | None:
-        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
-        wrapper = r.get("wrapper_paper") if isinstance(r.get("wrapper_paper"), dict) else {}
-
-        if sort_key == "key":
-            return str(r.get("key", "")).lower()
-        if sort_key == "interface":
-            return str(r.get("interface", "")).lower()
-        if sort_key == "requires":
-            return str(r.get("requires", "")).lower()
-        if sort_key == "description":
-            return str(r.get("description", "")).lower()
-        if sort_key == "paper_id":
-            return str(paper.get("paper_id", "")).lower()
-        if sort_key == "paper_year":
-            year = paper.get("year", None)
-            return int(year) if isinstance(year, int) else None
-        if sort_key == "wrapper_paper_id":
-            return str(wrapper.get("paper_id", "")).lower()
-        if sort_key == "wrapper_year":
-            year = wrapper.get("year", None)
-            return int(year) if isinstance(year, int) else None
-        raise ValueError(
-            "--sort must be one of: key, interface, requires, description, paper_id, paper_year, wrapper_paper_id, wrapper_year"
-        )
-
-    if sort_key in {"paper_year", "wrapper_year"}:
-        present = []
-        missing = []
-        for r in rows:
-            if _sort_value(r) is None:
-                missing.append(r)
-            else:
-                present.append(r)
-        present.sort(key=lambda r: int(_sort_value(r)), reverse=descending)  # type: ignore[arg-type]
-        rows = present + missing
-    else:
-        rows.sort(key=lambda r: str(_sort_value(r)), reverse=descending)  # type: ignore[arg-type]
+    rows = _sort_catalog_model_rows(rows, sort_key=sort_key, descending=descending)
 
     limit = int(args.limit)
     if limit < 0:
@@ -523,39 +745,11 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     else:
         columns = ["key", "requires", "description"]
 
-    def _col_value(r: dict[str, Any], col: str) -> object:
-        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
-        wrapper = r.get("wrapper_paper") if isinstance(r.get("wrapper_paper"), dict) else {}
-
-        if col == "key":
-            return r.get("key", "")
-        if col == "interface":
-            return r.get("interface", "")
-        if col == "requires":
-            return r.get("requires", "")
-        if col == "description":
-            return r.get("description", "")
-        if col == "paper_id":
-            return paper.get("paper_id", "")
-        if col == "paper_year":
-            return paper.get("year", "")
-        if col == "paper_title":
-            return paper.get("title", "")
-        if col == "wrapper_paper_id":
-            return wrapper.get("paper_id", "")
-        if col == "wrapper_year":
-            return wrapper.get("year", "")
-        if col == "wrapper_title":
-            return wrapper.get("title", "")
-        raise ValueError(
-            "--columns must be a comma-separated list of: key, interface, requires, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
-        )
-
-    lines: list[str] = []
-    if bool(getattr(args, "header", False)):
-        lines.append("\t".join(columns))
-    for r in rows:
-        lines.append("\t".join(_cli_shared._sanitize_tsv_cell(_col_value(r, c)) for c in columns))
+    lines = _models_list_tsv_lines(
+        rows,
+        columns=columns,
+        include_header=bool(getattr(args, "header", False)),
+    )
     _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
@@ -596,10 +790,7 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     any_mode = bool(args.any)
     prefix = str(args.prefix).strip()
 
-    interface_filter = str(getattr(args, "interface", "any")).strip().lower()
-    if interface_filter not in {"any", "local", "global"}:
-        raise ValueError("--interface must be one of: any, local, global")
-
+    interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
     req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
@@ -610,98 +801,34 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
         raise ValueError("--limit must be >= 1")
     limit = min(limit, 1000)
 
-    def _score_token(
-        token: str,
-        *,
-        key_l: str,
-        desc_l: str,
-        requires_l: str,
-        paper_id_l: str,
-        paper_title_l: str,
-        paper_year: int | None,
-        wrapper_id_l: str,
-        wrapper_title_l: str,
-        wrapper_year: int | None,
-    ) -> int:
-        best = 0
-        if token in key_l:
-            best = max(best, 10)
-        if token in desc_l:
-            best = max(best, 4)
-        if token in requires_l:
-            best = max(best, 2)
-        if token in paper_id_l:
-            best = max(best, 8)
-        if token in paper_title_l:
-            best = max(best, 6)
-        if token in wrapper_id_l:
-            best = max(best, 7)
-        if token in wrapper_title_l:
-            best = max(best, 5)
-        if token.isdigit():
-            year = int(token)
-            if paper_year is not None and int(paper_year) == year:
-                best = max(best, 6)
-            if wrapper_year is not None and int(wrapper_year) == year:
-                best = max(best, 5)
-        return best
-
     rows: list[dict[str, Any]] = []
     for key in list_models():
-        if prefix and not str(key).startswith(prefix):
-            continue
         spec = get_model_spec(key)
-
-        if interface_filter != "any" and str(spec.interface) != interface_filter:
+        if not _model_spec_matches_filters(
+            spec,
+            prefix=prefix,
+            interface_filter=interface_filter,
+            req_set=req_set,
+            include_core=include_core,
+            exc_set=exc_set,
+            exclude_core=exclude_core,
+        ):
             continue
 
-        reqs = set(spec.requires)
-        if req_set or include_core:
-            ok = False
-            if include_core and not reqs:
-                ok = True
-            if req_set and reqs.intersection(req_set):
-                ok = True
-            if not ok:
-                continue
-
-        if exc_set or exclude_core:
-            if exclude_core and not reqs:
-                continue
-            if exc_set and reqs.intersection(exc_set):
-                continue
-
-        paper = _paper_payload_for_model_key(spec.key) or {}
-        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
-        wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
-        wrapper = wrapper or {}
-
-        key_l = str(spec.key).lower()
-        desc_l = str(spec.description).lower()
-        requires_l = ",".join(spec.requires).lower()
-
-        paper_id_l = str(paper.get("paper_id", "")).lower()
-        paper_title_l = str(paper.get("title", "")).lower()
-        paper_year = paper.get("year", None)
-        paper_year_i = int(paper_year) if isinstance(paper_year, int) else None
-
-        wrapper_id_l = str(wrapper.get("paper_id", "")).lower()
-        wrapper_title_l = str(wrapper.get("title", "")).lower()
-        wrapper_year = wrapper.get("year", None)
-        wrapper_year_i = int(wrapper_year) if isinstance(wrapper_year, int) else None
+        metadata = _model_search_metadata(spec)
 
         token_scores = [
-            _score_token(
+            _score_model_search_token(
                 t,
-                key_l=key_l,
-                desc_l=desc_l,
-                requires_l=requires_l,
-                paper_id_l=paper_id_l,
-                paper_title_l=paper_title_l,
-                paper_year=paper_year_i,
-                wrapper_id_l=wrapper_id_l,
-                wrapper_title_l=wrapper_title_l,
-                wrapper_year=wrapper_year_i,
+                key_l=str(metadata["key_l"]),
+                desc_l=str(metadata["desc_l"]),
+                requires_l=str(metadata["requires_l"]),
+                paper_id_l=str(metadata["paper_id_l"]),
+                paper_title_l=str(metadata["paper_title_l"]),
+                paper_year=metadata["paper_year"],
+                wrapper_id_l=str(metadata["wrapper_id_l"]),
+                wrapper_title_l=str(metadata["wrapper_title_l"]),
+                wrapper_year=metadata["wrapper_year"],
             )
             for t in tokens
         ]
@@ -711,17 +838,14 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
             continue
 
         score = int(sum(token_scores))
-        row: dict[str, Any] = {
-            "key": spec.key,
-            "score": score,
-            "requires": ",".join(spec.requires),
-            "description": spec.description,
-        }
-        if paper:
-            row["paper"] = paper
-        if wrapper and str(wrapper.get("paper_id", "")).strip():
-            row["wrapper_paper"] = wrapper
-        rows.append(row)
+        rows.append(
+            _model_search_row(
+                spec,
+                score=score,
+                paper=metadata["paper"],
+                wrapper=metadata["wrapper"],
+            )
+        )
 
     rows.sort(key=lambda r: (-int(r.get("score", 0)), str(r.get("key", ""))))
     rows = rows[:limit]
@@ -731,25 +855,7 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
         _cli_shared._emit(rows, output=str(args.output), fmt="json")
         return 0
 
-    lines: list[str] = []
-    for r in rows:
-        paper = r.get("paper") if isinstance(r.get("paper"), dict) else {}
-        pid = str(paper.get("paper_id", "")).strip()
-        year = paper.get("year", None)
-        year_s = str(year) if isinstance(year, int) else ""
-
-        lines.append(
-            "\t".join(
-                [
-                    _cli_shared._sanitize_tsv_cell(r.get("key", "")),
-                    _cli_shared._sanitize_tsv_cell(r.get("score", "")),
-                    _cli_shared._sanitize_tsv_cell(pid),
-                    _cli_shared._sanitize_tsv_cell(year_s),
-                    _cli_shared._sanitize_tsv_cell(r.get("requires", "")),
-                    _cli_shared._sanitize_tsv_cell(r.get("description", "")),
-                ]
-            )
-        )
+    lines = _models_search_tsv_lines(rows)
     _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
@@ -840,47 +946,14 @@ def _cmd_papers_models(args: argparse.Namespace) -> int:
 
     rows: list[dict[str, Any]] = []
     for key in list_models():
-        if prefix and not str(key).startswith(prefix):
-            continue
-        spec = get_model_spec(key)
-
-        base = _paper_payload_for_model_key(spec.key) or {}
-        base_pid = str(base.get("paper_id", "")).strip()
-
-        wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
-        wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
-        wrapper = wrapper or {}
-        wrap_pid = str(wrapper.get("paper_id", "")).strip()
-
-        hit_base = base_pid == pid
-        hit_wrap = wrap_pid == pid
-        if role == "base":
-            if not hit_base:
-                continue
-        elif role == "wrapper":
-            if not hit_wrap:
-                continue
-        elif not (hit_base or hit_wrap):
-            continue
-
-        if hit_base:
-            rows.append(
-                {
-                    "key": spec.key,
-                    "role": "base",
-                    "requires": ",".join(spec.requires),
-                    "description": spec.description,
-                }
+        rows.extend(
+            _paper_matching_rows_for_spec(
+                get_model_spec(key),
+                pid=pid,
+                prefix=prefix,
+                role=role,
             )
-        if hit_wrap:
-            rows.append(
-                {
-                    "key": spec.key,
-                    "role": "wrapper",
-                    "requires": ",".join(spec.requires),
-                    "description": spec.description,
-                }
-            )
+        )
 
     rows.sort(key=lambda r: (str(r.get("role", "")), str(r.get("key", ""))))
 
@@ -912,23 +985,11 @@ def _cmd_docs_rnn(args: argparse.Namespace) -> int:
     if bool(args.check):
         expected_paper = render_rnn_paper_zoo_doc()
         expected_zoo = render_rnn_zoo_doc()
-        paper_path = out_dir / "rnn_paper_zoo.md"
-        zoo_path = out_dir / "rnn_zoo.md"
-
-        failures: list[str] = []
-        if not paper_path.exists():
-            failures.append(str(paper_path))
-        else:
-            actual = paper_path.read_text(encoding="utf-8")
-            if actual != expected_paper:
-                failures.append(str(paper_path))
-
-        if not zoo_path.exists():
-            failures.append(str(zoo_path))
-        else:
-            actual = zoo_path.read_text(encoding="utf-8")
-            if actual != expected_zoo:
-                failures.append(str(zoo_path))
+        failures = _rnn_doc_check_failures(
+            out_dir,
+            expected_paper=expected_paper,
+            expected_zoo=expected_zoo,
+        )
 
         if failures:
             print("Docs out of date (or missing):", file=sys.stderr)
@@ -944,3 +1005,85 @@ def _cmd_docs_rnn(args: argparse.Namespace) -> int:
     print(f"- {(out_dir / 'rnn_paper_zoo.md').as_posix()}")
     print(f"- {(out_dir / 'rnn_zoo.md').as_posix()}")
     return 0
+
+
+def _paper_model_matches_role(*, role: str, hit_base: bool, hit_wrap: bool) -> bool:
+    if role == "base":
+        return hit_base
+    if role == "wrapper":
+        return hit_wrap
+    return hit_base or hit_wrap
+
+
+def _paper_model_rows_for_spec(
+    spec: Any,
+    *,
+    hit_base: bool,
+    hit_wrap: bool,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if hit_base:
+        rows.append(
+            {
+                "key": spec.key,
+                "role": "base",
+                "requires": ",".join(spec.requires),
+                "description": spec.description,
+            }
+        )
+    if hit_wrap:
+        rows.append(
+            {
+                "key": spec.key,
+                "role": "wrapper",
+                "requires": ",".join(spec.requires),
+                "description": spec.description,
+            }
+        )
+    return rows
+
+
+def _paper_matching_rows_for_spec(
+    spec: Any,
+    *,
+    pid: str,
+    prefix: str,
+    role: str,
+) -> list[dict[str, Any]]:
+    if prefix and not str(spec.key).startswith(prefix):
+        return []
+
+    base = _paper_payload_for_model_key(spec.key) or {}
+    base_pid = str(base.get("paper_id", "")).strip()
+
+    wrapper_pid = _rnnzoo_wrapper_paper_id_from_model_key(spec.key)
+    wrapper = _paper_payload_for_paper_id(wrapper_pid) if wrapper_pid else None
+    wrapper = wrapper or {}
+    wrap_pid = str(wrapper.get("paper_id", "")).strip()
+
+    hit_base = base_pid == pid
+    hit_wrap = wrap_pid == pid
+    if not _paper_model_matches_role(role=role, hit_base=hit_base, hit_wrap=hit_wrap):
+        return []
+    return _paper_model_rows_for_spec(spec, hit_base=hit_base, hit_wrap=hit_wrap)
+
+
+def _rnn_doc_check_failures(
+    out_dir: Path,
+    *,
+    expected_paper: str,
+    expected_zoo: str,
+) -> list[str]:
+    doc_expectations = {
+        out_dir / "rnn_paper_zoo.md": expected_paper,
+        out_dir / "rnn_zoo.md": expected_zoo,
+    }
+    failures: list[str] = []
+    for path, expected_text in doc_expectations.items():
+        if not path.exists():
+            failures.append(str(path))
+            continue
+        actual = path.read_text(encoding="utf-8")
+        if actual != expected_text:
+            failures.append(str(path))
+    return failures

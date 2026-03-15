@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from einops import rearrange, repeat
 from layers.Crossformer_EncDec import scale_block, Encoder, Decoder, DecoderLayer
 from layers.Embed import PatchEmbedding
@@ -37,10 +36,10 @@ class Model(nn.Module):
         # Encoder
         self.encoder = Encoder(
             [
-                scale_block(configs, 1 if l is 0 else self.win_size, configs.d_model, configs.n_heads, configs.d_ff,
+                scale_block(configs, 1 if layer_idx == 0 else self.win_size, configs.d_model, configs.n_heads, configs.d_ff,
                             1, configs.dropout,
-                            self.in_seg_num if l is 0 else ceil(self.in_seg_num / self.win_size ** l), configs.factor
-                            ) for l in range(configs.e_layers)
+                            self.in_seg_num if layer_idx == 0 else ceil(self.in_seg_num / self.win_size ** layer_idx), configs.factor
+                            ) for layer_idx in range(configs.e_layers)
             ]
         )
         # Decoder
@@ -60,9 +59,8 @@ class Model(nn.Module):
                     configs.d_model,
                     configs.d_ff,
                     dropout=configs.dropout,
-                    # activation=configs.activation,
                 )
-                for l in range(configs.e_layers + 1)
+                for _ in range(configs.e_layers + 1)
             ],
         )
         if self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
@@ -81,7 +79,7 @@ class Model(nn.Module):
         x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d = n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
-        enc_out, attns = self.encoder(x_enc)
+        enc_out, _ = self.encoder(x_enc)
 
         dec_in = repeat(self.dec_pos_embedding, 'b ts_d l d -> (repeat b) ts_d l d', repeat=x_enc.shape[0])
         dec_out = self.decoder(dec_in, enc_out)
@@ -92,7 +90,7 @@ class Model(nn.Module):
         x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
-        enc_out, attns = self.encoder(x_enc)
+        enc_out, _ = self.encoder(x_enc)
 
         dec_out = self.head(enc_out[-1].permute(0, 1, 3, 2)).permute(0, 2, 1)
 
@@ -103,7 +101,7 @@ class Model(nn.Module):
         x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
-        enc_out, attns = self.encoder(x_enc)
+        enc_out, _ = self.encoder(x_enc)
 
         dec_out = self.head(enc_out[-1].permute(0, 1, 3, 2)).permute(0, 2, 1)
         return dec_out
@@ -113,7 +111,7 @@ class Model(nn.Module):
         x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
-        enc_out, attns = self.encoder(x_enc)
+        enc_out, _ = self.encoder(x_enc)
 
         output = self.flatten(enc_out[-1].permute(0, 1, 3, 2))
         output = self.dropout(output)
@@ -124,14 +122,14 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, N]
+            return dec_out
         return None

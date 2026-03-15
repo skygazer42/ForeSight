@@ -29,18 +29,18 @@ def parser(s):
 # %%
 #read data
 catfish_sales = pd.read_csv('catfish.csv', parse_dates=[0], index_col=0, squeeze=True, date_parser=parser)
-catfish_sales 
+print(catfish_sales)
 
 # %%
 #infer the frequency of the data
 catfish_sales = catfish_sales.asfreq(pd.infer_freq(catfish_sales.index))
-catfish_sales
+print(catfish_sales)
 
 # %%
 start_date = datetime(2000,1,1)
 end_date = datetime(2004,1,1)
 lim_catfish_sales = catfish_sales[start_date:end_date]
-lim_catfish_sales 
+print(lim_catfish_sales)
 
 # %%
 plt.figure(figsize=(10,4))
@@ -55,7 +55,7 @@ plt.axhline(lim_catfish_sales.mean(), color='r', alpha=0.2, linestyle='--')
 first_diff = lim_catfish_sales.diff()[1:]
 
 # %%
-first_diff 
+print(first_diff)
 
 # %%
 plt.figure(figsize=(10,4))
@@ -70,7 +70,7 @@ plt.axhline(first_diff.mean(), color='r', alpha=0.2, linestyle='--')
 # # ACF
 
 # %%
-first_diff # 差分
+print(first_diff)
 
 # %%
 acf_vals = acf(first_diff)
@@ -103,10 +103,10 @@ train_data = first_diff[:train_end]
 test_data = first_diff[train_end + timedelta(days=1):test_end]
 
 # %%
-train_data
+print(train_data)
 
 # %%
-test_data 
+print(test_data)
 
 # %% [markdown]
 # # Fit the ARMA Model
@@ -143,13 +143,13 @@ print(model_fit.summary())
 # 这个模型表示在时间点 $t$，预测值 $\hat{y_t}$ 是过去四个观测值（$y_{t-1}$、$y_{t-2}$、$y_{t-3}$ 和 $y_{t-4}$）以及滞后1期的误差项（$\varepsilon_{t-1}$）的线性组合。每个观测值和误差项都乘以对应的系数（$-0.87$、$-0.42$、$-0.56$、$-0.61$ 和 $0.52$）。这些系数表示每个滞后观测值和误差项对于预测时间点 $t$ 的影响程度
 
 # %%
-test_data
+print(test_data)
 
 # %%
-test_data.index[0]
+print(test_data.index[0])
 
 # %%
-test_data.index[-1]
+print(test_data.index[-1])
 
 # %%
 #get prediction start and end dates

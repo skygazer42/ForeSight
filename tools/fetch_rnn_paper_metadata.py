@@ -197,6 +197,46 @@ class ArxivHit:
     authors: tuple[str, ...]
 
 
+def _normalize_arxiv_id(raw_id: str) -> str:
+    arxiv_id = raw_id.split("/")[-1] if raw_id else ""
+    if "v" in arxiv_id:
+        arxiv_id = arxiv_id.split("v", 1)[0]
+    return arxiv_id
+
+
+def _published_year(published: str) -> int | None:
+    if len(published) >= 4 and published[:4].isdigit():
+        return int(published[:4])
+    return None
+
+
+def _arxiv_entry_authors(entry: ET.Element, ns: dict[str, str]) -> tuple[str, ...]:
+    authors: list[str] = []
+    for author in entry.findall("a:author", ns):
+        name = _normalize_spaces(author.findtext("a:name", default="", namespaces=ns))
+        if name:
+            authors.append(name)
+    return tuple(authors)
+
+
+def _parse_arxiv_entry(entry: ET.Element, ns: dict[str, str]) -> ArxivHit | None:
+    raw_id = _normalize_spaces(entry.findtext("a:id", default="", namespaces=ns))
+    arxiv_id = _normalize_arxiv_id(raw_id)
+    title = _normalize_spaces(entry.findtext("a:title", default="", namespaces=ns))
+    if not arxiv_id or not title:
+        return None
+
+    published = _normalize_spaces(entry.findtext("a:published", default="", namespaces=ns))
+    doi = _normalize_spaces(entry.findtext("arxiv:doi", default="", namespaces=ns)) or None
+    return ArxivHit(
+        arxiv_id=arxiv_id,
+        title=title,
+        year=_published_year(published),
+        doi=doi,
+        authors=_arxiv_entry_authors(entry, ns),
+    )
+
+
 def _arxiv_query(search_query: str, *, max_results: int = 5) -> list[ArxivHit]:
     url = "http://export.arxiv.org/api/query?" + urllib.parse.urlencode(
         {"search_query": search_query, "start": 0, "max_results": int(max_results)}
@@ -210,35 +250,57 @@ def _arxiv_query(search_query: str, *, max_results: int = 5) -> list[ArxivHit]:
     root = ET.fromstring(xml)
     hits: list[ArxivHit] = []
     for entry in root.findall("a:entry", ns):
-        raw_id = _normalize_spaces(entry.findtext("a:id", default="", namespaces=ns))
-        arxiv_id = raw_id.split("/")[-1] if raw_id else ""
-        if "v" in arxiv_id:
-            arxiv_id = arxiv_id.split("v", 1)[0]
-
-        title = _normalize_spaces(entry.findtext("a:title", default="", namespaces=ns))
-        published = _normalize_spaces(entry.findtext("a:published", default="", namespaces=ns))
-        year = int(published[:4]) if len(published) >= 4 and published[:4].isdigit() else None
-
-        doi = _normalize_spaces(entry.findtext("arxiv:doi", default="", namespaces=ns))
-        doi = doi or None
-
-        authors: list[str] = []
-        for a in entry.findall("a:author", ns):
-            an = _normalize_spaces(a.findtext("a:name", default="", namespaces=ns))
-            if an:
-                authors.append(an)
-
-        if arxiv_id and title:
-            hits.append(
-                ArxivHit(
-                    arxiv_id=arxiv_id,
-                    title=title,
-                    year=year,
-                    doi=doi,
-                    authors=tuple(authors),
-                )
-            )
+        hit = _parse_arxiv_entry(entry, ns)
+        if hit is not None:
+            hits.append(hit)
     return hits
+
+
+def _score_year_delta(
+    hit_year: int | None,
+    expected_year: int | None,
+    *,
+    exact: float,
+    near_one: float,
+    near_two: float,
+) -> float:
+    if hit_year is None or expected_year is None:
+        return 0.0
+
+    delta = abs(int(hit_year) - int(expected_year))
+    if delta == 0:
+        return exact
+    if delta == 1:
+        return near_one
+    if delta == 2:
+        return near_two
+    return 0.0
+
+
+def _count_author_last_name_matches(author_last_names: list[str], author_blob: str) -> int:
+    return sum(1 for ln in author_last_names if ln.lower() in author_blob)
+
+
+def _arxiv_hint_title_score(
+    hit: ArxivHit,
+    *,
+    author_last_names: list[str],
+    year: int | None,
+    hint_title: str | None,
+    author_blob: str,
+) -> float | None:
+    if not hint_title:
+        return 0.0
+
+    sim = _jaccard(_title_token_set(hit.title), _title_token_set(hint_title))
+    if sim < 0.40:
+        return None
+    if year is not None and hit.year is not None:
+        if abs(int(hit.year) - int(year)) > 2 and sim < 0.60:
+            return None
+    elif sim < 0.60 and _count_author_last_name_matches(author_last_names, author_blob) == 0:
+        return None
+    return 4.0 * float(sim)
 
 
 def _score_arxiv_hit(
@@ -258,36 +320,22 @@ def _score_arxiv_hit(
     #
     # Intentionally strict: if arXiv doesn't have the paper, we'd rather return None than
     # attach an unrelated arXiv id/DOI.
-    if hint_title:
-        sim = _jaccard(_title_token_set(hit.title), _title_token_set(hint_title))
-        if sim < 0.40:
-            return -1e9
-        if year is not None and hit.year is not None:
-            # arXiv `published` year is upload year, which can differ from the paper year.
-            # Enforce near-year matches unless the title match is very strong.
-            if abs(int(hit.year) - int(year)) > 2 and sim < 0.60:
-                return -1e9
-        elif sim < 0.60:
-            # If year is missing on either side, require an author last-name match unless
-            # the title match is very strong.
-            if not any(ln.lower() in author_blob for ln in author_last_names):
-                return -1e9
-        score += 4.0 * float(sim)
+    hint_score = _arxiv_hint_title_score(
+        hit,
+        author_last_names=author_last_names,
+        year=year,
+        hint_title=hint_title,
+        author_blob=author_blob,
+    )
+    if hint_score is None:
+        return -1e9
+    score += hint_score
 
     # Year match.
-    if year is not None and hit.year is not None:
-        dy = abs(int(hit.year) - int(year))
-        if dy == 0:
-            score += 3.0
-        elif dy == 1:
-            score += 1.5
-        elif dy == 2:
-            score += 0.5
+    score += _score_year_delta(hit.year, year, exact=3.0, near_one=1.5, near_two=0.5)
 
     # Author match (substring in authors list).
-    for ln in author_last_names:
-        if ln.lower() in author_blob:
-            score += 1.0
+    score += float(_count_author_last_name_matches(author_last_names, author_blob))
 
     # Token overlap.
     name_tokens = [t for t in re.split(SLUG_SPLIT_REGEX, name.lower()) if t and len(t) >= 3]
@@ -308,45 +356,20 @@ def _best_arxiv_match(
     sleep_s: float,
 ) -> ArxivHit | None:
     name, author_last_names, year = _parse_desc(desc)
-
-    queries: list[str] = []
     hint = title_hints.get(paper_id)
-    if hint:
-        queries.append(f'ti:"{hint}"')
-    for cand in _expand_name_for_title_search(name):
-        queries.append(f'ti:"{cand}"')
-
-    # Fallback keyword search.
-    if author_last_names:
-        queries.append("all:" + " ".join([name] + author_last_names[:2]))
-    else:
-        queries.append("all:" + name)
-
-    best: tuple[float, ArxivHit] | None = None
-    for q in queries:
-        try:
-            hits = _arxiv_query(q, max_results=5)
-        except Exception:
-            hits = []
-
-        if sleep_s > 0:
-            time.sleep(float(sleep_s))
-
-        for h in hits:
-            s = _score_arxiv_hit(
-                h,
-                name=name,
-                author_last_names=author_last_names,
-                year=year,
-                hint_title=hint,
-            )
-            if best is None or s > best[0]:
-                best = (s, h)
-
-        # If we found a confident match from a title query, stop early.
-        if best is not None and best[0] >= 3.0 and q.startswith("ti:"):
-            break
-
+    queries = _iter_arxiv_queries(
+        name=name,
+        author_last_names=author_last_names,
+        hint_title=hint,
+    )
+    best = _search_best_arxiv_hit(
+        queries,
+        name=name,
+        author_last_names=author_last_names,
+        year=year,
+        hint_title=hint,
+        sleep_s=sleep_s,
+    )
     if best is None or best[0] < 2.0:
         return None
     return best[1]
@@ -361,6 +384,48 @@ class CrossrefHit:
     authors: tuple[str, ...]
 
 
+def _crossref_year(issued: Any) -> int | None:
+    if (
+        issued
+        and isinstance(issued, list)
+        and issued
+        and isinstance(issued[0], list)
+        and issued[0]
+        and isinstance(issued[0][0], int)
+    ):
+        return int(issued[0][0])
+    return None
+
+
+def _crossref_authors(items: Any) -> tuple[str, ...]:
+    authors: list[str] = []
+    for item in items or []:
+        family = _normalize_spaces(item.get("family") or "")
+        given = _normalize_spaces(item.get("given") or "")
+        if family and given:
+            authors.append(f"{given} {family}")
+        elif family:
+            authors.append(family)
+    return tuple(authors)
+
+
+def _parse_crossref_hit(item: dict[str, Any]) -> CrossrefHit | None:
+    title_raw = item.get("title") or []
+    title = _normalize_spaces(title_raw[0]) if isinstance(title_raw, list) and title_raw else ""
+    if not title:
+        return None
+
+    doi = _normalize_spaces(item.get("DOI") or "") or None
+    url = _normalize_spaces(item.get("URL") or "") or None
+    return CrossrefHit(
+        title=title,
+        year=_crossref_year(item.get("issued", {}).get("date-parts")),
+        doi=doi,
+        url=url,
+        authors=_crossref_authors(item.get("author")),
+    )
+
+
 def _crossref_query(query: str, *, year: int | None, rows: int = 5) -> list[CrossrefHit]:
     params: dict[str, str] = {"query.bibliographic": query, "rows": str(int(rows))}
     if year is not None:
@@ -370,35 +435,9 @@ def _crossref_query(query: str, *, year: int | None, rows: int = 5) -> list[Cros
 
     out: list[CrossrefHit] = []
     for it in data.get("message", {}).get("items", []):
-        title_raw = it.get("title") or []
-        title = _normalize_spaces(title_raw[0]) if isinstance(title_raw, list) and title_raw else ""
-        if not title:
-            continue
-        doi = _normalize_spaces(it.get("DOI") or "") or None
-        url0 = _normalize_spaces(it.get("URL") or "") or None
-
-        issued = it.get("issued", {}).get("date-parts")
-        yr = None
-        if (
-            issued
-            and isinstance(issued, list)
-            and issued
-            and isinstance(issued[0], list)
-            and issued[0]
-            and isinstance(issued[0][0], int)
-        ):
-            yr = int(issued[0][0])
-
-        authors: list[str] = []
-        for a in it.get("author") or []:
-            fam = _normalize_spaces(a.get("family") or "")
-            given = _normalize_spaces(a.get("given") or "")
-            if fam and given:
-                authors.append(f"{given} {fam}")
-            elif fam:
-                authors.append(fam)
-
-        out.append(CrossrefHit(title=title, year=yr, doi=doi, url=url0, authors=tuple(authors)))
+        hit = _parse_crossref_hit(it)
+        if hit is not None:
+            out.append(hit)
     return out
 
 
@@ -412,19 +451,10 @@ def _score_crossref_hit(
     score = 0.0
     title_l = hit.title.lower()
 
-    if year is not None and hit.year is not None:
-        dy = abs(int(hit.year) - int(year))
-        if dy == 0:
-            score += 2.0
-        elif dy == 1:
-            score += 1.0
-        elif dy == 2:
-            score += 0.2
+    score += _score_year_delta(hit.year, year, exact=2.0, near_one=1.0, near_two=0.2)
 
     author_blob = " ".join(hit.authors).lower()
-    for ln in author_last_names:
-        if ln.lower() in author_blob:
-            score += 0.8
+    score += 0.8 * float(_count_author_last_name_matches(author_last_names, author_blob))
 
     if expected_title:
         et = expected_title.lower()
@@ -456,6 +486,146 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return float(len(inter)) / float(len(union))
 
 
+def _iter_arxiv_queries(
+    *,
+    name: str,
+    author_last_names: list[str],
+    hint_title: str | None,
+) -> list[str]:
+    queries: list[str] = []
+    if hint_title:
+        queries.append(f'ti:"{hint_title}"')
+    for candidate in _expand_name_for_title_search(name):
+        queries.append(f'ti:"{candidate}"')
+    if author_last_names:
+        queries.append("all:" + " ".join([name] + author_last_names[:2]))
+    else:
+        queries.append("all:" + name)
+    return queries
+
+
+def _sleep_between_requests(sleep_s: float) -> None:
+    if sleep_s > 0:
+        time.sleep(float(sleep_s))
+
+
+def _search_best_arxiv_hit(
+    queries: list[str],
+    *,
+    name: str,
+    author_last_names: list[str],
+    year: int | None,
+    hint_title: str | None,
+    sleep_s: float,
+) -> tuple[float, ArxivHit] | None:
+    best: tuple[float, ArxivHit] | None = None
+    for query in queries:
+        try:
+            hits = _arxiv_query(query, max_results=5)
+        except Exception:
+            hits = []
+
+        _sleep_between_requests(sleep_s)
+
+        for hit in hits:
+            score = _score_arxiv_hit(
+                hit,
+                name=name,
+                author_last_names=author_last_names,
+                year=year,
+                hint_title=hint_title,
+            )
+            if best is None or score > best[0]:
+                best = (score, hit)
+
+        if best is not None and best[0] >= 3.0 and query.startswith("ti:"):
+            break
+    return best
+
+
+def _iter_crossref_queries(
+    *,
+    name: str,
+    author_last_names: list[str],
+    year: int | None,
+    expected_title: str | None,
+) -> list[str]:
+    queries: list[str] = []
+    if expected_title:
+        queries.append(expected_title)
+    queries.append(f"{name} {' '.join(author_last_names[:2])} {year or ''}".strip())
+    queries.append(name)
+    return queries
+
+
+def _crossref_title_similarity(
+    hit: CrossrefHit,
+    *,
+    expected_title: str | None,
+    author_last_names: list[str],
+    strict_title_match: bool,
+) -> float | None:
+    if not expected_title:
+        return None
+
+    title_sim = _jaccard(_title_token_set(hit.title), _title_token_set(expected_title))
+    author_blob = " ".join(hit.authors).lower()
+    has_author_match = any(last_name.lower() in author_blob for last_name in author_last_names)
+    if strict_title_match:
+        min_sim = 0.50
+    elif author_last_names:
+        min_sim = 0.45 if has_author_match else 0.65
+    else:
+        min_sim = 0.55
+    if title_sim < min_sim:
+        return None
+    return title_sim
+
+
+def _search_best_crossref_hit(
+    queries: list[str],
+    *,
+    expected_title: str | None,
+    author_last_names: list[str],
+    year: int | None,
+    strict_title_match: bool,
+    sleep_s: float,
+) -> tuple[float, CrossrefHit] | None:
+    best: tuple[float, CrossrefHit] | None = None
+    for query in queries:
+        try:
+            hits = _crossref_query(query, year=year, rows=5)
+        except Exception:
+            hits = []
+
+        _sleep_between_requests(sleep_s)
+
+        for hit in hits:
+            title_sim = _crossref_title_similarity(
+                hit,
+                expected_title=expected_title,
+                author_last_names=author_last_names,
+                strict_title_match=strict_title_match,
+            )
+            if expected_title and title_sim is None:
+                continue
+
+            score = _score_crossref_hit(
+                hit,
+                expected_title=expected_title,
+                author_last_names=author_last_names,
+                year=year,
+            )
+            if title_sim is not None:
+                score += 4.0 * float(title_sim)
+            if best is None or score > best[0]:
+                best = (score, hit)
+
+        if best is not None and best[0] >= 2.5:
+            break
+    return best
+
+
 def _best_crossref_match(
     *,
     desc: str,
@@ -464,61 +634,349 @@ def _best_crossref_match(
     sleep_s: float,
 ) -> CrossrefHit | None:
     name, author_last_names, year = _parse_desc(desc)
-
-    queries: list[str] = []
-    if expected_title:
-        queries.append(expected_title)
-    queries.append(f"{name} {' '.join(author_last_names[:2])} {year or ''}".strip())
-    queries.append(name)
-
-    best: tuple[float, CrossrefHit] | None = None
-    for q in queries:
-        try:
-            hits = _crossref_query(q, year=year, rows=5)
-        except Exception:
-            hits = []
-
-        if sleep_s > 0:
-            time.sleep(float(sleep_s))
-
-        for h in hits:
-            title_sim = None
-            if expected_title:
-                title_sim = _jaccard(_title_token_set(h.title), _title_token_set(expected_title))
-                author_blob = " ".join(h.authors).lower()
-                has_author_match = any(ln.lower() in author_blob for ln in author_last_names)
-                if strict_title_match:
-                    min_sim = 0.50
-                else:
-                    if author_last_names:
-                        # Without author evidence, be much more conservative: Crossref can return
-                        # false positives from partial title overlap ("unreasonable effectiveness", etc.).
-                        min_sim = 0.45 if has_author_match else 0.65
-                    else:
-                        min_sim = 0.55
-                if title_sim < min_sim:
-                    # When we have an expected title (usually from arXiv or a curated hint),
-                    # reject Crossref hits that don't match it closely enough. This prevents
-                    # false-positive DOIs from partial token overlap (e.g. "unreasonable effectiveness").
-                    continue
-
-            s = _score_crossref_hit(
-                h,
-                expected_title=expected_title,
-                author_last_names=author_last_names,
-                year=year,
-            )
-            if title_sim is not None:
-                s += 4.0 * float(title_sim)
-            if best is None or s > best[0]:
-                best = (s, h)
-
-        if best is not None and best[0] >= 2.5:
-            break
-
+    queries = _iter_crossref_queries(
+        name=name,
+        author_last_names=author_last_names,
+        year=year,
+        expected_title=expected_title,
+    )
+    best = _search_best_crossref_hit(
+        queries,
+        expected_title=expected_title,
+        author_last_names=author_last_names,
+        year=year,
+        strict_title_match=strict_title_match,
+        sleep_s=sleep_s,
+    )
     if best is None or best[0] < 1.6:
         return None
     return best[1]
+
+
+def _metadata_seed_record(paper_id: str, desc: str, expected_year: int | None) -> dict[str, Any]:
+    return {
+        "paper_id": paper_id,
+        "desc": desc,
+        "title": "",
+        "year": int(expected_year) if expected_year is not None else None,
+        "doi": "",
+        "arxiv_id": "",
+        "url": "",
+        "source_title": "",
+        "source_doi": "",
+        "source_url": "",
+    }
+
+
+def _source_title_name(
+    *,
+    arxiv: ArxivHit | None,
+    hint_title: str | None,
+    crossref: CrossrefHit | None,
+) -> str:
+    if arxiv:
+        return "arxiv"
+    if hint_title:
+        return "hint"
+    if crossref:
+        return "crossref"
+    return ""
+
+
+def _source_doi_name(*, arxiv: ArxivHit | None, crossref: CrossrefHit | None) -> str:
+    if arxiv and arxiv.doi:
+        return "arxiv"
+    if crossref and crossref.doi:
+        return "crossref"
+    return ""
+
+
+def _metadata_year(
+    *,
+    expected_year: int | None,
+    arxiv: ArxivHit | None,
+    crossref: CrossrefHit | None,
+) -> int | None:
+    if expected_year is not None:
+        return expected_year
+    if arxiv and arxiv.year is not None:
+        return arxiv.year
+    if crossref and crossref.year is not None:
+        return crossref.year
+    return None
+
+
+def _metadata_doi(*, arxiv: ArxivHit | None, crossref: CrossrefHit | None) -> str:
+    if arxiv and arxiv.doi:
+        return arxiv.doi
+    if crossref and crossref.doi:
+        return crossref.doi
+    return ""
+
+
+def _resolve_entry_url_fields(
+    *,
+    paper_id: str,
+    doi: str,
+    arxiv_id: str,
+    url: str,
+    source_url: str,
+    url_overrides: dict[str, str],
+) -> tuple[str, str]:
+    resolved_url = url
+    resolved_source = source_url
+    if not resolved_url:
+        resolved_url, resolved_source = _best_reference_url(
+            paper_id=paper_id,
+            doi=doi,
+            arxiv_id=arxiv_id,
+            overrides=url_overrides,
+        )
+    if resolved_url and not resolved_source:
+        if doi:
+            resolved_source = "doi"
+        elif arxiv_id:
+            resolved_source = "arxiv"
+        elif paper_id in url_overrides:
+            resolved_source = "override"
+        else:
+            resolved_source = ""
+    return (resolved_url, resolved_source)
+
+
+def _expected_title_for_crossref(
+    *,
+    arxiv: ArxivHit | None,
+    hint_title: str | None,
+) -> str | None:
+    if arxiv:
+        return arxiv.title
+    return hint_title or None
+
+
+def _ensure_metadata_entry(
+    *,
+    paper_id: str,
+    desc: str,
+    expected_year: int | None,
+    existing: dict[str, Any],
+    updated: dict[str, Any],
+    url_overrides: dict[str, str],
+) -> dict[str, Any]:
+    current = updated.get(paper_id)
+    if isinstance(current, dict):
+        current["paper_id"] = paper_id
+        current["desc"] = desc
+        if expected_year is not None:
+            current["year"] = int(expected_year)
+    else:
+        current = _metadata_seed_record(paper_id, desc, expected_year)
+
+    doi = _normalize_spaces(str(current.get("doi", "")))
+    arxiv_id = _normalize_spaces(str(current.get("arxiv_id", "")))
+    url = _normalize_spaces(str(current.get("url", "")))
+    source_url = _normalize_spaces(str(current.get("source_url", "")))
+    url, source_url = _resolve_entry_url_fields(
+        paper_id=paper_id,
+        doi=doi,
+        arxiv_id=arxiv_id,
+        url=url,
+        source_url=source_url,
+        url_overrides=url_overrides,
+    )
+
+    current["url"] = url
+    current["source_url"] = source_url
+    updated[paper_id] = current
+    return current
+
+
+def _build_metadata_record(
+    *,
+    paper_id: str,
+    desc: str,
+    expected_year: int | None,
+    title_hints: dict[str, str],
+    url_overrides: dict[str, str],
+    sleep_s: float,
+) -> dict[str, Any]:
+    arxiv = _best_arxiv_match(
+        paper_id=paper_id,
+        desc=desc,
+        title_hints=title_hints,
+        sleep_s=sleep_s,
+    )
+    hint_title = title_hints.get(paper_id)
+    expected_title = _expected_title_for_crossref(arxiv=arxiv, hint_title=hint_title)
+    crossref = _best_crossref_match(
+        desc=desc,
+        expected_title=expected_title,
+        strict_title_match=bool(hint_title) and (arxiv is None),
+        sleep_s=sleep_s,
+    )
+
+    doi = _metadata_doi(arxiv=arxiv, crossref=crossref)
+    year = _metadata_year(
+        expected_year=expected_year,
+        arxiv=arxiv,
+        crossref=crossref,
+    )
+    url, source_url = _best_reference_url(
+        paper_id=paper_id,
+        doi=doi,
+        arxiv_id=(arxiv.arxiv_id if arxiv else ""),
+        overrides=url_overrides,
+    )
+    return {
+        "paper_id": paper_id,
+        "desc": desc,
+        "title": expected_title or (crossref.title if crossref else ""),
+        "year": int(year) if year is not None else None,
+        "doi": doi,
+        "arxiv_id": arxiv.arxiv_id if arxiv else "",
+        "url": url,
+        "source_title": _source_title_name(
+            arxiv=arxiv,
+            hint_title=hint_title,
+            crossref=crossref,
+        ),
+        "source_doi": _source_doi_name(arxiv=arxiv, crossref=crossref),
+        "source_url": source_url,
+    }
+
+
+def _missing_metadata_ids(
+    defs: list[tuple[str, str]],
+    updated: dict[str, Any],
+    *,
+    predicate: Any,
+) -> list[str]:
+    missing: list[str] = []
+    for paper_id, _desc in defs:
+        record = updated.get(paper_id, {})
+        if predicate(record):
+            missing.append(paper_id)
+    return missing
+
+
+def _print_metadata_coverage(
+    *,
+    output_path: Path,
+    updated: dict[str, Any],
+    paper_defs: list[tuple[str, str]],
+) -> None:
+    missing_title = _missing_metadata_ids(
+        paper_defs,
+        updated,
+        predicate=lambda record: not str(record.get("title", "")).strip(),
+    )
+    missing_any_ref = _missing_metadata_ids(
+        paper_defs,
+        updated,
+        predicate=lambda record: (
+            not str(record.get("doi", "")).strip()
+            and not str(record.get("arxiv_id", "")).strip()
+        ),
+    )
+    missing_url = _missing_metadata_ids(
+        paper_defs,
+        updated,
+        predicate=lambda record: not str(record.get("url", "")).strip(),
+    )
+
+    print(f"\nWrote: {output_path}")
+    print(
+        f"Coverage: titles={100 - len(missing_title)}/100, doi_or_arxiv={100 - len(missing_any_ref)}/100"
+    )
+    print(f"Coverage: url={100 - len(missing_url)}/100")
+    if missing_title:
+        print("Missing titles:")
+        for paper_id in missing_title:
+            print(" -", paper_id)
+    if missing_any_ref:
+        print("Missing DOI+arXiv:")
+        for paper_id in missing_any_ref:
+            print(" -", paper_id)
+    if missing_url:
+        print("Missing URL:")
+        for paper_id in missing_url:
+            print(" -", paper_id)
+
+
+def _resolve_wanted_paper_defs(
+    *,
+    paper_defs: list[tuple[str, str]],
+    extra_defs: list[tuple[str, str]],
+    only: str,
+) -> list[tuple[str, str]]:
+    wanted = list(paper_defs) + list(extra_defs)
+    if only:
+        wanted = [(pid, desc) for pid, desc in wanted if pid == only]
+        if not wanted:
+            raise SystemExit(f"Unknown paper_id: {only!r}")
+    return wanted
+
+
+def _should_rebuild_metadata_record(
+    *,
+    paper_id: str,
+    existing: dict[str, Any],
+    refresh: bool,
+) -> bool:
+    if refresh:
+        return True
+    if paper_id not in existing:
+        return True
+    return not str(existing.get(paper_id, {}).get("title", "")).strip()
+
+
+def _print_metadata_progress_row(
+    *,
+    idx: int,
+    total: int,
+    paper_id: str,
+    record: dict[str, Any],
+) -> None:
+    has_doi = bool(record["doi"])
+    has_arxiv = bool(record["arxiv_id"])
+    print(
+        f"[{idx:03d}/{total:03d}] {paper_id:28s} year={str(record['year']):4s} "
+        f"doi={'Y' if has_doi else '-'} arxiv={'Y' if has_arxiv else '-'} "
+        f"title={str(record['title'])[:70]!r}",
+        flush=True,
+    )
+
+
+def _refresh_metadata_record(
+    *,
+    updated: dict[str, Any],
+    paper_id: str,
+    desc: str,
+    expected_year: int | None,
+    title_hints: dict[str, str],
+    url_overrides: dict[str, str],
+    sleep_s: float,
+    output_path: Path,
+    idx: int,
+    total: int,
+) -> dict[str, Any]:
+    updated[paper_id] = _build_metadata_record(
+        paper_id=paper_id,
+        desc=desc,
+        expected_year=expected_year,
+        title_hints=title_hints,
+        url_overrides=url_overrides,
+        sleep_s=sleep_s,
+    )
+    _print_metadata_progress_row(
+        idx=idx,
+        total=total,
+        paper_id=paper_id,
+        record=updated[paper_id],
+    )
+    # Persist progress so interruptions don't lose work.
+    _write_json(output_path, updated)
+    return updated[paper_id]
 
 
 def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) -> None:
@@ -609,183 +1067,47 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
         "echo-state-network": "https://publica.fraunhofer.de/handle/publica/291207",
     }
 
-    wanted = list(_PAPER_DEFS) + list(extra_defs)
-    if only:
-        wanted = [(pid, d) for pid, d in wanted if pid == only]
-        if not wanted:
-            raise SystemExit(f"Unknown paper_id: {only!r}")
+    wanted = _resolve_wanted_paper_defs(
+        paper_defs=list(_PAPER_DEFS),
+        extra_defs=extra_defs,
+        only=only,
+    )
 
     total = len(wanted)
     for idx, (paper_id, desc) in enumerate(wanted, start=1):
-        # Always keep curated desc/year in sync, even when we skip network refresh.
         _, _, expected_year = _parse_desc(desc)
-        if paper_id in updated and isinstance(updated.get(paper_id), dict):
-            updated[paper_id]["paper_id"] = paper_id
-            updated[paper_id]["desc"] = desc
-            if expected_year is not None:
-                updated[paper_id]["year"] = int(expected_year)
-        else:
-            updated[paper_id] = {
-                "paper_id": paper_id,
-                "desc": desc,
-                "title": "",
-                "year": int(expected_year) if expected_year is not None else None,
-                "doi": "",
-                "arxiv_id": "",
-                "url": "",
-                "source_title": "",
-                "source_doi": "",
-                "source_url": "",
-            }
+        _ensure_metadata_entry(
+            paper_id=paper_id,
+            desc=desc,
+            expected_year=expected_year,
+            existing=existing,
+            updated=updated,
+            url_overrides=url_overrides,
+        )
 
-        # Even when we skip network refresh, we still want to backfill derived fields (e.g. `url`).
-        current = updated.get(paper_id, {})
-        if not isinstance(current, dict):
-            current = {}
-        doi0 = _normalize_spaces(str(current.get("doi", "")))
-        arxiv0 = _normalize_spaces(str(current.get("arxiv_id", "")))
-        url0 = _normalize_spaces(str(current.get("url", "")))
-        source_url0 = _normalize_spaces(str(current.get("source_url", "")))
-        if not url0:
-            url0, source_url0 = _best_reference_url(
-                paper_id=paper_id,
-                doi=doi0,
-                arxiv_id=arxiv0,
-                overrides=url_overrides,
-            )
-        if url0 and not source_url0:
-            # Backfill source based on which field is present.
-            if doi0:
-                source_url0 = "doi"
-            elif arxiv0:
-                source_url0 = "arxiv"
-            elif paper_id in url_overrides:
-                source_url0 = "override"
-            else:
-                source_url0 = ""
-
-        current["url"] = url0
-        current["source_url"] = source_url0
-        updated[paper_id] = current
-
-        if (
-            not refresh
-            and paper_id in existing
-            and str(existing.get(paper_id, {}).get("title", "")).strip()
+        if not _should_rebuild_metadata_record(
+            paper_id=paper_id,
+            existing=existing,
+            refresh=refresh,
         ):
             continue
 
-        arxiv = _best_arxiv_match(
+        _refresh_metadata_record(
+            updated=updated,
             paper_id=paper_id,
             desc=desc,
+            expected_year=expected_year,
             title_hints=title_hints,
+            url_overrides=url_overrides,
             sleep_s=sleep_s,
+            output_path=output_path,
+            idx=idx,
+            total=total,
         )
-        hint_title = title_hints.get(paper_id)
-        expected_title = arxiv.title if arxiv else (hint_title or None)
-        crossref = _best_crossref_match(
-            desc=desc,
-            expected_title=expected_title,
-            strict_title_match=bool(hint_title) and (arxiv is None),
-            sleep_s=sleep_s,
-        )
-
-        title = expected_title or (crossref.title if crossref else "")
-        # Prefer the year encoded in the curated description (paper year), which is stable and
-        # consistent with the model registry. arXiv "published" dates can reflect upload time.
-        year = expected_year
-        if year is None:
-            year = (
-                (arxiv.year if (arxiv and arxiv.year) else None)
-                or (crossref.year if (crossref and crossref.year) else None)
-                or None
-            )
-
-        doi = None
-        if arxiv and arxiv.doi:
-            doi = arxiv.doi
-        if not doi and crossref and crossref.doi:
-            doi = crossref.doi
-
-        url, source_url = _best_reference_url(
-            paper_id=paper_id,
-            doi=doi or "",
-            arxiv_id=(arxiv.arxiv_id if arxiv else ""),
-            overrides=url_overrides,
-        )
-        if arxiv:
-            source_title = "arxiv"
-        elif hint_title:
-            source_title = "hint"
-        elif crossref:
-            source_title = "crossref"
-        else:
-            source_title = ""
-
-        if arxiv and arxiv.doi:
-            source_doi = "arxiv"
-        elif crossref and crossref.doi:
-            source_doi = "crossref"
-        else:
-            source_doi = ""
-
-        updated[paper_id] = {
-            "paper_id": paper_id,
-            "desc": desc,
-            "title": title,
-            "year": int(year) if year is not None else None,
-            "doi": doi or "",
-            "arxiv_id": arxiv.arxiv_id if arxiv else "",
-            "url": url,
-            "source_title": source_title,
-            "source_doi": source_doi,
-            "source_url": source_url,
-        }
-
-        has_doi = bool(doi)
-        has_arxiv = bool(arxiv and arxiv.arxiv_id)
-        print(
-            f"[{idx:03d}/{total:03d}] {paper_id:28s} year={str(updated[paper_id]['year']):4s} "
-            f"doi={'Y' if has_doi else '-'} arxiv={'Y' if has_arxiv else '-'} title={title[:70]!r}",
-            flush=True,
-        )
-
-        # Persist progress so interruptions don't lose work.
-        _write_json(output_path, updated)
 
     # Final write (ensures sort_keys/formatting is consistent).
     _write_json(output_path, updated)
-
-    missing_title = [
-        pid for pid, _d in _PAPER_DEFS if not str(updated.get(pid, {}).get("title", "")).strip()
-    ]
-    missing_any_ref = [
-        pid
-        for pid, _d in _PAPER_DEFS
-        if not str(updated.get(pid, {}).get("doi", "")).strip()
-        and not str(updated.get(pid, {}).get("arxiv_id", "")).strip()
-    ]
-    missing_url = [
-        pid for pid, _d in _PAPER_DEFS if not str(updated.get(pid, {}).get("url", "")).strip()
-    ]
-
-    print(f"\nWrote: {output_path}")
-    print(
-        f"Coverage: titles={100 - len(missing_title)}/100, doi_or_arxiv={100 - len(missing_any_ref)}/100"
-    )
-    print(f"Coverage: url={100 - len(missing_url)}/100")
-    if missing_title:
-        print("Missing titles:")
-        for pid in missing_title:
-            print(" -", pid)
-    if missing_any_ref:
-        print("Missing DOI+arXiv:")
-        for pid in missing_any_ref:
-            print(" -", pid)
-    if missing_url:
-        print("Missing URL:")
-        for pid in missing_url:
-            print(" -", pid)
+    _print_metadata_coverage(output_path=output_path, updated=updated, paper_defs=list(_PAPER_DEFS))
 
 
 def main() -> int:

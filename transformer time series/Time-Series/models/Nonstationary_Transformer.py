@@ -67,7 +67,7 @@ class Model(nn.Module):
                     configs.d_ff,
                     dropout=configs.dropout,
                     activation=configs.activation
-                ) for l in range(configs.e_layers)
+                ) for _ in range(configs.e_layers)
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
@@ -91,7 +91,7 @@ class Model(nn.Module):
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
-                    for l in range(configs.d_layers)
+                    for _ in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
                 projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -127,7 +127,7 @@ class Model(nn.Module):
                               dim=1).to(x_enc.device).clone()
 
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
 
         dec_out = self.dec_embedding(x_dec_new, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, tau=tau, delta=delta)
@@ -150,7 +150,7 @@ class Model(nn.Module):
         delta = self.delta_learner(x_raw, mean_enc)  # B x S x E, B x 1 x E -> B x S
 
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
 
         dec_out = self.projection(enc_out)
         dec_out = dec_out * std_enc + mean_enc
@@ -169,7 +169,7 @@ class Model(nn.Module):
         delta = self.delta_learner(x_raw, mean_enc)  # B x S x E, B x 1 x E -> B x S
         # embedding
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
 
         dec_out = self.projection(enc_out)
         dec_out = dec_out * std_enc + mean_enc
@@ -187,7 +187,7 @@ class Model(nn.Module):
         delta = self.delta_learner(x_raw, mean_enc)  # B x S x E, B x 1 x E -> B x S
         # embedding
         enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
+        enc_out, _ = self.encoder(enc_out, attn_mask=None, tau=tau, delta=delta)
 
         # Output
         output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
@@ -200,14 +200,14 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         return None

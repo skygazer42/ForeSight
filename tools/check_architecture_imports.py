@@ -47,21 +47,39 @@ def _resolve_import(module_name: str, node: ast.ImportFrom) -> str:
     return ".".join(base_parts)
 
 
+def _append_import_entries(
+    imports: list[tuple[int, str]],
+    node: ast.Import,
+) -> None:
+    imports.extend((node.lineno, alias.name) for alias in node.names)
+
+
+def _append_import_from_entries(
+    imports: list[tuple[int, str]],
+    *,
+    module_name: str,
+    node: ast.ImportFrom,
+) -> None:
+    base = _resolve_import(module_name, node)
+    if not base:
+        return
+    imports.append((node.lineno, base))
+    imports.extend(
+        (node.lineno, f"{base}.{alias.name}")
+        for alias in node.names
+        if alias.name != "*"
+    )
+
+
 def _imports_for(path: Path) -> list[tuple[int, str]]:
     module_name = _module_name(path)
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imports: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.append((node.lineno, alias.name))
+            _append_import_entries(imports, node)
         elif isinstance(node, ast.ImportFrom):
-            base = _resolve_import(module_name, node)
-            if base:
-                imports.append((node.lineno, base))
-                for alias in node.names:
-                    if alias.name != "*":
-                        imports.append((node.lineno, f"{base}.{alias.name}"))
+            _append_import_from_entries(imports, module_name=module_name, node=node)
     return imports
 
 
@@ -160,7 +178,7 @@ def _registry_must_stay_facade(violations: list[str]) -> None:
             )
 
 
-def main() -> int:
+def _run_architecture_checks() -> list[str]:
     violations: list[str] = []
     _contracts_must_not_import_services(violations)
     _base_must_not_import_registry(violations)
@@ -168,11 +186,20 @@ def main() -> int:
     _facades_must_not_export_private_helpers(violations)
     _services_must_not_import_public_facades(violations)
     _registry_must_stay_facade(violations)
+    return violations
+
+
+def _print_architecture_violations(violations: list[str]) -> None:
+    print("Architecture import check failed:")
+    for item in violations:
+        print(f"- {item}")
+
+
+def main() -> int:
+    violations = _run_architecture_checks()
 
     if violations:
-        print("Architecture import check failed:")
-        for item in violations:
-            print(f"- {item}")
+        _print_architecture_violations(violations)
         return 1
 
     print("Architecture import check passed.")

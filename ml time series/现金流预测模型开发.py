@@ -50,7 +50,7 @@ cashflow_data.head(2)
 ## rent & utility: 房租和基础设施（水电、物业费）支出
 ## labor: 员工薪资支出
 ## material cost: 食品和包装原料支出
-cashflow_data[['cashflow_category','cashflow_subcategory']].drop_duplicates().sort_values('cashflow_category')
+print(cashflow_data[['cashflow_category', 'cashflow_subcategory']].drop_duplicates().sort_values('cashflow_category'))
 
 # %% [markdown]
 # ## 1.2. 查看数据范围
@@ -58,7 +58,7 @@ cashflow_data[['cashflow_category','cashflow_subcategory']].drop_duplicates().so
 # %%
 # 查看每种类型的现金流的取值范围
 cashflow_range = cashflow_data.groupby(['cashflow_category', 'cashflow_subcategory'])['cashflow'].describe()
-cashflow_range
+print(cashflow_range)
 
 # %% [markdown]
 # 结论：
@@ -75,7 +75,7 @@ print( cashflow_data['date'].min(), cashflow_data['date'].max() )
 
 # %%
 # 是否有na值
-cashflow_data[ cashflow_data['cashflow'].isna() ].shape[0]
+print(cashflow_data[cashflow_data['cashflow'].isna()].shape[0])
 
 # %%
 # 是否每天都有数据
@@ -92,7 +92,7 @@ branch_date_range = cashflow_data.groupby(['branch_id'])['date'].agg(['min','max
 branch_date_range.columns = ['branch_id', 'date_begin', 'date_end', 'date_count']
 branch_date_range['date_miss'] = (branch_date_range['date_end']-branch_date_range['date_begin']
                                  ).dt.days + 1 - branch_date_range['date_count']
-branch_date_range.describe()
+print(branch_date_range.describe())
 
 # %% [markdown]
 # 结论：
@@ -105,10 +105,10 @@ subcat_date_range = cashflow_data.groupby(['branch_id','cashflow_subcategory'])[
 subcat_date_range.columns = ['branch_id','cashflow_subcategory', 'date_begin', 'date_end', 'date_count']
 subcat_date_range['date_miss'] = (subcat_date_range['date_end']-subcat_date_range['date_begin']
                                  ).dt.days + 1 - subcat_date_range['date_count']
-subcat_date_range.describe()
+print(subcat_date_range.describe())
 
 # %%
-subcat_date_range.groupby(['cashflow_subcategory'])['date_miss'].agg(['min','max'])
+print(subcat_date_range.groupby(['cashflow_subcategory'])['date_miss'].agg(['min', 'max']))
 
 # %% [markdown]
 # 结论：
@@ -119,7 +119,10 @@ subcat_date_range.groupby(['cashflow_subcategory'])['date_miss'].agg(['min','max
 # ## 1.4. 是否存在主键重复的数据
 
 # %%
-cashflow_data.shape[0] == cashflow_data[['date','branch_id','cashflow_subcategory']].drop_duplicates().shape[0]
+print(
+    cashflow_data.shape[0]
+    == cashflow_data[['date', 'branch_id', 'cashflow_subcategory']].drop_duplicates().shape[0]
+)
 
 # %% [markdown]
 # 结论：
@@ -135,7 +138,7 @@ total_sales = cashflow_data[ cashflow_data['cashflow_subcategory']=='sales'
 total_sales = total_sales.sort_values( 'total_sales', ascending=False )
 
 sample_branch = total_sales.iloc[0]['branch_id']
-sample_branch
+print(sample_branch)
 
 # %% [markdown]
 # ### 1.5.1. sales数据的规律
@@ -789,21 +792,21 @@ val_results['is_cover'].mean()
 # %%
 # 是不是某一些现金流类型表现得比较差
 eval_by_subcat = val_results.groupby(['subcat'])['is_cover'].mean().reset_index()
-eval_by_subcat
+print(eval_by_subcat)
 
 # %%
 # 是不是某一些公司表现得特别差
 eval_by_branch = val_results[val_results['subcat']=='sales'
                            ].groupby(['branch_id'])['is_cover'].mean().reset_index()
 eval_by_branch = eval_by_branch.sort_values('is_cover')
-eval_by_branch
+print(eval_by_branch)
 
 # %%
 # 是不是某些日期表现得特别差
 eval_by_date = val_results[val_results['subcat']=='sales'
                            ].groupby(['date'])['is_cover'].mean().reset_index()
 eval_by_date = eval_by_date.sort_values('is_cover')
-eval_by_date
+print(eval_by_date)
 
 # %% [markdown]
 # 结论：
@@ -864,5 +867,5 @@ sales_val_results.loc[ (sales_val_results['y']<=sales_val_results['yhat_upper'])
 
 # %%
 eval_by_subcat = sales_val_results.groupby(['subcat'])['is_cover'].mean().reset_index()
-eval_by_subcat
+print(eval_by_subcat)
 

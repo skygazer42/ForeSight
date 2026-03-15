@@ -106,14 +106,14 @@ plt.legend(['Ice Cream'], fontsize=16)
 annual_volatility = ice_cream_heater_df.groupby(ice_cream_heater_df.index.year).std()
 
 # %%
-annual_volatility
+print(annual_volatility)
 
 # %%
 ice_cream_heater_df['ice_cream_annual_vol'] = ice_cream_heater_df.index.map(lambda d: annual_volatility.loc[d.year, 'ice cream'])
 ice_cream_heater_df['heater_annual_vol'] = ice_cream_heater_df.index.map(lambda d: annual_volatility.loc[d.year, 'heater'])
 
 # %%
-ice_cream_heater_df
+print(ice_cream_heater_df)
 
 # %%
 ice_cream_heater_df['ice cream'] = ice_cream_heater_df['ice cream'] / ice_cream_heater_df['ice_cream_annual_vol']
@@ -158,14 +158,14 @@ ice_cream_heater_df['ice_cream_month_avg'] = ice_cream_heater_df.index.map(lambd
 ice_cream_heater_df['heater_month_avg'] = ice_cream_heater_df.index.map(lambda d: month_avgs.loc[d.month, 'heater'])
 
 # %%
-ice_cream_heater_df
+print(ice_cream_heater_df)
 
 # %%
 ice_cream_heater_df['ice cream'] = ice_cream_heater_df['ice cream'] - ice_cream_heater_df['ice_cream_month_avg']
 ice_cream_heater_df['heater'] = ice_cream_heater_df['heater'] - ice_cream_heater_df['heater_month_avg']
 
 # %%
-ice_cream_heater_df
+print(ice_cream_heater_df)
 
 # %%
 plt.figure(figsize=(12,6))

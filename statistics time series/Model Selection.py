@@ -33,7 +33,7 @@ series = series.loc[datetime(2004,1,1):]
 series = series.diff().diff().dropna()
 
 # %%
-series
+print(series)
 
 # %%
 #check stationarity

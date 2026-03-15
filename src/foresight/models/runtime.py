@@ -320,6 +320,13 @@ from .torch_nn import (
 )
 
 
+_XGB_REG_SQUAREDERROR_OBJECTIVE = "reg:squarederror"
+_MEMBERS_NON_EMPTY_ERROR = "members must be non-empty"
+_ORDER_TUPLE_ERROR = "order must be a 3-tuple like (p, d, q)"
+_SEASONAL_ORDER_TUPLE_ERROR = "seasonal_order must be a 4-tuple like (P, D, Q, s)"
+_LOCAL_LEVEL_LITERAL = "local level"
+
+
 def _registry_statsmodels_symbol(name: str, fallback: Any) -> Any:
     def _call(*args: Any, **kwargs: Any) -> Any:
         from . import registry as _registry
@@ -2378,7 +2385,7 @@ def _factory_xgb_custom_lag(
     lags_int = int(lags)
     params = dict(xgb_params)
     params.setdefault("booster", "gbtree")
-    params.setdefault("objective", "reg:squarederror")
+    params.setdefault("objective", _XGB_REG_SQUAREDERROR_OBJECTIVE)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return xgb_custom_lag_direct_forecast(
@@ -2413,7 +2420,7 @@ def _factory_xgb_custom_lag_recursive(
     lags_int = int(lags)
     params = dict(xgb_params)
     params.setdefault("booster", "gbtree")
-    params.setdefault("objective", "reg:squarederror")
+    params.setdefault("objective", _XGB_REG_SQUAREDERROR_OBJECTIVE)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return xgb_custom_lag_recursive_forecast(
@@ -2451,7 +2458,7 @@ def _factory_xgb_custom_step_lag(
 
     params = dict(xgb_params)
     params.setdefault("booster", "gbtree")
-    params.setdefault("objective", "reg:squarederror")
+    params.setdefault("objective", _XGB_REG_SQUAREDERROR_OBJECTIVE)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return xgb_step_lag_direct_forecast(
@@ -2488,7 +2495,7 @@ def _factory_xgb_custom_dirrec_lag(
 
     params = dict(xgb_params)
     params.setdefault("booster", "gbtree")
-    params.setdefault("objective", "reg:squarederror")
+    params.setdefault("objective", _XGB_REG_SQUAREDERROR_OBJECTIVE)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return xgb_dirrec_lag_forecast(
@@ -2526,7 +2533,7 @@ def _factory_xgb_custom_mimo_lag(
 
     params = dict(xgb_params)
     params.setdefault("booster", "gbtree")
-    params.setdefault("objective", "reg:squarederror")
+    params.setdefault("objective", _XGB_REG_SQUAREDERROR_OBJECTIVE)
 
     def _f(train: Any, horizon: int) -> np.ndarray:
         return xgb_mimo_lag_direct_forecast(
@@ -2589,7 +2596,7 @@ def _factory_xgb_step_lag(
 
     xgb_params = {
         "booster": "gbtree",
-        "objective": "reg:squarederror",
+        "objective": _XGB_REG_SQUAREDERROR_OBJECTIVE,
         "n_estimators": n_estimators_int,
         "learning_rate": learning_rate_f,
         "max_depth": max_depth_int,
@@ -2663,7 +2670,7 @@ def _factory_xgb_dirrec_lag(
 
     xgb_params = {
         "booster": "gbtree",
-        "objective": "reg:squarederror",
+        "objective": _XGB_REG_SQUAREDERROR_OBJECTIVE,
         "n_estimators": n_estimators_int,
         "learning_rate": learning_rate_f,
         "max_depth": max_depth_int,
@@ -2738,7 +2745,7 @@ def _factory_xgb_mimo_lag(
 
     xgb_params = {
         "booster": "gbtree",
-        "objective": "reg:squarederror",
+        "objective": _XGB_REG_SQUAREDERROR_OBJECTIVE,
         "n_estimators": n_estimators_int,
         "learning_rate": learning_rate_f,
         "max_depth": max_depth_int,
@@ -10678,7 +10685,7 @@ def _normalize_members(members: Any) -> tuple[str, ...]:
     if isinstance(members, str):
         s = members.strip()
         if not s:
-            raise ValueError("members must be non-empty")
+            raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
         parts = [p.strip() for p in s.split(",") if p.strip()]
         return tuple(parts)
 
@@ -10688,7 +10695,7 @@ def _normalize_members(members: Any) -> tuple[str, ...]:
 
     s = str(members).strip()
     if not s:
-        raise ValueError("members must be non-empty")
+        raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
     return (s,)
 
 
@@ -10697,7 +10704,7 @@ def _factory_ensemble_mean(
 ) -> ForecasterFn:
     member_keys = _normalize_members(members)
     if not member_keys:
-        raise ValueError("members must be non-empty")
+        raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
     if any(k == "ensemble-mean" for k in member_keys):
         raise ValueError("ensemble-mean cannot include itself")
 
@@ -10716,7 +10723,7 @@ def _factory_ensemble_median(
 ) -> ForecasterFn:
     member_keys = _normalize_members(members)
     if not member_keys:
-        raise ValueError("members must be non-empty")
+        raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
     if any(k == "ensemble-median" for k in member_keys):
         raise ValueError("ensemble-median cannot include itself")
 
@@ -10741,7 +10748,7 @@ def _factory_arima(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
@@ -10876,7 +10883,7 @@ def _factory_fourier_arima(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
@@ -10912,12 +10919,12 @@ def _factory_fourier_sarimax(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     try:
         P, D, Q, s = seasonal_order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+        raise TypeError(_SEASONAL_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     seasonal_tup = (int(P), int(D), int(Q), int(s))
@@ -10993,7 +11000,7 @@ def _factory_fourier_uc(
     *,
     periods: Any = (12,),
     orders: Any = 2,
-    level: str = "local level",
+    level: str = _LOCAL_LEVEL_LITERAL,
     **_params: Any,
 ) -> ForecasterFn:
     level_s = str(level)
@@ -11022,12 +11029,12 @@ def _factory_sarimax(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     try:
         P, D, Q, s = seasonal_order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+        raise TypeError(_SEASONAL_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     seasonal_tup = (int(P), int(D), int(Q), int(s))
@@ -11088,7 +11095,7 @@ def _factory_autoreg(
 
 def _factory_unobserved_components(
     *,
-    level: str = "local level",
+    level: str = _LOCAL_LEVEL_LITERAL,
     seasonal: int | None = None,
     **_params: Any,
 ) -> ForecasterFn:
@@ -11117,7 +11124,7 @@ def _factory_stl_arima(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     period_int = int(period)
     order_tup = (int(p), int(d), int(q))
@@ -11195,7 +11202,7 @@ def _factory_stl_autoreg(
 def _factory_stl_uc(
     *,
     period: int = 12,
-    level: str = "local level",
+    level: str = _LOCAL_LEVEL_LITERAL,
     seasonal: int = 7,
     robust: bool = False,
     **_params: Any,
@@ -11233,12 +11240,12 @@ def _factory_stl_sarimax(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     try:
         P, D, Q, s = seasonal_order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+        raise TypeError(_SEASONAL_ORDER_TUPLE_ERROR) from e
 
     period_int = int(period)
     order_tup = (int(p), int(d), int(q))
@@ -11321,7 +11328,7 @@ def _factory_mstl_arima(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     iterate_int = int(iterate)
@@ -11369,7 +11376,7 @@ def _factory_mstl_autoreg(
 def _factory_mstl_uc(
     *,
     periods: Any = (12,),
-    level: str = "local level",
+    level: str = _LOCAL_LEVEL_LITERAL,
     iterate: int = 2,
     lmbda: float | str | None = None,
     **_params: Any,
@@ -11405,12 +11412,12 @@ def _factory_mstl_sarimax(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
 
     try:
         P, D, Q, s = seasonal_order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+        raise TypeError(_SEASONAL_ORDER_TUPLE_ERROR) from e
 
     order_tup = (int(p), int(d), int(q))
     seasonal_tup = (int(P), int(D), int(Q), int(s))
@@ -11615,11 +11622,11 @@ def _factory_tbats_lite_sarimax(
     try:
         p, d, q = order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("order must be a 3-tuple like (p, d, q)") from e
+        raise TypeError(_ORDER_TUPLE_ERROR) from e
     try:
         P, D, Q, s = seasonal_order
     except Exception as e:  # noqa: BLE001
-        raise TypeError("seasonal_order must be a 4-tuple like (P, D, Q, s)") from e
+        raise TypeError(_SEASONAL_ORDER_TUPLE_ERROR) from e
     order_tup = (int(p), int(d), int(q))
     seasonal_tup = (int(P), int(D), int(Q), int(s))
     trend_s = None if (trend is None or str(trend).lower() in {"none", "null", ""}) else str(trend)
@@ -11695,7 +11702,7 @@ def _factory_tbats_lite_uc(
     periods: Any = (12,),
     orders: Any = 2,
     include_trend: bool = True,
-    level: str = "local level",
+    level: str = _LOCAL_LEVEL_LITERAL,
     boxcox_lambda: float | None = None,
     **_params: Any,
 ) -> ForecasterFn:

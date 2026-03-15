@@ -22,8 +22,6 @@ from pandas.tseries import offsets
 # 这个函数也支持其他的时间字符串格式，例如 "H" 表示一个小时的偏移量，"T" 表示一分钟的偏移量等。
 from pandas.tseries.frequencies import to_offset
 # 例
-# dates = pd.date_range(start='2022-01-01', end='2022-12-31', freq='MS')
-# last_day_of_month = dates + MonthEnd(1)
 
 
 #这段代码定义了一个TimeFeature类，它是一个基类，它没有实现__call__方法，因此它不能被直接使用，
@@ -99,7 +97,6 @@ class WeekOfYear(TimeFeature):
 
 def time_features_from_frequency_str(freq_str: str) -> List[TimeFeature]:
    #例如 频率为每小时一次（hourly），则可以调用以下代码：
-   #time_features = time_features_from_frequency_str('1H')
 #包含适合每小时一次（hourly）时间序列数据的特征，例如小时、星期几、月份等。可以根据需要将它们组合成一个特征向量来表示时间序列数据的时间特征。
     """
     Returns a list of time features that will be appropriate for the given frequency string.
@@ -169,9 +166,7 @@ def time_features(dates, freq='h'):
     return np.vstack([feat(dates) for feat in time_features_from_frequency_str(freq)])
 
 if __name__ == '__main__':
-    # print(time_features_from_frequency_str('h')) #[HourOfDay(), DayOfWeek(), DayOfMonth(),DayOfMonth()]
     index = pd.date_range(start='2022-01-01', end='2022-01-02 2:00:00', freq='H')
-    # print(time_features_from_frequency_str('h')[0])
     list1=[feat(index) for feat in time_features_from_frequency_str('h')]
 #[Float64Index([-0.5, -0.4565217391304348, -0.41304347826086957], dtype='float64'), HourOfDay()
 # Float64Index([0.33333333333333337, 0.33333333333333337, 0.33333333333333337], dtype='float64'),  DayOfWeek()

@@ -46,7 +46,7 @@ class MIC(nn.Module):
         self.drop = torch.nn.Dropout(0.05)
 
     def conv_trans_conv(self, input, conv1d, conv1d_trans, isometric):
-        batch, seq_len, channel = input.shape
+        _, seq_len, _ = input.shape
         x = input.permute(0, 2, 1)
 
         # downsampling convolution
@@ -70,7 +70,7 @@ class MIC(nn.Module):
         # multi-scale
         multi = []
         for i in range(len(self.conv_kernel)):
-            src_out, trend1 = self.decomp[i](src)
+            src_out, _ = self.decomp[i](src)
             src_out = self.conv_trans_conv(src_out, self.conv[i], self.conv_trans[i], self.isometric_conv[i])
             multi.append(src_out)
 
@@ -94,7 +94,7 @@ class SeasonalPrediction(nn.Module):
         self.mic = nn.ModuleList([MIC(feature_size=embedding_size, n_heads=n_heads,
                                       decomp_kernel=decomp_kernel, conv_kernel=conv_kernel,
                                       isometric_kernel=isometric_kernel, device=device)
-                                  for i in range(d_layers)])
+                                  for _ in range(d_layers)])
 
         self.projection = nn.Linear(embedding_size, c_out)
 
@@ -205,15 +205,15 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(
                 x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
-            return dec_out  # [B, L, D]
+            return dec_out
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
-            return dec_out  # [B, N]
+            return dec_out
         return None

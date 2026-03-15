@@ -380,6 +380,87 @@ def _prepare_local_xreg_forecast_group(
     return observed, future, cutoff
 
 
+def _global_forecast_group_cutoff_and_future(
+    uid: Any,
+    g: pd.DataFrame,
+) -> tuple[Any, pd.DataFrame, int]:
+    y_notna = g["y"].notna().to_numpy(dtype=bool, copy=False)
+    if not y_notna.any():
+        raise ValueError(f"Global forecast requires observed history for unique_id={uid!r}")
+
+    missing_idx = np.flatnonzero(~y_notna)
+    if missing_idx.size > 0:
+        first_missing = int(missing_idx[0])
+        if y_notna[first_missing:].any():
+            raise ValueError(
+                "Global forecast requires missing y values only after the observed history"
+            )
+
+    observed_count = int(y_notna.sum())
+    cutoff = g["ds"].iloc[observed_count - 1]
+    future = g.iloc[observed_count:]
+    return cutoff, future, observed_count
+
+
+def _validate_global_forecast_group_x_cols(
+    g: pd.DataFrame,
+    *,
+    future: pd.DataFrame,
+    observed_count: int,
+    horizon: int,
+    x_cols: tuple[str, ...],
+) -> None:
+    if len(future) < int(horizon):
+        raise ValueError("Global forecast with x_cols requires at least horizon future rows per series")
+
+    future_slice = future.iloc[: int(horizon)]
+    missing_future_x = [col for col in x_cols if future_slice[col].isna().any()]
+    if missing_future_x:
+        raise ValueError(
+            f"Global forecast future rows are missing required x_cols: {missing_future_x}"
+        )
+
+    observed_slice = g.iloc[:observed_count]
+    missing_observed_x = [col for col in x_cols if observed_slice[col].isna().any()]
+    if missing_observed_x:
+        raise ValueError(
+            f"Global forecast observed rows are missing required x_cols: {missing_observed_x}"
+        )
+
+
+def _global_forecast_group_future_frame(
+    uid: Any,
+    g: pd.DataFrame,
+    *,
+    horizon: int,
+    x_cols: tuple[str, ...],
+) -> tuple[Any, pd.DataFrame | None]:
+    cutoff, future, observed_count = _global_forecast_group_cutoff_and_future(uid, g)
+    if x_cols:
+        _validate_global_forecast_group_x_cols(
+            g,
+            future=future,
+            observed_count=observed_count,
+            horizon=int(horizon),
+            x_cols=x_cols,
+        )
+        return cutoff, None
+
+    missing_future = int(horizon) - int(len(future))
+    if missing_future <= 0:
+        return cutoff, None
+    return cutoff, _future_frame_for_group(g, horizon=missing_future)
+
+
+def _validated_global_forecast_cutoff(cutoffs: list[Any]) -> Any:
+    cutoff_by_uid = pd.Series(cutoffs)
+    if cutoff_by_uid.nunique() != 1:
+        raise ValueError(
+            "Global forecast currently requires all series to share the same last observed timestamp"
+        )
+    return cutoff_by_uid.iloc[0]
+
+
 def _prepare_global_forecast_input(
     df: pd.DataFrame,
     *,
@@ -399,57 +480,23 @@ def _prepare_global_forecast_input(
     cutoffs: list[Any] = []
     future_frames: list[pd.DataFrame] = []
     for uid, g in df.groupby("unique_id", sort=False):
-        y_notna = g["y"].notna().to_numpy(dtype=bool, copy=False)
-        if not y_notna.any():
-            raise ValueError(f"Global forecast requires observed history for unique_id={uid!r}")
-
-        missing_idx = np.flatnonzero(~y_notna)
-        if missing_idx.size > 0:
-            first_missing = int(missing_idx[0])
-            if y_notna[first_missing:].any():
-                raise ValueError(
-                    "Global forecast requires missing y values only after the observed history"
-                )
-
-        observed_count = int(y_notna.sum())
-        cutoffs.append(g["ds"].iloc[observed_count - 1])
-        future = g.iloc[observed_count:]
-
-        if x_cols:
-            if len(future) < h:
-                raise ValueError(
-                    "Global forecast with x_cols requires at least horizon future rows per series"
-                )
-            missing_future_x = [col for col in x_cols if future.iloc[:h][col].isna().any()]
-            if missing_future_x:
-                raise ValueError(
-                    f"Global forecast future rows are missing required x_cols: {missing_future_x}"
-                )
-            missing_observed_x = [
-                col for col in x_cols if g.iloc[:observed_count][col].isna().any()
-            ]
-            if missing_observed_x:
-                raise ValueError(
-                    f"Global forecast observed rows are missing required x_cols: {missing_observed_x}"
-                )
-            continue
-
-        missing_future = h - int(len(future))
-        if missing_future > 0:
-            future_frames.append(_future_frame_for_group(g, horizon=missing_future))
-
-    cutoff_by_uid = pd.Series(cutoffs)
-    if cutoff_by_uid.nunique() != 1:
-        raise ValueError(
-            "Global forecast currently requires all series to share the same last observed timestamp"
+        cutoff, future_frame = _global_forecast_group_future_frame(
+            uid,
+            g,
+            horizon=h,
+            x_cols=x_cols,
         )
+        cutoffs.append(cutoff)
+        if future_frame is not None:
+            future_frames.append(future_frame)
 
+    cutoff = _validated_global_forecast_cutoff(cutoffs)
     if not future_frames:
-        return df, cutoff_by_uid.iloc[0]
+        return df, cutoff
 
     augmented = pd.concat([df, *future_frames], axis=0, ignore_index=True, sort=False)
     augmented = augmented.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
-    return augmented, cutoff_by_uid.iloc[0]
+    return augmented, cutoff
 
 
 def _finalize_forecast_frame(pred: pd.DataFrame, *, cutoff: Any, model: str) -> pd.DataFrame:
@@ -467,6 +514,201 @@ def _finalize_forecast_frame(pred: pd.DataFrame, *, cutoff: Any, model: str) -> 
     pred["model"] = str(model)
     ordered = ["unique_id", "ds", "cutoff", "step", *pred_cols, "model"]
     return pred.loc[:, ordered]
+
+
+def _forecast_result_row(
+    *,
+    uid: Any,
+    ds: Any,
+    cutoff: Any,
+    step: int,
+    yhat: float,
+    model: str,
+    interval_values: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "unique_id": str(uid),
+        "ds": ds,
+        "cutoff": cutoff,
+        "step": int(step),
+        "yhat": float(yhat),
+    }
+    if interval_values:
+        row.update(interval_values)
+    row["model"] = str(model)
+    return row
+
+
+def _forecast_local_xreg_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    params: dict[str, Any],
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    levels: tuple[float, ...],
+) -> pd.DataFrame:
+    if not bool(capabilities.get("supports_x_cols", False)):
+        raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
+
+    h = int(horizon)
+    interval_cols = _interval_column_names(levels)
+    rows: list[dict[str, Any]] = []
+    local_xreg_params = dict(params)
+    local_xreg_params.pop("x_cols", None)
+    for uid, g in df.groupby("unique_id", sort=False):
+        observed, future, cutoff = _prepare_local_xreg_forecast_group(
+            g,
+            horizon=h,
+            x_cols=x_cols,
+        )
+        train_y = observed["y"].to_numpy(dtype=float, copy=False)
+        train_exog = observed.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+        future_exog = future.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+        if levels:
+            if not bool(capabilities.get("supports_interval_forecast_with_x_cols", False)):
+                raise ValueError(
+                    f"Model {model!r} does not support interval_levels with x_cols "
+                    "in forecast_model_long_df"
+                )
+            pred_payload = _local_xreg_interval_payload(
+                model=model,
+                train_y=train_y,
+                horizon=h,
+                train_exog=train_exog,
+                future_exog=future_exog,
+                interval_levels=levels,
+                model_params=local_xreg_params,
+            )
+            yhat = np.asarray(pred_payload["yhat"], dtype=float)
+        else:
+            pred_payload = {}
+            yhat = _call_local_xreg_forecaster(
+                model=model,
+                train_y=train_y,
+                horizon=h,
+                train_exog=train_exog,
+                future_exog=future_exog,
+                model_params=local_xreg_params,
+            )
+
+        for i in range(h):
+            interval_values = {col: float(pred_payload[col][i]) for col in interval_cols}
+            rows.append(
+                _forecast_result_row(
+                    uid=uid,
+                    ds=future["ds"].iloc[i],
+                    cutoff=cutoff,
+                    step=i + 1,
+                    yhat=yhat[i],
+                    model=model,
+                    interval_values=interval_values,
+                )
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
+    )
+
+
+def _forecast_local_univariate_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    future_df: Any | None,
+    horizon: int,
+    params: dict[str, Any],
+    levels: tuple[float, ...],
+    interval_min_train_size: int | None,
+    interval_samples: int,
+    interval_seed: int | None,
+) -> pd.DataFrame:
+    df = _require_observed_history_only(df)
+    h = int(horizon)
+    interval_cols = _interval_column_names(levels)
+    rows: list[dict[str, Any]] = []
+    for uid, g in df.groupby("unique_id", sort=False):
+        if future_df is not None:
+            observed, future, cutoff = _prepare_local_xreg_forecast_group(
+                g,
+                horizon=h,
+                x_cols=(),
+            )
+            future_ds = pd.Index(future["ds"])
+            train_y = observed["y"].to_numpy(dtype=float, copy=False)
+        else:
+            cutoff = g["ds"].iloc[-1]
+            future_ds = _infer_future_ds(g["ds"], h)
+            train_y = g["y"].to_numpy(dtype=float, copy=False)
+
+        forecaster = _model_execution.make_local_forecaster_object_runner(model, params).fit(train_y)
+        yhat = np.asarray(forecaster.predict(h), dtype=float)
+        if yhat.shape != (h,):
+            raise ValueError(f"forecaster must return shape ({h},), got {yhat.shape}")
+
+        interval_data = _local_interval_columns(
+            train_y=np.asarray(train_y, dtype=float),
+            model=model,
+            model_params=params,
+            horizon=h,
+            interval_levels=levels,
+            interval_min_train_size=interval_min_train_size,
+            interval_samples=int(interval_samples),
+            interval_seed=interval_seed,
+        )
+
+        for i in range(h):
+            interval_values = {col: float(interval_data[col][i]) for col in interval_cols}
+            rows.append(
+                _forecast_result_row(
+                    uid=uid,
+                    ds=future_ds[i],
+                    cutoff=cutoff,
+                    step=i + 1,
+                    yhat=yhat[i],
+                    model=model,
+                    interval_values=interval_values,
+                )
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
+    )
+
+
+def _forecast_global_long_df(
+    *,
+    model: str,
+    df: pd.DataFrame,
+    horizon: int,
+    params: dict[str, Any],
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    levels: tuple[float, ...],
+) -> pd.DataFrame:
+    if x_cols and not bool(capabilities.get("supports_x_cols", False)):
+        raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
+    if levels and not bool(capabilities.get("supports_interval_forecast", False)):
+        raise ValueError(f"Model {model!r} does not support interval_levels in forecast_model_long_df")
+
+    h = int(horizon)
+    params_final = dict(params)
+    if levels:
+        params_final["quantiles"] = _merge_quantiles_for_interval_levels(
+            params_final.get("quantiles"),
+            interval_levels=levels,
+        )
+
+    augmented, cutoff = _prepare_global_forecast_input(df, horizon=h, x_cols=x_cols)
+    forecaster = _model_execution.make_global_forecaster_object_runner(model, params_final).fit(
+        augmented
+    )
+    pred = forecaster.predict(cutoff, h)
+    pred = _finalize_forecast_frame(pred, cutoff=cutoff, model=model)
+    return _add_interval_columns_from_quantile_predictions(pred, interval_levels=levels)
 
 
 def forecast_model_long_df(
@@ -492,7 +734,8 @@ def forecast_model_long_df(
         df = _merge_history_and_future_df(df, _require_future_df(future_df))
 
     params = _normalize_model_params(model_params)
-    model_spec = _model_execution.get_model_spec(str(model))
+    model_name = str(model)
+    model_spec = _model_execution.get_model_spec(model_name)
     interface = str(model_spec.interface).lower().strip()
     capabilities = dict(model_spec.capabilities)
     levels = _parse_interval_levels(interval_levels)
@@ -503,123 +746,32 @@ def forecast_model_long_df(
         if historic_x_cols:
             raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
         _require_x_cols_if_needed(
-            model=str(model),
+            model=model_name,
             capabilities=capabilities,
             x_cols=x_cols,
             context="forecast_model_long_df",
         )
         if x_cols:
-            if not bool(capabilities.get("supports_x_cols", False)):
-                raise ValueError(
-                    f"Model {model!r} does not support x_cols in forecast_model_long_df"
-                )
-            interval_cols = _interval_column_names(levels)
-            rows: list[dict[str, Any]] = []
-            local_xreg_params = dict(params)
-            local_xreg_params.pop("x_cols", None)
-            for uid, g in df.groupby("unique_id", sort=False):
-                observed, future, cutoff = _prepare_local_xreg_forecast_group(
-                    g,
-                    horizon=int(horizon),
-                    x_cols=x_cols,
-                )
-                train_exog = observed.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-                future_exog = future.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-                if levels:
-                    if not bool(capabilities.get("supports_interval_forecast_with_x_cols", False)):
-                        raise ValueError(
-                            f"Model {model!r} does not support interval_levels with x_cols "
-                            "in forecast_model_long_df"
-                        )
-                    pred_payload = _local_xreg_interval_payload(
-                        model=str(model),
-                        train_y=observed["y"].to_numpy(dtype=float, copy=False),
-                        horizon=int(horizon),
-                        train_exog=train_exog,
-                        future_exog=future_exog,
-                        interval_levels=levels,
-                        model_params=local_xreg_params,
-                    )
-                    yhat = np.asarray(pred_payload["yhat"], dtype=float)
-                else:
-                    yhat = _call_local_xreg_forecaster(
-                        model=str(model),
-                        train_y=observed["y"].to_numpy(dtype=float, copy=False),
-                        horizon=int(horizon),
-                        train_exog=train_exog,
-                        future_exog=future_exog,
-                        model_params=local_xreg_params,
-                    )
-                for i in range(int(horizon)):
-                    row = {
-                        "unique_id": str(uid),
-                        "ds": future["ds"].iloc[i],
-                        "cutoff": cutoff,
-                        "step": int(i + 1),
-                        "yhat": float(yhat[i]),
-                    }
-                    for col in interval_cols:
-                        if levels:
-                            row[col] = float(pred_payload[col][i])
-                    row["model"] = str(model)
-                    rows.append(row)
-            return pd.DataFrame(
-                rows,
-                columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
-            )
-
-        df = _require_observed_history_only(df)
-        interval_cols = _interval_column_names(levels)
-        rows: list[dict[str, Any]] = []
-        for uid, g in df.groupby("unique_id", sort=False):
-            if future_df is not None:
-                observed, future, cutoff = _prepare_local_xreg_forecast_group(
-                    g,
-                    horizon=int(horizon),
-                    x_cols=(),
-                )
-                future_ds = pd.Index(future["ds"])
-                train_y = observed["y"].to_numpy(dtype=float, copy=False)
-            else:
-                cutoff = g["ds"].iloc[-1]
-                future_ds = _infer_future_ds(g["ds"], int(horizon))
-                train_y = g["y"].to_numpy(dtype=float, copy=False)
-            forecaster = _model_execution.make_local_forecaster_object_runner(
-                str(model),
-                params,
-            ).fit(train_y)
-            yhat = np.asarray(forecaster.predict(int(horizon)), dtype=float)
-            if yhat.shape != (int(horizon),):
-                raise ValueError(
-                    f"forecaster must return shape ({int(horizon)},), got {yhat.shape}"
-                )
-            interval_data = _local_interval_columns(
-                train_y=np.asarray(train_y, dtype=float),
-                model=str(model),
-                model_params=params,
+            return _forecast_local_xreg_long_df(
+                model=model_name,
+                df=df,
                 horizon=int(horizon),
-                interval_levels=levels,
-                interval_min_train_size=interval_min_train_size,
-                interval_samples=int(interval_samples),
-                interval_seed=interval_seed,
+                params=params,
+                capabilities=capabilities,
+                x_cols=x_cols,
+                levels=levels,
             )
 
-            for i in range(int(horizon)):
-                row = {
-                    "unique_id": str(uid),
-                    "ds": future_ds[i],
-                    "cutoff": cutoff,
-                    "step": int(i + 1),
-                    "yhat": float(yhat[i]),
-                }
-                for col in interval_cols:
-                    row[col] = float(interval_data[col][i])
-                row["model"] = str(model)
-                rows.append(row)
-
-        return pd.DataFrame(
-            rows,
-            columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
+        return _forecast_local_univariate_long_df(
+            model=model_name,
+            df=df,
+            future_df=future_df,
+            horizon=int(horizon),
+            params=params,
+            levels=levels,
+            interval_min_train_size=interval_min_train_size,
+            interval_samples=int(interval_samples),
+            interval_seed=interval_seed,
         )
 
     if interface == "global":
@@ -627,32 +779,20 @@ def forecast_model_long_df(
         if historic_x_cols:
             raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
         _require_x_cols_if_needed(
-            model=str(model),
+            model=model_name,
             capabilities=capabilities,
             x_cols=x_cols,
             context="forecast_model_long_df",
         )
-        if x_cols and not bool(capabilities.get("supports_x_cols", False)):
-            raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
-        if levels:
-            if not bool(capabilities.get("supports_interval_forecast", False)):
-                raise ValueError(
-                    f"Model {model!r} does not support interval_levels in forecast_model_long_df"
-                )
-            params = dict(params)
-            params["quantiles"] = _merge_quantiles_for_interval_levels(
-                params.get("quantiles"),
-                interval_levels=levels,
-            )
-        augmented, cutoff = _prepare_global_forecast_input(df, horizon=int(horizon), x_cols=x_cols)
-
-        forecaster = _model_execution.make_global_forecaster_object_runner(
-            str(model),
-            params,
-        ).fit(augmented)
-        pred = forecaster.predict(cutoff, int(horizon))
-        pred = _finalize_forecast_frame(pred, cutoff=cutoff, model=str(model))
-        return _add_interval_columns_from_quantile_predictions(pred, interval_levels=levels)
+        return _forecast_global_long_df(
+            model=model_name,
+            df=df,
+            horizon=int(horizon),
+            params=params,
+            capabilities=capabilities,
+            x_cols=x_cols,
+            levels=levels,
+        )
 
     raise ValueError(f"Unknown model interface: {model_spec.interface!r}")
 

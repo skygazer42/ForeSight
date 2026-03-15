@@ -88,7 +88,6 @@ class GatedLinearUnit(nn.Module):
         for n, p in self.named_parameters():
             if 'bias' not in n:
                 torch.nn.init.xavier_uniform_(p)
-#                 torch.nn.init.kaiming_normal_(p, a=0, mode='fan_in', nonlinearity='sigmoid')
             elif 'bias' in n:
                 torch.nn.init.zeros_(p)
             
@@ -173,7 +172,6 @@ class GatedResidualNetwork(nn.Module):
                 torch.nn.init.kaiming_normal_(p, a=0, mode='fan_in', nonlinearity='leaky_relu')
             elif ('skip_linear' in name or 'W1' in name) and 'bias' not in name:
                 torch.nn.init.xavier_uniform_(p)
-#                 torch.nn.init.kaiming_normal_(p, a=0, mode='fan_in', nonlinearity='sigmoid')
             elif 'bias' in name:
                 torch.nn.init.zeros_(p)
             
@@ -181,25 +179,16 @@ class GatedResidualNetwork(nn.Module):
         
         if self.additional_context:
             x, context = x
-            #x_forward = self.W2(x)
-            #context_forward = self.W3(context)
-            #print(self.W3(context).shape)
             n2 = F.elu(self.W2(x) + self.W3(context))
         else:
             n2 = F.elu(self.W2(x))
-        
-        #print('n2 shape {}'.format(n2.shape))
             
         n1 = self.W1(n2)
-        
-        #print('n1 shape {}'.format(n1.shape))
             
         if self.output_size:
             output = self.glu_add_norm(n1, self.skip_linear(x))
         else:
             output = self.glu_add_norm(n1, x)
-            
-        #print('output shape {}'.format(output.shape))
         
         return output
     
@@ -211,29 +200,16 @@ class ScaledDotProductAttention(nn.Module):
         self.scale = scale
             
     def forward(self, q, k, v, mask = None):
-        #print('---Inputs----')
-        #print('q: {}'.format(q[0]))
-        #print('k: {}'.format(k[0]))
-        #print('v: {}'.format(v[0]))
-        
         attn = torch.bmm(q, k.permute(0,2,1))
-        #print('first bmm')
-        #print(attn.shape)
-        #print('attn: {}'.format(attn[0]))
         
         if self.scale:
             dimention = torch.sqrt(torch.tensor(k.shape[-1]).to(torch.float32))
             attn = attn / dimention
-        #    print('attn_scaled: {}'.format(attn[0]))
             
         if mask is not None:
-            #fill = torch.tensor(-1e9).to(DEVICE)
-            #zero = torch.tensor(0).to(DEVICE)
             attn = attn.masked_fill(mask == 0, -1e9)
-        #    print('attn_masked: {}'.format(attn[0]))
             
         attn = self.softmax(attn)
-        #print('attn_softmax: {}'.format(attn[0]))
         attn = self.dropout(attn)
         
         output = torch.bmm(attn, v)
@@ -264,7 +240,6 @@ class InterpretableMultiHeadAttention(nn.Module):
         for name, p in self.named_parameters():
             if 'bias' not in name:
                 torch.nn.init.xavier_uniform_(p)
-#                 torch.nn.init.kaiming_normal_(p, a=0, mode='fan_in', nonlinearity='sigmoid')
             else:
                 torch.nn.init.zeros_(p)
         
@@ -276,23 +251,15 @@ class InterpretableMultiHeadAttention(nn.Module):
             qs = self.q_layers[i](q)
             ks = self.k_layers[i](k)
             vs = self.v_layers[i](v)
-            #print('qs layer: {}'.format(qs.shape))
             head, attn = self.attention(qs, ks, vs, mask)
-            #print('head layer: {}'.format(head.shape))
-            #print('attn layer: {}'.format(attn.shape))
             head_dropout = self.dropout(head)
             heads.append(head_dropout)
             attns.append(attn)
             
         head = torch.stack(heads, dim = 2) if self.n_head > 1 else heads[0]
-        #print('concat heads: {}'.format(head.shape))
-        #print('heads {}: {}'.format(0, head[0,0,Ellipsis]))
         attn = torch.stack(attns, dim = 2)
-        #print('concat attn: {}'.format(attn.shape))
         
         outputs = torch.mean(head, dim = 2) if self.n_head > 1 else head
-        #print('outputs mean: {}'.format(outputs.shape))
-        #print('outputs mean {}: {}'.format(0, outputs[0,0,Ellipsis]))
         outputs = self.w_h(outputs)
         outputs = self.dropout(outputs)
         
@@ -325,81 +292,48 @@ class VariableSelectionNetwork(nn.Module):
         # Non Static Inputs
         if self.additional_context:
             embedding, static_context = x
-            #print('static_context')
-            #print(static_context.shape)
             
             time_steps = embedding.shape[1]
             flatten = embedding.view(-1, time_steps, self.hidden_layer_size * self.output_size)
-            #print('flatten')
-            #print(flatten.shape)
             
             static_context = static_context.unsqueeze(1)
-            #print('static_context')
-            #print(static_context.shape)
 
             # Nonlinear transformation with gated residual network.
             mlp_outputs = self.flattened_grn((flatten, static_context))
-            #print('mlp_outputs')
-            #print(mlp_outputs.shape)
             
             sparse_weights = F.softmax(mlp_outputs, dim = -1)
             sparse_weights = sparse_weights.unsqueeze(2)
-            #print('sparse_weights')
-            #print(sparse_weights.shape)
             
             trans_emb_list = []
             for i in range(self.output_size):
                 e = self.per_feature_grn[i](embedding[Ellipsis, i])
                 trans_emb_list.append(e)
             transformed_embedding = torch.stack(trans_emb_list, axis=-1)
-            #print('transformed_embedding')
-            #print(transformed_embedding.shape)
             
             combined = sparse_weights * transformed_embedding
-            #print('combined')
-            #print(combined.shape)
             
             temporal_ctx = torch.sum(combined, dim = -1)
-            #print('temporal_ctx')
-            #print(temporal_ctx.shape)
             
         # Static Inputs
         else:
             embedding = x
-            #print('embedding')
-            #print(embedding.shape)
             
             flatten = torch.flatten(embedding, start_dim=1)
-            #flatten = embedding.view(batch_size, -1)
-            #print('flatten')
-            #print(flatten.shape)
             
             # Nonlinear transformation with gated residual network.
             mlp_outputs = self.flattened_grn(flatten)
-            #print('mlp_outputs')
-            #print(mlp_outputs.shape)
             
             sparse_weights = F.softmax(mlp_outputs, dim = -1)
             sparse_weights = sparse_weights.unsqueeze(-1)
-#             print('sparse_weights')
-#             print(sparse_weights.shape)
             
             trans_emb_list = []
             for i in range(self.output_size):
-                #print('embedding for the per feature static grn')
-                #print(embedding[:, i:i + 1, :].shape)
                 e = self.per_feature_grn[i](embedding[:, i:i + 1, :])
                 trans_emb_list.append(e)
             transformed_embedding = torch.cat(trans_emb_list, axis=1)
-#             print('transformed_embedding')
-#             print(transformed_embedding.shape)
     
             combined = sparse_weights * transformed_embedding
-#             print('combined')
-#             print(combined.shape)
             
             temporal_ctx = torch.sum(combined, dim = 1)
-#             print('temporal_ctx')
-#             print(temporal_ctx.shape)
         
         return temporal_ctx, sparse_weights
