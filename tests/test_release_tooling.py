@@ -121,9 +121,12 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "src/foresight/models/statsmodels_wrap.py" in scan_args
     assert "src/foresight/models/torch_global.py" in scan_args
     assert "src/foresight/models/torch_rnn_paper_zoo.py" in scan_args
+    assert "src/foresight/models/torch_probabilistic.py" in scan_args
+    assert "src/foresight/models/torch_rnn_zoo.py" in scan_args
     assert "src/foresight/models/torch_seq2seq.py" in scan_args
     assert "src/foresight/models/torch_ssm.py" in scan_args
     assert "src/foresight/models/torch_xformer.py" in scan_args
+    assert "tests/**" in scan_args
     assert (
         scan_step["uses"]
         == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
@@ -152,9 +155,12 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     assert "src/foresight/models/statsmodels_wrap.py" in config
     assert "src/foresight/models/torch_global.py" in config
     assert "src/foresight/models/torch_rnn_paper_zoo.py" in config
+    assert "src/foresight/models/torch_probabilistic.py" in config
+    assert "src/foresight/models/torch_rnn_zoo.py" in config
     assert "src/foresight/models/torch_seq2seq.py" in config
     assert "src/foresight/models/torch_ssm.py" in config
     assert "src/foresight/models/torch_xformer.py" in config
+    assert "tests/**" in config
     assert "sonar.issue.ignore.multicriteria=e1,e2" in config
     assert "sonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083" in config
     assert "sonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in config
