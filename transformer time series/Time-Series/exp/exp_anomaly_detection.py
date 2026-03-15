@@ -1,5 +1,5 @@
 from data_provider.data_factory import data_provider
-from exp.exp_basic import Exp_Basic
+from exp.exp_basic import ExpBasic
 from utils.tools import EarlyStopping, adjust_learning_rate, adjustment
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
@@ -17,9 +17,9 @@ import numpy as np
 warnings.filterwarnings('ignore')
 
 
-class Exp_Anomaly_Detection(Exp_Basic):
+class ExpAnomalyDetection(ExpBasic):
     def __init__(self, args):
-        super(Exp_Anomaly_Detection, self).__init__(args)
+        super().__init__(args)
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -28,7 +28,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag):
+    def _get_data(self, flag='train'):
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
 
@@ -40,7 +40,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
         criterion = nn.MSELoss()
         return criterion
 
-    def vali(self, vali_data, vali_loader, criterion):
+    def vali(self, vali_data=None, vali_loader=None, criterion=None):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
@@ -60,7 +60,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
         self.model.train()
         return total_loss
 
-    def train(self, setting):
+    def train(self, setting='default'):
         _, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
@@ -125,7 +125,7 @@ class Exp_Anomaly_Detection(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
+    def test(self, setting='default', test=0):
         _, test_loader = self._get_data(flag='test')
         _, train_loader = self._get_data(flag='train')
         if test:
@@ -205,3 +205,6 @@ class Exp_Anomaly_Detection(Exp_Basic):
         f.write('\n')
         f.close()
         return
+
+
+Exp_Anomaly_Detection = ExpAnomalyDetection

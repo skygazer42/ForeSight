@@ -22,7 +22,7 @@ data_dict = {
 # flag指定了数据集的用途，可以是'train', 'valid'或'test'。
 def data_provider(args, flag):
     # 定义数据集类字典
-    Data = data_dict[args.data]
+    dataset_cls = data_dict[args.data]
     timeenc = 0 if args.embed != 'timeF' else 1
     # 判断数据集类型，为测试集则不打乱数据，且batch_size=1，否则为训练集和验证集，batch_size=args.batch_size
     if flag == 'test':
@@ -41,7 +41,7 @@ def data_provider(args, flag):
     # 如果是异常检测任务，则不删除数据最后一部分，返回数据集和数据加载器
     if args.task_name == 'anomaly_detection':
         drop_last = False
-        data_set = Data(
+        data_set = dataset_cls(
             root_path=args.root_path,
             win_size=args.seq_len,
             flag=flag,
@@ -57,7 +57,7 @@ def data_provider(args, flag):
     # 如果是分类任务，则不删除数据最后一部分，并按照最大长度进行填充，返回数据集和数据加载器
     elif args.task_name == 'classification':
         drop_last = False
-        data_set = Data(
+        data_set = dataset_cls(
             root_path=args.root_path,
             flag=flag,
         )
@@ -74,7 +74,7 @@ def data_provider(args, flag):
     else:
         if args.data == 'm4':
             drop_last = False
-        data_set = Data(
+        data_set = dataset_cls(
             root_path=args.root_path,
             data_path=args.data_path,
             flag=flag,

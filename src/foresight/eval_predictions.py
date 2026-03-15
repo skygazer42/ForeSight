@@ -20,6 +20,78 @@ from .metrics import (
 )
 
 
+def _sorted_unique_steps(step_values: Any) -> list[int]:
+    steps = np.asarray(step_values)
+    return sorted({int(step) for step in steps.tolist()})
+
+
+def _quantile_column_map(df: pd.DataFrame, *, yhat_prefix: str) -> dict[int, str]:
+    q_cols: dict[int, str] = {}
+    prefix = str(yhat_prefix)
+    for column in df.columns:
+        column_s = str(column)
+        if not column_s.startswith(prefix):
+            continue
+        pct_s = column_s[len(prefix) :]
+        if not pct_s.isdigit():
+            continue
+        pct = int(pct_s)
+        if 0 < pct < 100:
+            q_cols[pct] = column_s
+    return q_cols
+
+
+def _symmetric_interval_levels(pcts: list[int], q_cols: dict[int, str]) -> list[int]:
+    levels: list[int] = []
+    for lo_pct in pcts:
+        if lo_pct >= 50:
+            continue
+        hi_pct = 100 - lo_pct
+        if hi_pct in q_cols:
+            levels.append(100 - 2 * lo_pct)
+    return sorted(set(levels))
+
+
+def _per_step_interval_metrics(
+    y: np.ndarray,
+    lo: np.ndarray,
+    hi: np.ndarray,
+    *,
+    alpha: float,
+    step_values: Any,
+) -> tuple[list[float], list[float], list[float], list[float]]:
+    steps = np.asarray(step_values)
+    coverage_by_step: list[float] = []
+    width_by_step: list[float] = []
+    score_by_step: list[float] = []
+    winkler_by_step: list[float] = []
+    for step in _sorted_unique_steps(step_values):
+        mask = steps == step
+        coverage_by_step.append(interval_coverage(y[mask], lo[mask], hi[mask]))
+        width_by_step.append(mean_interval_width(lo[mask], hi[mask]))
+        score_by_step.append(interval_score(y[mask], lo[mask], hi[mask], alpha=alpha))
+        winkler_by_step.append(winkler_score(y[mask], lo[mask], hi[mask], alpha=alpha))
+    return coverage_by_step, width_by_step, score_by_step, winkler_by_step
+
+
+def _weighted_interval_score_by_step(
+    y: np.ndarray,
+    median: np.ndarray,
+    *,
+    wis_intervals: list[tuple[np.ndarray, np.ndarray, float]],
+    step_values: Any,
+) -> list[float]:
+    steps = np.asarray(step_values)
+    wis_by_step: list[float] = []
+    for step in _sorted_unique_steps(step_values):
+        mask = steps == step
+        interval_subset = [(lo[mask], hi[mask], alpha) for lo, hi, alpha in wis_intervals]
+        wis_by_step.append(
+            weighted_interval_score(y[mask], median[mask], intervals=interval_subset)
+        )
+    return wis_by_step
+
+
 def evaluate_predictions(
     df: pd.DataFrame,
     *,
@@ -53,7 +125,7 @@ def evaluate_predictions(
 
     if step_col in df.columns:
         steps = np.asarray(df[step_col])
-        uniq = sorted({int(s) for s in steps.tolist()})
+        uniq = _sorted_unique_steps(steps)
         mae_by_step: list[float] = []
         rmse_by_step: list[float] = []
         mape_by_step: list[float] = []
@@ -102,18 +174,7 @@ def evaluate_quantile_predictions(
         raise KeyError(f"Missing y column: {y_col!r}")
 
     y = df[y_col].to_numpy(dtype=float, copy=False)
-
-    # Detect quantile columns.
-    q_cols: dict[int, str] = {}
-    for c in df.columns:
-        if not str(c).startswith(str(yhat_prefix)):
-            continue
-        pct_s = str(c)[len(str(yhat_prefix)) :]
-        if not pct_s.isdigit():
-            continue
-        pct = int(pct_s)
-        if 0 < pct < 100:
-            q_cols[pct] = str(c)
+    q_cols = _quantile_column_map(df, yhat_prefix=yhat_prefix)
 
     if not q_cols:
         return {"quantiles": [], "pinball_mean": float("nan")}
@@ -136,18 +197,7 @@ def evaluate_quantile_predictions(
         crps_from_quantiles(y, qhat_mat, quantiles=tuple(float(p) / 100.0 for p in pcts))
     )
 
-    # Interval metrics for symmetric pairs: pX / p(100-X) -> central level = 100 - 2X
-    levels: list[int] = []
-    for lo_pct in pcts:
-        if lo_pct >= 50:
-            continue
-        hi_pct = 100 - lo_pct
-        if hi_pct not in q_cols:
-            continue
-        level = 100 - 2 * lo_pct
-        levels.append(int(level))
-
-    levels = sorted(set(levels))
+    levels = _symmetric_interval_levels(pcts, q_cols)
     out["interval_levels"] = levels
 
     center_col = None
@@ -173,18 +223,13 @@ def evaluate_quantile_predictions(
         wis_intervals.append((lo, hi, alpha))
 
         if step_col in df.columns:
-            steps = np.asarray(df[step_col])
-            uniq = sorted({int(s) for s in steps.tolist()})
-            cov_by_step: list[float] = []
-            width_by_step: list[float] = []
-            score_by_step: list[float] = []
-            winkler_by_step: list[float] = []
-            for s in uniq:
-                mask = steps == s
-                cov_by_step.append(interval_coverage(y[mask], lo[mask], hi[mask]))
-                width_by_step.append(mean_interval_width(lo[mask], hi[mask]))
-                score_by_step.append(interval_score(y[mask], lo[mask], hi[mask], alpha=alpha))
-                winkler_by_step.append(winkler_score(y[mask], lo[mask], hi[mask], alpha=alpha))
+            cov_by_step, width_by_step, score_by_step, winkler_by_step = _per_step_interval_metrics(
+                y,
+                lo,
+                hi,
+                alpha=alpha,
+                step_values=df[step_col],
+            )
             out[f"coverage_{level}_by_step"] = cov_by_step
             out[f"mean_width_{level}_by_step"] = width_by_step
             out[f"interval_score_{level}_by_step"] = score_by_step
@@ -196,15 +241,11 @@ def evaluate_quantile_predictions(
             weighted_interval_score(y, median, intervals=wis_intervals)
         )
         if step_col in df.columns:
-            steps = np.asarray(df[step_col])
-            uniq = sorted({int(s) for s in steps.tolist()})
-            wis_by_step: list[float] = []
-            for s in uniq:
-                mask = steps == s
-                wis_intervals_s = [(lo[mask], hi[mask], alpha) for lo, hi, alpha in wis_intervals]
-                wis_by_step.append(
-                    weighted_interval_score(y[mask], median[mask], intervals=wis_intervals_s)
-                )
-            out["weighted_interval_score_by_step"] = wis_by_step
+            out["weighted_interval_score_by_step"] = _weighted_interval_score_by_step(
+                y,
+                median,
+                wis_intervals=wis_intervals,
+                step_values=df[step_col],
+            )
 
     return out

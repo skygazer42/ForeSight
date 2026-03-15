@@ -1,5 +1,5 @@
 from data_provider.data_factory import data_provider
-from exp.exp_basic import Exp_Basic
+from exp.exp_basic import ExpBasic
 from utils.tools import EarlyStopping, adjust_learning_rate, cal_accuracy
 import torch
 import torch.nn as nn
@@ -12,9 +12,9 @@ import numpy as np
 warnings.filterwarnings('ignore')
 
 
-class Exp_Classification(Exp_Basic):
+class ExpClassification(ExpBasic):
     def __init__(self, args):
-        super(Exp_Classification, self).__init__(args)
+        super().__init__(args)
 
     def _build_model(self):
         # model input depends on data
@@ -30,7 +30,7 @@ class Exp_Classification(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag):
+    def _get_data(self, flag='TRAIN'):
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
 
@@ -42,7 +42,7 @@ class Exp_Classification(Exp_Basic):
         criterion = nn.CrossEntropyLoss()
         return criterion
 
-    def vali(self, vali_data, vali_loader, criterion):
+    def vali(self, vali_data=None, vali_loader=None, criterion=None):
         total_loss = []
         preds = []
         trues = []
@@ -74,7 +74,7 @@ class Exp_Classification(Exp_Basic):
         self.model.train()
         return total_loss, accuracy
 
-    def train(self, setting):
+    def train(self, setting='default'):
         _, train_loader = self._get_data(flag='TRAIN')
         vali_data, vali_loader = self._get_data(flag='TEST')
         test_data, test_loader = self._get_data(flag='TEST')
@@ -142,7 +142,7 @@ class Exp_Classification(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
+    def test(self, setting='default', test=0):
         _, test_loader = self._get_data(flag='TEST')
         if test:
             print('loading model')
@@ -188,3 +188,6 @@ class Exp_Classification(Exp_Basic):
         f.write('\n')
         f.close()
         return
+
+
+Exp_Classification = ExpClassification

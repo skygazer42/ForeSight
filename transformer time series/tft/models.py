@@ -29,21 +29,21 @@ class ManualLSTM(nn.Module):
         if int(x.shape[2]) != int(self.input_size):
             raise ValueError(f"Expected input_size={self.input_size}, got C={int(x.shape[2])}")
 
-        B = int(x.shape[0])
-        T = int(x.shape[1])
-        if T <= 0:
+        batch_size = int(x.shape[0])
+        seq_len = int(x.shape[1])
+        if seq_len <= 0:
             raise ValueError("Sequence length T must be >= 1")
 
         if hx is None:
-            h = x.new_zeros((B, self.hidden_size))
-            c = x.new_zeros((B, self.hidden_size))
+            h = x.new_zeros((batch_size, self.hidden_size))
+            c = x.new_zeros((batch_size, self.hidden_size))
         else:
             h0, c0 = hx
             h = h0[0] if h0.ndim == 3 else h0
             c = c0[0] if c0.ndim == 3 else c0
 
         outs = []
-        for t in range(T):
+        for t in range(seq_len):
             x_t = x[:, t, :]
             gates = self.x2h(x_t) + self.h2h(h)
             i, f, g, o = gates.chunk(4, dim=-1)
@@ -287,7 +287,7 @@ class VariableSelectionNetwork(nn.Module):
         
         self.per_feature_grn = nn.ModuleList([GatedResidualNetwork(self.hidden_layer_size,
                                                                    dropout_rate=self.dropout_rate)
-                                                      for i in range(self.output_size)])
+                                                      for _ in range(self.output_size)])
     def forward(self, x):
         # Non Static Inputs
         if self.additional_context:
@@ -308,7 +308,7 @@ class VariableSelectionNetwork(nn.Module):
             for i in range(self.output_size):
                 e = self.per_feature_grn[i](embedding[Ellipsis, i])
                 trans_emb_list.append(e)
-            transformed_embedding = torch.stack(trans_emb_list, axis=-1)
+            transformed_embedding = torch.stack(trans_emb_list, dim=-1)
             
             combined = sparse_weights * transformed_embedding
             
@@ -330,7 +330,7 @@ class VariableSelectionNetwork(nn.Module):
             for i in range(self.output_size):
                 e = self.per_feature_grn[i](embedding[:, i:i + 1, :])
                 trans_emb_list.append(e)
-            transformed_embedding = torch.cat(trans_emb_list, axis=1)
+            transformed_embedding = torch.cat(trans_emb_list, dim=1)
     
             combined = sparse_weights * transformed_embedding
             

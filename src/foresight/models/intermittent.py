@@ -157,6 +157,34 @@ def croston_optimized_forecast(
     return croston_classic_forecast(x, horizon, alpha=best_alpha)
 
 
+def _les_decay_value(y_hat: float, tau_hat: float, beta: float, tau: float) -> float:
+    if tau_hat <= 0.0:
+        return 0.0
+    factor = 1.0 - (beta * tau) / (2.0 * tau_hat)
+    if factor <= 0.0:
+        return 0.0
+    return float((y_hat / tau_hat) * factor)
+
+
+def _les_update_state(
+    y_hat: float,
+    tau_hat: float,
+    tau: float,
+    y: float,
+    *,
+    alpha: float,
+    beta: float,
+) -> tuple[float, float, float, float]:
+    if y > 0.0:
+        y_hat = alpha * y + (1.0 - alpha) * y_hat
+        tau_hat = beta * tau + (1.0 - beta) * tau_hat
+        forecast = 0.0 if tau_hat <= 0.0 else y_hat / tau_hat
+        return y_hat, tau_hat, 1.0, float(forecast)
+
+    forecast = _les_decay_value(y_hat, tau_hat, beta, tau)
+    return y_hat, tau_hat, tau + 1.0, forecast
+
+
 def les_forecast(
     train: Any,
     horizon: int,
@@ -193,28 +221,19 @@ def les_forecast(
     f = 0.0 if tau_hat <= 0.0 else y_hat / tau_hat
 
     for t in range(first + 1, x.size):
-        y = float(x[t])
-        if y:
-            y_hat = a * y + (1.0 - a) * y_hat
-            tau_hat = b * tau + (1.0 - b) * tau_hat
-            f = 0.0 if tau_hat <= 0.0 else y_hat / tau_hat
-            tau = 1.0
-        else:
-            if tau_hat <= 0.0:
-                f = 0.0
-            else:
-                factor = 1.0 - (b * tau) / (2.0 * tau_hat)
-                f = 0.0 if factor <= 0.0 else (y_hat / tau_hat) * factor
-            tau += 1.0
+        y_hat, tau_hat, tau, f = _les_update_state(
+            y_hat,
+            tau_hat,
+            tau,
+            float(x[t]),
+            alpha=a,
+            beta=b,
+        )
 
     preds = np.empty((int(horizon),), dtype=float)
     for h in range(int(horizon)):
         preds[h] = float(f)
-        if tau_hat <= 0.0:
-            f = 0.0
-        else:
-            factor = 1.0 - (b * tau) / (2.0 * tau_hat)
-            f = 0.0 if factor <= 0.0 else (y_hat / tau_hat) * factor
+        f = _les_decay_value(y_hat, tau_hat, b, tau)
         tau += 1.0
 
     return preds

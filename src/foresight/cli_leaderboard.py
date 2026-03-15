@@ -602,7 +602,7 @@ def _resume_row_matches_leaderboard_sweep(
 
     row_params = _leaderboard_resume_value_as_params_dict(row.get("model_params"))
     if row_params is None:
-        return (not expected_params_norm, ds, model) if False else (not bool(expected_params_norm), ds, model)
+        return (not bool(expected_params_norm), ds, model)
 
     row_params_norm = json.loads(json.dumps(row_params, ensure_ascii=False, sort_keys=True))
     return (row_params_norm == expected_params_norm, ds, model)

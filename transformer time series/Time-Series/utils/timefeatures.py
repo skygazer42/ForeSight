@@ -24,14 +24,16 @@ from pandas.tseries.frequencies import to_offset
 # 例
 
 
-#这段代码定义了一个TimeFeature类，它是一个基类，它没有实现__call__方法，因此它不能被直接使用，
-# 但它可以被子类继承并实现__call__方法，以生成时间特征的向量表示
+
+
 class TimeFeature:
     def __init__(self):
+        # Base time features do not need instance state.
         pass
 
     def __call__(self, index: pd.DatetimeIndex) -> np.ndarray:
-        pass
+        # Subclasses implement the concrete datetime-to-feature mapping.
+        raise NotImplementedError
 
     def __repr__(self):
         return self.__class__.__name__ + "()"

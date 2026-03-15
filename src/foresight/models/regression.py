@@ -378,6 +378,32 @@ def _dirrec_step_prediction_features(
     return np.concatenate([feat_step, np.asarray(out, dtype=float)], axis=0)
 
 
+def _direct_forecast_step_features(
+    x_base_aug: np.ndarray,
+    feat_base_aug: np.ndarray,
+    *,
+    step_idx: int,
+    t_idx: np.ndarray,
+    fourier_periods: Any,
+    fourier_orders: Any,
+    fourier_pred_all: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    if fourier_pred_all is None:
+        return x_base_aug, feat_base_aug
+
+    fourier_train, _ = build_fourier_features(
+        t_idx + int(step_idx),
+        periods=fourier_periods,
+        orders=fourier_orders,
+    )
+    x_step = np.concatenate([x_base_aug, fourier_train], axis=1)
+    feat_step = np.concatenate(
+        [feat_base_aug, fourier_pred_all[int(step_idx) : int(step_idx) + 1, :]],
+        axis=1,
+    )
+    return x_step, feat_step
+
+
 def lr_lag_forecast(
     train: Any,
     horizon: int,
@@ -2514,22 +2540,18 @@ def xgbrf_lag_direct_forecast(
         raise ValueError(HORIZON_MIN_ERROR)
     if lags <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if n_estimators <= 0:
-        raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if max_depth <= 0:
-        raise ValueError(MAX_DEPTH_MIN_ERROR)
-    if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    if float(reg_lambda) < 0:
-        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
-    if float(min_child_weight) < 0:
-        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
-    if float(gamma) < 0:
-        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
-    if n_jobs == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _xgb_validate_common_regressor_params(
+        {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "reg_lambda": reg_lambda,
+            "min_child_weight": min_child_weight,
+            "gamma": gamma,
+            "n_jobs": n_jobs,
+        }
+    )
 
     h = int(horizon)
     start_t = _compute_feature_start_t(
@@ -2572,36 +2594,63 @@ def xgbrf_lag_direct_forecast(
 
     out = np.empty((h,), dtype=float)
     for j in range(h):
-        if fourier_pred_all is None:
-            x_j = x_base_aug
-            feat = feat_base_aug
-        else:
-            fourier_train, _ = build_fourier_features(
-                t_idx + int(j),
-                periods=fourier_periods,
-                orders=fourier_orders,
-            )
-            x_j = np.concatenate([x_base_aug, fourier_train], axis=1)
-            feat = np.concatenate([feat_base_aug, fourier_pred_all[int(j) : int(j) + 1, :]], axis=1)
+        x_j, feat = _direct_forecast_step_features(
+            x_base_aug,
+            feat_base_aug,
+            step_idx=j,
+            t_idx=t_idx,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+            fourier_pred_all=fourier_pred_all,
+        )
 
-        model = xgb.XGBRFRegressor(
-            objective=XGB_OBJECTIVE_SQUAREDERROR,
-            n_estimators=int(n_estimators),
-            max_depth=int(max_depth),
-            subsample=float(subsample),
-            colsample_bytree=float(colsample_bytree),
-            reg_lambda=float(reg_lambda),
-            min_child_weight=float(min_child_weight),
-            gamma=float(gamma),
-            random_state=int(random_state),
-            n_jobs=int(n_jobs),
-            tree_method=str(tree_method),
-            verbosity=0,
+        model = _build_xgbrf_regressor(
+            xgb,
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            reg_lambda=reg_lambda,
+            min_child_weight=min_child_weight,
+            gamma=gamma,
+            random_state=random_state,
+            n_jobs=n_jobs,
+            tree_method=tree_method,
         )
         model.fit(x_j, Y[:, j])
         out[j] = float(model.predict(feat)[0])
 
     return np.asarray(out, dtype=float)
+
+
+def _build_xgbrf_regressor(
+    xgb_module: Any,
+    *,
+    n_estimators: int,
+    max_depth: int,
+    subsample: float,
+    colsample_bytree: float,
+    reg_lambda: float,
+    min_child_weight: float,
+    gamma: float,
+    random_state: int,
+    n_jobs: int,
+    tree_method: str,
+) -> Any:
+    return xgb_module.XGBRFRegressor(
+        objective=XGB_OBJECTIVE_SQUAREDERROR,
+        n_estimators=int(n_estimators),
+        max_depth=int(max_depth),
+        subsample=float(subsample),
+        colsample_bytree=float(colsample_bytree),
+        reg_lambda=float(reg_lambda),
+        min_child_weight=float(min_child_weight),
+        gamma=float(gamma),
+        random_state=int(random_state),
+        n_jobs=int(n_jobs),
+        tree_method=str(tree_method),
+        verbosity=0,
+    )
 
 
 def xgbrf_lag_recursive_forecast(
@@ -2644,22 +2693,18 @@ def xgbrf_lag_recursive_forecast(
         raise ValueError(
             f"xgboost recursive lag forecast requires > lags points (lags={lags}), got {x.size}"
         )
-    if n_estimators <= 0:
-        raise ValueError(N_ESTIMATORS_MIN_ERROR)
-    if max_depth <= 0:
-        raise ValueError(MAX_DEPTH_MIN_ERROR)
-    if not (0.0 < float(subsample) <= 1.0):
-        raise ValueError(SUBSAMPLE_RANGE_ERROR)
-    if not (0.0 < float(colsample_bytree) <= 1.0):
-        raise ValueError(COLSAMPLE_BYTREE_RANGE_ERROR)
-    if float(reg_lambda) < 0:
-        raise ValueError(REG_LAMBDA_NON_NEGATIVE_ERROR)
-    if float(min_child_weight) < 0:
-        raise ValueError(MIN_CHILD_WEIGHT_NON_NEGATIVE_ERROR)
-    if float(gamma) < 0:
-        raise ValueError(GAMMA_NON_NEGATIVE_ERROR)
-    if n_jobs == 0:
-        raise ValueError(N_JOBS_NON_ZERO_ERROR)
+    _xgb_validate_common_regressor_params(
+        {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "reg_lambda": reg_lambda,
+            "min_child_weight": min_child_weight,
+            "gamma": gamma,
+            "n_jobs": n_jobs,
+        }
+    )
 
     start_t = _compute_feature_start_t(
         lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
@@ -2678,19 +2723,18 @@ def xgbrf_lag_recursive_forecast(
         t_index=t_idx,
         series=x,
     )
-    model = xgb.XGBRFRegressor(
-        objective=XGB_OBJECTIVE_SQUAREDERROR,
-        n_estimators=int(n_estimators),
-        max_depth=int(max_depth),
-        subsample=float(subsample),
-        colsample_bytree=float(colsample_bytree),
-        reg_lambda=float(reg_lambda),
-        min_child_weight=float(min_child_weight),
-        gamma=float(gamma),
-        random_state=int(random_state),
-        n_jobs=int(n_jobs),
-        tree_method=str(tree_method),
-        verbosity=0,
+    model = _build_xgbrf_regressor(
+        xgb,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        reg_lambda=reg_lambda,
+        min_child_weight=min_child_weight,
+        gamma=gamma,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        tree_method=tree_method,
     )
     model.fit(X, y)
 

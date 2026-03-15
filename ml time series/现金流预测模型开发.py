@@ -204,7 +204,13 @@ plot_data = cashflow_data[ (cashflow_data['cashflow_subcategory']=='labor') &
 
 # 不是每天都有数据。为了更好得可视化数据的规律，没有数据的地方有0填充
 full_data = pd.DataFrame({'date':pd.date_range( plot_data['date'].min(), plot_data['date'].max() )})
-plot_data = pd.merge( full_data, plot_data[['date', 'cashflow']], how='left' )
+plot_data = pd.merge(
+    full_data,
+    plot_data[['date', 'cashflow']],
+    how='left',
+    on='date',
+    validate='one_to_one',
+)
 plot_data.fillna(0, inplace=True)
 
 plt.plot( plot_data['date'], plot_data['cashflow'], '.-' )
@@ -228,7 +234,13 @@ plot_data = cashflow_data[ (cashflow_data['cashflow_subcategory']=='material cos
 
 # 不是每天都有数据。为了更好得可视化数据的规律，没有数据的地方有0填充
 full_data = pd.DataFrame({'date':pd.date_range( plot_data['date'].min(), plot_data['date'].max() )})
-plot_data = pd.merge( full_data, plot_data[['date', 'cashflow']], how='left' )
+plot_data = pd.merge(
+    full_data,
+    plot_data[['date', 'cashflow']],
+    how='left',
+    on='date',
+    validate='one_to_one',
+)
 plot_data.fillna(0, inplace=True)
 
 plt.plot( plot_data['date'], plot_data['cashflow'], '.-' )
@@ -253,7 +265,13 @@ plot_data = cashflow_data[ (cashflow_data['cashflow_subcategory']=='rent & utili
 
 # 不是每天都有数据。为了更好得可视化数据的规律，没有数据的地方有0填充
 full_data = pd.DataFrame({'date':pd.date_range( plot_data['date'].min(), plot_data['date'].max() )})
-plot_data = pd.merge( full_data, plot_data[['date', 'cashflow']], how='left' )
+plot_data = pd.merge(
+    full_data,
+    plot_data[['date', 'cashflow']],
+    how='left',
+    on='date',
+    validate='one_to_one',
+)
 plot_data.fillna(0, inplace=True)
 
 plt.plot( plot_data['date'], plot_data['cashflow'], '.-' )
@@ -278,7 +296,13 @@ plot_data = cashflow_data[ (cashflow_data['cashflow_subcategory']=='invest') &
 
 # 不是每天都有数据。为了更好得可视化数据的规律，没有数据的地方有0填充
 full_data = pd.DataFrame({'date':pd.date_range( plot_data['date'].min(), plot_data['date'].max() )})
-plot_data = pd.merge( full_data, plot_data[['date', 'cashflow']], how='left' )
+plot_data = pd.merge(
+    full_data,
+    plot_data[['date', 'cashflow']],
+    how='left',
+    on='date',
+    validate='one_to_one',
+)
 plot_data.fillna(0, inplace=True)
 
 plt.plot( plot_data['date'], plot_data['cashflow'], '.-' )
@@ -300,7 +324,13 @@ plot_data = cashflow_data[ (cashflow_data['cashflow_subcategory']=='invest & int
 
 # 不是每天都有数据。为了更好得可视化数据的规律，没有数据的地方有0填充
 full_data = pd.DataFrame({'date':pd.date_range( plot_data['date'].min(), plot_data['date'].max() )})
-plot_data = pd.merge( full_data, plot_data[['date', 'cashflow']], how='left' )
+plot_data = pd.merge(
+    full_data,
+    plot_data[['date', 'cashflow']],
+    how='left',
+    on='date',
+    validate='one_to_one',
+)
 plot_data.fillna(0, inplace=True)
 
 plt.plot( plot_data['date'], plot_data['cashflow'], '.-' )
@@ -361,7 +391,13 @@ df_labor = cashflow_data[ cashflow_data['cashflow_subcategory']=='labor'
 # %%
 #将没有数据的日期用0填补
 full_data = df_sales[['branch_id','date']].copy()
-df_labor = pd.merge( full_data, df_labor, how='left' )
+df_labor = pd.merge(
+    full_data,
+    df_labor,
+    how='left',
+    on=['branch_id', 'date'],
+    validate='one_to_one',
+)
 df_labor.fillna(0, inplace=True)
 
 # %%
@@ -375,7 +411,13 @@ date_25 = calendar[ calendar['date'].dt.day==25
 
 ## step2: 找到每月25日之前的所有上班日（含25日）
 date_work = calendar[ calendar['day_off']==0 ][['date','month']].rename(columns={'date':'date_work'})
-date_work = pd.merge( date_25, date_work )
+date_work = pd.merge(
+    date_25,
+    date_work,
+    how='inner',
+    on='month',
+    validate='one_to_many',
+)
 date_work = date_work[ date_work['date_work'] <=  date_work['date_25'] ]
 
 
@@ -396,7 +438,13 @@ df_cost = cashflow_data[ cashflow_data['cashflow_subcategory']=='material cost'
 # %%
 #将没有数据的日期用0填补
 full_data = df_sales[['branch_id','date']].copy()
-df_cost = pd.merge( full_data, df_cost, how='left' )
+df_cost = pd.merge(
+    full_data,
+    df_cost,
+    how='left',
+    on=['branch_id', 'date'],
+    validate='one_to_one',
+)
 df_cost.fillna(0, inplace=True)
 
 # %%
@@ -413,7 +461,13 @@ season_end = calendar[ ((calendar['date'].dt.month== 3) & (calendar['date'].dt.d
 
 ## step2: 找到季末之前的所有上班日（含付款日）
 date_work = calendar[ calendar['day_off']==0 ][['date','month']].rename(columns={'date':'date_work'})
-date_work = pd.merge( season_end, date_work )
+date_work = pd.merge(
+    season_end,
+    date_work,
+    how='inner',
+    on='month',
+    validate='one_to_many',
+)
 date_work = date_work[ date_work['date_work'] <=  date_work['season_end'] ]
 
 ## step3: 找到距离季末最近的上班日，即为付款日
@@ -433,7 +487,13 @@ df_rent = cashflow_data[ cashflow_data['cashflow_subcategory']=='rent & utility'
 # %%
 #将没有数据的日期用0填补
 full_data = df_sales[['branch_id','date']].copy()
-df_rent = pd.merge( full_data, df_rent, how='left' )
+df_rent = pd.merge(
+    full_data,
+    df_rent,
+    how='left',
+    on=['branch_id', 'date'],
+    validate='one_to_one',
+)
 df_rent.fillna(0, inplace=True)
 
 # %%
@@ -446,22 +506,44 @@ calendar['day_of_month'] = calendar['date'].dt.day
 calendar['day_of_month_reverse'] = (calendar['date']+pd.tseries.offsets.MonthEnd(0) - calendar['date']).dt.days+1
 
 ## step2: 判断每个公司的房租日是否固定是每个月的第几天
-pay_date1 = pd.merge( calendar[['date','day_of_month']],
-                    df_rent[ df_rent['cashflow']!=0 ])
+pay_date1 = pd.merge(
+    calendar[['date', 'day_of_month']],
+    df_rent[df_rent['cashflow'] != 0],
+    how='inner',
+    on='date',
+    validate='one_to_many',
+)
 pay_date1 = pay_date1.groupby(['branch_id'])['day_of_month'].agg(['min','max']).reset_index()
 pay_date1 = pay_date1[ pay_date1['min']==pay_date1['max'] 
                      ][['branch_id','min']].rename(columns={'min':'day_of_month'})
-pay_date1 = pd.merge( pay_date1, calendar[['date','day_of_month']] )
+pay_date1 = pd.merge(
+    pay_date1,
+    calendar[['date', 'day_of_month']],
+    how='inner',
+    on='day_of_month',
+    validate='many_to_many',
+)
 pay_date1 = pay_date1[['branch_id','date']]
 pay_date1['is_pay_date'] = 1
 
 ## step3: 判断每个公司的房租日是否固定是每个月的倒数几天
-pay_date2 = pd.merge( calendar[['date','day_of_month_reverse']],
-                     df_rent[ df_rent['cashflow']!=0 ])
+pay_date2 = pd.merge(
+    calendar[['date', 'day_of_month_reverse']],
+    df_rent[df_rent['cashflow'] != 0],
+    how='inner',
+    on='date',
+    validate='one_to_many',
+)
 pay_date2 = pay_date2.groupby(['branch_id'])['day_of_month_reverse'].agg(['min','max']).reset_index()
 pay_date2 = pay_date2[ pay_date2['min']==pay_date2['max'] 
                      ][['branch_id','min']].rename(columns={'min':'day_of_month_reverse'})
-pay_date2 = pd.merge( pay_date2, calendar[['date','day_of_month_reverse']] )
+pay_date2 = pd.merge(
+    pay_date2,
+    calendar[['date', 'day_of_month_reverse']],
+    how='inner',
+    on='day_of_month_reverse',
+    validate='many_to_many',
+)
 pay_date2 = pay_date2[['branch_id','date']]
 pay_date2['is_pay_date'] = 1
 
@@ -469,7 +551,13 @@ pay_date2['is_pay_date'] = 1
 pay_date = pd.concat( [pay_date1, pay_date2] )
 
 
-df_rent = pd.merge( df_rent, pay_date, how='left' )
+df_rent = pd.merge(
+    df_rent,
+    pay_date,
+    how='left',
+    on=['branch_id', 'date'],
+    validate='one_to_many',
+)
 df_rent.fillna(0, inplace=True)
 
 # %% [markdown]
@@ -523,8 +611,13 @@ m.fit( df_train[['ds','y','is_cnye','is_cny1']] )
 # %%
 # 预测
 forecast = m.predict( df_val[['ds','is_cnye', 'is_cny1']] )
-df_val = pd.merge( df_val, 
-                  forecast[['ds','yhat','yhat_lower','yhat_upper']]   )
+df_val = pd.merge(
+    df_val,
+    forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']],
+    how='left',
+    on='ds',
+    validate='one_to_one',
+)
 
 # %%
 # 计算94%置信区间的覆盖率
@@ -569,8 +662,13 @@ m.fit( df_train[['ds','y','is_pay_date']] )
 # %%
 # 预测
 forecast = m.predict( df_val[['ds','is_pay_date']] )
-df_val = pd.merge( df_val, 
-                  forecast[['ds','yhat','yhat_lower','yhat_upper']])
+df_val = pd.merge(
+    df_val,
+    forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']],
+    how='left',
+    on='ds',
+    validate='one_to_one',
+)
 
 # %%
 # 计算94%置信区间的覆盖率
@@ -615,8 +713,13 @@ m.fit( df_train[['ds','y','is_pay_date']] )
 # %%
 # 预测
 forecast = m.predict( df_val[['ds','is_pay_date']] )
-df_val = pd.merge( df_val, 
-                  forecast[['ds','yhat','yhat_upper','yhat_lower']]  )
+df_val = pd.merge(
+    df_val,
+    forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+    how='left',
+    on='ds',
+    validate='one_to_one',
+)
 
 # %%
 # 计算94%置信区间的覆盖率
@@ -661,8 +764,13 @@ m.fit( df_train[['ds','y','is_pay_date']] )
 # %%
 # 预测
 forecast = m.predict( df_val[['ds','is_pay_date']] )
-df_val = pd.merge( df_val, 
-                  forecast[['ds','yhat','yhat_upper','yhat_lower']]  )
+df_val = pd.merge(
+    df_val,
+    forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+    how='left',
+    on='ds',
+    validate='one_to_one',
+)
 
 # %%
 # 计算94%置信区间的覆盖率
@@ -707,8 +815,13 @@ for tmp_branch_id in branch_id_list: #对子公司做循环
     df_val['ds'] = df_val['date']
     df_val['y'] = df_val['cashflow']
     forecast = m.predict( df_val[['ds','is_cnye','is_cny1']] )
-    df_val = pd.merge( df_val, 
-                      forecast[['ds','yhat','yhat_upper','yhat_lower']]  )
+    df_val = pd.merge(
+        df_val,
+        forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+        how='left',
+        on='ds',
+        validate='one_to_one',
+    )
     df_val['subcat'] = 'sales'
     val_results.append( df_val )
     
@@ -727,8 +840,13 @@ for tmp_branch_id in branch_id_list: #对子公司做循环
     df_val['ds'] = df_val['date']
     df_val['y'] = df_val['cashflow']
     forecast = m.predict( df_val[['ds','is_pay_date']] )
-    df_val = pd.merge( df_val, 
-                      forecast[['ds','yhat','yhat_upper','yhat_lower']]   )
+    df_val = pd.merge(
+        df_val,
+        forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+        how='left',
+        on='ds',
+        validate='one_to_one',
+    )
     df_val['subcat'] = 'labor'
     val_results.append( df_val )
     
@@ -747,8 +865,13 @@ for tmp_branch_id in branch_id_list: #对子公司做循环
     df_val['ds'] = df_val['date']
     df_val['y'] = df_val['cashflow']
     forecast = m.predict( df_val[['ds','is_pay_date']] )
-    df_val = pd.merge( df_val, 
-                      forecast[['ds','yhat','yhat_upper','yhat_lower']]   )
+    df_val = pd.merge(
+        df_val,
+        forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+        how='left',
+        on='ds',
+        validate='one_to_one',
+    )
     df_val['subcat'] = 'cost'
     val_results.append( df_val )
     
@@ -767,8 +890,13 @@ for tmp_branch_id in branch_id_list: #对子公司做循环
     df_val['ds'] = df_val['date']
     df_val['y'] = df_val['cashflow']
     forecast = m.predict( df_val[['ds','is_pay_date']] )
-    df_val = pd.merge( df_val, 
-                      forecast[['ds','yhat','yhat_upper','yhat_lower']]   )
+    df_val = pd.merge(
+        df_val,
+        forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+        how='left',
+        on='ds',
+        validate='one_to_one',
+    )
     df_val['subcat'] = 'rent'
     val_results.append( df_val )
     
@@ -849,8 +977,13 @@ for tmp_branch_id in branch_id_list: #对子公司做循环
     df_val['ds'] = df_val['date']
     df_val['y'] = df_val['cashflow']
     forecast = m.predict( df_val[['ds','is_cny1'] + holiday_list] )
-    df_val = pd.merge( df_val, 
-                      forecast[['ds','yhat','yhat_upper','yhat_lower']]  )
+    df_val = pd.merge(
+        df_val,
+        forecast[['ds', 'yhat', 'yhat_upper', 'yhat_lower']],
+        how='left',
+        on='ds',
+        validate='one_to_one',
+    )
     df_val['subcat'] = 'sales'
     sales_val_results.append( df_val )
     

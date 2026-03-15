@@ -12,7 +12,15 @@ def _repo_root() -> Path:
 
 
 def _read_repo_file(path: str) -> str:
-    return (_repo_root() / path).read_text(encoding="utf-8")
+    return (_repo_root() / path).read_text(encoding="utf-8-sig")
+
+
+def _read_repo_lines(path: str) -> list[str]:
+    return _read_repo_file(path).splitlines()
+
+
+def _line_at(path: str, lineno: int) -> str:
+    return _read_repo_lines(path)[lineno - 1]
 
 
 def _parse_repo_file(path: str) -> ast.AST:
@@ -52,6 +60,28 @@ def _call_lines_missing_keyword(path: str, *, method_name: str, keyword: str) ->
             node,
             method_name=method_name,
             keyword=keyword,
+        ):
+            out.append(node.lineno)
+    return sorted(out)
+
+
+def _call_lines_with_keyword_alias(
+    path: str,
+    *,
+    owner_name: str,
+    method_name: str,
+    keyword: str,
+) -> list[int]:
+    tree = _parse_repo_file(path)
+    out: list[int] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == owner_name
+            and node.func.attr == method_name
+            and any(kw.arg == keyword for kw in node.keywords)
         ):
             out.append(node.lineno)
     return sorted(out)
@@ -116,6 +146,63 @@ def _shape_dim_assignment_targets(node: ast.AST) -> list[tuple[int, ast.Tuple]]:
     for sub in ast.walk(node):
         targets.extend((sub.lineno, target) for target in _shape_tuple_targets_for_assign(sub))
     return targets
+
+
+def _class_method_names(path: str, class_name: str) -> list[str]:
+    tree = _parse_repo_file(path)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            return [
+                sub.name
+                for sub in node.body
+                if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+    raise AssertionError(f"Class {class_name!r} not found in {path}")
+
+
+def _required_method_param_names(path: str, class_name: str, method_name: str) -> list[str]:
+    tree = _parse_repo_file(path)
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for sub in node.body:
+            if not isinstance(sub, ast.FunctionDef) or sub.name != method_name:
+                continue
+            positional = list(sub.args.posonlyargs) + list(sub.args.args)
+            non_self = positional[1:]
+            required_count = max(0, len(non_self) - len(sub.args.defaults))
+            return [arg.arg for arg in non_self[:required_count]]
+        raise AssertionError(f"Method {method_name!r} not found on {class_name!r} in {path}")
+    raise AssertionError(f"Class {class_name!r} not found in {path}")
+
+
+def _top_level_class_names(path: str) -> set[str]:
+    tree = _parse_repo_file(path)
+    return {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+
+
+def _top_level_name_aliases(path: str) -> set[tuple[str, str]]:
+    tree = _parse_repo_file(path)
+    aliases: set[tuple[str, str]] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name) or not isinstance(node.value, ast.Name):
+            continue
+        aliases.add((target.id, node.value.id))
+    return aliases
+
+
+def _declared_names(path: str) -> set[str]:
+    tree = _parse_repo_file(path)
+    names = {
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+    }
+    names.update(node.arg for node in ast.walk(tree) if isinstance(node, ast.arg))
+    return names
 
 
 def _collect_unused_shape_dims(node: ast.AST) -> list[tuple[int, str]]:
@@ -654,6 +741,8 @@ def test_fetch_rnn_paper_metadata_source_extracts_complexity_helpers() -> None:
     assert "def _search_best_arxiv_hit(" in source
     assert "def _iter_crossref_queries(" in source
     assert "def _search_best_crossref_hit(" in source
+    assert "def _crossref_hits_for_query(" in source
+    assert "def _crossref_hit_score(" in source
     assert "def _ensure_metadata_entry(" in source
     assert "def _build_metadata_record(" in source
     assert "def _print_metadata_coverage(" in source
@@ -676,6 +765,16 @@ def test_fetch_rnn_paper_metadata_source_extracts_complexity_helpers() -> None:
         "tools/fetch_rnn_paper_metadata.py",
         "_best_crossref_match",
         "_search_best_crossref_hit",
+    )
+    assert _function_uses_name(
+        "tools/fetch_rnn_paper_metadata.py",
+        "_search_best_crossref_hit",
+        "_crossref_hits_for_query",
+    )
+    assert _function_uses_name(
+        "tools/fetch_rnn_paper_metadata.py",
+        "_search_best_crossref_hit",
+        "_crossref_hit_score",
     )
     assert _function_uses_name(
         "tools/fetch_rnn_paper_metadata.py",
@@ -766,6 +865,138 @@ def test_fetch_rnn_paper_metadata_source_extracts_scoring_helpers() -> None:
         "_score_crossref_hit",
         "_count_author_last_name_matches",
     )
+
+
+def test_convert_ipynb_source_extracts_complexity_helpers() -> None:
+    source = _read_repo_file("tools/convert_ipynb_to_py.py")
+
+    assert "def _normalized_cell_source(" in source
+    assert "def _normalized_cell_text(" in source
+    assert "def _append_markdown_cell(" in source
+    assert "def _append_code_cell(" in source
+    assert "def _append_unknown_cell(" in source
+    assert "def _append_cell(" in source
+    assert _function_uses_name(
+        "tools/convert_ipynb_to_py.py",
+        "convert_one",
+        "_normalized_cell_source",
+    )
+    assert _function_uses_name(
+        "tools/convert_ipynb_to_py.py",
+        "convert_one",
+        "_append_cell",
+    )
+    assert _function_uses_name(
+        "tools/convert_ipynb_to_py.py",
+        "_append_cell",
+        "_append_markdown_cell",
+    )
+    assert _function_uses_name(
+        "tools/convert_ipynb_to_py.py",
+        "_append_cell",
+        "_append_code_cell",
+    )
+    assert _function_uses_name(
+        "tools/convert_ipynb_to_py.py",
+        "_append_cell",
+        "_append_unknown_cell",
+    )
+
+
+def test_transformer_tools_source_extracts_adjustment_helpers() -> None:
+    source = _read_repo_file("transformer time series/Time-Series/utils/tools.py")
+
+    assert "def _starts_detected_anomaly_run(" in source
+    assert "def _mark_anomaly_run(" in source
+    assert _function_uses_name(
+        "transformer time series/Time-Series/utils/tools.py",
+        "adjustment",
+        "_starts_detected_anomaly_run",
+    )
+    assert _function_uses_name(
+        "transformer time series/Time-Series/utils/tools.py",
+        "adjustment",
+        "_mark_anomaly_run",
+    )
+
+
+def test_multiwavelet_correlation_source_uses_sonar_safe_names() -> None:
+    source = _read_repo_file("transformer time series/Time-Series/layers/MultiWaveletCorrelation.py")
+
+    assert "self.nCZ" not in source
+    assert "self.MWT_CZ" not in source
+    assert "B, seq_len, _, _ = queries.shape" not in source
+    assert "_, source_steps, _, D = values.shape" not in source
+    assert "V = self.Lk0(values).view(B, seq_len, self.c, -1)" not in source
+    assert "V = self.Lk1(V.view(B, seq_len, -1))" not in source
+    assert "ud = torch.jit.annotate(List[Tensor], [])" not in source
+    assert "us = torch.jit.annotate(List[Tensor], [])" not in source
+    assert "self.n_cz" in source
+    assert "self.mwt_cz" in source
+
+
+def test_multiwavelet_correlation_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/layers/MultiWaveletCorrelation.py")
+    forbidden = {"B", "N", "S", "E", "H", "H0", "H1", "G0", "G1", "PHI0", "PHI1"}
+
+    assert forbidden.isdisjoint(declared)
+
+
+def test_self_attention_family_declared_names_avoid_selected_s117_patterns() -> None:
+    forbidden = {"A", "B", "E", "H", "L", "S", "V"}
+    for path in (
+        "transformer time series/Time-Series/layers/SelfAttention_Family.py",
+        "transformer time series/SelfAttention_Family.py",
+    ):
+        declared = _declared_names(path)
+        assert forbidden.isdisjoint(declared)
+
+
+def test_tft_models_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/tft/models.py")
+    assert {"B", "T"}.isdisjoint(declared)
+
+
+def test_autocorrelation_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/layers/AutoCorrelation.py")
+    assert {"B", "H", "L", "S", "V"}.isdisjoint(declared)
+
+
+def test_etsformer_encdec_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/layers/ETSformer_EncDec.py")
+    assert {"M", "N"}.isdisjoint(declared)
+
+
+def test_timeseries_run_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/run.py")
+    assert {"Exp"}.isdisjoint(declared)
+
+
+def test_lightts_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/models/LightTS.py")
+    assert {"B", "N"}.isdisjoint(declared)
+
+
+def test_timesnet_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/models/TimesNet.py")
+    assert {"B", "N", "T"}.isdisjoint(declared)
+
+
+def test_fourier_correlation_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/layers/FourierCorrelation.py")
+    assert {"B", "E", "H", "L"}.isdisjoint(declared)
+
+
+def test_exp_imputation_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names("transformer time series/Time-Series/exp/exp_imputation.py")
+    assert {"B", "N", "T"}.isdisjoint(declared)
+
+
+def test_exp_short_term_declared_names_avoid_selected_s117_patterns() -> None:
+    declared = _declared_names(
+        "transformer time series/Time-Series/exp/exp_short_term_forecasting.py"
+    )
+    assert {"B", "C"}.isdisjoint(declared)
 
 
 def test_short_term_forecasting_source_avoids_seq_len_inline_formula_comment() -> None:
@@ -886,7 +1117,8 @@ def test_transformer_sources_replace_selected_unused_bindings_with_underscores()
     assert "xv = v.permute(0, 2, 3, 1)" not in fourier_correlation_source
 
     assert "B, T, N = x.size()" not in lightts_source
-    assert "B, _, N = x.size()" in lightts_source
+    assert "B, _, N = x.size()" not in lightts_source
+    assert "batch_size, _, num_nodes = x.size()" in lightts_source
 
     assert "batch, seq_len, channel = input.shape" not in micn_source
     assert "src_out, trend1 = self.decomp[i](src)" not in micn_source
@@ -1023,6 +1255,360 @@ def test_selected_transformer_sources_pass_pyflakes() -> None:
     assert _pyflakes_messages(paths) == []
 
 
+def test_selected_examples_and_cli_sources_avoid_current_low_risk_sonar_patterns() -> None:
+    run_benchmarks_source = _read_repo_file("benchmarks/run_benchmarks.py")
+    rnn_paper_zoo_source = _read_repo_file("examples/rnn_paper_zoo.py")
+    torch_global_models_source = _read_repo_file("examples/torch_global_models.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert 'list(config.get("conformal_levels", []))' not in run_benchmarks_source
+    assert "common = dict(" not in rnn_paper_zoo_source
+    assert torch_global_models_source.count('"0.1,0.5,0.9"') <= 1
+    assert "if False else" not in cli_leaderboard_source
+
+
+def test_ml_time_series_sources_make_merge_contracts_explicit() -> None:
+    prophet_path = "ml time series/prophet.py"
+    cashflow_path = "ml time series/现金流预测模型开发.py"
+
+    assert _call_lines_missing_keyword(prophet_path, method_name="merge", keyword="on") == []
+    assert _call_lines_missing_keyword(prophet_path, method_name="merge", keyword="validate") == []
+
+    assert _call_lines_missing_keyword(cashflow_path, method_name="merge", keyword="how") == []
+    assert _call_lines_missing_keyword(cashflow_path, method_name="merge", keyword="on") == []
+    assert _call_lines_missing_keyword(cashflow_path, method_name="merge", keyword="validate") == []
+
+
+def test_selected_transformer_sources_remove_current_public_commented_code() -> None:
+    fourier_source = _read_repo_file("transformer time series/Time-Series/layers/FourierCorrelation.py")
+    multiwavelet_source = _read_repo_file(
+        "transformer time series/Time-Series/layers/MultiWaveletCorrelation.py"
+    )
+    run_source = _read_repo_file("transformer time series/Time-Series/run.py")
+
+    assert "# size = [B, H, E, L]" not in fourier_source
+    assert "# size = [B, H, E, L]" not in multiwavelet_source
+    assert not _line_at(
+        "transformer time series/Time-Series/layers/Transformer_EncDec.py",
+        5,
+    ).lstrip().startswith("#")
+    assert not _line_at(
+        "transformer time series/Time-Series/layers/Transformer_EncDec.py",
+        6,
+    ).lstrip().startswith("#")
+    assert "# type1:" not in run_source
+    assert "# type2:" not in run_source
+    assert "# type3:" not in run_source
+    assert "#M4" not in run_source
+    assert "传感器读数" not in run_source
+    assert not _line_at(
+        "transformer time series/Time-Series/utils/timefeatures.py",
+        27,
+    ).lstrip().startswith("#")
+    assert not _line_at(
+        "transformer time series/Time-Series/utils/timefeatures.py",
+        28,
+    ).lstrip().startswith("#")
+    assert not _line_at(
+        "transformer time series/tft/data/data_download.py",
+        22,
+    ).lstrip().startswith("#")
+    assert not _line_at(
+        "transformer time series/tft/data/data_download.py",
+        23,
+    ).lstrip().startswith("#")
+
+
+def test_selected_sources_avoid_current_public_empty_method_bodies() -> None:
+    timefeatures_source = _read_repo_file("transformer time series/Time-Series/utils/timefeatures.py")
+    exp_basic_source = _read_repo_file("transformer time series/Time-Series/exp/exp_basic.py")
+    sonar_coverage_source = _read_repo_file("tests/test_sonar_coverage_recent_fixes.py")
+
+    assert "def __init__(self):\n        pass" not in timefeatures_source
+    assert "def __call__(self, index: pd.DatetimeIndex) -> np.ndarray:\n        pass" not in timefeatures_source
+
+    assert "def _get_data(self):\n        pass" not in exp_basic_source
+    assert "def vali(self):\n        pass" not in exp_basic_source
+    assert "def train(self):\n        pass" not in exp_basic_source
+    assert "def test(self):\n        pass" not in exp_basic_source
+
+    assert (
+        sonar_coverage_source.count("def __init__(self, **_: object) -> None:\n            pass")
+        == 0
+    )
+
+
+def test_selected_sources_extract_current_public_repeated_literals_to_constants() -> None:
+    anomaly_source = _read_repo_file("statistics time series/Anomaly Detection.py")
+    garch_source = _read_repo_file("statistics time series/GARCH Model.py")
+    sarima_source = _read_repo_file("statistics time series/SARIMA Model.py")
+    undo_stationary_source = _read_repo_file(
+        "statistics time series/Undo Stationary Transformations.py"
+    )
+    var_source = _read_repo_file("statistics time series/VAR Model.py")
+    data_loader_source = _read_repo_file(
+        "transformer time series/Time-Series/data_provider/data_loader.py"
+    )
+    etsformer_encdec_source = _read_repo_file(
+        "transformer time series/Time-Series/layers/ETSformer_EncDec.py"
+    )
+    crossformer_source = _read_repo_file("transformer time series/Time-Series/models/Crossformer.py")
+
+    assert anomaly_source.count("Catfish Sales in 1000s of Pounds") <= 1
+    assert garch_source.count("True Volatility") <= 1
+    assert garch_source.count("Predicted Volatility") <= 1
+    assert sarima_source.count("Catfish Sales in 1000s of Pounds") <= 1
+    assert undo_stationary_source.count("Hours Since Published") <= 1
+    assert var_source.count("'ice cream'") <= 1
+    assert var_source.count("'Ice Cream'") <= 1
+    assert var_source.count("'First Difference'") <= 1
+    assert data_loader_source.count("ETTh1.csv") <= 1
+    assert data_loader_source.count("test:") <= 1
+    assert data_loader_source.count("train:") <= 1
+    assert etsformer_encdec_source.count("b f d -> b f () d") <= 1
+    assert crossformer_source.count("(b d) seg_num d_model -> b d seg_num d_model") <= 1
+
+
+def test_sonar_coverage_recent_fixes_test_uses_precise_callable_annotations() -> None:
+    source = _read_repo_file("tests/test_sonar_coverage_recent_fixes.py")
+
+    assert "fit_model: object" not in source
+    assert "installer: object" not in source
+    assert "factory: object" not in source
+
+
+def test_transformer_experiment_overrides_keep_added_parameters_optional() -> None:
+    expectations = {
+        (
+            "transformer time series/Time-Series/exp/exp_anomaly_detection.py",
+            "ExpAnomalyDetection",
+            "_get_data",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_anomaly_detection.py",
+            "ExpAnomalyDetection",
+            "vali",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_anomaly_detection.py",
+            "ExpAnomalyDetection",
+            "train",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_anomaly_detection.py",
+            "ExpAnomalyDetection",
+            "test",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_classification.py",
+            "ExpClassification",
+            "_get_data",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_classification.py",
+            "ExpClassification",
+            "vali",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_classification.py",
+            "ExpClassification",
+            "train",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_classification.py",
+            "ExpClassification",
+            "test",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_imputation.py",
+            "ExpImputation",
+            "_get_data",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_imputation.py",
+            "ExpImputation",
+            "vali",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_imputation.py",
+            "ExpImputation",
+            "train",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_imputation.py",
+            "ExpImputation",
+            "test",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_long_term_forecasting.py",
+            "ExpLongTermForecast",
+            "_get_data",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_long_term_forecasting.py",
+            "ExpLongTermForecast",
+            "vali",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_long_term_forecasting.py",
+            "ExpLongTermForecast",
+            "train",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_long_term_forecasting.py",
+            "ExpLongTermForecast",
+            "test",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_short_term_forecasting.py",
+            "ExpShortTermForecast",
+            "_get_data",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_short_term_forecasting.py",
+            "ExpShortTermForecast",
+            "vali",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_short_term_forecasting.py",
+            "ExpShortTermForecast",
+            "train",
+        ): [],
+        (
+            "transformer time series/Time-Series/exp/exp_short_term_forecasting.py",
+            "ExpShortTermForecast",
+            "test",
+        ): [],
+    }
+
+    for key, expected in expectations.items():
+        path, class_name, method_name = key
+        assert _required_method_param_names(path, class_name, method_name) == expected
+
+
+def test_selected_transformer_sources_use_current_lowercase_helper_names() -> None:
+    multiwavelet_source = _read_repo_file(
+        "transformer time series/Time-Series/layers/MultiWaveletCorrelation.py"
+    )
+    timesnet_source = _read_repo_file("transformer time series/Time-Series/models/TimesNet.py")
+    metrics_path = "transformer time series/Time-Series/utils/metrics.py"
+    metrics_source = _read_repo_file(metrics_path)
+
+    assert "def legendreDer(" not in multiwavelet_source
+    assert "def legendre_der(" in multiwavelet_source
+    assert "legendreDer(" not in multiwavelet_source
+    assert "legendre_der(" in multiwavelet_source
+
+    assert "def FFT_for_Period(" not in timesnet_source
+    assert "def fft_for_period(" in timesnet_source
+    assert "FFT_for_Period(" not in timesnet_source
+    assert "fft_for_period(" in timesnet_source
+
+    for old_name, new_name in (
+        ("RSE", "rse"),
+        ("CORR", "corr"),
+        ("MAE", "mean_absolute_error"),
+        ("MSE", "mean_squared_error"),
+        ("RMSE", "root_mean_squared_error"),
+        ("MAPE", "mean_absolute_percentage_error"),
+        ("MSPE", "mean_squared_percentage_error"),
+    ):
+        assert f"def {old_name}(" not in metrics_source
+        assert f"def {new_name}(" in metrics_source
+
+    assert _function_uses_name(metrics_path, "metric", "mean_absolute_error")
+    assert _function_uses_name(metrics_path, "metric", "mean_squared_error")
+    assert _function_uses_name(metrics_path, "metric", "root_mean_squared_error")
+    assert _function_uses_name(metrics_path, "metric", "mean_absolute_percentage_error")
+    assert _function_uses_name(metrics_path, "metric", "mean_squared_percentage_error")
+
+
+def test_selected_transformer_sources_use_s101_safe_class_names_with_legacy_aliases() -> None:
+    expectations = {
+        "transformer time series/Embed.py": [("DataEmbedding_wo_pos", "DataEmbeddingWoPos")],
+        "transformer time series/Time-Series/layers/Embed.py": [
+            ("DataEmbedding_wo_pos", "DataEmbeddingWoPos")
+        ],
+        "transformer time series/Time-Series/data_provider/data_loader.py": [
+            ("Dataset_ETT_hour", "DatasetEttHour"),
+            ("Dataset_ETT_minute", "DatasetEttMinute"),
+            ("Dataset_Custom", "DatasetCustom"),
+            ("Dataset_M4", "DatasetM4"),
+        ],
+        "transformer time series/Time-Series/exp/exp_basic.py": [("Exp_Basic", "ExpBasic")],
+        "transformer time series/Time-Series/exp/exp_anomaly_detection.py": [
+            ("Exp_Anomaly_Detection", "ExpAnomalyDetection")
+        ],
+        "transformer time series/Time-Series/exp/exp_classification.py": [
+            ("Exp_Classification", "ExpClassification")
+        ],
+        "transformer time series/Time-Series/exp/exp_imputation.py": [
+            ("Exp_Imputation", "ExpImputation")
+        ],
+        "transformer time series/Time-Series/exp/exp_long_term_forecasting.py": [
+            ("Exp_Long_Term_Forecast", "ExpLongTermForecast")
+        ],
+        "transformer time series/Time-Series/exp/exp_short_term_forecasting.py": [
+            ("Exp_Short_Term_Forecast", "ExpShortTermForecast")
+        ],
+        "transformer time series/Time-Series/layers/Autoformer_EncDec.py": [
+            ("my_Layernorm", "MyLayerNorm")
+        ],
+        "transformer time series/Time-Series/layers/Conv_Blocks.py": [
+            ("Inception_Block_V1", "InceptionBlockV1"),
+            ("Inception_Block_V2", "InceptionBlockV2"),
+        ],
+        "transformer time series/Time-Series/layers/MultiWaveletCorrelation.py": [
+            ("sparseKernelFT1d", "SparseKernelFt1d"),
+            ("MWT_CZ1d", "MwtCz1d"),
+        ],
+        "transformer time series/Time-Series/layers/Pyraformer_EncDec.py": [
+            ("Bottleneck_Construct", "BottleneckConstruct")
+        ],
+    }
+
+    for path, alias_pairs in expectations.items():
+        class_names = _top_level_class_names(path)
+        name_aliases = _top_level_name_aliases(path)
+        for old_name, new_name in alias_pairs:
+            assert new_name in class_names
+            assert old_name not in class_names
+            assert (old_name, new_name) in name_aliases
+
+
+def test_selected_transformer_sources_avoid_public_dataframe_values_calls() -> None:
+    data_loader_source = _read_repo_file(
+        "transformer time series/Time-Series/data_provider/data_loader.py"
+    )
+    m4_summary_source = _read_repo_file("transformer time series/Time-Series/utils/m4_summary.py")
+
+    assert "data = data.values[:, 1:]" not in data_loader_source
+    assert "test_data = test_data.values[:, 1:]" not in data_loader_source
+    assert "pd.read_csv(os.path.join(root_path, 'test_label.csv')).values[:, 1:]" not in data_loader_source
+    assert "labels = test_data.values[:, -1:]" not in data_loader_source
+    assert "train_data = train_data.values[:, :-1]" not in data_loader_source
+    assert "test_data = test_data.values[:, :-1]" not in data_loader_source
+
+    assert "pd.read_csv(self.naive_path).values[:, 1:]" not in m4_summary_source
+    assert "model_forecast = pd.read_csv(file_name).values" not in m4_summary_source
+
+
+def test_selected_tft_sources_avoid_public_unused_local_names() -> None:
+    volatility_source = _read_repo_file("transformer time series/tft/data_formatters/volatility.py")
+    models_source = _read_repo_file("transformer time series/tft/models.py")
+    run_source = _read_repo_file("transformer time series/tft/run.py")
+    training_source = _read_repo_file("transformer time series/tft/training_tft.py")
+
+    assert "fixed_params = {" not in volatility_source
+    assert "for i in range(self.output_size)])" not in models_source
+    assert "for i in range(self.num_regular_variables)])" not in run_source
+    assert "for i in range(self.num_regular_variables)])" not in training_source
+    assert "sparse_weights" not in run_source
+    assert "historical_flags" not in run_source
+    assert "future_flags" not in run_source
+    assert "x, self_att = self.self_attn_layer(" not in run_source
+
+
 def test_selected_example_scripts_avoid_bare_no_effect_expr_statements() -> None:
     for path in (
         "ml time series/prophet.py",
@@ -1045,6 +1631,107 @@ def test_tft_sources_avoid_bare_no_effect_expr_statements() -> None:
         "transformer time series/tft/run.py",
     ):
         assert _bare_no_effect_expr_lines(path) == []
+
+
+def test_tft_sources_use_dim_keyword_for_torch_tensor_joins() -> None:
+    for path in (
+        "transformer time series/tft/training_tft.py",
+        "transformer time series/tft/run.py",
+        "transformer time series/tft/models.py",
+    ):
+        assert _call_lines_with_keyword_alias(
+            path,
+            owner_name="torch",
+            method_name="stack",
+            keyword="axis",
+        ) == []
+        assert _call_lines_with_keyword_alias(
+            path,
+            owner_name="torch",
+            method_name="cat",
+            keyword="axis",
+        ) == []
+
+
+def test_transformer_sources_remove_selected_static_bug_patterns() -> None:
+    exp_basic_source = _read_repo_file("transformer time series/Time-Series/exp/exp_basic.py")
+    self_attention_source = _read_repo_file(
+        "transformer time series/Time-Series/layers/SelfAttention_Family.py"
+    )
+    self_attention_legacy_source = _read_repo_file("transformer time series/SelfAttention_Family.py")
+    losses_source = _read_repo_file("transformer time series/Time-Series/utils/losses.py")
+
+    assert "raise NotImplementedError\n        return None" not in exp_basic_source
+    assert "attn_mask = ProbMask(" not in self_attention_source
+    assert "attn_mask = ProbMask(" not in self_attention_legacy_source
+    assert "result[result != result]" not in losses_source
+    assert "t.isnan(result)" in losses_source
+
+
+def test_volatility_formatter_exposes_fixed_params_as_class_method() -> None:
+    assert "get_fixed_params" in _class_method_names(
+        "transformer time series/tft/data_formatters/volatility.py",
+        "VolatilityFormatter",
+    )
+
+
+def test_selected_transformer_sources_avoid_uppercase_s117_identifiers() -> None:
+    expected_missing = {
+        "transformer time series/Time-Series/layers/Embed.py": {"Embed"},
+        "transformer time series/Embed.py": {"Embed"},
+        "transformer time series/Time-Series/data_provider/data_factory.py": {"Data"},
+        "transformer time series/Time-Series/layers/ETSformer_EncDec.py": {
+            "F_f",
+            "F_g",
+            "F_fg",
+            "T",
+        },
+        "transformer time series/Time-Series/layers/MultiWaveletCorrelation.py": {
+            "kUse",
+            "L",
+            "nCZ",
+            "H0r",
+            "G0r",
+            "H1r",
+            "G1r",
+            "Ud_q",
+            "Ud_k",
+            "Ud_v",
+            "Us_q",
+            "Us_k",
+            "Us_v",
+            "Ud",
+            "Us",
+        },
+        "transformer time series/Time-Series/utils/masking.py": {"B", "H", "L"},
+        "transformer time series/Time-Series/layers/SelfAttention_Family.py": {
+            "K",
+            "Q",
+            "K_expand",
+            "K_sample",
+            "Q_K_sample",
+            "M_top",
+            "Q_reduce",
+            "L_Q",
+            "V_sum",
+            "U_part",
+        },
+        "transformer time series/SelfAttention_Family.py": {
+            "K",
+            "Q",
+            "K_expand",
+            "K_sample",
+            "Q_K_sample",
+            "M_top",
+            "Q_reduce",
+            "L_Q",
+            "V_sum",
+            "U_part",
+        },
+    }
+
+    for path, names in expected_missing.items():
+        assert _declared_names(path).isdisjoint(names)
 
 
 def test_check_architecture_imports_source_extracts_import_helpers() -> None:
@@ -1440,6 +2127,40 @@ def test_global_regression_source_extracts_panel_step_lag_helpers() -> None:
     )
 
 
+def test_global_regression_source_extracts_forecaster_prediction_helpers() -> None:
+    path = "src/foresight/models/global_regression.py"
+    source = _read_repo_file(path)
+
+    assert "def _normalize_step_lag_quantiles(" in source
+    assert "def _step_lag_point_quantile(" in source
+    assert "def _step_lag_training_payload(" in source
+    assert "def _iter_step_lag_prediction_inputs(" in source
+    assert "def _validated_step_lag_prediction(" in source
+    assert "def _step_lag_point_rows(" in source
+    assert "def _step_lag_quantile_rows(" in source
+    assert _function_uses_name(path, "hgb_step_lag_global_forecaster", "_step_lag_training_payload")
+    assert _function_uses_name(path, "hgb_step_lag_global_forecaster", "_iter_step_lag_prediction_inputs")
+    assert _function_uses_name(path, "hgb_step_lag_global_forecaster", "_step_lag_point_rows")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_normalize_step_lag_quantiles")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_step_lag_point_quantile")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_step_lag_training_payload")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_iter_step_lag_prediction_inputs")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_step_lag_quantile_rows")
+    assert _function_uses_name(path, "_xgb_step_lag_global_forecaster_impl", "_step_lag_point_rows")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_normalize_step_lag_quantiles")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_step_lag_point_quantile")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_step_lag_training_payload")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_iter_step_lag_prediction_inputs")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_step_lag_quantile_rows")
+    assert _function_uses_name(path, "lgbm_step_lag_global_forecaster", "_step_lag_point_rows")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_normalize_step_lag_quantiles")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_step_lag_point_quantile")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_step_lag_training_payload")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_iter_step_lag_prediction_inputs")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_step_lag_quantile_rows")
+    assert _function_uses_name(path, "catboost_step_lag_global_forecaster", "_step_lag_point_rows")
+
+
 def test_regression_source_extracts_lag_matrix_feature_helpers() -> None:
     source = _read_repo_file("src/foresight/models/regression.py")
 
@@ -1564,6 +2285,83 @@ def test_regression_source_extracts_dirrec_feature_helpers() -> None:
             func_name,
             "_dirrec_step_prediction_features",
         )
+
+
+def test_regression_source_extracts_xgbrf_direct_helpers() -> None:
+    path = "src/foresight/models/regression.py"
+    source = _read_repo_file(path)
+
+    assert "def _direct_forecast_step_features(" in source
+    assert "def _build_xgbrf_regressor(" in source
+    assert _function_uses_name(path, "xgbrf_lag_direct_forecast", "_xgb_validate_common_regressor_params")
+    assert _function_uses_name(path, "xgbrf_lag_direct_forecast", "_direct_forecast_step_features")
+    assert _function_uses_name(path, "xgbrf_lag_direct_forecast", "_build_xgbrf_regressor")
+    assert _function_uses_name(path, "xgbrf_lag_recursive_forecast", "_xgb_validate_common_regressor_params")
+    assert _function_uses_name(path, "xgbrf_lag_recursive_forecast", "_build_xgbrf_regressor")
+
+
+def test_torch_probabilistic_source_extracts_validation_and_loss_helpers() -> None:
+    path = "src/foresight/models/torch_probabilistic.py"
+    source = _read_repo_file(path)
+
+    assert "def _validate_probabilistic_direct_config(" in source
+    assert "def _make_probabilistic_loss(" in source
+    assert _function_uses_name(
+        path,
+        "torch_probabilistic_direct_forecast",
+        "_validate_probabilistic_direct_config",
+    )
+    assert _function_uses_name(path, "torch_probabilistic_direct_forecast", "_make_probabilistic_loss")
+
+
+def test_torch_seq2seq_source_extracts_training_and_forecast_helpers() -> None:
+    path = "src/foresight/models/torch_seq2seq.py"
+    source = _read_repo_file(path)
+
+    assert "def _validate_seq2seq_training_config(" in source
+    assert "def _validate_seq2seq_teacher_forcing(" in source
+    assert "def _split_seq2seq_train_validation(" in source
+    assert "def _make_seq2seq_optimizer(" in source
+    assert "def _make_seq2seq_scheduler(" in source
+    assert "def _seq2seq_teacher_forcing_ratio(" in source
+    assert "def _validate_seq2seq_direct_config(" in source
+    assert "def _build_torch_train_config(" in source
+    assert "def _prepare_univariate_direct_payload(" in source
+    assert "def _predict_direct_torch_model(" in source
+    assert "def _maybe_denormalize_forecast(" in source
+    assert _function_uses_name(path, "_train_seq2seq", "_validate_seq2seq_training_config")
+    assert _function_uses_name(path, "_train_seq2seq", "_validate_seq2seq_teacher_forcing")
+    assert _function_uses_name(path, "_train_seq2seq", "_split_seq2seq_train_validation")
+    assert _function_uses_name(path, "_train_seq2seq", "_make_seq2seq_optimizer")
+    assert _function_uses_name(path, "_train_seq2seq", "_make_seq2seq_scheduler")
+    assert _function_uses_name(path, "_train_seq2seq", "_seq2seq_teacher_forcing_ratio")
+    assert _function_uses_name(path, "torch_seq2seq_direct_forecast", "_validate_seq2seq_direct_config")
+    assert _function_uses_name(path, "torch_seq2seq_direct_forecast", "_build_torch_train_config")
+    assert _function_uses_name(path, "torch_seq2seq_direct_forecast", "_prepare_univariate_direct_payload")
+    assert _function_uses_name(path, "torch_seq2seq_direct_forecast", "_predict_direct_torch_model")
+    assert _function_uses_name(path, "torch_seq2seq_direct_forecast", "_maybe_denormalize_forecast")
+    assert _function_uses_name(path, "torch_lstnet_direct_forecast", "_build_torch_train_config")
+    assert _function_uses_name(path, "torch_lstnet_direct_forecast", "_prepare_univariate_direct_payload")
+    assert _function_uses_name(path, "torch_lstnet_direct_forecast", "_predict_direct_torch_model")
+    assert _function_uses_name(path, "torch_lstnet_direct_forecast", "_maybe_denormalize_forecast")
+
+
+def test_torch_rnnzoo_source_extracts_validation_and_dispatch_helpers() -> None:
+    path = "src/foresight/models/torch_rnn_zoo.py"
+    source = _read_repo_file(path)
+
+    assert "def _validate_rnnzoo_direct_config(" in source
+    assert "def _normalize_clock_periods(" in source
+    assert "def _build_rnnzoo_train_config(" in source
+    assert "def _prepare_rnnzoo_payload(" in source
+    assert "def _predict_rnnzoo_direct_model(" in source
+    assert "def _maybe_denormalize_rnnzoo_forecast(" in source
+    assert _function_uses_name(path, "torch_rnnzoo_direct_forecast", "_validate_rnnzoo_direct_config")
+    assert _function_uses_name(path, "torch_rnnzoo_direct_forecast", "_build_rnnzoo_train_config")
+    assert _function_uses_name(path, "torch_rnnzoo_direct_forecast", "_prepare_rnnzoo_payload")
+    assert _function_uses_name(path, "torch_rnnzoo_direct_forecast", "_predict_rnnzoo_direct_model")
+    assert _function_uses_name(path, "torch_rnnzoo_direct_forecast", "_maybe_denormalize_rnnzoo_forecast")
+    assert _function_uses_name(path, "_make_base_encoder", "_normalize_clock_periods")
 
 
 def test_torch_files_do_not_leave_unused_shape_dimensions() -> None:
@@ -1784,3 +2582,124 @@ def test_hierarchical_source_extracts_reconciliation_helpers() -> None:
         "_top_down_reconciled_frame",
         "_top_down_allocated_series",
     )
+
+
+def test_analog_source_extracts_neighbor_selection_helpers() -> None:
+    source = _read_repo_file("src/foresight/models/analog.py")
+
+    assert "def _validate_analog_forecast_inputs(" in source
+    assert "def _maybe_normalize_window_bank(" in source
+    assert "def _analog_neighbor_prediction(" in source
+    assert _function_uses_name(
+        "src/foresight/models/analog.py",
+        "analog_knn_forecast",
+        "_validate_analog_forecast_inputs",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/analog.py",
+        "analog_knn_forecast",
+        "_maybe_normalize_window_bank",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/analog.py",
+        "analog_knn_forecast",
+        "_analog_neighbor_prediction",
+    )
+
+
+def test_fourier_source_extracts_order_normalization_helpers() -> None:
+    source = _read_repo_file("src/foresight/models/fourier.py")
+
+    assert "def _default_order_tuple(" in source
+    assert "def _coerce_order_parts(" in source
+    assert "def _normalize_order_parts(" in source
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "_normalize_orders",
+        "_default_order_tuple",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "_normalize_orders",
+        "_coerce_order_parts",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "_normalize_orders",
+        "_normalize_order_parts",
+    )
+
+
+def test_eval_predictions_source_extracts_quantile_interval_helpers() -> None:
+    source = _read_repo_file("src/foresight/eval_predictions.py")
+
+    assert "def _quantile_column_map(" in source
+    assert "def _symmetric_interval_levels(" in source
+    assert "def _per_step_interval_metrics(" in source
+    assert "def _weighted_interval_score_by_step(" in source
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "evaluate_quantile_predictions",
+        "_quantile_column_map",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "evaluate_quantile_predictions",
+        "_symmetric_interval_levels",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "evaluate_quantile_predictions",
+        "_per_step_interval_metrics",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "evaluate_quantile_predictions",
+        "_weighted_interval_score_by_step",
+    )
+
+
+def test_intermittent_source_extracts_les_helpers() -> None:
+    path = "src/foresight/models/intermittent.py"
+    source = _read_repo_file(path)
+
+    assert "def _les_decay_value(" in source
+    assert "def _les_update_state(" in source
+    assert _function_uses_name(path, "les_forecast", "_les_update_state")
+    assert _function_uses_name(path, "_les_update_state", "_les_decay_value")
+
+
+def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
+    path = "src/foresight/models/multivariate.py"
+    source = _read_repo_file(path)
+
+    assert "def _load_adj_matrix_from_path(" in source
+    assert "def _resolve_builtin_adj_matrix(" in source
+    assert "def _corr_topk_adj_matrix(" in source
+    assert _function_uses_name(path, "_resolve_adj_matrix", "_load_adj_matrix_from_path")
+    assert _function_uses_name(path, "_resolve_adj_matrix", "_resolve_builtin_adj_matrix")
+    assert _function_uses_name(path, "_resolve_builtin_adj_matrix", "_corr_topk_adj_matrix")
+
+
+def test_statsmodels_wrap_source_extracts_auto_arima_search_helpers() -> None:
+    path = "src/foresight/models/statsmodels_wrap.py"
+    source = _read_repo_file(path)
+
+    assert "def _validate_auto_arima_grid_bounds(" in source
+    assert "def _normalize_auto_arima_search_config(" in source
+    assert "def _iter_auto_arima_candidate_orders(" in source
+    assert "def _fit_auto_arima_candidate_result(" in source
+    assert _function_uses_name(path, "_fit_auto_arima_best_result", "_validate_auto_arima_grid_bounds")
+    assert _function_uses_name(path, "_fit_auto_arima_best_result", "_normalize_auto_arima_search_config")
+    assert _function_uses_name(path, "_fit_auto_arima_best_result", "_iter_auto_arima_candidate_orders")
+    assert _function_uses_name(path, "_fit_auto_arima_best_result", "_fit_auto_arima_candidate_result")
+
+
+def test_statsmodels_wrap_source_extracts_fourier_order_normalization_helpers() -> None:
+    path = "src/foresight/models/statsmodels_wrap.py"
+    source = _read_repo_file(path)
+
+    assert "def _repeat_fourier_order(" in source
+    assert "def _normalize_sequence_fourier_orders(" in source
+    assert _function_uses_name(path, "_normalize_fourier_orders", "_repeat_fourier_order")
+    assert _function_uses_name(path, "_normalize_fourier_orders", "_normalize_sequence_fourier_orders")

@@ -98,20 +98,20 @@ class Model(nn.Module):
         self.ar = nn.Linear(self.seq_len, self.pred_len)
 
     def encoder(self, x):
-        B, _, N = x.size()
+        batch_size, _, num_nodes = x.size()
 
         highway = self.ar(x.permute(0, 2, 1))
         highway = highway.permute(0, 2, 1)
 
         # continuous sampling
-        x1 = x.reshape(B, self.num_chunks, self.chunk_size, N)
+        x1 = x.reshape(batch_size, self.num_chunks, self.chunk_size, num_nodes)
         x1 = x1.permute(0, 3, 2, 1)
         x1 = x1.reshape(-1, self.chunk_size, self.num_chunks)
         x1 = self.layer_1(x1)
         x1 = self.chunk_proj_1(x1).squeeze(dim=-1)
 
         # interval sampling
-        x2 = x.reshape(B, self.chunk_size, self.num_chunks, N)
+        x2 = x.reshape(batch_size, self.chunk_size, self.num_chunks, num_nodes)
         x2 = x2.permute(0, 3, 1, 2)
         x2 = x2.reshape(-1, self.chunk_size, self.num_chunks)
         x2 = self.layer_2(x2)
@@ -119,7 +119,7 @@ class Model(nn.Module):
 
         x3 = torch.cat([x1, x2], dim=-1)
 
-        x3 = x3.reshape(B, N, -1)
+        x3 = x3.reshape(batch_size, num_nodes, -1)
         x3 = x3.permute(0, 2, 1)
 
         out = self.layer_3(x3)

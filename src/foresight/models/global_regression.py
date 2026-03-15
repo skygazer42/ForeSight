@@ -498,7 +498,40 @@ def _panel_step_lag_predict_x(
 _panel_step_lag_predict_X = _panel_step_lag_predict_x
 
 
-def _run_point_global_model(
+def _normalize_step_lag_quantiles(quantiles: Any) -> tuple[float, ...]:
+    q_items: list[float] = []
+    if quantiles is not None:
+        if isinstance(quantiles, list | tuple):
+            q_items = [float(q) for q in quantiles]
+        elif isinstance(quantiles, str):
+            s = quantiles.strip()
+            q_items = [] if not s else [float(p.strip()) for p in s.split(",") if p.strip()]
+        else:
+            q_items = [float(quantiles)]
+
+    q_pcts: list[int] = []
+    for q in q_items:
+        if not (0.0 < float(q) < 1.0):
+            raise ValueError(QUANTILES_RANGE_ERROR)
+        pct_f = float(q) * 100.0
+        pct = int(round(pct_f))
+        if abs(pct_f - float(pct)) > 1e-6:
+            raise ValueError(QUANTILES_ALIGN_ERROR)
+        if pct <= 0 or pct >= 100:
+            raise ValueError(QUANTILES_STRICT_ERROR)
+        q_pcts.append(int(pct))
+    return tuple(p / 100.0 for p in sorted(set(q_pcts)))
+
+
+def _step_lag_point_quantile(q_vals: tuple[float, ...]) -> float | None:
+    if not q_vals:
+        return None
+    if 0.5 in q_vals:
+        return 0.5
+    return min(q_vals, key=lambda x: abs(x - 0.5))
+
+
+def _step_lag_training_payload(
     long_df: Any,
     cutoff: Any,
     horizon: int,
@@ -516,8 +549,7 @@ def _run_point_global_model(
     step_scale: str,
     max_train_size: int | None,
     sample_step: int,
-    fit_model: Callable[[np.ndarray, np.ndarray], Any],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, dict[str, float]]:
     df = _validate_long_df(long_df, x_cols=x_cols)
     df = df.sort_values(["unique_id", "ds"], kind="mergesort")
 
@@ -539,14 +571,31 @@ def _run_point_global_model(
         max_train_size=max_train_size,
         sample_step=int(sample_step),
     )
+    return df, X_train, y_train, uid_to_val
 
-    model = fit_model(X_train, y_train)
 
-    rows: list[dict[str, Any]] = []
+def _iter_step_lag_prediction_inputs(
+    df: pd.DataFrame,
+    *,
+    uid_to_val: dict[str, float],
+    cutoff: Any,
+    horizon: int,
+    lags: Any,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
+    roll_windows: Any,
+    roll_stats: Any,
+    diff_lags: Any,
+    x_cols: tuple[str, ...],
+    add_time_features: bool,
+    id_feature: str,
+    step_scale: str,
+) -> tuple[str, np.ndarray, np.ndarray]:
     for uid, g in df.groupby("unique_id", sort=False):
         uid_s = str(uid)
         uid_val = float(uid_to_val.get(uid_s, 0.0))
-        x_pred, ds_out = _panel_step_lag_predict_X(
+        x_pred, ds_out = _panel_step_lag_predict_x(
             g,
             uid_val=uid_val,
             cutoff=cutoff,
@@ -565,11 +614,259 @@ def _run_point_global_model(
         )
         if x_pred.size == 0:
             continue
-        pred = np.asarray(model.predict(x_pred), dtype=float).reshape(-1)
-        if pred.shape[0] != int(horizon):
-            raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-        for i in range(int(horizon)):
-            rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
+        yield uid_s, x_pred, ds_out
+
+
+def _validated_step_lag_prediction(pred: Any, *, horizon: int) -> np.ndarray:
+    pred_arr = np.asarray(pred, dtype=float).reshape(-1)
+    if pred_arr.shape[0] != int(horizon):
+        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
+    return pred_arr
+
+
+def _step_lag_point_rows(
+    uid_s: str,
+    ds_out: np.ndarray,
+    pred: Any,
+    *,
+    horizon: int,
+) -> list[dict[str, Any]]:
+    pred_arr = _validated_step_lag_prediction(pred, horizon=int(horizon))
+    return [
+        {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred_arr[i])}
+        for i in range(int(horizon))
+    ]
+
+
+def _step_lag_quantile_rows(
+    uid_s: str,
+    ds_out: np.ndarray,
+    preds_q: dict[float, Any],
+    *,
+    horizon: int,
+    q_vals: tuple[float, ...],
+    point_q: float,
+) -> list[dict[str, Any]]:
+    preds_q_arr = {
+        float(q): _validated_step_lag_prediction(preds_q[float(q)], horizon=int(horizon))
+        for q in q_vals
+    }
+    yhat_point = preds_q_arr[float(point_q)]
+
+    rows: list[dict[str, Any]] = []
+    for i in range(int(horizon)):
+        row = {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(yhat_point[i])}
+        for q in q_vals:
+            pct = int(round(float(q) * 100.0))
+            row[f"yhat_p{pct}"] = float(preds_q_arr[float(q)][i])
+        rows.append(row)
+    return rows
+
+
+def _fit_optional_quantile_models(
+    q_vals: tuple[float, ...],
+    *,
+    fit_quantile_model: Callable[[float], Any],
+    fit_point_model: Callable[[], Any],
+) -> tuple[dict[float, Any], Any | None]:
+    if q_vals:
+        return ({float(q): fit_quantile_model(float(q)) for q in q_vals}, None)
+    return ({}, fit_point_model())
+
+
+def _predict_quantile_model_outputs(
+    models_by_q: dict[float, Any],
+    x_pred: np.ndarray,
+    *,
+    horizon: int,
+    predict_fn: Callable[[Any, np.ndarray], Any],
+) -> dict[float, np.ndarray]:
+    return {
+        float(q): _validated_step_lag_prediction(
+            predict_fn(model, x_pred),
+            horizon=int(horizon),
+        )
+        for q, model in models_by_q.items()
+    }
+
+
+def _fit_xgb_step_lag_model(
+    xgb: Any,
+    *,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    estimator_kind: str,
+    booster: str,
+    objective: str,
+    objective_params: dict[str, Any] | None,
+    n_estimators: int,
+    learning_rate: float,
+    max_depth: int,
+    subsample: float,
+    colsample_bytree: float,
+    reg_alpha: float,
+    reg_lambda: float,
+    min_child_weight: float,
+    gamma: float,
+    random_state: int,
+    n_jobs: int,
+    tree_method: str,
+) -> Any:
+    if estimator_kind == "xgbrf":
+        params: dict[str, Any] = {
+            "objective": str(objective),
+            "n_estimators": int(n_estimators),
+            "max_depth": int(max_depth),
+            "subsample": float(subsample),
+            "colsample_bytree": float(colsample_bytree),
+            "reg_lambda": float(reg_lambda),
+            "min_child_weight": float(min_child_weight),
+            "gamma": float(gamma),
+            "random_state": int(random_state),
+            "n_jobs": int(n_jobs),
+            "tree_method": str(tree_method),
+            "verbosity": 0,
+        }
+        if objective_params:
+            params.update(objective_params)
+        model = xgb.XGBRFRegressor(**params)
+    else:
+        params = {
+            "booster": str(booster),
+            "n_estimators": int(n_estimators),
+            "learning_rate": float(learning_rate),
+            "max_depth": 1 if str(booster) == "gblinear" else int(max_depth),
+            "subsample": float(subsample),
+            "colsample_bytree": float(colsample_bytree),
+            "reg_alpha": float(reg_alpha),
+            "reg_lambda": float(reg_lambda),
+            "min_child_weight": float(min_child_weight),
+            "gamma": float(gamma),
+            "random_state": int(random_state),
+            "n_jobs": int(n_jobs),
+            "tree_method": str(tree_method),
+            "verbosity": 0,
+            "objective": str(objective),
+        }
+        if objective_params:
+            params.update(objective_params)
+        model = xgb.XGBRegressor(**params)
+    model.fit(X_train, y_train)
+    return model
+
+
+def _fit_lgbm_step_lag_model(
+    lgb: Any,
+    *,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    base_params: dict[str, Any],
+    objective: str,
+    objective_params: dict[str, Any] | None = None,
+) -> Any:
+    params = dict(base_params)
+    params["objective"] = str(objective)
+    if objective_params:
+        params.update(objective_params)
+    model = lgb.LGBMRegressor(**params)
+    model.fit(X_train, y_train)
+    return model
+
+
+def _predict_lgbm_step_lag_model(model: Any, X: np.ndarray) -> np.ndarray:
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "X does not have valid feature names, but LGBMRegressor was fitted with feature names"
+            ),
+            category=UserWarning,
+        )
+        return np.asarray(model.predict(X), dtype=float)
+
+
+def _fit_catboost_step_lag_model(
+    catboost_regressor_cls: Any,
+    *,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    base_params: dict[str, Any],
+    loss_function: str,
+) -> Any:
+    model = catboost_regressor_cls(**dict(base_params, loss_function=str(loss_function)))
+    model.fit(X_train, y_train)
+    return model
+
+
+def _run_point_global_model(
+    long_df: Any,
+    cutoff: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    target_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
+    roll_windows: Any,
+    roll_stats: Any,
+    diff_lags: Any,
+    x_cols: tuple[str, ...],
+    add_time_features: bool,
+    id_feature: str,
+    step_scale: str,
+    max_train_size: int | None,
+    sample_step: int,
+    fit_model: Callable[[np.ndarray, np.ndarray], Any],
+) -> pd.DataFrame:
+    df, X_train, y_train, uid_to_val = _step_lag_training_payload(
+        long_df,
+        cutoff,
+        int(horizon),
+        lags=lags,
+        target_lags=target_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        x_cols=x_cols,
+        add_time_features=bool(add_time_features),
+        id_feature=str(id_feature),
+        step_scale=str(step_scale),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+    )
+
+    model = fit_model(X_train, y_train)
+
+    rows: list[dict[str, Any]] = []
+    for uid_s, x_pred, ds_out in _iter_step_lag_prediction_inputs(
+        df,
+        uid_to_val=uid_to_val,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        lags=lags,
+        target_lags=target_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        x_cols=x_cols,
+        add_time_features=bool(add_time_features),
+        id_feature=str(id_feature),
+        step_scale=str(step_scale),
+    ):
+        rows.extend(
+            _step_lag_point_rows(
+                uid_s,
+                ds_out,
+                model.predict(x_pred),
+                horizon=int(horizon),
+            )
+        )
 
     if not rows:
         raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
@@ -2324,13 +2621,11 @@ def hgb_step_lag_global_forecaster(
         raise ValueError(MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE)
 
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
-        df = _validate_long_df(long_df, x_cols=x_cols_tup)
-        df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-
-        X_train, y_train, uid_to_val, _id_dim, _time_dim, _exog_dim = _panel_step_lag_train_xy(
-            df,
+        h = int(horizon)
+        df, X_train, y_train, uid_to_val = _step_lag_training_payload(
+            long_df,
             cutoff,
-            int(horizon),
+            h,
             lags=lags_int,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -2353,32 +2648,29 @@ def hgb_step_lag_global_forecaster(
         model.fit(X_train, y_train)
 
         rows: list[dict[str, Any]] = []
-        for uid, g in df.groupby("unique_id", sort=False):
-            uid_s = str(uid)
-            uid_val = float(uid_to_val.get(uid_s, 0.0))
-            x_pred, ds_out = _panel_step_lag_predict_X(
-                g,
-                uid_val=uid_val,
-                cutoff=cutoff,
-                horizon=int(horizon),
-                lags=lags_int,
-                roll_windows=roll_windows,
-                roll_stats=roll_stats,
-                diff_lags=diff_lags,
-                x_cols=x_cols_tup,
-                add_time_features=bool(add_time_features),
-                id_feature=str(id_feature),
-                step_scale=str(step_scale),
-                **lag_role_params,
+        for uid_s, x_pred, ds_out in _iter_step_lag_prediction_inputs(
+            df,
+            uid_to_val=uid_to_val,
+            cutoff=cutoff,
+            horizon=h,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=str(step_scale),
+            **lag_role_params,
+        ):
+            rows.extend(
+                _step_lag_point_rows(
+                    uid_s,
+                    ds_out,
+                    model.predict(x_pred),
+                    horizon=h,
+                )
             )
-            if x_pred.size == 0:
-                continue
-            pred = model.predict(x_pred)
-            pred = np.asarray(pred, dtype=float).reshape(-1)
-            if pred.shape[0] != int(horizon):
-                raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-            for i in range(int(horizon)):
-                rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
 
         if not rows:
             raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
@@ -2433,45 +2725,17 @@ def _xgb_step_lag_global_forecaster_impl(
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
     lag_role_params = _extract_step_lag_role_params(_params)
-
-    q_items: list[float] = []
-    if quantiles is not None:
-        if isinstance(quantiles, list | tuple):
-            q_items = [float(q) for q in quantiles]
-        elif isinstance(quantiles, str):
-            s = quantiles.strip()
-            q_items = [] if not s else [float(p.strip()) for p in s.split(",") if p.strip()]
-        else:
-            q_items = [float(quantiles)]
-
-    q_pcts: list[int] = []
-    for q in q_items:
-        if not (0.0 < float(q) < 1.0):
-            raise ValueError(QUANTILES_RANGE_ERROR)
-        pct_f = float(q) * 100.0
-        pct = int(round(pct_f))
-        if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError(QUANTILES_ALIGN_ERROR)
-        if pct <= 0 or pct >= 100:
-            raise ValueError(QUANTILES_STRICT_ERROR)
-        q_pcts.append(int(pct))
-
-    q_pcts = sorted(set(q_pcts))
-    q_vals = tuple(p / 100.0 for p in q_pcts)
+    q_vals = _normalize_step_lag_quantiles(quantiles)
 
     if q_vals and not allow_quantiles:
         raise ValueError(f"{model_key} does not support quantiles")
 
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
-        nonlocal q_vals
-
-        df = _validate_long_df(long_df, x_cols=x_cols_tup)
-        df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-
-        X_train, y_train, uid_to_val, _id_dim, _time_dim, _exog_dim = _panel_step_lag_train_xy(
-            df,
+        h = int(horizon)
+        df, X_train, y_train, uid_to_val = _step_lag_training_payload(
+            long_df,
             cutoff,
-            int(horizon),
+            h,
             lags=lags_int,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -2484,122 +2748,99 @@ def _xgb_step_lag_global_forecaster_impl(
             sample_step=sample_step_int,
             **lag_role_params,
         )
-
-        def _fit_model(*, objective: str, objective_params: dict[str, Any] | None = None) -> Any:
-            if estimator_kind == "xgbrf":
-                params: dict[str, Any] = {
-                    "objective": str(objective),
-                    "n_estimators": int(n_estimators),
-                    "max_depth": int(max_depth),
-                    "subsample": float(subsample),
-                    "colsample_bytree": float(colsample_bytree),
-                    "reg_lambda": float(reg_lambda),
-                    "min_child_weight": float(min_child_weight),
-                    "gamma": float(gamma),
-                    "random_state": int(random_state),
-                    "n_jobs": int(n_jobs),
-                    "tree_method": str(tree_method),
-                    "verbosity": 0,
-                }
-                if objective_params:
-                    params.update(objective_params)
-                model = xgb.XGBRFRegressor(**params)
-            else:
-                params = {
-                    "booster": str(booster),
-                    "n_estimators": int(n_estimators),
-                    "learning_rate": float(learning_rate),
-                    # gblinear ignores tree-only params but accepts them through XGBRegressor.
-                    "max_depth": 1 if str(booster) == "gblinear" else int(max_depth),
-                    "subsample": float(subsample),
-                    "colsample_bytree": float(colsample_bytree),
-                    "reg_alpha": float(reg_alpha),
-                    "reg_lambda": float(reg_lambda),
-                    "min_child_weight": float(min_child_weight),
-                    "gamma": float(gamma),
-                    "random_state": int(random_state),
-                    "n_jobs": int(n_jobs),
-                    "tree_method": str(tree_method),
-                    "verbosity": 0,
-                    "objective": str(objective),
-                }
-                if objective_params:
-                    params.update(objective_params)
-                model = xgb.XGBRegressor(**params)
-            model.fit(X_train, y_train)
-            return model
-
-        models_by_q: dict[float, Any] = {}
-        point_model: Any | None = None
-
-        if q_vals:
-            for q in q_vals:
-                models_by_q[float(q)] = _fit_model(
-                    objective="reg:quantileerror",
-                    objective_params={"quantile_alpha": float(q)},
-                )
-        else:
-            point_model = _fit_model(
+        models_by_q, point_model = _fit_optional_quantile_models(
+            q_vals,
+            fit_quantile_model=lambda q: _fit_xgb_step_lag_model(
+                xgb,
+                X_train=X_train,
+                y_train=y_train,
+                estimator_kind=estimator_kind,
+                booster=booster,
+                objective="reg:quantileerror",
+                objective_params={"quantile_alpha": float(q)},
+                n_estimators=int(n_estimators),
+                learning_rate=float(learning_rate),
+                max_depth=int(max_depth),
+                subsample=float(subsample),
+                colsample_bytree=float(colsample_bytree),
+                reg_alpha=float(reg_alpha),
+                reg_lambda=float(reg_lambda),
+                min_child_weight=float(min_child_weight),
+                gamma=float(gamma),
+                random_state=int(random_state),
+                n_jobs=int(n_jobs),
+                tree_method=str(tree_method),
+            ),
+            fit_point_model=lambda: _fit_xgb_step_lag_model(
+                xgb,
+                X_train=X_train,
+                y_train=y_train,
+                estimator_kind=estimator_kind,
+                booster=booster,
                 objective=str(point_objective),
                 objective_params=None
                 if point_objective_params is None
                 else dict(point_objective_params),
-            )
-
-        point_q: float | None = None
-        if q_vals:
-            if 0.5 in q_vals:
-                point_q = 0.5
-            else:
-                point_q = min(q_vals, key=lambda x: abs(x - 0.5))
+                n_estimators=int(n_estimators),
+                learning_rate=float(learning_rate),
+                max_depth=int(max_depth),
+                subsample=float(subsample),
+                colsample_bytree=float(colsample_bytree),
+                reg_alpha=float(reg_alpha),
+                reg_lambda=float(reg_lambda),
+                min_child_weight=float(min_child_weight),
+                gamma=float(gamma),
+                random_state=int(random_state),
+                n_jobs=int(n_jobs),
+                tree_method=str(tree_method),
+            ),
+        )
+        point_q = _step_lag_point_quantile(q_vals)
 
         rows: list[dict[str, Any]] = []
-        for uid, g in df.groupby("unique_id", sort=False):
-            uid_s = str(uid)
-            uid_val = float(uid_to_val.get(uid_s, 0.0))
-            x_pred, ds_out = _panel_step_lag_predict_X(
-                g,
-                uid_val=uid_val,
-                cutoff=cutoff,
-                horizon=int(horizon),
-                lags=lags_int,
-                roll_windows=roll_windows,
-                roll_stats=roll_stats,
-                diff_lags=diff_lags,
-                x_cols=x_cols_tup,
-                add_time_features=bool(add_time_features),
-                id_feature=str(id_feature),
-                step_scale=step_scale_s,
-                **lag_role_params,
-            )
-            if x_pred.size == 0:
-                continue
-
-            out_row: dict[str, Any]
+        for uid_s, x_pred, ds_out in _iter_step_lag_prediction_inputs(
+            df,
+            uid_to_val=uid_to_val,
+            cutoff=cutoff,
+            horizon=h,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=step_scale_s,
+            **lag_role_params,
+        ):
             if q_vals:
-                preds_q: dict[float, np.ndarray] = {}
-                for q, m in models_by_q.items():
-                    p = np.asarray(m.predict(x_pred), dtype=float).reshape(-1)
-                    if p.shape[0] != int(horizon):
-                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                    preds_q[float(q)] = p
-
+                preds_q = _predict_quantile_model_outputs(
+                    models_by_q,
+                    x_pred,
+                    horizon=h,
+                    predict_fn=lambda model, X: model.predict(X),
+                )
                 assert point_q is not None
-                yhat_point = preds_q[float(point_q)]
-
-                for i in range(int(horizon)):
-                    out_row = {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(yhat_point[i])}
-                    for q in q_vals:
-                        pct = int(round(float(q) * 100.0))
-                        out_row[f"yhat_p{pct}"] = float(preds_q[float(q)][i])
-                    rows.append(out_row)
+                rows.extend(
+                    _step_lag_quantile_rows(
+                        uid_s,
+                        ds_out,
+                        preds_q,
+                        horizon=h,
+                        q_vals=q_vals,
+                        point_q=point_q,
+                    )
+                )
             else:
                 assert point_model is not None
-                pred = np.asarray(point_model.predict(x_pred), dtype=float).reshape(-1)
-                if pred.shape[0] != int(horizon):
-                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                for i in range(int(horizon)):
-                    rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
+                rows.extend(
+                    _step_lag_point_rows(
+                        uid_s,
+                        ds_out,
+                        point_model.predict(x_pred),
+                        horizon=h,
+                    )
+                )
 
         if not rows:
             raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
@@ -3315,38 +3556,13 @@ def lgbm_step_lag_global_forecaster(
             'lgbm-step-lag-global requires lightgbm. Install with: pip install -e ".[lgbm]"'
         ) from e
 
-    import warnings
-
     lags_int = int(lags)
     x_cols_tup = _normalize_x_cols(x_cols)
     max_train_size_int = None if max_train_size is None else int(max_train_size)
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
     lag_role_params = _extract_step_lag_role_params(_params)
-
-    q_items: list[float] = []
-    if quantiles is not None:
-        if isinstance(quantiles, list | tuple):
-            q_items = [float(q) for q in quantiles]
-        elif isinstance(quantiles, str):
-            s = quantiles.strip()
-            q_items = [] if not s else [float(p.strip()) for p in s.split(",") if p.strip()]
-        else:
-            q_items = [float(quantiles)]
-
-    q_pcts: list[int] = []
-    for q in q_items:
-        if not (0.0 < float(q) < 1.0):
-            raise ValueError(QUANTILES_RANGE_ERROR)
-        pct_f = float(q) * 100.0
-        pct = int(round(pct_f))
-        if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError(QUANTILES_ALIGN_ERROR)
-        if pct <= 0 or pct >= 100:
-            raise ValueError(QUANTILES_STRICT_ERROR)
-        q_pcts.append(int(pct))
-    q_pcts = sorted(set(q_pcts))
-    q_vals = tuple(p / 100.0 for p in q_pcts)
+    q_vals = _normalize_step_lag_quantiles(quantiles)
 
     base_params: dict[str, Any] = {
         "n_estimators": int(n_estimators),
@@ -3363,27 +3579,12 @@ def lgbm_step_lag_global_forecaster(
         "verbosity": -1,
     }
 
-    def _predict(model: Any, X: np.ndarray) -> np.ndarray:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=(
-                    "X does not have valid feature names, but LGBMRegressor was fitted with feature names"
-                ),
-                category=UserWarning,
-            )
-            return np.asarray(model.predict(X), dtype=float).reshape(-1)
-
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
-        nonlocal q_vals
-
-        df = _validate_long_df(long_df, x_cols=x_cols_tup)
-        df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-
-        X_train, y_train, uid_to_val, _id_dim, _time_dim, _exog_dim = _panel_step_lag_train_xy(
-            df,
+        h = int(horizon)
+        df, X_train, y_train, uid_to_val = _step_lag_training_payload(
+            long_df,
             cutoff,
-            int(horizon),
+            h,
             lags=lags_int,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -3396,82 +3597,70 @@ def lgbm_step_lag_global_forecaster(
             sample_step=sample_step_int,
             **lag_role_params,
         )
-
-        def _fit_model(*, objective: str, objective_params: dict[str, Any] | None = None) -> Any:
-            params = dict(base_params)
-            params["objective"] = str(objective)
-            if objective_params:
-                params.update(objective_params)
-            model = lgb.LGBMRegressor(**params)
-            model.fit(X_train, y_train)
-            return model
-
-        models_by_q: dict[float, Any] = {}
-        point_model: Any | None = None
-
-        if q_vals:
-            for q in q_vals:
-                models_by_q[float(q)] = _fit_model(
-                    objective="quantile",
-                    objective_params={"alpha": float(q)},
-                )
-        else:
-            point_model = _fit_model(objective="regression")
-
-        point_q: float | None = None
-        if q_vals:
-            if 0.5 in q_vals:
-                point_q = 0.5
-            else:
-                point_q = min(q_vals, key=lambda x: abs(x - 0.5))
+        models_by_q, point_model = _fit_optional_quantile_models(
+            q_vals,
+            fit_quantile_model=lambda q: _fit_lgbm_step_lag_model(
+                lgb,
+                X_train=X_train,
+                y_train=y_train,
+                base_params=base_params,
+                objective="quantile",
+                objective_params={"alpha": float(q)},
+            ),
+            fit_point_model=lambda: _fit_lgbm_step_lag_model(
+                lgb,
+                X_train=X_train,
+                y_train=y_train,
+                base_params=base_params,
+                objective="regression",
+            ),
+        )
+        point_q = _step_lag_point_quantile(q_vals)
 
         rows: list[dict[str, Any]] = []
-        for uid, g in df.groupby("unique_id", sort=False):
-            uid_s = str(uid)
-            uid_val = float(uid_to_val.get(uid_s, 0.0))
-            x_pred, ds_out = _panel_step_lag_predict_X(
-                g,
-                uid_val=uid_val,
-                cutoff=cutoff,
-                horizon=int(horizon),
-                lags=lags_int,
-                roll_windows=roll_windows,
-                roll_stats=roll_stats,
-                diff_lags=diff_lags,
-                x_cols=x_cols_tup,
-                add_time_features=bool(add_time_features),
-                id_feature=str(id_feature),
-                step_scale=step_scale_s,
-                **lag_role_params,
-            )
-            if x_pred.size == 0:
-                continue
-
-            out_row: dict[str, Any]
+        for uid_s, x_pred, ds_out in _iter_step_lag_prediction_inputs(
+            df,
+            uid_to_val=uid_to_val,
+            cutoff=cutoff,
+            horizon=h,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=step_scale_s,
+            **lag_role_params,
+        ):
             if q_vals:
-                preds_q: dict[float, np.ndarray] = {}
-                for q, m in models_by_q.items():
-                    p = _predict(m, x_pred)
-                    if p.shape[0] != int(horizon):
-                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                    preds_q[float(q)] = p
-
+                preds_q = _predict_quantile_model_outputs(
+                    models_by_q,
+                    x_pred,
+                    horizon=h,
+                    predict_fn=lambda model, X: _predict_lgbm_step_lag_model(model, X),
+                )
                 assert point_q is not None
-                yhat_point = preds_q[float(point_q)]
-
-                for i in range(int(horizon)):
-                    out_row = {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(yhat_point[i])}
-                    for q in q_vals:
-                        pct = int(round(float(q) * 100.0))
-                        out_row[f"yhat_p{pct}"] = float(preds_q[float(q)][i])
-                    rows.append(out_row)
+                rows.extend(
+                    _step_lag_quantile_rows(
+                        uid_s,
+                        ds_out,
+                        preds_q,
+                        horizon=h,
+                        q_vals=q_vals,
+                        point_q=point_q,
+                    )
+                )
             else:
                 assert point_model is not None
-                pred = _predict(point_model, x_pred)
-                if pred.shape[0] != int(horizon):
-                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                for i in range(int(horizon)):
-                    rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
+                rows.extend(
+                    _step_lag_point_rows(
+                        uid_s,
+                        ds_out,
+                        _predict_lgbm_step_lag_model(point_model, x_pred),
+                        horizon=h,
+                    )
+                )
 
         if not rows:
             raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)
@@ -3515,30 +3704,7 @@ def catboost_step_lag_global_forecaster(
     sample_step_int = int(sample_step)
     step_scale_s = str(step_scale)
     lag_role_params = _extract_step_lag_role_params(_params)
-
-    q_items: list[float] = []
-    if quantiles is not None:
-        if isinstance(quantiles, list | tuple):
-            q_items = [float(q) for q in quantiles]
-        elif isinstance(quantiles, str):
-            s = quantiles.strip()
-            q_items = [] if not s else [float(p.strip()) for p in s.split(",") if p.strip()]
-        else:
-            q_items = [float(quantiles)]
-
-    q_pcts: list[int] = []
-    for q in q_items:
-        if not (0.0 < float(q) < 1.0):
-            raise ValueError(QUANTILES_RANGE_ERROR)
-        pct_f = float(q) * 100.0
-        pct = int(round(pct_f))
-        if abs(pct_f - float(pct)) > 1e-6:
-            raise ValueError(QUANTILES_ALIGN_ERROR)
-        if pct <= 0 or pct >= 100:
-            raise ValueError(QUANTILES_STRICT_ERROR)
-        q_pcts.append(int(pct))
-    q_pcts = sorted(set(q_pcts))
-    q_vals = tuple(p / 100.0 for p in q_pcts)
+    q_vals = _normalize_step_lag_quantiles(quantiles)
 
     base_params: dict[str, Any] = {
         "iterations": int(iterations),
@@ -3552,15 +3718,11 @@ def catboost_step_lag_global_forecaster(
     }
 
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:
-        nonlocal q_vals
-
-        df = _validate_long_df(long_df, x_cols=x_cols_tup)
-        df = df.sort_values(["unique_id", "ds"], kind="mergesort")
-
-        X_train, y_train, uid_to_val, _id_dim, _time_dim, _exog_dim = _panel_step_lag_train_xy(
-            df,
+        h = int(horizon)
+        df, X_train, y_train, uid_to_val = _step_lag_training_payload(
+            long_df,
             cutoff,
-            int(horizon),
+            h,
             lags=lags_int,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
@@ -3573,75 +3735,69 @@ def catboost_step_lag_global_forecaster(
             sample_step=sample_step_int,
             **lag_role_params,
         )
-
-        def _fit_model(*, loss_function: str) -> Any:
-            model = CatBoostRegressor(**dict(base_params, loss_function=str(loss_function)))
-            model.fit(X_train, y_train)
-            return model
-
-        models_by_q: dict[float, Any] = {}
-        point_model: Any | None = None
-
-        if q_vals:
-            for q in q_vals:
-                models_by_q[float(q)] = _fit_model(loss_function=f"Quantile:alpha={float(q)}")
-        else:
-            point_model = _fit_model(loss_function="RMSE")
-
-        point_q: float | None = None
-        if q_vals:
-            if 0.5 in q_vals:
-                point_q = 0.5
-            else:
-                point_q = min(q_vals, key=lambda x: abs(x - 0.5))
+        models_by_q, point_model = _fit_optional_quantile_models(
+            q_vals,
+            fit_quantile_model=lambda q: _fit_catboost_step_lag_model(
+                CatBoostRegressor,
+                X_train=X_train,
+                y_train=y_train,
+                base_params=base_params,
+                loss_function=f"Quantile:alpha={float(q)}",
+            ),
+            fit_point_model=lambda: _fit_catboost_step_lag_model(
+                CatBoostRegressor,
+                X_train=X_train,
+                y_train=y_train,
+                base_params=base_params,
+                loss_function="RMSE",
+            ),
+        )
+        point_q = _step_lag_point_quantile(q_vals)
 
         rows: list[dict[str, Any]] = []
-        for uid, g in df.groupby("unique_id", sort=False):
-            uid_s = str(uid)
-            uid_val = float(uid_to_val.get(uid_s, 0.0))
-            x_pred, ds_out = _panel_step_lag_predict_X(
-                g,
-                uid_val=uid_val,
-                cutoff=cutoff,
-                horizon=int(horizon),
-                lags=lags_int,
-                roll_windows=roll_windows,
-                roll_stats=roll_stats,
-                diff_lags=diff_lags,
-                x_cols=x_cols_tup,
-                add_time_features=bool(add_time_features),
-                id_feature=str(id_feature),
-                step_scale=step_scale_s,
-                **lag_role_params,
-            )
-            if x_pred.size == 0:
-                continue
-
-            out_row: dict[str, Any]
+        for uid_s, x_pred, ds_out in _iter_step_lag_prediction_inputs(
+            df,
+            uid_to_val=uid_to_val,
+            cutoff=cutoff,
+            horizon=h,
+            lags=lags_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+            id_feature=str(id_feature),
+            step_scale=step_scale_s,
+            **lag_role_params,
+        ):
             if q_vals:
-                preds_q: dict[float, np.ndarray] = {}
-                for q, m in models_by_q.items():
-                    p = np.asarray(m.predict(x_pred), dtype=float).reshape(-1)
-                    if p.shape[0] != int(horizon):
-                        raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                    preds_q[float(q)] = p
-
+                preds_q = _predict_quantile_model_outputs(
+                    models_by_q,
+                    x_pred,
+                    horizon=h,
+                    predict_fn=lambda model, X: model.predict(X),
+                )
                 assert point_q is not None
-                yhat_point = preds_q[float(point_q)]
-
-                for i in range(int(horizon)):
-                    out_row = {"unique_id": uid_s, "ds": ds_out[i], "yhat": float(yhat_point[i])}
-                    for q in q_vals:
-                        pct = int(round(float(q) * 100.0))
-                        out_row[f"yhat_p{pct}"] = float(preds_q[float(q)][i])
-                    rows.append(out_row)
+                rows.extend(
+                    _step_lag_quantile_rows(
+                        uid_s,
+                        ds_out,
+                        preds_q,
+                        horizon=h,
+                        q_vals=q_vals,
+                        point_q=point_q,
+                    )
+                )
             else:
                 assert point_model is not None
-                pred = np.asarray(point_model.predict(x_pred), dtype=float).reshape(-1)
-                if pred.shape[0] != int(horizon):
-                    raise RuntimeError(UNEXPECTED_PREDICTION_SHAPE_ERROR)
-                for i in range(int(horizon)):
-                    rows.append({"unique_id": uid_s, "ds": ds_out[i], "yhat": float(pred[i])})
+                rows.extend(
+                    _step_lag_point_rows(
+                        uid_s,
+                        ds_out,
+                        point_model.predict(x_pred),
+                        horizon=h,
+                    )
+                )
 
         if not rows:
             raise ValueError(NO_GLOBAL_PREDICTIONS_ERROR)

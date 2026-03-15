@@ -31,9 +31,8 @@ def _assignment_bound_name(node: ast.AST) -> set[str]:
     names: set[str] = set()
     if isinstance(node, ast.Assign):
         names.update(target.id for target in node.targets if isinstance(target, ast.Name))
-    elif isinstance(node, ast.AnnAssign):
-        if isinstance(node.target, ast.Name):
-            names.add(node.target.id)
+    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        names.add(node.target.id)
     return names
 
 

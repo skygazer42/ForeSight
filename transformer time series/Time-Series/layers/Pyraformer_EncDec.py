@@ -153,11 +153,11 @@ class ConvLayer(nn.Module):
         return x
 
 
-class Bottleneck_Construct(nn.Module):
+class BottleneckConstruct(nn.Module):
     """Bottleneck convolution CSCM"""
 
     def __init__(self, d_model, window_size, d_inner):
-        super(Bottleneck_Construct, self).__init__()
+        super().__init__()
         if not isinstance(window_size, list):
             self.conv_layers = nn.ModuleList([
                 ConvLayer(d_inner, window_size),
@@ -186,6 +186,9 @@ class Bottleneck_Construct(nn.Module):
 
         all_inputs = self.norm(all_inputs)
         return all_inputs
+
+
+Bottleneck_Construct = BottleneckConstruct
 
 
 class PositionwiseFeedForward(nn.Module):

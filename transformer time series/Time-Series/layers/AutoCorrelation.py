@@ -96,15 +96,15 @@ class AutoCorrelation(nn.Module):
         return delays_agg
 
     def forward(self, queries, keys, values, attn_mask):
-        _, L, _, _ = queries.shape
-        _, S, _, _ = values.shape
-        if L > S:
-            zeros = torch.zeros_like(queries[:, :(L - S), :]).float()
+        _, query_length, _, _ = queries.shape
+        _, source_length, _, _ = values.shape
+        if query_length > source_length:
+            zeros = torch.zeros_like(queries[:, :(query_length - source_length), :]).float()
             values = torch.cat([values, zeros], dim=1)
             keys = torch.cat([keys, zeros], dim=1)
         else:
-            values = values[:, :L, :, :]
-            keys = keys[:, :L, :, :]
+            values = values[:, :query_length, :, :]
+            keys = keys[:, :query_length, :, :]
 
         # period-based dependencies
         q_fft = torch.fft.rfft(queries.permute(0, 2, 3, 1).contiguous(), dim=-1)
@@ -114,14 +114,20 @@ class AutoCorrelation(nn.Module):
 
         # time delay agg
         if self.training:
-            V = self.time_delay_agg_training(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
+            value_output = self.time_delay_agg_training(
+                values.permute(0, 2, 3, 1).contiguous(),
+                corr,
+            ).permute(0, 3, 1, 2)
         else:
-            V = self.time_delay_agg_inference(values.permute(0, 2, 3, 1).contiguous(), corr).permute(0, 3, 1, 2)
+            value_output = self.time_delay_agg_inference(
+                values.permute(0, 2, 3, 1).contiguous(),
+                corr,
+            ).permute(0, 3, 1, 2)
 
         if self.output_attention:
-            return (V.contiguous(), corr.permute(0, 3, 1, 2))
+            return (value_output.contiguous(), corr.permute(0, 3, 1, 2))
         else:
-            return (V.contiguous(), None)
+            return (value_output.contiguous(), None)
 
 
 class AutoCorrelationLayer(nn.Module):
@@ -140,13 +146,13 @@ class AutoCorrelationLayer(nn.Module):
         self.n_heads = n_heads
 
     def forward(self, queries, keys, values, attn_mask):
-        B, L, _ = queries.shape
-        _, S, _ = keys.shape
-        H = self.n_heads
+        batch_size, query_length, _ = queries.shape
+        _, source_length, _ = keys.shape
+        num_heads = self.n_heads
 
-        queries = self.query_projection(queries).view(B, L, H, -1)
-        keys = self.key_projection(keys).view(B, S, H, -1)
-        values = self.value_projection(values).view(B, S, H, -1)
+        queries = self.query_projection(queries).view(batch_size, query_length, num_heads, -1)
+        keys = self.key_projection(keys).view(batch_size, source_length, num_heads, -1)
+        values = self.value_projection(values).view(batch_size, source_length, num_heads, -1)
 
         out, attn = self.inner_correlation(
             queries,
@@ -154,6 +160,6 @@ class AutoCorrelationLayer(nn.Module):
             values,
             attn_mask
         )
-        out = out.view(B, L, -1)
+        out = out.view(batch_size, query_length, -1)
 
         return self.out_projection(out), attn

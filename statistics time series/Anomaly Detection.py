@@ -19,6 +19,8 @@ from time import time
 import warnings
 warnings.filterwarnings('ignore')
 
+CATFISH_TITLE = 'Catfish Sales in 1000s of Pounds'
+
 # %% [markdown]
 # # Catfish Sales Data
 
@@ -68,7 +70,7 @@ lim_catfish_sales[datetime(1998,12,1)] = 10000
 # %%
 plt.figure(figsize=(10,4))
 plt.plot(lim_catfish_sales)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -88,7 +90,7 @@ first_diff.head()
 # %%
 plt.figure(figsize=(10,4))
 plt.plot(first_diff)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -160,7 +162,7 @@ plt.plot(rolling_predictions)
 
 plt.legend(('Data', 'Predictions'), fontsize=16)
 
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Production', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -180,7 +182,7 @@ print('Root Mean Squared Error:', np.sqrt(np.mean(rolling_residuals**2)))
 # %%
 plt.figure(figsize=(10,4))
 plt.plot(lim_catfish_sales)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -260,7 +262,7 @@ adjusted_data.loc[curr_anomaly] = december_data[(december_data.index != curr_ano
 plt.figure(figsize=(10,4))
 plt.plot(lim_catfish_sales, color='firebrick', alpha=0.4)
 plt.plot(adjusted_data)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -303,7 +305,7 @@ plt.plot(rolling_predictions)
 
 plt.legend(('Data', 'Predictions'), fontsize=16)
 
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Production', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)

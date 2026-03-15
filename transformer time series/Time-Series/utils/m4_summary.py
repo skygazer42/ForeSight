@@ -71,7 +71,7 @@ class M4Summary:
         # OWA考虑了模型的准确性和相对偏差两方面，通过将模型的sMAPE与与该问题的“naive”方法的sMAPE相对比，给出了一个综合的性能度量。
         grouped_owa = OrderedDict()
 
-        naive2_forecasts = pd.read_csv(self.naive_path).values[:, 1:].astype(np.float32)
+        naive2_forecasts = pd.read_csv(self.naive_path).iloc[:, 1:].to_numpy().astype(np.float32)
         naive2_forecasts = np.array([v[~np.isnan(v)] for v in naive2_forecasts])
 
         model_mases = {}
@@ -82,7 +82,7 @@ class M4Summary:
         for group_name in M4Meta.seasonal_patterns:
             file_name = self.file_path + group_name + "_forecast.csv"
             if os.path.exists(file_name):
-                model_forecast = pd.read_csv(file_name).values
+                model_forecast = pd.read_csv(file_name).to_numpy()
 
             naive2_forecast = group_values(naive2_forecasts, self.test_set.groups, group_name)
             target = group_values(self.test_set.values, self.test_set.groups, group_name)

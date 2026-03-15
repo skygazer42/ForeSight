@@ -150,19 +150,15 @@ class VolatilityFormatter(GenericDataFormatter):
 
         return output
 
-        # Default params
-        def get_fixed_params(self):
-            """Returns fixed model parameters for experiments."""
-
-            fixed_params = {
-                'total_time_steps': 252 + 5,
-                'num_encoder_steps': 252,
-                'num_epochs': 100,
-                'early_stopping_patience': 5,
-                'multiprocessing_workers': 5,
-            }
-
-        return fixed_params
+    def get_fixed_params(self):
+        """Returns fixed model parameters for experiments."""
+        return {
+            'total_time_steps': 252 + 5,
+            'num_encoder_steps': 252,
+            'num_epochs': 100,
+            'early_stopping_patience': 5,
+            'multiprocessing_workers': 5,
+        }
 
     def get_default_model_params(self):
         """Returns default optimised model parameters."""

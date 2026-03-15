@@ -12,6 +12,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import warnings
 warnings.filterwarnings('ignore')
 
+VOLATILITY_LEGEND_LABELS = ['True Volatility', 'Predicted Volatility']
+
 # %% [markdown]
 # # GARCH(2,2) Model
 #
@@ -109,7 +111,7 @@ plt.figure(figsize=(10,4))
 true, = plt.plot(vols[-test_size:]) 
 preds, = plt.plot(np.sqrt(predictions.variance.values[-1, :])) # 指定预测的步数，即未来的时间点数
 plt.title('Volatility Prediction', fontsize=20)
-plt.legend(['True Volatility', 'Predicted Volatility'], fontsize=16)
+plt.legend(VOLATILITY_LEGEND_LABELS, fontsize=16)
 
 # %%
 predictions_long_term = model_fit.forecast(horizon=1000)
@@ -117,7 +119,7 @@ plt.figure(figsize=(10,4))
 true, = plt.plot(vols[-test_size:])
 preds, = plt.plot(np.sqrt(predictions_long_term.variance.values[-1, :]))
 plt.title('Long Term Volatility Prediction', fontsize=20)
-plt.legend(['True Volatility', 'Predicted Volatility'], fontsize=16)
+plt.legend(VOLATILITY_LEGEND_LABELS, fontsize=16)
 
 # %% [markdown]
 # # Rolling Forecast Origin
@@ -139,7 +141,7 @@ plt.figure(figsize=(10,4))
 true, = plt.plot(vols[-test_size:])
 preds, = plt.plot(rolling_predictions)
 plt.title('Volatility Prediction - Rolling Forecast', fontsize=20) #波动率预测
-plt.legend(['True Volatility', 'Predicted Volatility'], fontsize=16)
+plt.legend(VOLATILITY_LEGEND_LABELS, fontsize=16)
 
 # %%
 

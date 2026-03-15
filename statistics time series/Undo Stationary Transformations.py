@@ -9,6 +9,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima_model import ARIMA
 import pandas as pd
 
+HOURS_SINCE_PUBLISHED_LABEL = 'Hours Since Published'
+
 # %%
 def perform_adf_test(series):
     result = adfuller(series)
@@ -27,7 +29,7 @@ plt.figure(figsize=(10,4))
 plt.plot(ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(0,50000,10000), fontsize=14)
 plt.ylabel('Views', fontsize=16)
@@ -59,7 +61,7 @@ plt.figure(figsize=(10,4))
 plt.plot(norm_ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(-3,2), fontsize=14)
 plt.ylabel('Norm. Views', fontsize=16)
@@ -77,7 +79,7 @@ plt.figure(figsize=(10,4))
 plt.plot(exp_ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(0,3.5,.5), fontsize=14)
 plt.ylabel('Exp. Norm. Views', fontsize=16)
@@ -135,7 +137,7 @@ plt.figure(figsize=(10,4))
 plt.plot(diff_ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(-0.2,0.3,.1), fontsize=14)
 plt.ylabel('First Diff. \nExp. Norm. Views', fontsize=16)
@@ -181,7 +183,7 @@ plt.figure(figsize=(10,4))
 plt.plot(diff_ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(-0.2,0.3,.1), fontsize=14)
 plt.ylabel('First Diff. \nExp. Norm. Views', fontsize=16)
@@ -215,7 +217,7 @@ plt.figure(figsize=(10,4))
 plt.plot(ts)
 
 plt.xticks(np.arange(0,78,6), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(0,50000,10000), fontsize=14)
 plt.ylabel('Views', fontsize=16)
@@ -228,7 +230,7 @@ plt.figure(figsize=(10,4))
 plt.plot(ts)
 
 plt.xticks(np.arange(0,78), fontsize=14)
-plt.xlabel('Hours Since Published', fontsize=16)
+plt.xlabel(HOURS_SINCE_PUBLISHED_LABEL, fontsize=16)
 
 plt.yticks(np.arange(40000,46000,1000), fontsize=14)
 plt.ylabel('Views', fontsize=16)

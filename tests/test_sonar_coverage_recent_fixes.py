@@ -8,6 +8,7 @@ import re
 import sys
 import types
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,10 @@ from foresight.models.statsmodels_wrap import (
     _validate_positive_horizon,
     ets_forecast,
 )
+
+FitModelFn = Callable[[np.ndarray, np.ndarray], object]
+MonkeypatchInstaller = Callable[[pytest.MonkeyPatch], None]
+GenericFactory = Callable[..., object]
 from foresight.models.torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
 from foresight.models.torch_xformer import torch_xformer_direct_forecast
 
@@ -230,6 +235,7 @@ def _install_fake_xgboost(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class _FakeXGBRegressor:
         def __init__(self, **_: object) -> None:
+            # Test double only needs a constructor-compatible signature.
             pass
 
         def fit(self, X: np.ndarray, y: np.ndarray) -> _FakeXGBRegressor:
@@ -248,6 +254,7 @@ def _install_fake_lightgbm(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class _FakeLGBMRegressor:
         def __init__(self, **_: object) -> None:
+            # Test double only needs a constructor-compatible signature.
             pass
 
     lightgbm.LGBMRegressor = _FakeLGBMRegressor
@@ -259,6 +266,7 @@ def _install_fake_catboost(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class _FakeCatBoostRegressor:
         def __init__(self, **_: object) -> None:
+            # Test double only needs a constructor-compatible signature.
             pass
 
     catboost.CatBoostRegressor = _FakeCatBoostRegressor
@@ -741,7 +749,7 @@ def test_rf_step_lag_global_forecaster_sets_explicit_rf_defaults(
     _install_fake_sklearn(monkeypatch, captured)
 
     def _fake_run_point_global_model(
-        *args: object, fit_model: object, **kwargs: object
+        *args: object, fit_model: FitModelFn, **kwargs: object
     ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
@@ -766,7 +774,7 @@ def test_decision_tree_step_lag_global_forecaster_sets_explicit_ccp_alpha(
     _install_fake_sklearn(monkeypatch, captured)
 
     def _fake_run_point_global_model(
-        *args: object, fit_model: object, **kwargs: object
+        *args: object, fit_model: FitModelFn, **kwargs: object
     ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
@@ -790,7 +798,7 @@ def test_svr_step_lag_global_forecaster_sets_explicit_kernel(
     _install_fake_sklearn(monkeypatch, captured)
 
     def _fake_run_point_global_model(
-        *args: object, fit_model: object, **kwargs: object
+        *args: object, fit_model: FitModelFn, **kwargs: object
     ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
@@ -814,7 +822,7 @@ def test_global_svr_forecasters_accept_lowercase_c_name(
     _install_fake_sklearn(monkeypatch, captured)
 
     def _fake_run_point_global_model(
-        *args: object, fit_model: object, **kwargs: object
+        *args: object, fit_model: FitModelFn, **kwargs: object
     ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((4, 2), dtype=float), np.arange(4, dtype=float))
@@ -943,7 +951,7 @@ def test_tweedie_step_lag_global_forecaster_validates_targets_via_shared_helper(
     _install_fake_sklearn(monkeypatch, {})
 
     def _fake_run_point_global_model(
-        *args: object, fit_model: object, **kwargs: object
+        *args: object, fit_model: FitModelFn, **kwargs: object
     ) -> dict[str, bool]:
         assert callable(fit_model)
         fit_model(np.ones((3, 2), dtype=float), np.array([1.0, 0.0, 2.0], dtype=float))
@@ -978,7 +986,7 @@ def test_tweedie_step_lag_global_forecaster_validates_targets_via_shared_helper(
 def test_global_step_lag_quantile_factories_validate_quantiles_before_fit(
     monkeypatch: pytest.MonkeyPatch,
     factory_name: str,
-    installer: object,
+    installer: MonkeypatchInstaller,
     quantiles: list[float],
     message: str,
 ) -> None:
@@ -1000,7 +1008,7 @@ def test_global_step_lag_quantile_factories_validate_quantiles_before_fit(
 def test_global_step_lag_quantile_factories_normalize_valid_percentiles(
     monkeypatch: pytest.MonkeyPatch,
     factory_name: str,
-    installer: object,
+    installer: MonkeypatchInstaller,
 ) -> None:
     installer(monkeypatch)
     factory = getattr(global_regression_mod, factory_name)
@@ -1201,7 +1209,7 @@ def test_regression_additional_forecasters_cover_recent_literal_refactors(
 )
 def test_regression_xgb_internal_forecasters_validate_shared_scalar_constraints(
     monkeypatch: pytest.MonkeyPatch,
-    factory: object,
+    factory: GenericFactory,
     kwargs: dict[str, object],
     message: str,
 ) -> None:

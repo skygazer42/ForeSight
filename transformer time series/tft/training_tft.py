@@ -274,9 +274,9 @@ class TemporalFusionTransformer(pl.LightningModule):
                                                                       self.hidden_layer_size) 
                                                      for i in range(self.num_categorical_variables)])
 
-        self.regular_var_embeddings = nn.ModuleList([nn.Linear(1, 
-                                                              self.hidden_layer_size) 
-                                                  for i in range(self.num_regular_variables)])
+        self.regular_var_embeddings = nn.ModuleList([nn.Linear(1,
+                                                               self.hidden_layer_size)
+                                                     for _ in range(self.num_regular_variables)])
 
     def build_variable_selection_networks(self):
         
@@ -379,13 +379,13 @@ class TemporalFusionTransformer(pl.LightningModule):
             static_categorical_inputs = [self.categorical_var_embeddings[i](categorical_inputs[Ellipsis, i])[:,0,:] 
                                          for i in range(self.num_categorical_variables)
                                          if i + self.num_regular_variables in self._static_input_loc]
-            static_inputs = torch.stack(static_regular_inputs + static_categorical_inputs, axis = 1)
+            static_inputs = torch.stack(static_regular_inputs + static_categorical_inputs, dim=1)
         else:
             static_inputs = None
             
         # Target input
         obs_inputs = torch.stack([self.regular_var_embeddings[i](regular_inputs[Ellipsis, i:i + 1])
-                                     for i in self._input_obs_loc], axis=-1)
+                                     for i in self._input_obs_loc], dim=-1)
         
         # Observed (a prioir unknown) inputs
         wired_embeddings = []
@@ -403,7 +403,7 @@ class TemporalFusionTransformer(pl.LightningModule):
                 unknown_inputs.append(e)
                 
         if unknown_inputs + wired_embeddings:
-            unknown_inputs = torch.stack(unknown_inputs + wired_embeddings, axis=-1)
+            unknown_inputs = torch.stack(unknown_inputs + wired_embeddings, dim=-1)
         else:
             unknown_inputs = None
             
@@ -416,7 +416,7 @@ class TemporalFusionTransformer(pl.LightningModule):
                                     for i in self._known_categorical_input_idx
                                     if i + self.num_regular_variables not in self._static_input_loc]
 
-        known_combined_layer = torch.stack(known_regular_inputs + known_categorical_inputs, axis=-1)
+        known_combined_layer = torch.stack(known_regular_inputs + known_categorical_inputs, dim=-1)
         
         return unknown_inputs, known_combined_layer, obs_inputs, static_inputs
         
@@ -434,12 +434,12 @@ class TemporalFusionTransformer(pl.LightningModule):
                   unknown_inputs[:, :self.num_encoder_steps, :],
                   known_combined_layer[:, :self.num_encoder_steps, :],
                   obs_inputs[:, :self.num_encoder_steps, :]
-              ], axis=-1)
+              ], dim=-1)
         else:
               historical_inputs = torch.cat([
                   known_combined_layer[:, :self.num_encoder_steps, :],
                   obs_inputs[:, :self.num_encoder_steps, :]
-              ], axis=-1)
+              ], dim=-1)
         
         # Isolate only known future inputs.
         future_inputs = known_combined_layer[:, self.num_encoder_steps:, :]
@@ -469,9 +469,9 @@ class TemporalFusionTransformer(pl.LightningModule):
                                            state_c))
         
         # Apply gated skip connection
-        input_embeddings = torch.cat((historical_features, future_features), axis=1)
+        input_embeddings = torch.cat((historical_features, future_features), dim=1)
         
-        lstm_layer = torch.cat((history_lstm, future_lstm), axis=1)
+        lstm_layer = torch.cat((history_lstm, future_lstm), dim=1)
         
         temporal_feature_layer = self.post_seq_encoder_gate_add_norm(lstm_layer, input_embeddings)
         

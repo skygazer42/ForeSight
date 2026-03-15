@@ -80,28 +80,35 @@ def _normalize_periods(periods: Any) -> tuple[int, ...]:
     return (int(periods),)
 
 
+def _default_order_tuple(n_periods: int) -> tuple[int, ...]:
+    return tuple([2] * int(n_periods))
+
+
+def _coerce_order_parts(orders: Any) -> tuple[int, ...]:
+    if isinstance(orders, str):
+        parts = [part.strip() for part in orders.strip().split(",") if part.strip()]
+        return tuple(int(part) for part in parts)
+    if isinstance(orders, list | tuple):
+        return tuple(int(order) for order in orders)
+    return (int(orders),)
+
+
+def _normalize_order_parts(parts: tuple[int, ...], *, n_periods: int) -> tuple[int, ...]:
+    if not parts:
+        return _default_order_tuple(n_periods)
+    if len(parts) == 1 and n_periods > 1:
+        return tuple([int(parts[0])] * int(n_periods))
+    if len(parts) != int(n_periods):
+        raise ValueError("orders must be an int or have the same length as periods")
+    return tuple(int(part) for part in parts)
+
+
 def _normalize_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]:
     if orders is None:
-        return tuple([2] * int(n_periods))
+        return _default_order_tuple(n_periods)
     if isinstance(orders, int | float):
         return tuple([int(orders)] * int(n_periods))
-    if isinstance(orders, str):
-        s = orders.strip()
-        if not s:
-            return tuple([2] * int(n_periods))
-        parts = [p.strip() for p in s.split(",") if p.strip()]
-        if len(parts) == 1 and n_periods > 1:
-            return tuple([int(parts[0])] * int(n_periods))
-        if len(parts) != int(n_periods):
-            raise ValueError("orders must be an int or have the same length as periods")
-        return tuple(int(p) for p in parts)
-    if isinstance(orders, list | tuple):
-        if len(orders) == 1 and n_periods > 1:
-            return tuple([int(orders[0])] * int(n_periods))
-        if len(orders) != int(n_periods):
-            raise ValueError("orders must be an int or have the same length as periods")
-        return tuple(int(o) for o in orders)
-    return tuple([int(orders)] * int(n_periods))
+    return _normalize_order_parts(_coerce_order_parts(orders), n_periods=n_periods)
 
 
 def fourier_multi_regression_forecast(

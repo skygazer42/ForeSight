@@ -6,6 +6,8 @@ from einops import rearrange, reduce, repeat
 import math
 from scipy.fftpack import next_fast_len
 
+FOURIER_EXPAND_PATTERN = 'b f d -> b f () d'
+
 
 class Transform:
     def __init__(self, sigma):
@@ -26,18 +28,18 @@ class Transform:
 
 
 def conv1d_fft(f, g, dim=-1):
-    N = f.size(dim)
-    M = g.size(dim)
+    signal_len = f.size(dim)
+    kernel_len = g.size(dim)
 
-    fast_len = next_fast_len(N + M - 1)
+    fast_len = next_fast_len(signal_len + kernel_len - 1)
 
-    F_f = fft.rfft(f, fast_len, dim=dim)
-    F_g = fft.rfft(g, fast_len, dim=dim)
+    fft_f = fft.rfft(f, fast_len, dim=dim)
+    fft_g = fft.rfft(g, fast_len, dim=dim)
 
-    F_fg = F_f * F_g.conj()
-    out = fft.irfft(F_fg, fast_len, dim=dim)
+    fft_fg = fft_f * fft_g.conj()
+    out = fft.irfft(fft_fg, fast_len, dim=dim)
     out = out.roll((-1,), dims=(dim,))
-    idx = torch.as_tensor(range(fast_len - N, fast_len)).to(out.device)
+    idx = torch.as_tensor(range(fast_len - signal_len, fast_len)).to(out.device)
     out = out.index_select(dim, idx)
 
     return out
@@ -67,9 +69,9 @@ class ExponentialSmoothing(nn.Module):
 
         return output
 
-    def get_exponential_weight(self, T):
+    def get_exponential_weight(self, time_steps):
         # Generate array [0, 1, ..., T-1]
-        powers = torch.arange(T, dtype=torch.float, device=self.weight.device)
+        powers = torch.arange(time_steps, dtype=torch.float, device=self.weight.device)
 
         # (1 - \alpha) * \alpha^t, for all t = T-1, T-2, ..., 0]
         weight = (1 - self.weight) * (self.weight ** torch.flip(powers, dims=(0,)))
@@ -153,7 +155,7 @@ class FourierLayer(nn.Module):
 
         x_freq, index_tuple = self.topk_freq(x_freq)
         f = repeat(f, 'f -> b f d', b=x_freq.size(0), d=x_freq.size(2))
-        f = rearrange(f[index_tuple], 'b f d -> b f () d').to(x_freq.device)
+        f = rearrange(f[index_tuple], FOURIER_EXPAND_PATTERN).to(x_freq.device)
 
         return self.extrapolate(x_freq, f, t)
 
@@ -163,8 +165,8 @@ class FourierLayer(nn.Module):
         t_val = rearrange(torch.arange(t + self.pred_len, dtype=torch.float),
                           't -> () () t ()').to(x_freq.device)
 
-        amp = rearrange(x_freq.abs() / t, 'b f d -> b f () d')
-        phase = rearrange(x_freq.angle(), 'b f d -> b f () d')
+        amp = rearrange(x_freq.abs() / t, FOURIER_EXPAND_PATTERN)
+        phase = rearrange(x_freq.angle(), FOURIER_EXPAND_PATTERN)
 
         x_time = amp * torch.cos(2 * math.pi * f * t_val + phase)
 

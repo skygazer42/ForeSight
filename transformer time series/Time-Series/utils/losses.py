@@ -18,8 +18,6 @@ Loss functions for PyTorch.
 
 import torch as t
 import torch.nn as nn
-import numpy as np
-import pdb
 
 
 def divide_no_nan(a, b):
@@ -27,8 +25,8 @@ def divide_no_nan(a, b):
     a/b where the resulted NaN or Inf are replaced by 0.
     """
     result = a / b
-    result[result != result] = .0 ## 将结果中的NaN替换为0
-    result[result == np.inf] = .0  # 将结果中的Inf替换为0
+    result[t.isnan(result)] = .0
+    result[t.isinf(result)] = .0
     return result
 
 #计算均值绝对百分比误差（Mean Absolute Percentage Error，MAPE）。MAPE是一种衡量预测值和真实值之间百分比误差的指标

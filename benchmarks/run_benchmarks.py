@@ -245,7 +245,7 @@ def run_benchmark_suite(
     datasets = config.get("datasets", [])
     models = config.get("models", [])
     dataset_fields_list = [_benchmark_dataset_case_fields(case) for case in datasets]
-    conformal_levels = [int(float(level)) for level in list(config.get("conformal_levels", []))]
+    conformal_levels = [int(float(level)) for level in config.get("conformal_levels", [])]
     conformal_per_step = bool(config.get("conformal_per_step", False))
 
     rows: list[dict[str, Any]] = []

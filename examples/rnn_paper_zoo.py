@@ -32,16 +32,16 @@ def main() -> None:
     y = 0.02 * t + np.sin(2.0 * np.pi * t / 30.0) + 0.2 * rng.standard_normal(t.shape[0])
 
     horizon = 14
-    common = dict(
-        lags=48,
-        hidden_size=32,
-        epochs=10,
-        batch_size=32,
-        lr=1e-3,
-        seed=0,
-        patience=5,
-        device="cpu",
-    )
+    common = {
+        "lags": 48,
+        "hidden_size": 32,
+        "epochs": 10,
+        "batch_size": 32,
+        "lr": 1e-3,
+        "seed": 0,
+        "patience": 5,
+        "device": "cpu",
+    }
 
     models = [
         ("torch-rnnpaper-elman-srn-direct", common),

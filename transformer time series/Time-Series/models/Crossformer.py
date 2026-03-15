@@ -9,6 +9,8 @@ from models.PatchTST import FlattenHead
 
 from math import ceil
 
+SEGMENT_REARRANGE_PATTERN = '(b d) seg_num d_model -> b d seg_num d_model'
+
 
 class Model(nn.Module):
     def __init__(self, configs):
@@ -76,7 +78,7 @@ class Model(nn.Module):
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         x_enc, n_vars = self.enc_value_embedding(x_enc.permute(0, 2, 1))
-        x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d = n_vars)
+        x_enc = rearrange(x_enc, SEGMENT_REARRANGE_PATTERN, d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
         enc_out, _ = self.encoder(x_enc)
@@ -87,7 +89,7 @@ class Model(nn.Module):
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         x_enc, n_vars = self.enc_value_embedding(x_enc.permute(0, 2, 1))
-        x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
+        x_enc = rearrange(x_enc, SEGMENT_REARRANGE_PATTERN, d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
         enc_out, _ = self.encoder(x_enc)
@@ -98,7 +100,7 @@ class Model(nn.Module):
 
     def anomaly_detection(self, x_enc):
         x_enc, n_vars = self.enc_value_embedding(x_enc.permute(0, 2, 1))
-        x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
+        x_enc = rearrange(x_enc, SEGMENT_REARRANGE_PATTERN, d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
         enc_out, _ = self.encoder(x_enc)
@@ -108,7 +110,7 @@ class Model(nn.Module):
 
     def classification(self, x_enc, x_mark_enc):
         x_enc, n_vars = self.enc_value_embedding(x_enc.permute(0, 2, 1))
-        x_enc = rearrange(x_enc, '(b d) seg_num d_model -> b d seg_num d_model', d=n_vars)
+        x_enc = rearrange(x_enc, SEGMENT_REARRANGE_PATTERN, d=n_vars)
         x_enc += self.enc_pos_embedding
         x_enc = self.pre_norm(x_enc)
         enc_out, _ = self.encoder(x_enc)

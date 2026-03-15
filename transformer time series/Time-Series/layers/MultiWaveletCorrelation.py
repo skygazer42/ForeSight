@@ -10,7 +10,7 @@ from sympy import Poly, legendre, Symbol, chebyshevt
 from scipy.special import eval_legendre
 
 
-def legendreDer(k, x):
+def legendre_der(k, x):
     def _legendre(k, x):
         return (2 * k + 1) * eval_legendre(k, x)
 
@@ -91,11 +91,11 @@ def get_phi_psi(k, base):
         phi = [partial(phi_, phi_coeff[i, :]) for i in range(k)]
 
         x = Symbol('x')
-        kUse = 2 * k
-        roots = Poly(chebyshevt(kUse, 2 * x - 1)).all_roots()
+        k_use = 2 * k
+        roots = Poly(chebyshevt(k_use, 2 * x - 1)).all_roots()
         x_m = np.array([rt.evalf(20) for rt in roots]).astype(np.float64)
         # not needed for our purpose here, we use even k always to avoid
-        wm = np.pi / kUse / 2
+        wm = np.pi / k_use / 2
 
         psi1_coeff = np.zeros((k, k))
         psi2_coeff = np.zeros((k, k))
@@ -142,55 +142,55 @@ def get_filter(base, k):
         raise Exception('Base not supported')
 
     x = Symbol('x')
-    H0 = np.zeros((k, k))
-    H1 = np.zeros((k, k))
-    G0 = np.zeros((k, k))
-    G1 = np.zeros((k, k))
-    PHI0 = np.zeros((k, k))
-    PHI1 = np.zeros((k, k))
+    h0 = np.zeros((k, k))
+    h1 = np.zeros((k, k))
+    g0 = np.zeros((k, k))
+    g1 = np.zeros((k, k))
+    phi0 = np.zeros((k, k))
+    phi1 = np.zeros((k, k))
     phi, psi1, psi2 = get_phi_psi(k, base)
     if base == 'legendre':
         roots = Poly(legendre(k, 2 * x - 1)).all_roots()
         x_m = np.array([rt.evalf(20) for rt in roots]).astype(np.float64)
-        wm = 1 / k / legendreDer(k, 2 * x_m - 1) / eval_legendre(k - 1, 2 * x_m - 1)
+        wm = 1 / k / legendre_der(k, 2 * x_m - 1) / eval_legendre(k - 1, 2 * x_m - 1)
 
         for ki in range(k):
             for kpi in range(k):
-                H0[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki](x_m / 2) * phi[kpi](x_m)).sum()
-                G0[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, x_m / 2) * phi[kpi](x_m)).sum()
-                H1[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki]((x_m + 1) / 2) * phi[kpi](x_m)).sum()
-                G1[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, (x_m + 1) / 2) * phi[kpi](x_m)).sum()
+                h0[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki](x_m / 2) * phi[kpi](x_m)).sum()
+                g0[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, x_m / 2) * phi[kpi](x_m)).sum()
+                h1[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki]((x_m + 1) / 2) * phi[kpi](x_m)).sum()
+                g1[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, (x_m + 1) / 2) * phi[kpi](x_m)).sum()
 
-        PHI0 = np.eye(k)
-        PHI1 = np.eye(k)
+        phi0 = np.eye(k)
+        phi1 = np.eye(k)
 
     elif base == 'chebyshev':
         x = Symbol('x')
-        kUse = 2 * k
-        roots = Poly(chebyshevt(kUse, 2 * x - 1)).all_roots()
+        k_use = 2 * k
+        roots = Poly(chebyshevt(k_use, 2 * x - 1)).all_roots()
         x_m = np.array([rt.evalf(20) for rt in roots]).astype(np.float64)
         # not needed for our purpose here, we use even k always to avoid
-        wm = np.pi / kUse / 2
+        wm = np.pi / k_use / 2
 
         for ki in range(k):
             for kpi in range(k):
-                H0[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki](x_m / 2) * phi[kpi](x_m)).sum()
-                G0[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, x_m / 2) * phi[kpi](x_m)).sum()
-                H1[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki]((x_m + 1) / 2) * phi[kpi](x_m)).sum()
-                G1[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, (x_m + 1) / 2) * phi[kpi](x_m)).sum()
+                h0[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki](x_m / 2) * phi[kpi](x_m)).sum()
+                g0[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, x_m / 2) * phi[kpi](x_m)).sum()
+                h1[ki, kpi] = 1 / np.sqrt(2) * (wm * phi[ki]((x_m + 1) / 2) * phi[kpi](x_m)).sum()
+                g1[ki, kpi] = 1 / np.sqrt(2) * (wm * psi(psi1, psi2, ki, (x_m + 1) / 2) * phi[kpi](x_m)).sum()
 
-                PHI0[ki, kpi] = (wm * phi[ki](2 * x_m) * phi[kpi](2 * x_m)).sum() * 2
-                PHI1[ki, kpi] = (wm * phi[ki](2 * x_m - 1) * phi[kpi](2 * x_m - 1)).sum() * 2
+                phi0[ki, kpi] = (wm * phi[ki](2 * x_m) * phi[kpi](2 * x_m)).sum() * 2
+                phi1[ki, kpi] = (wm * phi[ki](2 * x_m - 1) * phi[kpi](2 * x_m - 1)).sum() * 2
 
-        PHI0[np.abs(PHI0) < 1e-8] = 0
-        PHI1[np.abs(PHI1) < 1e-8] = 0
+        phi0[np.abs(phi0) < 1e-8] = 0
+        phi1[np.abs(phi1) < 1e-8] = 0
 
-    H0[np.abs(H0) < 1e-8] = 0
-    H1[np.abs(H1) < 1e-8] = 0
-    G0[np.abs(G0) < 1e-8] = 0
-    G1[np.abs(G1) < 1e-8] = 0
+    h0[np.abs(h0) < 1e-8] = 0
+    h1[np.abs(h1) < 1e-8] = 0
+    g0[np.abs(g0) < 1e-8] = 0
+    g1[np.abs(g1) < 1e-8] = 0
 
-    return H0, H1, G0, G1, PHI0, PHI1
+    return h0, h1, g0, g1, phi0, phi1
 
 
 class MultiWaveletTransform(nn.Module):
@@ -199,39 +199,39 @@ class MultiWaveletTransform(nn.Module):
     """
 
     def __init__(self, ich=1, k=8, alpha=16, c=128,
-                 nCZ=1, L=0, base='legendre', attention_dropout=0.1):
+                 n_cz=1, levels=0, base='legendre', attention_dropout=0.1):
         super(MultiWaveletTransform, self).__init__()
         print('base', base)
         self.k = k
         self.c = c
-        self.L = L
-        self.nCZ = nCZ
+        self.L = levels
+        self.n_cz = n_cz
         self.Lk0 = nn.Linear(ich, c * k)
         self.Lk1 = nn.Linear(c * k, ich)
         self.ich = ich
-        self.MWT_CZ = nn.ModuleList(MWT_CZ1d(k, alpha, L, c, base) for _ in range(nCZ))
+        self.mwt_cz = nn.ModuleList(MWT_CZ1d(k, alpha, levels, c, base) for _ in range(n_cz))
 
     def forward(self, queries, keys, values, attn_mask):
-        B, L, _, _ = queries.shape
-        _, source_steps, _, D = values.shape
-        if L > source_steps:
-            zeros = torch.zeros_like(queries[:, :(L - source_steps), :]).float()
+        batch_size, seq_len, _, _ = queries.shape
+        _, source_steps, _, value_dim = values.shape
+        if seq_len > source_steps:
+            zeros = torch.zeros_like(queries[:, :(seq_len - source_steps), :]).float()
             values = torch.cat([values, zeros], dim=1)
             keys = torch.cat([keys, zeros], dim=1)
         else:
-            values = values[:, :L, :, :]
-            keys = keys[:, :L, :, :]
-        values = values.view(B, L, -1)
+            values = values[:, :seq_len, :, :]
+            keys = keys[:, :seq_len, :, :]
+        values = values.view(batch_size, seq_len, -1)
 
-        V = self.Lk0(values).view(B, L, self.c, -1)
-        for i in range(self.nCZ):
-            V = self.MWT_CZ[i](V)
-            if i < self.nCZ - 1:
-                V = F.relu(V)
+        values_proj = self.Lk0(values).view(batch_size, seq_len, self.c, -1)
+        for index in range(self.n_cz):
+            values_proj = self.mwt_cz[index](values_proj)
+            if index < self.n_cz - 1:
+                values_proj = F.relu(values_proj)
 
-        V = self.Lk1(V.view(B, L, -1))
-        V = V.view(B, L, -1, D)
-        return (V.contiguous(), None)
+        values_proj = self.Lk1(values_proj.view(batch_size, seq_len, -1))
+        values_proj = values_proj.view(batch_size, seq_len, -1, value_dim)
+        return (values_proj.contiguous(), None)
 
 
 class MultiWaveletCross(nn.Module):
@@ -241,7 +241,7 @@ class MultiWaveletCross(nn.Module):
 
     def __init__(self, in_channels, out_channels, seq_len_q, seq_len_kv, modes, c=64,
                  k=8, ich=512,
-                 L=0,
+                 levels=0,
                  base='legendre',
                  mode_select_method='random',
                  initializer=None, activation='tanh',
@@ -251,17 +251,17 @@ class MultiWaveletCross(nn.Module):
 
         self.c = c
         self.k = k
-        self.L = L
-        H0, H1, G0, G1, PHI0, PHI1 = get_filter(base, k)
-        H0r = H0 @ PHI0
-        G0r = G0 @ PHI0
-        H1r = H1 @ PHI1
-        G1r = G1 @ PHI1
+        self.L = levels
+        h0, h1, g0, g1, phi0, phi1 = get_filter(base, k)
+        h0_r = h0 @ phi0
+        g0_r = g0 @ phi0
+        h1_r = h1 @ phi1
+        g1_r = g1 @ phi1
 
-        H0r[np.abs(H0r) < 1e-8] = 0
-        H1r[np.abs(H1r) < 1e-8] = 0
-        G0r[np.abs(G0r) < 1e-8] = 0
-        G1r[np.abs(G1r) < 1e-8] = 0
+        h0_r[np.abs(h0_r) < 1e-8] = 0
+        h1_r[np.abs(h1_r) < 1e-8] = 0
+        g0_r[np.abs(g0_r) < 1e-8] = 0
+        g1_r[np.abs(g1_r) < 1e-8] = 0
         self.max_item = 3
 
         self.attn1 = FourierCrossAttentionW(in_channels=in_channels, out_channels=out_channels, seq_len_q=seq_len_q,
@@ -278,14 +278,14 @@ class MultiWaveletCross(nn.Module):
                                             mode_select_method=mode_select_method)
         self.T0 = nn.Linear(k, k)
         self.register_buffer('ec_s', torch.Tensor(
-            np.concatenate((H0.T, H1.T), axis=0)))
+            np.concatenate((h0.T, h1.T), axis=0)))
         self.register_buffer('ec_d', torch.Tensor(
-            np.concatenate((G0.T, G1.T), axis=0)))
+            np.concatenate((g0.T, g1.T), axis=0)))
 
         self.register_buffer('rc_e', torch.Tensor(
-            np.concatenate((H0r, G0r), axis=0)))
+            np.concatenate((h0_r, g0_r), axis=0)))
         self.register_buffer('rc_o', torch.Tensor(
-            np.concatenate((H1r, G1r), axis=0)))
+            np.concatenate((h1_r, g1_r), axis=0)))
 
         self.Lk = nn.Linear(ich, c * k)
         self.Lq = nn.Linear(ich, c * k)
@@ -294,8 +294,8 @@ class MultiWaveletCross(nn.Module):
         self.modes1 = modes
 
     def forward(self, q, k, v, mask=None):
-        B, N, _, _ = q.shape  # (B, N, H, E)
-        _, S, _, _ = k.shape  # (B, S, H, E)
+        batch_size, query_steps, _, _ = q.shape  # (B, N, H, E)
+        _, key_steps, _, _ = k.shape  # (B, S, H, E)
 
         q = q.view(q.shape[0], q.shape[1], -1)
         k = k.view(k.shape[0], k.shape[1], -1)
@@ -307,61 +307,64 @@ class MultiWaveletCross(nn.Module):
         v = self.Lv(v)
         v = v.view(v.shape[0], v.shape[1], self.c, self.k)
 
-        if N > S:
-            zeros = torch.zeros_like(q[:, :(N - S), :]).float()
+        if query_steps > key_steps:
+            zeros = torch.zeros_like(q[:, :(query_steps - key_steps), :]).float()
             v = torch.cat([v, zeros], dim=1)
             k = torch.cat([k, zeros], dim=1)
         else:
-            v = v[:, :N, :, :]
-            k = k[:, :N, :, :]
+            v = v[:, :query_steps, :, :]
+            k = k[:, :query_steps, :, :]
 
-        ns = math.floor(np.log2(N))
-        nl = pow(2, math.ceil(np.log2(N)))
-        extra_q = q[:, 0:nl - N, :, :]
-        extra_k = k[:, 0:nl - N, :, :]
-        extra_v = v[:, 0:nl - N, :, :]
+        ns = math.floor(np.log2(query_steps))
+        nl = pow(2, math.ceil(np.log2(query_steps)))
+        extra_q = q[:, 0:nl - query_steps, :, :]
+        extra_k = k[:, 0:nl - query_steps, :, :]
+        extra_v = v[:, 0:nl - query_steps, :, :]
         q = torch.cat([q, extra_q], 1)
         k = torch.cat([k, extra_k], 1)
         v = torch.cat([v, extra_v], 1)
 
-        Ud_q = torch.jit.annotate(List[Tuple[Tensor]], [])
-        Ud_k = torch.jit.annotate(List[Tuple[Tensor]], [])
-        Ud_v = torch.jit.annotate(List[Tuple[Tensor]], [])
+        detail_query_pairs = torch.jit.annotate(List[Tuple[Tensor]], [])
+        detail_key_pairs = torch.jit.annotate(List[Tuple[Tensor]], [])
+        detail_value_pairs = torch.jit.annotate(List[Tuple[Tensor]], [])
 
-        Us_q = torch.jit.annotate(List[Tensor], [])
-        Us_k = torch.jit.annotate(List[Tensor], [])
-        Us_v = torch.jit.annotate(List[Tensor], [])
+        smooth_queries = torch.jit.annotate(List[Tensor], [])
+        smooth_keys = torch.jit.annotate(List[Tensor], [])
+        smooth_values = torch.jit.annotate(List[Tensor], [])
 
-        Ud = torch.jit.annotate(List[Tensor], [])
-        Us = torch.jit.annotate(List[Tensor], [])
+        detail_outputs = torch.jit.annotate(List[Tensor], [])
+        smooth_outputs = torch.jit.annotate(List[Tensor], [])
 
         # decompose
         for _ in range(ns - self.L):
             d, q = self.wavelet_transform(q)
-            Ud_q += [tuple([d, q])]
-            Us_q += [d]
+            detail_query_pairs += [tuple([d, q])]
+            smooth_queries += [d]
         for _ in range(ns - self.L):
             d, k = self.wavelet_transform(k)
-            Ud_k += [tuple([d, k])]
-            Us_k += [d]
+            detail_key_pairs += [tuple([d, k])]
+            smooth_keys += [d]
         for _ in range(ns - self.L):
             d, v = self.wavelet_transform(v)
-            Ud_v += [tuple([d, v])]
-            Us_v += [d]
+            detail_value_pairs += [tuple([d, v])]
+            smooth_values += [d]
         for i in range(ns - self.L):
-            dk, sk = Ud_k[i], Us_k[i]
-            dq, sq = Ud_q[i], Us_q[i]
-            dv, sv = Ud_v[i], Us_v[i]
-            Ud += [self.attn1(dq[0], dk[0], dv[0], mask)[0] + self.attn2(dq[1], dk[1], dv[1], mask)[0]]
-            Us += [self.attn3(sq, sk, sv, mask)[0]]
+            dk, sk = detail_key_pairs[i], smooth_keys[i]
+            dq, sq = detail_query_pairs[i], smooth_queries[i]
+            dv, sv = detail_value_pairs[i], smooth_values[i]
+            detail_outputs += [
+                self.attn1(dq[0], dk[0], dv[0], mask)[0]
+                + self.attn2(dq[1], dk[1], dv[1], mask)[0]
+            ]
+            smooth_outputs += [self.attn3(sq, sk, sv, mask)[0]]
         v = self.attn4(q, k, v, mask)[0]
 
         # reconstruct
         for i in range(ns - 1 - self.L, -1, -1):
-            v = v + Us[i]
-            v = torch.cat((v, Ud[i]), -1)
+            v = v + smooth_outputs[i]
+            v = torch.cat((v, detail_outputs[i]), -1)
             v = self.evenOdd(v)
-        v = self.out(v[:, :N, :, :].contiguous().view(B, N, -1))
+        v = self.out(v[:, :query_steps, :, :].contiguous().view(batch_size, query_steps, -1))
         return (v.contiguous(), None)
 
     def wavelet_transform(self, x):
@@ -373,12 +376,12 @@ class MultiWaveletCross(nn.Module):
         return d, s
 
     def evenOdd(self, x):
-        B, N, c, ich = x.shape  # (B, N, c, k)
-        assert ich == 2 * self.k
+        batch_size, num_steps, c, input_channels = x.shape  # (B, N, c, k)
+        assert input_channels == 2 * self.k
         x_e = torch.matmul(x, self.rc_e)
         x_o = torch.matmul(x, self.rc_o)
 
-        x = torch.zeros(B, N * 2, c, self.k,
+        x = torch.zeros(batch_size, num_steps * 2, c, self.k,
                         device=x.device)
         x[..., ::2, :, :] = x_e
         x[..., 1::2, :, :] = x_o
@@ -411,21 +414,35 @@ class FourierCrossAttentionW(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, q, k, v, mask):
-        B, L, E, H = q.shape
+        batch_size, seq_len, embed_dim, num_heads = q.shape
 
-        xq = q.permute(0, 3, 2, 1)  # size = [B, H, E, L]
+        xq = q.permute(0, 3, 2, 1)
         xk = k.permute(0, 3, 2, 1)
         xv = v.permute(0, 3, 2, 1)
-        self.index_q = list(range(0, min(int(L // 2), self.modes1)))
+        self.index_q = list(range(0, min(int(seq_len // 2), self.modes1)))
         self.index_k_v = list(range(0, min(int(xv.shape[3] // 2), self.modes1)))
 
         # Compute Fourier coefficients
-        xq_ft_ = torch.zeros(B, H, E, len(self.index_q), device=xq.device, dtype=torch.cfloat)
+        xq_ft_ = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            len(self.index_q),
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         xq_ft = torch.fft.rfft(xq, dim=-1)
         for i, j in enumerate(self.index_q):
             xq_ft_[:, :, :, i] = xq_ft[:, :, :, j]
 
-        xk_ft_ = torch.zeros(B, H, E, len(self.index_k_v), device=xq.device, dtype=torch.cfloat)
+        xk_ft_ = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            len(self.index_k_v),
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         xk_ft = torch.fft.rfft(xk, dim=-1)
         for i, j in enumerate(self.index_k_v):
             xk_ft_[:, :, :, i] = xk_ft[:, :, :, j]
@@ -440,7 +457,14 @@ class FourierCrossAttentionW(nn.Module):
         xqkv_ft = self.compl_mul1d("bhxy,bhey->bhex", xqk_ft, xk_ft_)
 
         xqkvw = xqkv_ft
-        out_ft = torch.zeros(B, H, E, L // 2 + 1, device=xq.device, dtype=torch.cfloat)
+        out_ft = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            seq_len // 2 + 1,
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         for i, j in enumerate(self.index_q):
             out_ft[:, :, :, j] = xqkvw[:, :, :, i]
 
@@ -448,13 +472,13 @@ class FourierCrossAttentionW(nn.Module):
         return (out, None)
 
 
-class sparseKernelFT1d(nn.Module):
+class SparseKernelFt1d(nn.Module):
     def __init__(self,
                  k, alpha, c=1,
                  nl=1,
                  initializer=None,
                  **kwargs):
-        super(sparseKernelFT1d, self).__init__()
+        super().__init__()
 
         self.modes1 = alpha
         self.scale = (1 / (c * k * c * k))
@@ -480,81 +504,81 @@ class sparseKernelFT1d(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, x):
-        B, N, c, k = x.shape  # (B, N, c, k)
+        batch_size, num_steps, c, k = x.shape  # (B, N, c, k)
 
-        x = x.view(B, N, -1)
+        x = x.view(batch_size, num_steps, -1)
         x = x.permute(0, 2, 1)
         x_fft = torch.fft.rfft(x)
         # Multiply relevant Fourier modes
-        l = min(self.modes1, N // 2 + 1)
-        out_ft = torch.zeros(B, c * k, N // 2 + 1, device=x.device, dtype=torch.cfloat)
+        l = min(self.modes1, num_steps // 2 + 1)
+        out_ft = torch.zeros(batch_size, c * k, num_steps // 2 + 1, device=x.device, dtype=torch.cfloat)
         out_ft[:, :, :l] = self.compl_mul1d("bix,iox->box", x_fft[:, :, :l],
                                             torch.complex(self.weights1, self.weights2)[:, :, :l])
-        x = torch.fft.irfft(out_ft, n=N)
-        x = x.permute(0, 2, 1).view(B, N, c, k)
+        x = torch.fft.irfft(out_ft, n=num_steps)
+        x = x.permute(0, 2, 1).view(batch_size, num_steps, c, k)
         return x
 
 
 # ##
-class MWT_CZ1d(nn.Module):
+class MwtCz1d(nn.Module):
     def __init__(self,
                  k=3, alpha=64,
-                 L=0, c=1,
+                 levels=0, c=1,
                  base='legendre',
                  initializer=None,
                  **kwargs):
-        super(MWT_CZ1d, self).__init__()
+        super().__init__()
 
         self.k = k
-        self.L = L
-        H0, H1, G0, G1, PHI0, PHI1 = get_filter(base, k)
-        H0r = H0 @ PHI0
-        G0r = G0 @ PHI0
-        H1r = H1 @ PHI1
-        G1r = G1 @ PHI1
+        self.L = levels
+        h0, h1, g0, g1, phi0, phi1 = get_filter(base, k)
+        h0_r = h0 @ phi0
+        g0_r = g0 @ phi0
+        h1_r = h1 @ phi1
+        g1_r = g1 @ phi1
 
-        H0r[np.abs(H0r) < 1e-8] = 0
-        H1r[np.abs(H1r) < 1e-8] = 0
-        G0r[np.abs(G0r) < 1e-8] = 0
-        G1r[np.abs(G1r) < 1e-8] = 0
+        h0_r[np.abs(h0_r) < 1e-8] = 0
+        h1_r[np.abs(h1_r) < 1e-8] = 0
+        g0_r[np.abs(g0_r) < 1e-8] = 0
+        g1_r[np.abs(g1_r) < 1e-8] = 0
         self.max_item = 3
 
-        self.A = sparseKernelFT1d(k, alpha, c)
-        self.B = sparseKernelFT1d(k, alpha, c)
-        self.C = sparseKernelFT1d(k, alpha, c)
+        self.A = SparseKernelFt1d(k, alpha, c)
+        self.B = SparseKernelFt1d(k, alpha, c)
+        self.C = SparseKernelFt1d(k, alpha, c)
 
         self.T0 = nn.Linear(k, k)
 
         self.register_buffer('ec_s', torch.Tensor(
-            np.concatenate((H0.T, H1.T), axis=0)))
+            np.concatenate((h0.T, h1.T), axis=0)))
         self.register_buffer('ec_d', torch.Tensor(
-            np.concatenate((G0.T, G1.T), axis=0)))
+            np.concatenate((g0.T, g1.T), axis=0)))
 
         self.register_buffer('rc_e', torch.Tensor(
-            np.concatenate((H0r, G0r), axis=0)))
+            np.concatenate((h0_r, g0_r), axis=0)))
         self.register_buffer('rc_o', torch.Tensor(
-            np.concatenate((H1r, G1r), axis=0)))
+            np.concatenate((h1_r, g1_r), axis=0)))
 
     def forward(self, x):
-        _, N, _, _ = x.shape  # (B, N, k)
-        ns = math.floor(np.log2(N))
-        nl = pow(2, math.ceil(np.log2(N)))
-        extra_x = x[:, 0:nl - N, :, :]
+        _, num_steps, _, _ = x.shape  # (B, N, k)
+        ns = math.floor(np.log2(num_steps))
+        nl = pow(2, math.ceil(np.log2(num_steps)))
+        extra_x = x[:, 0:nl - num_steps, :, :]
         x = torch.cat([x, extra_x], 1)
-        Ud = torch.jit.annotate(List[Tensor], [])
-        Us = torch.jit.annotate(List[Tensor], [])
+        update_details = torch.jit.annotate(List[Tensor], [])
+        update_smooths = torch.jit.annotate(List[Tensor], [])
         for _ in range(ns - self.L):
             d, x = self.wavelet_transform(x)
-            Ud += [self.A(d) + self.B(x)]
-            Us += [self.C(d)]
+            update_details += [self.A(d) + self.B(x)]
+            update_smooths += [self.C(d)]
         x = self.T0(x)  # coarsest scale transform
 
         #        reconstruct
         for i in range(ns - 1 - self.L, -1, -1):
-            x = x + Us[i]
-            x = torch.cat((x, Ud[i]), -1)
+            x = x + update_smooths[i]
+            x = torch.cat((x, update_details[i]), -1)
             x = self.evenOdd(x)
-        x = x[:, :N, :, :]
+        x = x[:, :num_steps, :, :]
 
         return x
 
@@ -568,13 +592,17 @@ class MWT_CZ1d(nn.Module):
 
     def evenOdd(self, x):
 
-        B, N, c, ich = x.shape  # (B, N, c, k)
-        assert ich == 2 * self.k
+        batch_size, num_steps, c, input_channels = x.shape  # (B, N, c, k)
+        assert input_channels == 2 * self.k
         x_e = torch.matmul(x, self.rc_e)
         x_o = torch.matmul(x, self.rc_o)
 
-        x = torch.zeros(B, N * 2, c, self.k,
+        x = torch.zeros(batch_size, num_steps * 2, c, self.k,
                         device=x.device)
         x[..., ::2, :, :] = x_e
         x[..., 1::2, :, :] = x_o
         return x
+
+
+sparseKernelFT1d = SparseKernelFt1d
+MWT_CZ1d = MwtCz1d

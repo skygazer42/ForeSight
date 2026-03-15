@@ -24,6 +24,21 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+@dataclass(frozen=True)
+class ResolvedDocsJsonPath:
+    path: Path
+
+    def __post_init__(self) -> None:
+        docs_dir = (_repo_root().resolve(strict=False) / "docs").resolve(strict=False)
+        resolved = self.path.resolve(strict=False)
+        if resolved.parent != docs_dir or resolved.suffix != ".json":
+            raise ValueError("resolved docs JSON path must stay inside docs/")
+        object.__setattr__(self, "path", resolved)
+
+    def __str__(self) -> str:
+        return str(self.path)
+
+
 def _ensure_src_on_path(root: Path) -> None:
     import sys
 
@@ -36,21 +51,27 @@ def _normalize_spaces(s: str) -> str:
     return re.sub(r"\s+", " ", str(s).strip())
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
+def _read_json(path: ResolvedDocsJsonPath) -> dict[str, Any]:
+    if not isinstance(path, ResolvedDocsJsonPath):
+        raise TypeError("expected resolved docs JSON path")
+    resolved = path.path
+    if not resolved.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(resolved.read_text(encoding="utf-8"))
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+def _write_json(path: ResolvedDocsJsonPath, payload: dict[str, Any]) -> None:
+    if not isinstance(path, ResolvedDocsJsonPath):
+        raise TypeError("expected resolved docs JSON path")
+    resolved = path.path
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
 
-def _resolve_output_path(output: str | Path) -> Path:
+def _resolve_output_path(output: str | Path) -> ResolvedDocsJsonPath:
     name = str(output).strip()
     candidate = Path(name)
     if (
@@ -61,7 +82,9 @@ def _resolve_output_path(output: str | Path) -> Path:
         or re.fullmatch(r"[A-Za-z0-9._-]+\.json", name) is None
     ):
         raise ValueError("output must be a JSON filename inside docs/")
-    return _repo_root().resolve(strict=False) / "docs" / candidate.name
+    return ResolvedDocsJsonPath(
+        (_repo_root().resolve(strict=False) / "docs" / candidate.name).resolve(strict=False)
+    )
 
 
 def _parse_desc(desc: str) -> tuple[str, list[str], int | None]:
@@ -582,6 +605,49 @@ def _crossref_title_similarity(
     return title_sim
 
 
+def _crossref_hits_for_query(
+    query: str,
+    *,
+    year: int | None,
+    sleep_s: float,
+) -> list[CrossrefHit]:
+    try:
+        hits = _crossref_query(query, year=year, rows=5)
+    except Exception:
+        hits = []
+
+    _sleep_between_requests(sleep_s)
+    return hits
+
+
+def _crossref_hit_score(
+    hit: CrossrefHit,
+    *,
+    expected_title: str | None,
+    author_last_names: list[str],
+    year: int | None,
+    strict_title_match: bool,
+) -> float | None:
+    title_sim = _crossref_title_similarity(
+        hit,
+        expected_title=expected_title,
+        author_last_names=author_last_names,
+        strict_title_match=strict_title_match,
+    )
+    if expected_title and title_sim is None:
+        return None
+
+    score = _score_crossref_hit(
+        hit,
+        expected_title=expected_title,
+        author_last_names=author_last_names,
+        year=year,
+    )
+    if title_sim is not None:
+        score += 4.0 * float(title_sim)
+    return score
+
+
 def _search_best_crossref_hit(
     queries: list[str],
     *,
@@ -593,31 +659,19 @@ def _search_best_crossref_hit(
 ) -> tuple[float, CrossrefHit] | None:
     best: tuple[float, CrossrefHit] | None = None
     for query in queries:
-        try:
-            hits = _crossref_query(query, year=year, rows=5)
-        except Exception:
-            hits = []
-
-        _sleep_between_requests(sleep_s)
+        hits = _crossref_hits_for_query(query, year=year, sleep_s=sleep_s)
 
         for hit in hits:
-            title_sim = _crossref_title_similarity(
-                hit,
-                expected_title=expected_title,
-                author_last_names=author_last_names,
-                strict_title_match=strict_title_match,
-            )
-            if expected_title and title_sim is None:
-                continue
-
-            score = _score_crossref_hit(
+            score = _crossref_hit_score(
                 hit,
                 expected_title=expected_title,
                 author_last_names=author_last_names,
                 year=year,
+                strict_title_match=strict_title_match,
             )
-            if title_sim is not None:
-                score += 4.0 * float(title_sim)
+            if score is None:
+                continue
+
             if best is None or score > best[0]:
                 best = (score, hit)
 

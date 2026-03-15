@@ -24,6 +24,10 @@ from scipy.stats import pearsonr #来计算变量之间的相关系数和p-value
 import warnings
 warnings.filterwarnings('ignore')
 
+ICE_CREAM_COLUMN = 'ice cream'
+ICE_CREAM_LABEL = 'Ice Cream'
+FIRST_DIFFERENCE_LABEL = 'First Difference'
+
 # %%
 def parser(s):
     return datetime.strptime(s, '%Y-%m')
@@ -37,13 +41,13 @@ ice_cream_heater_df = ice_cream_heater_df.asfreq(pd.infer_freq(ice_cream_heater_
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 heater, = plt.plot(ice_cream_heater_df['heater'], color='red')
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
 
-plt.legend(['Ice Cream', 'Heater'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL, 'Heater'], fontsize=16)
 
 # %% [markdown]
 # # Normalize
@@ -58,7 +62,7 @@ for col in ice_cream_heater_df.columns:
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 heater, = plt.plot(ice_cream_heater_df['heater'], color='red')
 
 for year in range(2004, 2021):
@@ -66,7 +70,7 @@ for year in range(2004, 2021):
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
 
-plt.legend(['Ice Cream', 'Heater'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL, 'Heater'], fontsize=16)
 
 # %% [markdown]
 # # Take First Difference to Remove Trend
@@ -76,28 +80,28 @@ ice_cream_heater_df = ice_cream_heater_df.diff().dropna()
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 heater, = plt.plot(ice_cream_heater_df['heater'], color='red')
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream', 'Heater'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL, 'Heater'], fontsize=16)
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL], fontsize=16)
 
 # %% [markdown]
 # # Remove Increasing Volatility
@@ -109,40 +113,44 @@ annual_volatility = ice_cream_heater_df.groupby(ice_cream_heater_df.index.year).
 print(annual_volatility)
 
 # %%
-ice_cream_heater_df['ice_cream_annual_vol'] = ice_cream_heater_df.index.map(lambda d: annual_volatility.loc[d.year, 'ice cream'])
+ice_cream_heater_df['ice_cream_annual_vol'] = ice_cream_heater_df.index.map(
+    lambda d: annual_volatility.loc[d.year, ICE_CREAM_COLUMN]
+)
 ice_cream_heater_df['heater_annual_vol'] = ice_cream_heater_df.index.map(lambda d: annual_volatility.loc[d.year, 'heater'])
 
 # %%
 print(ice_cream_heater_df)
 
 # %%
-ice_cream_heater_df['ice cream'] = ice_cream_heater_df['ice cream'] / ice_cream_heater_df['ice_cream_annual_vol']
+ice_cream_heater_df[ICE_CREAM_COLUMN] = (
+    ice_cream_heater_df[ICE_CREAM_COLUMN] / ice_cream_heater_df['ice_cream_annual_vol']
+)
 ice_cream_heater_df['heater'] = ice_cream_heater_df['heater'] / ice_cream_heater_df['heater_annual_vol']
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL], fontsize=16)
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 heater, = plt.plot(ice_cream_heater_df['heater'], color='red')
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream', 'Heater'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL, 'Heater'], fontsize=16)
 
 # %% [markdown]
 # # Remove Seasonality
@@ -154,14 +162,18 @@ month_avgs = ice_cream_heater_df.groupby(ice_cream_heater_df.index.month).mean()
 print(month_avgs)
 
 # %%
-ice_cream_heater_df['ice_cream_month_avg'] = ice_cream_heater_df.index.map(lambda d: month_avgs.loc[d.month, 'ice cream'])
+ice_cream_heater_df['ice_cream_month_avg'] = ice_cream_heater_df.index.map(
+    lambda d: month_avgs.loc[d.month, ICE_CREAM_COLUMN]
+)
 ice_cream_heater_df['heater_month_avg'] = ice_cream_heater_df.index.map(lambda d: month_avgs.loc[d.month, 'heater'])
 
 # %%
 print(ice_cream_heater_df)
 
 # %%
-ice_cream_heater_df['ice cream'] = ice_cream_heater_df['ice cream'] - ice_cream_heater_df['ice_cream_month_avg']
+ice_cream_heater_df[ICE_CREAM_COLUMN] = (
+    ice_cream_heater_df[ICE_CREAM_COLUMN] - ice_cream_heater_df['ice_cream_month_avg']
+)
 ice_cream_heater_df['heater'] = ice_cream_heater_df['heater'] - ice_cream_heater_df['heater_month_avg']
 
 # %%
@@ -169,28 +181,28 @@ print(ice_cream_heater_df)
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL], fontsize=16)
 
 # %%
 plt.figure(figsize=(12,6))
-ice_cream, = plt.plot(ice_cream_heater_df['ice cream'])
+ice_cream, = plt.plot(ice_cream_heater_df[ICE_CREAM_COLUMN])
 heater, = plt.plot(ice_cream_heater_df['heater'], color='red')
 
 for year in range(2004, 2021):
     plt.axvline(datetime(year,1,1), linestyle='--', color='k', alpha=0.5)
     
 plt.axhline(0, linestyle='--', color='k', alpha=0.3)
-plt.ylabel('First Difference', fontsize=18)
+plt.ylabel(FIRST_DIFFERENCE_LABEL, fontsize=18)
 
-plt.legend(['Ice Cream', 'Heater'], fontsize=16)
+plt.legend([ICE_CREAM_LABEL, 'Heater'], fontsize=16)
 
 # %% [markdown]
 # # PACF - Heater
@@ -208,7 +220,7 @@ plt.show()
 # %%
 for lag in range(1, 14):
     heater_series = ice_cream_heater_df['heater'].iloc[lag:]
-    lagged_ice_cream_series = ice_cream_heater_df['ice cream'].iloc[:-lag]
+    lagged_ice_cream_series = ice_cream_heater_df[ICE_CREAM_COLUMN].iloc[:-lag]
     print('Lag: %s'%lag)
     print(pearsonr(heater_series, lagged_ice_cream_series))
     print('------')
@@ -217,7 +229,7 @@ for lag in range(1, 14):
 # # Fit a VAR Model
 
 # %%
-ice_cream_heater_df = ice_cream_heater_df[['ice cream', 'heater']]
+ice_cream_heater_df = ice_cream_heater_df[[ICE_CREAM_COLUMN, 'heater']]
 
 # %%
 model = VAR(ice_cream_heater_df)

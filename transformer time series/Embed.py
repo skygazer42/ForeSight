@@ -88,14 +88,14 @@ class TemporalEmbedding(nn.Module):
         day_size = 32 #表示月中的天数维度的取值范围，这里是32，表示一个月中的天数可能的取值为1, 2, ..., 31
         month_size = 13 #表示月份维度的取值范围，这里是13，表示月份可能的取值为1, 2, ..., 12
 
-        Embed = FixedEmbedding if embed_type == 'fixed' else nn.Embedding
+        embedding_cls = FixedEmbedding if embed_type == 'fixed' else nn.Embedding
         #freq 表示时间序列的频率
         if freq == 't':
-            self.minute_embed = Embed(minute_size, d_model)
-        self.hour_embed = Embed(hour_size, d_model) #24 16
-        self.weekday_embed = Embed(weekday_size, d_model)
-        self.day_embed = Embed(day_size, d_model)
-        self.month_embed = Embed(month_size, d_model)
+            self.minute_embed = embedding_cls(minute_size, d_model)
+        self.hour_embed = embedding_cls(hour_size, d_model) #24 16
+        self.weekday_embed = embedding_cls(weekday_size, d_model)
+        self.day_embed = embedding_cls(day_size, d_model)
+        self.month_embed = embedding_cls(month_size, d_model)
 
     def forward(self, x):
 
@@ -145,9 +145,9 @@ class DataEmbedding(nn.Module):
         return self.dropout(x)
 
 #DataEmbedding_wo_pos 表示不使用位置编码
-class DataEmbedding_wo_pos(nn.Module):
+class DataEmbeddingWoPos(nn.Module):
     def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
-        super(DataEmbedding_wo_pos, self).__init__()
+        super().__init__()
 
         self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
         self.position_embedding = PositionalEmbedding(d_model=d_model)
@@ -162,6 +162,9 @@ class DataEmbedding_wo_pos(nn.Module):
         else:
             x = self.value_embedding(x) + self.temporal_embedding(x_mark)
         return self.dropout(x)
+
+
+DataEmbedding_wo_pos = DataEmbeddingWoPos
 
 
 class PatchEmbedding(nn.Module):

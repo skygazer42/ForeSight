@@ -4,7 +4,7 @@ from models import Autoformer, Transformer, TimesNet, Nonstationary_Transformer,
     Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer
 
 
-class Exp_Basic(object):
+class ExpBasic(object):
     def __init__(self, args):
         self.args = args
         self.model_dict = {
@@ -28,7 +28,6 @@ class Exp_Basic(object):
 #_build_model 用于构建模型
     def _build_model(self):
         raise NotImplementedError
-        return None
 
     def _acquire_device(self):
         if self.args.use_gpu:
@@ -42,13 +41,20 @@ class Exp_Basic(object):
         return device
 #_get_data 用于获取数据
     def _get_data(self):
+        # Subclasses provide task-specific dataset loading.
         pass
 
     def vali(self):
+        # Subclasses define their own validation loop.
         pass
 
     def train(self):
+        # Subclasses define their own training loop.
         pass
 
     def test(self):
+        # Subclasses define their own test/inference loop.
         pass
+
+
+Exp_Basic = ExpBasic

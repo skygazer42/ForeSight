@@ -76,6 +76,148 @@ def list_rnnzoo_specs() -> list[RNNZooModelSpec]:
     return out
 
 
+def _validate_rnnzoo_direct_config(
+    *,
+    horizon: int,
+    lags: int,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float,
+    proj_size: int,
+    attn_hidden: int,
+    base: str,
+    variant: RNNZooVariant,
+) -> tuple[int, int, int, int, float, int, int, str, RNNZooVariant]:
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+
+    lag_count = int(lags)
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    hid = int(hidden_size)
+    if hid <= 0:
+        raise ValueError("hidden_size must be >= 1")
+
+    layers = int(num_layers)
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    proj = int(proj_size)
+    if proj <= 0:
+        raise ValueError("proj_size must be >= 1")
+
+    attn_hid = int(attn_hidden)
+    if attn_hid <= 0:
+        raise ValueError("attn_hidden must be >= 1")
+
+    base_s = str(base).strip().lower()
+    variant_s: RNNZooVariant = str(variant).strip().lower()  # type: ignore[assignment]
+    if base_s not in _BASE_DESCRIPTIONS:
+        raise ValueError(f"Unknown rnnzoo base: {base_s!r}")
+    if variant_s not in {"direct", "bidir", "ln", "attn", "proj"}:
+        raise ValueError("variant must be one of: direct, bidir, ln, attn, proj")
+
+    return h, lag_count, hid, layers, drop, proj, attn_hid, base_s, variant_s
+
+
+def _normalize_clock_periods(clock_periods: Any) -> tuple[int, ...]:
+    if isinstance(clock_periods, str):
+        parts = [part.strip() for part in clock_periods.split(",") if part.strip()]
+        return tuple(int(part) for part in parts)
+    if isinstance(clock_periods, list | tuple):
+        return tuple(int(period) for period in clock_periods)
+    return (int(clock_periods),)
+
+
+def _build_rnnzoo_train_config(
+    *,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+) -> TorchTrainConfig:
+    return TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+
+def _prepare_rnnzoo_payload(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    normalize: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    x = _as_1d_float_array(train)
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=int(lags), horizon=int(horizon))
+    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    return x_work, x_seq, Y, mean, std
+
+
+def _predict_rnnzoo_direct_model(
+    torch: Any,
+    model: Any,
+    history: np.ndarray,
+    *,
+    lag_count: int,
+    device: str,
+) -> np.ndarray:
+    feat = history[-int(lag_count) :].astype(float, copy=False).reshape(1, int(lag_count), 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        return model(feat_t).detach().cpu().numpy().reshape(-1)
+
+
+def _maybe_denormalize_rnnzoo_forecast(
+    yhat_t: np.ndarray,
+    *,
+    normalize: bool,
+    mean: float,
+    std: float,
+) -> np.ndarray:
+    yhat = np.asarray(yhat_t, dtype=float).astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
 def torch_rnnzoo_direct_forecast(
     train: Any,
     horizon: int,
@@ -129,50 +271,25 @@ def torch_rnnzoo_direct_forecast(
     nn = torch.nn
     F = torch.nn.functional
 
-    x = _as_1d_float_array(train)
-    h = int(horizon)
-    if h <= 0:
-        raise ValueError("horizon must be >= 1")
-
-    lag_count = int(lags)
-    if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
-
-    hid = int(hidden_size)
-    if hid <= 0:
-        raise ValueError("hidden_size must be >= 1")
-
-    layers = int(num_layers)
-    if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
-
-    drop = float(dropout)
-    if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
-
-    proj = int(proj_size)
-    if proj <= 0:
-        raise ValueError("proj_size must be >= 1")
-
-    attn_hid = int(attn_hidden)
-    if attn_hid <= 0:
-        raise ValueError("attn_hidden must be >= 1")
-
-    base_s = str(base).strip().lower()
-    variant_s: RNNZooVariant = str(variant).strip().lower()  # type: ignore[assignment]
-    if base_s not in _BASE_DESCRIPTIONS:
-        raise ValueError(f"Unknown rnnzoo base: {base_s!r}")
-    if variant_s not in {"direct", "bidir", "ln", "attn", "proj"}:
-        raise ValueError("variant must be one of: direct, bidir, ln, attn, proj")
-
-    x_work = x
-    mean = 0.0
-    std = 1.0
-    if bool(normalize):
-        x_work, mean, std = _normalize_series(x_work)
-
-    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    x_seq = X.reshape(X.shape[0], X.shape[1], 1)
+    h, lag_count, hid, layers, drop, proj, attn_hid, base_s, variant_s = (
+        _validate_rnnzoo_direct_config(
+            horizon=horizon,
+            lags=lags,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout,
+            proj_size=proj_size,
+            attn_hidden=attn_hidden,
+            base=base,
+            variant=variant,
+        )
+    )
+    x_work, x_seq, Y, mean, std = _prepare_rnnzoo_payload(
+        train,
+        h,
+        lags=lag_count,
+        normalize=bool(normalize),
+    )
 
     def _ensure_device(xb: Any) -> Any:
         dev = torch.device(str(device))
@@ -723,53 +840,34 @@ def torch_rnnzoo_direct_forecast(
             return torch.cat(outs, dim=1)
 
     def _make_base_encoder() -> _SeqEncoder:
-        if base_s == "elman":
-            return _ElmanEncoder()
-        if base_s == "lstm":
-            return _LSTMEncoder()
-        if base_s == "gru":
-            return _GRUEncoder()
-        if base_s == "peephole-lstm":
-            return _PeepholeLSTMEncoder()
-        if base_s == "cifg-lstm":
-            return _CIFGLSTMEncoder()
-        if base_s == "janet":
-            return _JANETEncoder()
-        if base_s == "indrnn":
-            return _IndRNNEncoder()
-        if base_s == "minimalrnn":
-            return _MinimalRNNEncoder()
-        if base_s == "mgu":
-            return _MGUEncoder()
-        if base_s == "fastrnn":
-            return _FastRNNEncoder()
-        if base_s == "fastgrnn":
-            return _FastGRNNEncoder()
-        if base_s == "mut1":
-            return _MUT1Encoder()
-        if base_s == "mut2":
-            return _MUT2Encoder()
-        if base_s == "mut3":
-            return _MUT3Encoder()
-        if base_s == "ran":
-            return _RANEncoder()
-        if base_s == "scrn":
-            return _SCRNEncoder()
+        simple_builders: dict[str, Any] = {
+            "elman": _ElmanEncoder,
+            "lstm": _LSTMEncoder,
+            "gru": _GRUEncoder,
+            "peephole-lstm": _PeepholeLSTMEncoder,
+            "cifg-lstm": _CIFGLSTMEncoder,
+            "janet": _JANETEncoder,
+            "indrnn": _IndRNNEncoder,
+            "minimalrnn": _MinimalRNNEncoder,
+            "mgu": _MGUEncoder,
+            "fastrnn": _FastRNNEncoder,
+            "fastgrnn": _FastGRNNEncoder,
+            "mut1": _MUT1Encoder,
+            "mut2": _MUT2Encoder,
+            "mut3": _MUT3Encoder,
+            "ran": _RANEncoder,
+            "scrn": _SCRNEncoder,
+            "phased-lstm": _PhasedLSTMEncoder,
+        }
         if base_s == "rhn":
             return _RHNEncoder(depth=int(rhn_depth))
         if base_s == "clockwork":
-            if isinstance(clock_periods, str):
-                parts = [p.strip() for p in clock_periods.split(",") if p.strip()]
-                periods = tuple(int(p) for p in parts)
-            elif isinstance(clock_periods, list | tuple):
-                periods = tuple(int(p) for p in clock_periods)
-            else:
-                periods = (int(clock_periods),)
-            return _ClockworkEncoder(periods=periods)
+            return _ClockworkEncoder(periods=_normalize_clock_periods(clock_periods))
         if base_s == "qrnn":
             return _QRNNEncoder(kernel_size=int(qrnn_kernel_size))
-        if base_s == "phased-lstm":
-            return _PhasedLSTMEncoder()
+        builder = simple_builders.get(base_s)
+        if builder is not None:
+            return builder()
         raise ValueError(f"Unknown rnnzoo base: {base_s!r}")
 
     class _BidirectionalWrapper(_SeqEncoder):
@@ -836,31 +934,35 @@ def torch_rnnzoo_direct_forecast(
 
     model = _RNNZooNet()
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        restore_best=bool(restore_best),
+    cfg = _build_rnnzoo_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        restore_best=restore_best,
     )
     model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
-    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
-
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std + mean
-    return np.asarray(yhat, dtype=float)
+    yhat_t = _predict_rnnzoo_direct_model(
+        torch,
+        model,
+        x_work,
+        lag_count=lag_count,
+        device=str(device),
+    )
+    return _maybe_denormalize_rnnzoo_forecast(
+        yhat_t,
+        normalize=bool(normalize),
+        mean=mean,
+        std=std,
+    )

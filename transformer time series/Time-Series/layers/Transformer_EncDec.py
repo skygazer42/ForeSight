@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-#卷积神经网络的一层，用于处理一维信号。它包括一个一维卷积层（Conv1d），一个批量归一化层（BatchNorm1d），
-# 一个激活函数（ELU），和一个一维最大池化层（MaxPool1d）。
+
+
 class ConvLayer(nn.Module):
     def __init__(self, c_in):
         super(ConvLayer, self).__init__()

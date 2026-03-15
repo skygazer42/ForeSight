@@ -56,12 +56,19 @@ class FourierBlock(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, q, k, v, mask):
-        B, L, H, E = q.shape
+        batch_size, seq_len, num_heads, embed_dim = q.shape
         x = q.permute(0, 2, 3, 1)
         # Compute Fourier coefficients
         x_ft = torch.fft.rfft(x, dim=-1)
         # Perform Fourier neural operations
-        out_ft = torch.zeros(B, H, E, L // 2 + 1, device=x.device, dtype=torch.cfloat)
+        out_ft = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            seq_len // 2 + 1,
+            device=x.device,
+            dtype=torch.cfloat,
+        )
         for wi, i in enumerate(self.index):
             if i >= x_ft.shape[3] or wi >= out_ft.shape[3]:
                 continue
@@ -114,17 +121,31 @@ class FourierCrossAttention(nn.Module):
             return torch.einsum(order, x.real, weights.real)
 
     def forward(self, q, k, v, mask):
-        B, L, H, E = q.shape
-        xq = q.permute(0, 2, 3, 1)  # size = [B, H, E, L]
+        batch_size, seq_len, num_heads, embed_dim = q.shape
+        xq = q.permute(0, 2, 3, 1)
         xk = k.permute(0, 2, 3, 1)
         # Compute Fourier coefficients
-        xq_ft_ = torch.zeros(B, H, E, len(self.index_q), device=xq.device, dtype=torch.cfloat)
+        xq_ft_ = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            len(self.index_q),
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         xq_ft = torch.fft.rfft(xq, dim=-1)
         for i, j in enumerate(self.index_q):
             if j >= xq_ft.shape[3]:
                 continue
             xq_ft_[:, :, :, i] = xq_ft[:, :, :, j]
-        xk_ft_ = torch.zeros(B, H, E, len(self.index_kv), device=xq.device, dtype=torch.cfloat)
+        xk_ft_ = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            len(self.index_kv),
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         xk_ft = torch.fft.rfft(xk, dim=-1)
         for i, j in enumerate(self.index_kv):
             if j >= xk_ft.shape[3]:
@@ -142,7 +163,14 @@ class FourierCrossAttention(nn.Module):
             raise Exception('{} actiation function is not implemented'.format(self.activation))
         xqkv_ft = self.compl_mul1d("bhxy,bhey->bhex", xqk_ft, xk_ft_)
         xqkvw = self.compl_mul1d("bhex,heox->bhox", xqkv_ft, torch.complex(self.weights1, self.weights2))
-        out_ft = torch.zeros(B, H, E, L // 2 + 1, device=xq.device, dtype=torch.cfloat)
+        out_ft = torch.zeros(
+            batch_size,
+            num_heads,
+            embed_dim,
+            seq_len // 2 + 1,
+            device=xq.device,
+            dtype=torch.cfloat,
+        )
         for i, j in enumerate(self.index_q):
             if i >= xqkvw.shape[3] or j >= out_ft.shape[3]:
                 continue

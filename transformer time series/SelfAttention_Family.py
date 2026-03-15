@@ -35,8 +35,8 @@ class DSAttention(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L, _, E = queries.shape  # 获取输入张量的形状
-        scale = self.scale or 1. / sqrt(E)  # 计算缩放因子
+        batch_size, query_length, _, embed_dim = queries.shape  # 获取输入张量的形状
+        scale = self.scale or 1. / sqrt(embed_dim)  # 计算缩放因子
 #假设tau的shape为(batch_size,)，则经过如下操作后，tau的shape会变成(batch_size, 1, 1)，
         # 以便与queries和keys的shape进行broadcasting后进行矩阵乘法。
         tau = 1.0 if tau is None else tau.unsqueeze(
@@ -48,18 +48,18 @@ class DSAttention(nn.Module):
         scores = torch.einsum("blhe,bshe->bhls", queries, keys) * tau + delta  # 矩阵乘法，加法，求得 scores
         if self.mask_flag:
             if attn_mask is None:
-                attn_mask = TriangularCausalMask(B, L, device=queries.device) # 如果有掩码则应用它 生成mask矩阵
+                attn_mask = TriangularCausalMask(batch_size, query_length, device=queries.device) # 如果有掩码则应用它 生成mask矩阵
             scores.masked_fill_(attn_mask.mask, -np.inf)
 
-        A = self.dropout(torch.softmax(scale * scores, dim=-1)) # 应用缩放因子并进行 softmax，随后进行 dropout
-        V = torch.einsum("bhls,bshd->blhd", A, values)  # 矩阵乘法，得到输出特征
+        attn_weights = self.dropout(torch.softmax(scale * scores, dim=-1)) # 应用缩放因子并进行 softmax，随后进行 dropout
+        value_output = torch.einsum("bhls,bshd->blhd", attn_weights, values)  # 矩阵乘法，得到输出特征
         # 其中 V.contiguous()表示对输出特征进行内存连续化，
         # A表示计算得到的注意力矩阵。如果不需要输出
         # attention，则只返回一个元组(V.contiguous(), None)，其中 None表示没有计算注意力矩阵。
         if self.output_attention:
-            return (V.contiguous(), A) # 如果需要输出 attention，将 attention 返回
+            return (value_output.contiguous(), attn_weights) # 如果需要输出 attention，将 attention 返回
         else:
-            return (V.contiguous(), None) # 只返回输出特征
+            return (value_output.contiguous(), None) # 只返回输出特征
 
 #Vanila attention block
 class FullAttention(nn.Module):
@@ -71,25 +71,25 @@ class FullAttention(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L, _, E = queries.shape
-        
-        scale = self.scale or 1. / sqrt(E)
+        batch_size, query_length, _, embed_dim = queries.shape
+
+        scale = self.scale or 1. / sqrt(embed_dim)
 
         scores = torch.einsum("blhe,bshe->bhls", queries, keys)
 
         if self.mask_flag:
             if attn_mask is None:
-                attn_mask = TriangularCausalMask(B, L, device=queries.device)
+                attn_mask = TriangularCausalMask(batch_size, query_length, device=queries.device)
 
             scores.masked_fill_(attn_mask.mask, -np.inf)
 
-        A = self.dropout(torch.softmax(scale * scores, dim=-1))
-        V = torch.einsum("bhls,bshd->blhd", A, values)
+        attn_weights = self.dropout(torch.softmax(scale * scores, dim=-1))
+        value_output = torch.einsum("bhls,bshd->blhd", attn_weights, values)
 
         if self.output_attention:
-            return (V.contiguous(), A)
+            return (value_output.contiguous(), attn_weights)
         else:
-            return (V.contiguous(), None)
+            return (value_output.contiguous(), None)
 
 #概率注意力机制 topK Q
 class ProbAttention(nn.Module):
@@ -101,101 +101,101 @@ class ProbAttention(nn.Module):
         self.output_attention = output_attention
         self.dropout = nn.Dropout(attention_dropout)
 
-    def _prob_QK(self, Q, K, sample_k, n_top):  # n_top: c*ln(L_q)
+    def _prob_QK(self, query_states, key_states, sample_k, n_top):  # n_top: c*ln(L_q)
         # Q [B, H, L, D]
-        B, H, L_K, E = K.shape
-        _, _, L_Q, _ = Q.shape
+        batch_size, num_heads, key_length, embed_dim = key_states.shape
+        _, _, query_length, _ = query_states.shape
 
         # calculate the sampled Q_K
         #(B, H, L_K, E) 的 K 张量在倒数第三个维度上添加一个新的维度，变为 (B, H, 1, L_K, E)
         #然后用 expand() 方法将其复制扩展为 (B, H, L_Q, L_K, E)
-        K_expand = K.unsqueeze(-3).expand(B, H, L_Q, L_K, E)
+        key_expand = key_states.unsqueeze(-3).expand(batch_size, num_heads, query_length, key_length, embed_dim)
         # real U = U_part(factor*ln(L_k))*L_q
-        index_sample = torch.randint(L_K, (L_Q, sample_k))
+        index_sample = torch.randint(key_length, (query_length, sample_k))
 #从K中抽取一些列作为样本，以构成一个大小为(L_Q, sample_k, E)的张量K_sample。具体来说，torch.arange(L_Q).unsqueeze(1）
         #(B, H, L_Q, sample_k, E)
-        K_sample = K_expand[:, :, torch.arange(L_Q).unsqueeze(1), index_sample, :]
+        key_sample = key_expand[:, :, torch.arange(query_length).unsqueeze(1), index_sample, :]
         #(B, H, L_Q, L_Q)
-        Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze()
+        query_key_sample = torch.matmul(query_states.unsqueeze(-2), key_sample.transpose(-2, -1)).squeeze()
         #表示在 K_sample 中每个 query 对应的 top-k 的 attention scores 的最大值，
         # 即 Q 和 K_sample 中每个 query 和 top-k keys 的 attention score 的最大值。
-        M = Q_K_sample.max(-1)[0] - torch.div(Q_K_sample.sum(-1), L_K)
+        m = query_key_sample.max(-1)[0] - torch.div(query_key_sample.sum(-1), key_length)
 #是取M矩阵在最后一个维度上的前n_top个最大值，返回的是这些最大值在最后一个维度上的索引，即表示最相关的top-k个键值对的位置。
-        M_top = M.topk(n_top, sorted=False)[1]
+        m_top = m.topk(n_top, sorted=False)[1]
 
         # use the reduced Q to calculate Q_K
-        Q_reduce = Q[torch.arange(B)[:, None, None],
-                   torch.arange(H)[None, :, None],
-                   M_top, :]  # factor*ln(L_q)
-        Q_K = torch.matmul(Q_reduce, K.transpose(-2, -1))  # factor*ln(L_q)*L_k
+        query_reduce = query_states[torch.arange(batch_size)[:, None, None],
+                                    torch.arange(num_heads)[None, :, None],
+                                    m_top, :]  # factor*ln(L_q)
+        query_key = torch.matmul(query_reduce, key_states.transpose(-2, -1))  # factor*ln(L_q)*L_k
 
-        return Q_K, M_top
+        return query_key, m_top
 
-    def _get_initial_context(self, V, L_Q):
-        B, H, L_V, _ = V.shape
+    def _get_initial_context(self, value_states, query_length):
+        batch_size, num_heads, value_length, _ = value_states.shape
         if not self.mask_flag:
-            V_sum = V.mean(dim=-2)
-            contex = V_sum.unsqueeze(-2).expand(B, H,
-                                                L_Q, V_sum.shape[-1]).clone()
+            value_sum = value_states.mean(dim=-2)
+            contex = value_sum.unsqueeze(-2).expand(batch_size, num_heads,
+                                                    query_length, value_sum.shape[-1]).clone()
         else:  # use mask
             # requires that L_Q == L_V, i.e. for self-attention only
-            assert (L_Q == L_V)
-            contex = V.cumsum(dim=-2)
+            assert (query_length == value_length)
+            contex = value_states.cumsum(dim=-2)
         return contex
 
-    def _update_context(self, context_in, V, scores, index, L_Q, attn_mask):
-        B, H, L_V, _ = V.shape
+    def _update_context(self, context_in, value_states, scores, index, query_length, attn_mask):
+        batch_size, num_heads, value_length, _ = value_states.shape
 
         if self.mask_flag:
-            attn_mask = ProbMask(B, H, L_Q, index, scores, device=V.device)
-            scores.masked_fill_(attn_mask.mask, -np.inf)
+            prob_mask = ProbMask(batch_size, num_heads, query_length, index, scores, device=value_states.device)
+            scores.masked_fill_(prob_mask.mask, -np.inf)
 
         attn = torch.softmax(scores, dim=-1)  # nn.Softmax(dim=-1)(scores)
 
-        context_in[torch.arange(B)[:, None, None],
-        torch.arange(H)[None, :, None],
-        index, :] = torch.matmul(attn, V).type_as(context_in)
+        context_in[torch.arange(batch_size)[:, None, None],
+        torch.arange(num_heads)[None, :, None],
+        index, :] = torch.matmul(attn, value_states).type_as(context_in)
         if self.output_attention:
-            attns = (torch.ones([B, H, L_V, L_V]) /
-                     L_V).type_as(attn).to(attn.device)
-            attns[torch.arange(B)[:, None, None], torch.arange(H)[
+            attns = (torch.ones([batch_size, num_heads, value_length, value_length]) /
+                     value_length).type_as(attn).to(attn.device)
+            attns[torch.arange(batch_size)[:, None, None], torch.arange(num_heads)[
                                                   None, :, None], index, :] = attn
             return (context_in, attns)
         else:
             return (context_in, None)
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        _, L_Q, _, D = queries.shape
-        _, L_K, _, _ = keys.shape
+        _, query_length, _, value_dim = queries.shape
+        _, key_length, _, _ = keys.shape
 
-        queries = queries.transpose(2, 1)
-        keys = keys.transpose(2, 1)
-        values = values.transpose(2, 1)
+        query_states = queries.transpose(2, 1)
+        key_states = keys.transpose(2, 1)
+        value_states = values.transpose(2, 1)
 
-        U_part = self.factor * \
-                 np.ceil(np.log(L_K)).astype('int').item()  # c*ln(L_k)
+        u_part = self.factor * \
+                 np.ceil(np.log(key_length)).astype('int').item()  # c*ln(L_k)
 #u 是用于控制 Q 的行数的参数c 是一个可调参数，通常取值为 $1/\sqrt{d_k}$，$L_q$ 是 Q 的序列长度
 #它的作用是控制 Q 的行数，使得在多头注意力中，每个头得到的 Q 矩阵的行数相同。
         u = self.factor * \
-            np.ceil(np.log(L_Q)).astype('int').item()  # c*ln(L_q)
+            np.ceil(np.log(query_length)).astype('int').item()  # c*ln(L_q)
 #对 U_part 和 u 进行了一个限制，确保它们不超过 L_K 和 L_Q。
-        U_part = U_part if U_part < L_K else L_K
-        u = u if u < L_Q else L_Q
+        u_part = u_part if u_part < key_length else key_length
+        u = u if u < query_length else query_length
         #前 n_top 个最大的注意力得分和
         # sample_k控制对于每个 query，只考虑前 sample_k 个 key，从而加速 attention 的计算。
         # 而 n_top 控制输出最大的前几个 attention score，只有这些 score 才会被保留下来
-        scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u)
+        scores_top, index = self._prob_QK(query_states, key_states, sample_k=u_part, n_top=u)
 
         # add scale factor
-        scale = self.scale or 1. / sqrt(D)
+        scale = self.scale or 1. / sqrt(value_dim)
         if scale is not None:
             scores_top = scores_top * scale
         # get the context
 #取topk操作虽然可以减少计算量，但是也可能会损失一些信息，因此需要引入上下文信息来弥补这种损失。
-        context = self._get_initial_context(values, L_Q)
+        context = self._get_initial_context(value_states, query_length)
         # update the context with selected top_k queries
         context, attn = self._update_context(
-            context, values, scores_top, index, L_Q, attn_mask)
+            context, value_states, scores_top, index, query_length, attn_mask)
 
         return context.contiguous(), attn
 
@@ -216,13 +216,13 @@ class AttentionLayer(nn.Module):
         self.n_heads = n_heads
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
-        B, L, _ = queries.shape
-        _, S, _ = keys.shape
-        H = self.n_heads
+        batch_size, query_length, _ = queries.shape
+        _, source_length, _ = keys.shape
+        num_heads = self.n_heads
 
-        queries = self.query_projection(queries).view(B, L, H, -1)
-        keys = self.key_projection(keys).view(B, S, H, -1)
-        values = self.value_projection(values).view(B, S, H, -1)
+        queries = self.query_projection(queries).view(batch_size, query_length, num_heads, -1)
+        keys = self.key_projection(keys).view(batch_size, source_length, num_heads, -1)
+        values = self.value_projection(values).view(batch_size, source_length, num_heads, -1)
 
         out, attn = self.inner_attention(
             queries,
@@ -232,7 +232,7 @@ class AttentionLayer(nn.Module):
             tau=tau,
             delta=delta
         )
-        out = out.view(B, L, -1)
+        out = out.view(batch_size, query_length, -1)
 
         return self.out_projection(out), attn
 

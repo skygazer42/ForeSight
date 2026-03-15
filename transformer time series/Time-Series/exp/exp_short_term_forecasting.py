@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from data_provider.m4 import M4Meta
-from exp.exp_basic import Exp_Basic
+from exp.exp_basic import ExpBasic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.losses import mape_loss, mase_loss, smape_loss
 from utils.m4_summary import M4Summary
@@ -16,9 +16,9 @@ import pandas
 warnings.filterwarnings('ignore')
 
 
-class Exp_Short_Term_Forecast(Exp_Basic):
+class ExpShortTermForecast(ExpBasic):
     def __init__(self, args):
-        super(Exp_Short_Term_Forecast, self).__init__(args)
+        super().__init__(args)
 
     def _build_model(self):
         if self.args.data == 'm4':
@@ -32,7 +32,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag):
+    def _get_data(self, flag='train'):
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
 
@@ -50,7 +50,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
         elif loss_name == 'SMAPE':
             return smape_loss()
 
-    def train(self, setting):
+    def train(self, setting='default'):
         _, train_loader = self._get_data(flag='train')
         _, vali_loader = self._get_data(flag='val')
 
@@ -124,7 +124,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
         return self.model
 
-    def vali(self, train_loader, vali_loader, criterion):
+    def vali(self, train_loader=None, vali_loader=None, criterion=None):
         x, _ = train_loader.dataset.last_insample_window()
         y = vali_loader.dataset.timeseries
         x = torch.tensor(x, dtype=torch.float32).to(self.device)
@@ -133,13 +133,13 @@ class Exp_Short_Term_Forecast(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             # decoder input
-            B, _, C = x.shape
-            dec_inp = torch.zeros((B, self.args.pred_len, C)).float().to(self.device)
+            batch_size, _, num_channels = x.shape
+            dec_inp = torch.zeros((batch_size, self.args.pred_len, num_channels)).float().to(self.device)
             dec_inp = torch.cat([x[:, -self.args.label_len:, :], dec_inp], dim=1).float()
             # encoder - decoder
-            outputs = torch.zeros((B, self.args.pred_len, C)).float()  # .to(self.device)
-            id_list = np.arange(0, B, 500)  # validation set size
-            id_list = np.append(id_list, B)
+            outputs = torch.zeros((batch_size, self.args.pred_len, num_channels)).float()  # .to(self.device)
+            id_list = np.arange(0, batch_size, 500)  # validation set size
+            id_list = np.append(id_list, batch_size)
             for i in range(len(id_list) - 1):
                 outputs[id_list[i]:id_list[i + 1], :, :] = self.model(x[id_list[i]:id_list[i + 1]], None,
                                                                       dec_inp[id_list[i]:id_list[i + 1]],
@@ -155,7 +155,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
         self.model.train()
         return loss
 
-    def test(self, setting, test=0):
+    def test(self, setting='default', test=0):
         _, train_loader = self._get_data(flag='train')
         _, test_loader = self._get_data(flag='test')
         x, _ = train_loader.dataset.last_insample_window()
@@ -173,13 +173,13 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
         self.model.eval()
         with torch.no_grad():
-            B, _, C = x.shape
-            dec_inp = torch.zeros((B, self.args.pred_len, C)).float().to(self.device)
+            batch_size, _, num_channels = x.shape
+            dec_inp = torch.zeros((batch_size, self.args.pred_len, num_channels)).float().to(self.device)
             dec_inp = torch.cat([x[:, -self.args.label_len:, :], dec_inp], dim=1).float()
             # encoder - decoder
-            outputs = torch.zeros((B, self.args.pred_len, C)).float().to(self.device)
-            id_list = np.arange(0, B, 1)
-            id_list = np.append(id_list, B)
+            outputs = torch.zeros((batch_size, self.args.pred_len, num_channels)).float().to(self.device)
+            id_list = np.arange(0, batch_size, 1)
+            id_list = np.append(id_list, batch_size)
             for i in range(len(id_list) - 1):
                 outputs[id_list[i]:id_list[i + 1], :, :] = self.model(x[id_list[i]:id_list[i + 1]], None,
                                                                       dec_inp[id_list[i]:id_list[i + 1]], None)
@@ -231,3 +231,6 @@ class Exp_Short_Term_Forecast(Exp_Basic):
         else:
             print('After all 6 tasks are finished, you can calculate the averaged index')
         return
+
+
+Exp_Short_Term_Forecast = ExpShortTermForecast

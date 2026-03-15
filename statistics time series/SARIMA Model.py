@@ -15,6 +15,8 @@ from time import time
 import warnings
 warnings.filterwarnings('ignore')
 
+CATFISH_TITLE = 'Catfish Sales in 1000s of Pounds'
+
 # %% [markdown]
 # # Catfish Sales Data
 
@@ -38,7 +40,7 @@ lim_catfish_sales = catfish_sales[start_date:end_date]
 # %%
 plt.figure(figsize=(10,4))
 plt.plot(lim_catfish_sales)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -52,7 +54,7 @@ first_diff = lim_catfish_sales.diff()[1:]
 # %%
 plt.figure(figsize=(10,4))
 plt.plot(first_diff)
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Sales', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -141,7 +143,7 @@ plt.plot(predictions)
 
 plt.legend(('Data', 'Predictions'), fontsize=16)
 
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Production', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)
@@ -183,7 +185,7 @@ plt.plot(rolling_predictions)
 
 plt.legend(('Data', 'Predictions'), fontsize=16)
 
-plt.title('Catfish Sales in 1000s of Pounds', fontsize=20)
+plt.title(CATFISH_TITLE, fontsize=20)
 plt.ylabel('Production', fontsize=16)
 for year in range(start_date.year,end_date.year):
     plt.axvline(pd.to_datetime(str(year)+'-01-01'), color='k', linestyle='--', alpha=0.2)

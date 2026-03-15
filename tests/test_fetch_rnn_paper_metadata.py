@@ -19,7 +19,7 @@ def test_resolve_output_path_anchors_safe_filenames_under_docs_dir() -> None:
 
     resolved = resolve_output_path("custom-metadata.json")
 
-    assert resolved == repo_root / "docs" / "custom-metadata.json"
+    assert resolved.path == repo_root / "docs" / "custom-metadata.json"
 
 
 def test_resolve_output_path_rejects_nested_paths() -> None:
@@ -54,7 +54,15 @@ def test_main_resolves_output_path_before_fetching(monkeypatch: pytest.MonkeyPat
     )
 
     assert mod["main"]() == 0
-    assert captured["output_path"] == repo_root / "docs" / "cli-metadata.json"
+    assert captured["output_path"].path == repo_root / "docs" / "cli-metadata.json"
+
+
+def test_write_json_requires_resolved_docs_json_path(tmp_path: Path) -> None:
+    mod = _load_tool()
+    write_json = mod["_write_json"]
+
+    with pytest.raises(TypeError, match="resolved docs JSON path"):
+        write_json(tmp_path / "unsafe.json", {})
 
 
 def test_fetch_tool_avoids_nested_conditionals_for_metadata_sources() -> None:

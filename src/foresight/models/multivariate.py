@@ -232,6 +232,70 @@ def _row_normalize_adj(adj: np.ndarray) -> np.ndarray:
     return a / denom
 
 
+def _load_adj_matrix_from_path(adj_path: str) -> np.ndarray | None:
+    if not str(adj_path).strip():
+        return None
+
+    path = Path(str(adj_path)).expanduser()
+    if not path.exists():
+        raise FileNotFoundError(f"adj_path not found: {path}")
+    if path.suffix.lower() == ".npy":
+        return np.asarray(np.load(path), dtype=float)
+    if path.suffix.lower() in {".csv", ".txt"}:
+        return pd.read_csv(path).to_numpy(dtype=float, copy=False)
+    raise ValueError("adj_path must end with .npy or .csv/.txt")
+
+
+def _corr_topk_adj_matrix(x_work: np.ndarray, *, n_nodes: int, top_k: int) -> np.ndarray:
+    if x_work.ndim != 2 or int(x_work.shape[1]) != int(n_nodes):
+        raise ValueError("corr adjacency requires x_work with shape (T, n_nodes)")
+
+    corr = np.corrcoef(x_work.T)
+    corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
+    corr = np.abs(corr)
+    np.fill_diagonal(corr, 0.0)
+    mat = corr.astype(float, copy=False)
+
+    k = int(top_k)
+    if 0 < k < int(n_nodes):
+        masked = np.zeros_like(mat)
+        for i in range(int(n_nodes)):
+            idx = np.argpartition(-mat[i], kth=k - 1)[:k]
+            masked[i, idx] = 1.0
+        mat = mat * masked
+    return mat
+
+
+def _resolve_builtin_adj_matrix(
+    *,
+    adj: Any,
+    n_nodes: int,
+    x_work: np.ndarray,
+    top_k: int,
+) -> np.ndarray:
+    if adj is None:
+        adj_s = "identity"
+    else:
+        adj_s = str(adj).strip().lower() if isinstance(adj, str) else ""
+
+    if adj_s in {"", "none", "null"}:
+        adj_s = "identity"
+
+    if adj_s in {"identity", "eye", "i"}:
+        return np.eye(int(n_nodes), dtype=float)
+    if adj_s in {"ring", "cycle"}:
+        mat = np.zeros((int(n_nodes), int(n_nodes)), dtype=float)
+        for i in range(int(n_nodes)):
+            mat[i, (i - 1) % int(n_nodes)] = 1.0
+            mat[i, (i + 1) % int(n_nodes)] = 1.0
+        return mat
+    if adj_s in {"fully-connected", "fully", "all"}:
+        return np.ones((int(n_nodes), int(n_nodes)), dtype=float)
+    if adj_s in {"corr", "correlation"}:
+        return _corr_topk_adj_matrix(x_work, n_nodes=int(n_nodes), top_k=int(top_k))
+    return np.asarray(adj, dtype=float)
+
+
 def _resolve_adj_matrix(
     *,
     adj: Any,
@@ -243,54 +307,14 @@ def _resolve_adj_matrix(
     if int(n_nodes) <= 0:
         raise ValueError("n_nodes must be >= 1")
 
-    if str(adj_path).strip():
-        path = Path(str(adj_path)).expanduser()
-        if not path.exists():
-            raise FileNotFoundError(f"adj_path not found: {path}")
-        if path.suffix.lower() == ".npy":
-            mat = np.asarray(np.load(path), dtype=float)
-        elif path.suffix.lower() in {".csv", ".txt"}:
-            mat = pd.read_csv(path).to_numpy(dtype=float, copy=False)
-        else:
-            raise ValueError("adj_path must end with .npy or .csv/.txt")
-    else:
-        mat = None
-
+    mat = _load_adj_matrix_from_path(adj_path)
     if mat is None:
-        if adj is None:
-            adj_s = "identity"
-        else:
-            adj_s = str(adj).strip().lower() if isinstance(adj, str) else ""
-
-        if adj_s in {"", "none", "null"}:
-            adj_s = "identity"
-
-        if adj_s in {"identity", "eye", "i"}:
-            mat = np.eye(int(n_nodes), dtype=float)
-        elif adj_s in {"ring", "cycle"}:
-            mat = np.zeros((int(n_nodes), int(n_nodes)), dtype=float)
-            for i in range(int(n_nodes)):
-                mat[i, (i - 1) % int(n_nodes)] = 1.0
-                mat[i, (i + 1) % int(n_nodes)] = 1.0
-        elif adj_s in {"fully-connected", "fully", "all"}:
-            mat = np.ones((int(n_nodes), int(n_nodes)), dtype=float)
-        elif adj_s in {"corr", "correlation"}:
-            if x_work.ndim != 2 or int(x_work.shape[1]) != int(n_nodes):
-                raise ValueError("corr adjacency requires x_work with shape (T, n_nodes)")
-            corr = np.corrcoef(x_work.T)
-            corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
-            corr = np.abs(corr)
-            np.fill_diagonal(corr, 0.0)
-            mat = corr.astype(float, copy=False)
-            k = int(top_k)
-            if 0 < k < int(n_nodes):
-                masked = np.zeros_like(mat)
-                for i in range(int(n_nodes)):
-                    idx = np.argpartition(-mat[i], kth=k - 1)[:k]
-                    masked[i, idx] = 1.0
-                mat = mat * masked
-        else:
-            mat = np.asarray(adj, dtype=float)
+        mat = _resolve_builtin_adj_matrix(
+            adj=adj,
+            n_nodes=int(n_nodes),
+            x_work=x_work,
+            top_k=int(top_k),
+        )
 
     mat = np.asarray(mat, dtype=float)
     if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:

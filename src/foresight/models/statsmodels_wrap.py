@@ -172,6 +172,117 @@ def _fit_sarimax_result(
     return model.fit(disp=False), exog_future
 
 
+def _validate_auto_arima_grid_bounds(
+    *,
+    max_p: int,
+    max_d: int,
+    max_q: int,
+    max_seasonal_p: int,
+    max_seasonal_d: int,
+    max_seasonal_q: int,
+) -> None:
+    if int(max_p) < 0 or int(max_d) < 0 or int(max_q) < 0:
+        raise ValueError("max_p/max_d/max_q must be >= 0")
+    if int(max_seasonal_p) < 0 or int(max_seasonal_d) < 0 or int(max_seasonal_q) < 0:
+        raise ValueError("max_P/max_D/max_Q must be >= 0")
+
+
+def _normalize_auto_arima_search_config(
+    *,
+    seasonal_period: int | None,
+    information_criterion: str,
+    trend: str | None,
+    exog_train: np.ndarray | None,
+    max_seasonal_p: int,
+    max_seasonal_d: int,
+    max_seasonal_q: int,
+) -> tuple[int | None, str, str | None, bool]:
+    seasonal_period_int = (
+        None
+        if seasonal_period is None or str(seasonal_period).strip().lower() in {"none", "null", ""}
+        else int(seasonal_period)
+    )
+    if seasonal_period_int is None and any(
+        int(v) > 0 for v in (max_seasonal_p, max_seasonal_d, max_seasonal_q)
+    ):
+        raise ValueError("seasonal_period must be provided when max_P/max_D/max_Q are non-zero")
+    if seasonal_period_int is not None and seasonal_period_int <= 1:
+        raise ValueError("seasonal_period must be at least 2")
+
+    ic_key = str(information_criterion).strip().lower()
+    if ic_key not in {"aic", "bic"}:
+        raise ValueError("information_criterion must be 'aic' or 'bic'")
+
+    trend_final = (
+        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
+    )
+    allow_zero_order = exog_train is not None or trend_final not in {None, "n"}
+    return seasonal_period_int, ic_key, trend_final, allow_zero_order
+
+
+def _iter_auto_arima_candidate_orders(
+    *,
+    max_p: int,
+    max_d: int,
+    max_q: int,
+    max_seasonal_p: int,
+    max_seasonal_d: int,
+    max_seasonal_q: int,
+    seasonal_period: int | None,
+    allow_zero_order: bool,
+) -> tuple[tuple[int, int, int], tuple[int, int, int, int]]:
+    seasonal_grid = (
+        [(0, 0, 0, 0)]
+        if seasonal_period is None
+        else [
+            (P, D, Q, seasonal_period)
+            for P in range(0, int(max_seasonal_p) + 1)
+            for D in range(0, int(max_seasonal_d) + 1)
+            for Q in range(0, int(max_seasonal_q) + 1)
+        ]
+    )
+    for p in range(0, int(max_p) + 1):
+        for d in range(0, int(max_d) + 1):
+            for q in range(0, int(max_q) + 1):
+                for P, D, Q, s in seasonal_grid:
+                    if (
+                        p == 0
+                        and d == 0
+                        and q == 0
+                        and P == 0
+                        and D == 0
+                        and Q == 0
+                        and not allow_zero_order
+                    ):
+                        continue
+                    yield (int(p), int(d), int(q)), (int(P), int(D), int(Q), int(s))
+
+
+def _fit_auto_arima_candidate_result(
+    arima_cls: Any,
+    *,
+    x: np.ndarray,
+    exog_train: np.ndarray | None,
+    order: tuple[int, int, int],
+    seasonal_order: tuple[int, int, int, int],
+    trend_final: str | None,
+    enforce_stationarity: bool,
+    enforce_invertibility: bool,
+) -> Any | None:
+    try:
+        return arima_cls(
+            x,
+            exog=exog_train,
+            order=order,
+            seasonal_order=seasonal_order,
+            trend=trend_final,
+            enforce_stationarity=bool(enforce_stationarity),
+            enforce_invertibility=bool(enforce_invertibility),
+        ).fit()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _fit_auto_arima_best_result(
     train: Any,
     horizon: int,
@@ -201,10 +312,14 @@ def _fit_auto_arima_best_result(
     _validate_positive_horizon(horizon)
     if x.size < 5:
         raise ValueError("auto_arima_forecast requires at least 5 training points")
-    if int(max_p) < 0 or int(max_d) < 0 or int(max_q) < 0:
-        raise ValueError("max_p/max_d/max_q must be >= 0")
-    if int(max_seasonal_p) < 0 or int(max_seasonal_d) < 0 or int(max_seasonal_q) < 0:
-        raise ValueError("max_P/max_D/max_Q must be >= 0")
+    _validate_auto_arima_grid_bounds(
+        max_p=int(max_p),
+        max_d=int(max_d),
+        max_q=int(max_q),
+        max_seasonal_p=int(max_seasonal_p),
+        max_seasonal_d=int(max_seasonal_d),
+        max_seasonal_q=int(max_seasonal_q),
+    )
 
     exog_train, exog_future = _validate_exog_pair(
         train_size=int(x.size),
@@ -213,70 +328,47 @@ def _fit_auto_arima_best_result(
         future_exog=future_exog,
     )
 
-    seasonal_period_int = (
-        None
-        if seasonal_period is None or str(seasonal_period).strip().lower() in {"none", "null", ""}
-        else int(seasonal_period)
+    seasonal_period_int, ic_key, trend_final, allow_zero_order = (
+        _normalize_auto_arima_search_config(
+            seasonal_period=seasonal_period,
+            information_criterion=information_criterion,
+            trend=trend,
+            exog_train=exog_train,
+            max_seasonal_p=int(max_seasonal_p),
+            max_seasonal_d=int(max_seasonal_d),
+            max_seasonal_q=int(max_seasonal_q),
+        )
     )
-    if seasonal_period_int is None and any(
-        int(v) > 0 for v in (max_seasonal_p, max_seasonal_d, max_seasonal_q)
-    ):
-        raise ValueError("seasonal_period must be provided when max_P/max_D/max_Q are non-zero")
-    if seasonal_period_int is not None and seasonal_period_int <= 1:
-        raise ValueError("seasonal_period must be at least 2")
-
-    ic_key = str(information_criterion).strip().lower()
-    if ic_key not in {"aic", "bic"}:
-        raise ValueError("information_criterion must be 'aic' or 'bic'")
-
-    trend_final = (
-        None if trend is None or str(trend).lower() in {"none", "null", ""} else str(trend)
-    )
-    allow_zero_order = exog_train is not None or trend_final not in {None, "n"}
 
     best_ic = float("inf")
     best_res = None
 
-    for p in range(0, int(max_p) + 1):
-        for d in range(0, int(max_d) + 1):
-            for q in range(0, int(max_q) + 1):
-                seasonal_grid = (
-                    [(0, 0, 0, 0)]
-                    if seasonal_period_int is None
-                    else [
-                        (P, D, Q, seasonal_period_int)
-                        for P in range(0, int(max_seasonal_p) + 1)
-                        for D in range(0, int(max_seasonal_d) + 1)
-                        for Q in range(0, int(max_seasonal_q) + 1)
-                    ]
-                )
-                for P, D, Q, s in seasonal_grid:
-                    if (
-                        p == 0
-                        and d == 0
-                        and q == 0
-                        and P == 0
-                        and D == 0
-                        and Q == 0
-                        and not allow_zero_order
-                    ):
-                        continue
-                    try:
-                        res = ARIMA(
-                            x,
-                            exog=exog_train,
-                            order=(int(p), int(d), int(q)),
-                            seasonal_order=(int(P), int(D), int(Q), int(s)),
-                            trend=trend_final,
-                            enforce_stationarity=bool(enforce_stationarity),
-                            enforce_invertibility=bool(enforce_invertibility),
-                        ).fit()
-                    except Exception:  # noqa: BLE001
-                        continue
-                    ic = float(getattr(res, ic_key))
-                    if ic < best_ic:
-                        best_ic = ic
-                        best_res = res
+    for order, seasonal_order in _iter_auto_arima_candidate_orders(
+        max_p=int(max_p),
+        max_d=int(max_d),
+        max_q=int(max_q),
+        max_seasonal_p=int(max_seasonal_p),
+        max_seasonal_d=int(max_seasonal_d),
+        max_seasonal_q=int(max_seasonal_q),
+        seasonal_period=seasonal_period_int,
+        allow_zero_order=allow_zero_order,
+    ):
+        res = _fit_auto_arima_candidate_result(
+            ARIMA,
+            x=x,
+            exog_train=exog_train,
+            order=order,
+            seasonal_order=seasonal_order,
+            trend_final=trend_final,
+            enforce_stationarity=bool(enforce_stationarity),
+            enforce_invertibility=bool(enforce_invertibility),
+        )
+        if res is None:
+            continue
+        ic = float(getattr(res, ic_key))
+        if ic < best_ic:
+            best_ic = ic
+            best_res = res
 
     if best_res is None:
         raise ValueError("auto_arima_forecast failed to fit any ARIMA model in the grid")
@@ -911,28 +1003,32 @@ def _normalize_valid_periods(periods: Any) -> tuple[int, ...]:
     return tuple(int(p) for p in periods_tup)
 
 
+def _repeat_fourier_order(order: Any, *, n_periods: int) -> tuple[int, ...]:
+    return tuple([int(order)] * int(n_periods))
+
+
+def _normalize_sequence_fourier_orders(orders: list | tuple, *, n_periods: int) -> tuple[int, ...]:
+    if len(orders) == 1 and int(n_periods) > 1:
+        return _repeat_fourier_order(orders[0], n_periods=n_periods)
+    if len(orders) != int(n_periods):
+        raise ValueError(FOURIER_ORDERS_MUST_MATCH_PERIODS)
+    return tuple(int(order) for order in orders)
+
+
 def _normalize_fourier_orders(orders: Any, *, n_periods: int) -> tuple[int, ...]:
     if orders is None:
-        return tuple([2] * int(n_periods))
+        return _repeat_fourier_order(2, n_periods=int(n_periods))
     if isinstance(orders, int | float):
-        return tuple([int(orders)] * int(n_periods))
+        return _repeat_fourier_order(orders, n_periods=int(n_periods))
     if isinstance(orders, str):
         s = orders.strip()
         if not s:
-            return tuple([2] * int(n_periods))
+            return _repeat_fourier_order(2, n_periods=int(n_periods))
         parts = [p.strip() for p in s.split(",") if p.strip()]
-        if len(parts) == 1 and int(n_periods) > 1:
-            return tuple([int(parts[0])] * int(n_periods))
-        if len(parts) != int(n_periods):
-            raise ValueError(FOURIER_ORDERS_MUST_MATCH_PERIODS)
-        return tuple(int(p) for p in parts)
+        return _normalize_sequence_fourier_orders(parts, n_periods=int(n_periods))
     if isinstance(orders, list | tuple):
-        if len(orders) == 1 and int(n_periods) > 1:
-            return tuple([int(orders[0])] * int(n_periods))
-        if len(orders) != int(n_periods):
-            raise ValueError(FOURIER_ORDERS_MUST_MATCH_PERIODS)
-        return tuple(int(o) for o in orders)
-    return tuple([int(orders)] * int(n_periods))
+        return _normalize_sequence_fourier_orders(orders, n_periods=int(n_periods))
+    return _repeat_fourier_order(orders, n_periods=int(n_periods))
 
 
 def _validate_non_negative_fourier_orders(orders: tuple[int, ...]) -> tuple[int, ...]:

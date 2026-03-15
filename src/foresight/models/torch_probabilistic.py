@@ -17,6 +17,53 @@ from .torch_nn import (
 )
 
 
+def _validate_probabilistic_direct_config(
+    *,
+    horizon: int,
+    lags: int,
+    hidden_size: int,
+    num_layers: int,
+    num_heads: int,
+    dropout: float,
+    variant: str,
+) -> None:
+    if horizon <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lags <= 0:
+        raise ValueError("lags must be >= 1")
+    if hidden_size <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if num_layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+    if num_heads <= 0:
+        raise ValueError("num_heads must be >= 1")
+    if not (0.0 <= dropout < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+    if variant not in {"timegrad", "tactis"}:
+        raise ValueError("variant must be one of: timegrad, tactis")
+    if variant == "tactis" and hidden_size % num_heads != 0:
+        raise ValueError("hidden_size must be divisible by num_heads for tactis")
+
+
+def _make_probabilistic_loss(torch: Any, functional: Any, *, loss_name: str) -> Any:
+    def _loss(pred: Any, yb: Any) -> Any:
+        mu = pred[..., 0]
+        sigma = functional.softplus(pred[..., 1]) + 1e-3
+
+        if loss_name in {"gaussian", "nll", "probabilistic"}:
+            z = (yb - mu) / sigma
+            return (0.5 * math.log(2.0 * math.pi) + torch.log(sigma) + 0.5 * (z**2)).mean()
+        if loss_name in {"mse", ""}:
+            return ((mu - yb) ** 2).mean()
+        if loss_name in {"mae", "l1"}:
+            return (mu - yb).abs().mean()
+        if loss_name in {"huber", "smoothl1"}:
+            return functional.smooth_l1_loss(mu, yb)
+        raise ValueError("loss must be one of: gaussian, mse, mae, huber")
+
+    return _loss
+
+
 def torch_probabilistic_direct_forecast(
     train: Any,
     horizon: int,
@@ -66,22 +113,15 @@ def torch_probabilistic_direct_forecast(
     variant_s = str(variant).strip().lower()
     loss_s = str(loss).strip().lower()
 
-    if h <= 0:
-        raise ValueError("horizon must be >= 1")
-    if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
-    if hidden <= 0:
-        raise ValueError("hidden_size must be >= 1")
-    if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
-    if heads <= 0:
-        raise ValueError("num_heads must be >= 1")
-    if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
-    if variant_s not in {"timegrad", "tactis"}:
-        raise ValueError("variant must be one of: timegrad, tactis")
-    if variant_s == "tactis" and hidden % heads != 0:
-        raise ValueError("hidden_size must be divisible by num_heads for tactis")
+    _validate_probabilistic_direct_config(
+        horizon=h,
+        lags=lag_count,
+        hidden_size=hidden,
+        num_layers=layers,
+        num_heads=heads,
+        dropout=drop,
+        variant=variant_s,
+    )
 
     x_work = x
     mean = 0.0
@@ -148,26 +188,6 @@ def torch_probabilistic_direct_forecast(
             attn_out, _ = self.attn(q, ctx, ctx, need_weights=False)
             return self.head(attn_out)
 
-    def _make_loss() -> Any:
-        def _loss(pred: Any, yb: Any) -> Any:
-            mu = pred[..., 0]
-            sigma = F.softplus(pred[..., 1]) + 1e-3
-
-            if loss_s in {"gaussian", "nll", "probabilistic"}:
-                z = (yb - mu) / sigma
-                return (
-                    0.5 * math.log(2.0 * math.pi) + torch.log(sigma) + 0.5 * (z**2)
-                ).mean()
-            if loss_s in {"mse", ""}:
-                return ((mu - yb) ** 2).mean()
-            if loss_s in {"mae", "l1"}:
-                return (mu - yb).abs().mean()
-            if loss_s in {"huber", "smoothl1"}:
-                return F.smooth_l1_loss(mu, yb)
-            raise ValueError("loss must be one of: gaussian, mse, mae, huber")
-
-        return _loss
-
     if variant_s == "timegrad":
         model = _TimeGradLite()
     else:
@@ -190,7 +210,14 @@ def torch_probabilistic_direct_forecast(
         scheduler_gamma=float(scheduler_gamma),
         restore_best=bool(restore_best),
     )
-    model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_make_loss())
+    model = _train_loop(
+        model,
+        x_seq,
+        Y,
+        cfg=cfg,
+        device=str(device),
+        loss_fn_override=_make_probabilistic_loss(torch, F, loss_name=loss_s),
+    )
 
     feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
     with torch.no_grad():

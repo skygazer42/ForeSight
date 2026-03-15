@@ -14,10 +14,14 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+DEFAULT_ETTH1_DATA_PATH = 'ETTh1.csv'
+TEST_SHAPE_LABEL = 'test:'
+TRAIN_SHAPE_LABEL = 'train:'
 
-class Dataset_ETT_hour(Dataset):
+
+class DatasetEttHour(Dataset):
     def __init__(self, root_path, flag='train', size=None,
-                 features='S', data_path='ETTh1.csv',
+                 features='S', data_path=DEFAULT_ETTH1_DATA_PATH,
                  target='OT', scale=True, timeenc=0, freq='h', seasonal_patterns=None):
         # size [seq_len, label_len, pred_len]
         # info
@@ -105,7 +109,7 @@ class Dataset_ETT_hour(Dataset):
         return self.scaler.inverse_transform(data)
 
 
-class Dataset_ETT_minute(Dataset):
+class DatasetEttMinute(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTm1.csv',
                  target='OT', scale=True, timeenc=0, freq='t', seasonal_patterns=None):
@@ -195,9 +199,9 @@ class Dataset_ETT_minute(Dataset):
         return self.scaler.inverse_transform(data)
 
 
-class Dataset_Custom(Dataset):
+class DatasetCustom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
-                 features='S', data_path='ETTh1.csv',
+                 features='S', data_path=DEFAULT_ETTH1_DATA_PATH,
                  target='OT', scale=True, timeenc=0, freq='h', seasonal_patterns=None):
         # size [seq_len, label_len, pred_len]
         # info
@@ -293,9 +297,9 @@ class Dataset_Custom(Dataset):
         return self.scaler.inverse_transform(data)
 
 
-class Dataset_M4(Dataset):
+class DatasetM4(Dataset):
     def __init__(self, root_path, flag='pred', size=None,
-                 features='S', data_path='ETTh1.csv',
+                 features='S', data_path=DEFAULT_ETTH1_DATA_PATH,
                  target='OT', scale=False, inverse=False, timeenc=0, freq='15min',
                  seasonal_patterns='Yearly'):
         # size [seq_len, label_len, pred_len]
@@ -372,6 +376,12 @@ class Dataset_M4(Dataset):
         return insample, insample_mask
 
 
+Dataset_ETT_hour = DatasetEttHour
+Dataset_ETT_minute = DatasetEttMinute
+Dataset_Custom = DatasetCustom
+Dataset_M4 = DatasetM4
+
+
 class PSMSegLoader(Dataset):
     def __init__(self, root_path, win_size, step=1, flag="train"):
         self.flag = flag
@@ -379,19 +389,21 @@ class PSMSegLoader(Dataset):
         self.win_size = win_size
         self.scaler = StandardScaler()
         data = pd.read_csv(os.path.join(root_path, 'train.csv'))
-        data = data.values[:, 1:]
+        data = data.iloc[:, 1:].to_numpy()
         data = np.nan_to_num(data)
         self.scaler.fit(data)
         data = self.scaler.transform(data)
         test_data = pd.read_csv(os.path.join(root_path, 'test.csv'))
-        test_data = test_data.values[:, 1:]
+        test_data = test_data.iloc[:, 1:].to_numpy()
         test_data = np.nan_to_num(test_data)
         self.test = self.scaler.transform(test_data)
         self.train = data
         self.val = self.test
-        self.test_labels = pd.read_csv(os.path.join(root_path, 'test_label.csv')).values[:, 1:]
-        print("test:", self.test.shape)
-        print("train:", self.train.shape)
+        self.test_labels = pd.read_csv(
+            os.path.join(root_path, 'test_label.csv')
+        ).iloc[:, 1:].to_numpy()
+        print(TEST_SHAPE_LABEL, self.test.shape)
+        print(TRAIN_SHAPE_LABEL, self.train.shape)
 
     def __len__(self):
         if self.flag == "train":
@@ -432,8 +444,8 @@ class MSLSegLoader(Dataset):
         self.train = data
         self.val = self.test
         self.test_labels = np.load(os.path.join(root_path, "MSL_test_label.npy"))
-        print("test:", self.test.shape)
-        print("train:", self.train.shape)
+        print(TEST_SHAPE_LABEL, self.test.shape)
+        print(TRAIN_SHAPE_LABEL, self.train.shape)
 
     def __len__(self):
         if self.flag == "train":
@@ -474,8 +486,8 @@ class SMAPSegLoader(Dataset):
         self.train = data
         self.val = self.test
         self.test_labels = np.load(os.path.join(root_path, "SMAP_test_label.npy"))
-        print("test:", self.test.shape)
-        print("train:", self.train.shape)
+        print(TEST_SHAPE_LABEL, self.test.shape)
+        print(TRAIN_SHAPE_LABEL, self.train.shape)
 
     def __len__(self):
 
@@ -553,9 +565,9 @@ class SWATSegLoader(Dataset):
 
         train_data = pd.read_csv(os.path.join(root_path, 'swat_train2.csv'))
         test_data = pd.read_csv(os.path.join(root_path, 'swat2.csv'))
-        labels = test_data.values[:, -1:]
-        train_data = train_data.values[:, :-1]
-        test_data = test_data.values[:, :-1]
+        labels = test_data.iloc[:, -1:].to_numpy()
+        train_data = train_data.iloc[:, :-1].to_numpy()
+        test_data = test_data.iloc[:, :-1].to_numpy()
 
         self.scaler.fit(train_data)
         train_data = self.scaler.transform(train_data)
@@ -564,8 +576,8 @@ class SWATSegLoader(Dataset):
         self.test = test_data
         self.val = test_data
         self.test_labels = labels
-        print("test:", self.test.shape)
-        print("train:", self.train.shape)
+        print(TEST_SHAPE_LABEL, self.test.shape)
+        print(TRAIN_SHAPE_LABEL, self.train.shape)
 
     def __len__(self):
         """

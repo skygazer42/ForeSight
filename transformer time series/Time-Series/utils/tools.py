@@ -83,27 +83,31 @@ def visual(true, preds=None, name='./pic/test.pdf'):
     plt.savefig(name, bbox_inches='tight')
 
 
+def _starts_detected_anomaly_run(gt, pred, index, *, anomaly_state):
+    return gt[index] == 1 and pred[index] == 1 and not anomaly_state
+
+
+def _mark_anomaly_run(gt, pred, start_index):
+    for index in range(start_index, -1, -1):
+        if gt[index] == 0:
+            break
+        pred[index] = 1
+    for index in range(start_index, len(gt)):
+        if gt[index] == 0:
+            break
+        pred[index] = 1
+
+
 def adjustment(gt, pred):
     anomaly_state = False
-    for i in range(len(gt)):
-        if gt[i] == 1 and pred[i] == 1 and not anomaly_state:
+    for index in range(len(gt)):
+        if _starts_detected_anomaly_run(gt, pred, index, anomaly_state=anomaly_state):
             anomaly_state = True
-            for j in range(i, 0, -1):
-                if gt[j] == 0:
-                    break
-                else:
-                    if pred[j] == 0:
-                        pred[j] = 1
-            for j in range(i, len(gt)):
-                if gt[j] == 0:
-                    break
-                else:
-                    if pred[j] == 0:
-                        pred[j] = 1
-        elif gt[i] == 0:
+            _mark_anomaly_run(gt, pred, index)
+        elif gt[index] == 0:
             anomaly_state = False
         if anomaly_state:
-            pred[i] = 1
+            pred[index] = 1
     return gt, pred
 
 

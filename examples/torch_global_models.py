@@ -5,6 +5,8 @@ import pandas as pd
 
 from foresight.models.registry import make_global_forecaster
 
+DEFAULT_QUANTILES = "0.1,0.5,0.9"
+
 
 def main() -> None:
     """
@@ -198,7 +200,7 @@ def main() -> None:
                 "d_model": 64,
                 "num_layers": 2,
                 "epochs": 10,
-                "quantiles": "0.1,0.5,0.9",
+                "quantiles": DEFAULT_QUANTILES,
             },
         ),
         (
@@ -360,20 +362,20 @@ def main() -> None:
                 "nhead": 4,
                 "num_layers": 2,
                 "epochs": 10,
-                "quantiles": "0.1,0.5,0.9",
+                "quantiles": DEFAULT_QUANTILES,
             },
         ),
         (
             "torch-nlinear-global",
-            {"context_length": 96, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
+            {"context_length": 96, "epochs": 10, "quantiles": DEFAULT_QUANTILES},
         ),
         (
             "torch-dlinear-global",
-            {"context_length": 96, "ma_window": 7, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
+            {"context_length": 96, "ma_window": 7, "epochs": 10, "quantiles": DEFAULT_QUANTILES},
         ),
         (
             "torch-deepar-global",
-            {"context_length": 96, "hidden_size": 64, "epochs": 10, "quantiles": "0.1,0.5,0.9"},
+            {"context_length": 96, "hidden_size": 64, "epochs": 10, "quantiles": DEFAULT_QUANTILES},
         ),
         (
             "torch-seq2seq-attn-lstm-global",

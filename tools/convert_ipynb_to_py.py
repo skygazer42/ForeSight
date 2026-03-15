@@ -27,6 +27,56 @@ def _comment_magic(line: str) -> str:
     return line
 
 
+def _normalized_cell_source(cell: dict[str, object]) -> tuple[str, list[str]]:
+    cell_type = str(cell.get("cell_type", ""))
+    source = cell.get("source", [])
+    if isinstance(source, str):
+        return cell_type, [source]
+    return cell_type, list(source)
+
+
+def _normalized_cell_text(source: list[str]) -> list[str]:
+    return "".join(source).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+
+def _append_markdown_cell(lines: list[str], source: list[str]) -> None:
+    lines.append("# %% [markdown]\n")
+    for raw in _normalized_cell_text(source):
+        if raw.strip() == "":
+            lines.append("#\n")
+        else:
+            lines.append(f"# {raw.rstrip()}\n")
+    lines.append("\n")
+
+
+def _append_code_cell(lines: list[str], source: list[str]) -> None:
+    lines.append("# %%\n")
+    for raw in _normalized_cell_text(source):
+        # Keep the trailing newline behavior consistent.
+        lines.append(_comment_magic(raw.rstrip("\n")) + "\n")
+    lines.append("\n")
+
+
+def _append_unknown_cell(lines: list[str], *, cell_type: str, source: list[str]) -> None:
+    lines.append(f"# %% [unknown:{cell_type}]\n")
+    for raw in _normalized_cell_text(source):
+        if raw.strip() == "":
+            lines.append("#\n")
+        else:
+            lines.append(f"# {raw.rstrip()}\n")
+    lines.append("\n")
+
+
+def _append_cell(lines: list[str], *, cell_type: str, source: list[str]) -> None:
+    if cell_type == "markdown":
+        _append_markdown_cell(lines, source)
+        return
+    if cell_type == "code":
+        _append_code_cell(lines, source)
+        return
+    _append_unknown_cell(lines, cell_type=cell_type, source=source)
+
+
 def convert_one(ipynb_path: Path, out_path: Path | None = None) -> Path:
     out_path = out_path or ipynb_path.with_suffix(".py")
 
@@ -39,40 +89,8 @@ def convert_one(ipynb_path: Path, out_path: Path | None = None) -> Path:
     lines.append("\n")
 
     for cell in cells:
-        cell_type = cell.get("cell_type", "")
-        source = cell.get("source", [])
-        if isinstance(source, str):
-            source = [source]
-
-        if cell_type == "markdown":
-            lines.append("# %% [markdown]\n")
-            md = "".join(source).replace("\r\n", "\n").replace("\r", "\n")
-            for raw in md.split("\n"):
-                if raw.strip() == "":
-                    lines.append("#\n")
-                else:
-                    lines.append(f"# {raw.rstrip()}\n")
-            lines.append("\n")
-            continue
-
-        if cell_type == "code":
-            lines.append("# %%\n")
-            code = "".join(source).replace("\r\n", "\n").replace("\r", "\n")
-            for raw in code.split("\n"):
-                # Keep the trailing newline behavior consistent.
-                lines.append(_comment_magic(raw.rstrip("\n")) + "\n")
-            lines.append("\n")
-            continue
-
-        # Unknown cell types are preserved as commented blocks.
-        lines.append(f"# %% [unknown:{cell_type}]\n")
-        blob = "".join(source).replace("\r\n", "\n").replace("\r", "\n")
-        for raw in blob.split("\n"):
-            if raw.strip() == "":
-                lines.append("#\n")
-            else:
-                lines.append(f"# {raw.rstrip()}\n")
-        lines.append("\n")
+        cell_type, source = _normalized_cell_source(cell)
+        _append_cell(lines, cell_type=cell_type, source=source)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("".join(lines), encoding="utf-8")

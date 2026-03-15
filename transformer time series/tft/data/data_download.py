@@ -19,8 +19,8 @@ def recreate_folder(path):
 
 def unzip(zip_path, output_file, data_folder):
     """Unzips files and checks successful completion."""
-#用于解压指定的zip文件并将解压后的文件保存到指定的目录（即data_folder）。
-# 其中，zip_path指定了待解压的zip文件路径。如果zip文件中包含多个文件，extractall方法会将这些文件都解压出来并保存到指定目录下。
+
+
     print('Unzipping file: {}'.format(zip_path))
     pyunpack.Archive(zip_path).extractall(data_folder)
 

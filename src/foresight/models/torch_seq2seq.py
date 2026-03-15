@@ -26,19 +26,7 @@ def _make_loss_fn(nn: Any, loss: str) -> Any:
     raise ValueError("loss must be one of: mse, mae, huber")
 
 
-def _train_seq2seq(
-    model: Any,
-    X: np.ndarray,
-    Y: np.ndarray,
-    *,
-    cfg: TorchTrainConfig,
-    device: str,
-    teacher_forcing_start: float,
-    teacher_forcing_final: float,
-) -> Any:
-    torch = _require_torch()
-    nn = torch.nn
-
+def _validate_seq2seq_training_config(cfg: TorchTrainConfig) -> None:
     if cfg.epochs <= 0:
         raise ValueError("epochs must be >= 1")
     if cfg.lr <= 0.0:
@@ -52,28 +40,37 @@ def _train_seq2seq(
     if float(cfg.grad_clip_norm) < 0.0:
         raise ValueError("grad_clip_norm must be >= 0")
 
+
+def _validate_seq2seq_teacher_forcing(
+    *,
+    teacher_forcing_start: float,
+    teacher_forcing_final: float,
+) -> tuple[float, float]:
     tf0 = float(teacher_forcing_start)
     tf1 = float(teacher_forcing_final)
     if not (0.0 <= tf0 <= 1.0):
         raise ValueError("teacher_forcing_start must be in [0,1]")
     if not (0.0 <= tf1 <= 1.0):
         raise ValueError("teacher_forcing_final must be in [0,1]")
+    return tf0, tf1
 
-    torch.manual_seed(int(cfg.seed))
 
-    dev = torch.device(str(device))
-    if dev.type == "cuda" and not torch.cuda.is_available():
-        raise ValueError("device='cuda' requested but CUDA is not available")
-
-    model = model.to(dev)
-
-    x_tensor = torch.tensor(X, dtype=torch.float32, device=dev)
-    y_tensor = torch.tensor(Y, dtype=torch.float32, device=dev)
+def _split_seq2seq_train_validation(
+    torch: Any,
+    X: np.ndarray,
+    Y: np.ndarray,
+    *,
+    device: Any,
+    batch_size: int,
+    val_split: float,
+) -> tuple[Any, Any]:
+    x_tensor = torch.tensor(X, dtype=torch.float32, device=device)
+    y_tensor = torch.tensor(Y, dtype=torch.float32, device=device)
 
     n = int(x_tensor.shape[0])
     val_n = 0
-    if float(cfg.val_split) > 0.0 and n >= 5:
-        val_n = max(1, int(round(float(cfg.val_split) * n)))
+    if float(val_split) > 0.0 and n >= 5:
+        val_n = max(1, int(round(float(val_split) * n)))
         val_n = min(val_n, n - 1)
 
     if val_n > 0:
@@ -86,7 +83,7 @@ def _train_seq2seq(
 
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(X_train, Y_train),
-        batch_size=int(cfg.batch_size),
+        batch_size=int(batch_size),
         shuffle=True,
     )
     val_loader = (
@@ -94,54 +91,288 @@ def _train_seq2seq(
         if x_val is None
         else torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(x_val, y_val),
-            batch_size=int(cfg.batch_size),
+            batch_size=int(batch_size),
             shuffle=False,
         )
     )
+    return train_loader, val_loader
 
+
+def _make_seq2seq_optimizer(torch: Any, model: Any, *, cfg: TorchTrainConfig) -> Any:
     opt_name = str(cfg.optimizer).lower().strip()
     if opt_name in {"adam", ""}:
-        opt = torch.optim.Adam(
-            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
+        return torch.optim.Adam(
+            model.parameters(),
+            lr=float(cfg.lr),
+            weight_decay=float(cfg.weight_decay),
         )
-    elif opt_name == "adamw":
-        opt = torch.optim.AdamW(
-            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
+    if opt_name == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(),
+            lr=float(cfg.lr),
+            weight_decay=float(cfg.weight_decay),
         )
-    elif opt_name == "sgd":
-        opt = torch.optim.SGD(
+    if opt_name == "sgd":
+        return torch.optim.SGD(
             model.parameters(),
             lr=float(cfg.lr),
             momentum=float(cfg.momentum),
             weight_decay=float(cfg.weight_decay),
         )
-    else:
-        raise ValueError("optimizer must be one of: adam, adamw, sgd")
+    raise ValueError("optimizer must be one of: adam, adamw, sgd")
 
-    loss_fn = _make_loss_fn(nn, cfg.loss)
 
+def _make_seq2seq_scheduler(torch: Any, opt: Any, *, cfg: TorchTrainConfig) -> Any:
     sched_name = str(cfg.scheduler).lower().strip()
     if sched_name in {"none", ""}:
-        sched = None
-    elif sched_name == "cosine":
-        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=int(cfg.epochs))
-    elif sched_name == "step":
-        sched = torch.optim.lr_scheduler.StepLR(
-            opt, step_size=int(cfg.scheduler_step_size), gamma=float(cfg.scheduler_gamma)
+        return None
+    if sched_name == "cosine":
+        return torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=int(cfg.epochs))
+    if sched_name == "step":
+        return torch.optim.lr_scheduler.StepLR(
+            opt,
+            step_size=int(cfg.scheduler_step_size),
+            gamma=float(cfg.scheduler_gamma),
         )
-    else:
-        raise ValueError("scheduler must be one of: none, cosine, step")
+    raise ValueError("scheduler must be one of: none, cosine, step")
+
+
+def _seq2seq_teacher_forcing_ratio(
+    epoch: int,
+    *,
+    total_epochs: int,
+    teacher_forcing_start: float,
+    teacher_forcing_final: float,
+) -> float:
+    if int(total_epochs) == 1:
+        return float(teacher_forcing_final)
+    t = float(epoch) / float(int(total_epochs) - 1)
+    return (1.0 - t) * float(teacher_forcing_start) + t * float(teacher_forcing_final)
+
+
+def _validate_seq2seq_direct_config(
+    *,
+    horizon: int,
+    lags: int,
+    cell: str,
+    attention: str,
+    hidden_size: int,
+    num_layers: int,
+    dropout: float,
+    teacher_forcing: float,
+    teacher_forcing_final: float | None,
+) -> tuple[int, int, str, str, int, int, float, float, float]:
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    cell_s = str(cell).lower().strip()
+    attn_s = str(attention).lower().strip()
+    if cell_s not in {"lstm", "gru"}:
+        raise ValueError("cell must be one of: lstm, gru")
+    if attn_s not in {"none", "bahdanau"}:
+        raise ValueError("attention must be one of: none, bahdanau")
+
+    hidden = int(hidden_size)
+    layers = int(num_layers)
+    if hidden <= 0:
+        raise ValueError("hidden_size must be >= 1")
+    if layers <= 0:
+        raise ValueError("num_layers must be >= 1")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0, 1)")
+
+    tf0, tf1 = _validate_seq2seq_teacher_forcing(
+        teacher_forcing_start=float(teacher_forcing),
+        teacher_forcing_final=(
+            float(teacher_forcing) if teacher_forcing_final is None else float(teacher_forcing_final)
+        ),
+    )
+    return h, lag_count, cell_s, attn_s, hidden, layers, drop, tf0, tf1
+
+
+def _validate_lstnet_direct_config(
+    *,
+    horizon: int,
+    lags: int,
+    cnn_channels: int,
+    kernel_size: int,
+    rnn_hidden: int,
+    skip: int,
+    highway_window: int,
+    dropout: float,
+) -> tuple[int, int, int, int, int, int, int, float]:
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if lag_count <= 0:
+        raise ValueError("lags must be >= 1")
+
+    channels = int(cnn_channels)
+    kernel = int(kernel_size)
+    hidden = int(rnn_hidden)
+    if channels <= 0:
+        raise ValueError("cnn_channels must be >= 1")
+    if kernel <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    if hidden <= 0:
+        raise ValueError("rnn_hidden must be >= 1")
+
+    skip_int = int(skip)
+    if skip_int < 0:
+        raise ValueError("skip must be >= 0")
+    highway = int(highway_window)
+    if highway < 0:
+        raise ValueError("highway_window must be >= 0")
+
+    drop = float(dropout)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError("dropout must be in [0,1)")
+
+    return h, lag_count, channels, kernel, hidden, skip_int, highway, drop
+
+
+def _build_torch_train_config(
+    *,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    restore_best: bool,
+) -> TorchTrainConfig:
+    return TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        restore_best=bool(restore_best),
+    )
+
+
+def _prepare_univariate_direct_payload(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    normalize: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    x = _as_1d_float_array(train)
+    x_work = x
+    mean = 0.0
+    std = 1.0
+    if bool(normalize):
+        x_work, mean, std = _normalize_series(x_work)
+
+    X, Y = _make_lagged_xy_multi(x_work, lags=int(lags), horizon=int(horizon))
+    x_seq = X.reshape(X.shape[0], int(lags), 1)
+    return x_work, x_seq, Y, mean, std
+
+
+def _predict_direct_torch_model(
+    torch: Any,
+    model: Any,
+    history: np.ndarray,
+    *,
+    lag_count: int,
+    device: str,
+    predict_fn: Any | None = None,
+) -> np.ndarray:
+    feat = history[-int(lag_count) :].astype(float, copy=False).reshape(1, int(lag_count), 1)
+    with torch.no_grad():
+        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
+        raw = model(feat_t) if predict_fn is None else predict_fn(model, feat_t)
+        return raw.detach().cpu().numpy().reshape(-1)
+
+
+def _maybe_denormalize_forecast(
+    yhat_t: np.ndarray,
+    *,
+    normalize: bool,
+    mean: float,
+    std: float,
+) -> np.ndarray:
+    yhat = np.asarray(yhat_t, dtype=float).astype(float, copy=False)
+    if bool(normalize):
+        yhat = yhat * std + mean
+    return np.asarray(yhat, dtype=float)
+
+
+def _train_seq2seq(
+    model: Any,
+    X: np.ndarray,
+    Y: np.ndarray,
+    *,
+    cfg: TorchTrainConfig,
+    device: str,
+    teacher_forcing_start: float,
+    teacher_forcing_final: float,
+) -> Any:
+    torch = _require_torch()
+    nn = torch.nn
+
+    _validate_seq2seq_training_config(cfg)
+    tf0, tf1 = _validate_seq2seq_teacher_forcing(
+        teacher_forcing_start=teacher_forcing_start,
+        teacher_forcing_final=teacher_forcing_final,
+    )
+
+    torch.manual_seed(int(cfg.seed))
+
+    dev = torch.device(str(device))
+    if dev.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError("device='cuda' requested but CUDA is not available")
+
+    model = model.to(dev)
+    train_loader, val_loader = _split_seq2seq_train_validation(
+        torch,
+        X,
+        Y,
+        device=dev,
+        batch_size=int(cfg.batch_size),
+        val_split=float(cfg.val_split),
+    )
+    opt = _make_seq2seq_optimizer(torch, model, cfg=cfg)
+
+    loss_fn = _make_loss_fn(nn, cfg.loss)
+    sched = _make_seq2seq_scheduler(torch, opt, cfg=cfg)
 
     best_loss = float("inf")
     best_state: dict[str, Any] | None = None
     bad_epochs = 0
 
     for epoch in range(int(cfg.epochs)):
-        if int(cfg.epochs) == 1:
-            tf = tf1
-        else:
-            t = float(epoch) / float(int(cfg.epochs) - 1)
-            tf = (1.0 - t) * tf0 + t * tf1
+        tf = _seq2seq_teacher_forcing_ratio(
+            epoch,
+            total_epochs=int(cfg.epochs),
+            teacher_forcing_start=tf0,
+            teacher_forcing_final=tf1,
+        )
 
         model.train()
         total = 0.0
@@ -235,43 +466,23 @@ def torch_seq2seq_direct_forecast(
     torch = _require_torch()
     nn = torch.nn
 
-    x = _as_1d_float_array(train)
-    h = int(horizon)
-    lag_count = int(lags)
-    if h <= 0:
-        raise ValueError("horizon must be >= 1")
-    if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
-
-    cell_s = str(cell).lower().strip()
-    attn_s = str(attention).lower().strip()
-    if cell_s not in {"lstm", "gru"}:
-        raise ValueError("cell must be one of: lstm, gru")
-    if attn_s not in {"none", "bahdanau"}:
-        raise ValueError("attention must be one of: none, bahdanau")
-
-    hidden = int(hidden_size)
-    layers = int(num_layers)
-    if hidden <= 0:
-        raise ValueError("hidden_size must be >= 1")
-    if layers <= 0:
-        raise ValueError("num_layers must be >= 1")
-
-    drop = float(dropout)
-    if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0, 1)")
-
-    tf0 = float(teacher_forcing)
-    tf1 = float(tf0 if teacher_forcing_final is None else float(teacher_forcing_final))
-
-    x_work = x
-    mean = 0.0
-    std = 1.0
-    if bool(normalize):
-        x_work, mean, std = _normalize_series(x_work)
-
-    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    x_seq = X.reshape(X.shape[0], lag_count, 1)
+    h, lag_count, cell_s, attn_s, hidden, layers, drop, tf0, tf1 = _validate_seq2seq_direct_config(
+        horizon=horizon,
+        lags=lags,
+        cell=cell,
+        attention=attention,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        dropout=dropout,
+        teacher_forcing=teacher_forcing,
+        teacher_forcing_final=teacher_forcing_final,
+    )
+    x_work, x_seq, Y, mean, std = _prepare_univariate_direct_payload(
+        train,
+        h,
+        lags=lag_count,
+        normalize=bool(normalize),
+    )
 
     class _Bahdanau(nn.Module):
         def __init__(self) -> None:
@@ -360,22 +571,22 @@ def torch_seq2seq_direct_forecast(
 
     model = _Seq2Seq()
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        restore_best=bool(restore_best),
+    cfg = _build_torch_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        restore_best=restore_best,
     )
     model = _train_seq2seq(
         model,
@@ -387,15 +598,19 @@ def torch_seq2seq_direct_forecast(
         teacher_forcing_final=tf1,
     )
 
-    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t, None, teacher_forcing_ratio=0.0).detach().cpu().numpy().reshape(-1)
-
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std + mean
-    return np.asarray(yhat, dtype=float)
+    yhat_t = _predict_direct_torch_model(
+        torch,
+        model,
+        x_work,
+        lag_count=lag_count,
+        device=str(device),
+        predict_fn=lambda seq2seq_model, feat_t: seq2seq_model(
+            feat_t,
+            None,
+            teacher_forcing_ratio=0.0,
+        ),
+    )
+    return _maybe_denormalize_forecast(yhat_t, normalize=bool(normalize), mean=mean, std=std)
 
 
 def torch_lstnet_direct_forecast(
@@ -438,43 +653,22 @@ def torch_lstnet_direct_forecast(
     nn = torch.nn
     F = torch.nn.functional
 
-    x = _as_1d_float_array(train)
-    h = int(horizon)
-    lag_count = int(lags)
-    if h <= 0:
-        raise ValueError("horizon must be >= 1")
-    if lag_count <= 0:
-        raise ValueError("lags must be >= 1")
-
-    c = int(cnn_channels)
-    k = int(kernel_size)
-    hidden = int(rnn_hidden)
-    if c <= 0:
-        raise ValueError("cnn_channels must be >= 1")
-    if k <= 0:
-        raise ValueError("kernel_size must be >= 1")
-    if hidden <= 0:
-        raise ValueError("rnn_hidden must be >= 1")
-
-    skip_int = int(skip)
-    if skip_int < 0:
-        raise ValueError("skip must be >= 0")
-    hw = int(highway_window)
-    if hw < 0:
-        raise ValueError("highway_window must be >= 0")
-
-    drop = float(dropout)
-    if not (0.0 <= drop < 1.0):
-        raise ValueError("dropout must be in [0,1)")
-
-    x_work = x
-    mean = 0.0
-    std = 1.0
-    if bool(normalize):
-        x_work, mean, std = _normalize_series(x_work)
-
-    X, Y = _make_lagged_xy_multi(x_work, lags=lag_count, horizon=h)
-    x_seq = X.reshape(X.shape[0], lag_count, 1)
+    h, lag_count, c, k, hidden, skip_int, hw, drop = _validate_lstnet_direct_config(
+        horizon=horizon,
+        lags=lags,
+        cnn_channels=cnn_channels,
+        kernel_size=kernel_size,
+        rnn_hidden=rnn_hidden,
+        skip=skip,
+        highway_window=highway_window,
+        dropout=dropout,
+    )
+    x_work, x_seq, Y, mean, std = _prepare_univariate_direct_payload(
+        train,
+        h,
+        lags=lag_count,
+        normalize=bool(normalize),
+    )
 
     class _LSTNetLite(nn.Module):
         def __init__(self) -> None:
@@ -538,31 +732,30 @@ def torch_lstnet_direct_forecast(
 
     model = _LSTNetLite()
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        restore_best=bool(restore_best),
+    cfg = _build_torch_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        restore_best=restore_best,
     )
     model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
-    feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t).detach().cpu().numpy().reshape(-1)
-
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std + mean
-    return np.asarray(yhat, dtype=float)
+    yhat_t = _predict_direct_torch_model(
+        torch,
+        model,
+        x_work,
+        lag_count=lag_count,
+        device=str(device),
+    )
+    return _maybe_denormalize_forecast(yhat_t, normalize=bool(normalize), mean=mean, std=std)

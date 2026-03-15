@@ -41,7 +41,13 @@ df_promotion.head(2)
 
 # %%
 # 合并销售和促销数据
-df_all = pd.merge( df_sales, df_promotion, how='left' )
+df_all = pd.merge(
+    df_sales,
+    df_promotion,
+    how='left',
+    on=['store', 'dept', 'week'],
+    validate='one_to_one',
+)
 df_all.fillna(0, inplace=True)
 
 # %% [markdown]
