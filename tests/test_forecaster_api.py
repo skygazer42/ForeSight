@@ -80,12 +80,15 @@ def test_make_forecaster_svr_variants_accept_legacy_uppercase_c_keyword(
         horizon: int,
         *,
         lags: int,
-        C: float,
         gamma: object,
         epsilon: float,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> np.ndarray:
-        captured["svr-lag"] = {"lags": float(lags), "C": float(C), "epsilon": float(epsilon)}
+        captured["svr-lag"] = {
+            "lags": float(lags),
+            "C": float(kwargs["C"]),
+            "epsilon": float(epsilon),
+        }
         return np.zeros(int(horizon), dtype=float)
 
     def _fake_linear_svr_lag_direct_forecast(
@@ -93,15 +96,14 @@ def test_make_forecaster_svr_variants_accept_legacy_uppercase_c_keyword(
         horizon: int,
         *,
         lags: int,
-        C: float,
         epsilon: float,
         max_iter: int,
         random_state: int,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> np.ndarray:
         captured["linear-svr-lag"] = {
             "lags": float(lags),
-            "C": float(C),
+            "C": float(kwargs["C"]),
             "epsilon": float(epsilon),
             "max_iter": float(max_iter),
             "random_state": float(random_state),

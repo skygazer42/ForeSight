@@ -113,6 +113,7 @@ TARGETED_BAD_NAMES: dict[str, set[str]] = {
         "X_seq",
     },
     "src/foresight/models/trend.py": {"Xf"},
+    "tests/test_forecaster_api.py": {"C"},
 }
 
 TARGETED_RUNTIME_FUNCTION_BAD_NAMES: dict[str, set[str]] = {
