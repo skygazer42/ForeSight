@@ -33,7 +33,7 @@ def test_drift_forecast_linear_trend():
 def test_moving_average_forecast_uses_last_window():
     y = [1.0, 2.0, 3.0, 100.0]
     pred = moving_average_forecast(y, horizon=2, window=3)
-    # mean([2,3,100]) = 35
+    # The trailing three values average to 35.
     assert pred.tolist() == [35.0, 35.0]
 
 
@@ -71,7 +71,7 @@ def test_moving_median_forecast_uses_last_window():
         horizon=3,
         window=3,
     )
-    # median([2, 100, 4]) = 4
+    # The trailing three values have a median of 4.
     assert pred.shape == (3,)
     assert pred.tolist() == [4.0, 4.0, 4.0]
 

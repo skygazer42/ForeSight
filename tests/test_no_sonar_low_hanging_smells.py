@@ -288,6 +288,17 @@ def test_evaluation_source_extracts_eval_model_long_df_helpers() -> None:
     )
 
 
+def test_cli_catalog_source_extracts_reused_help_literals() -> None:
+    source = _read_repo_file("src/foresight/cli_catalog.py")
+
+    assert '_OUTPUT_FORMAT_DEFAULT_TSV_HELP = "Output format (default: tsv)"' in source
+    assert '_OPTIONAL_OUTPUT_PATH_HELP = "Optional path to write output"' in source
+    assert '_RNN_PAPER_METADATA_FILENAME = "rnn_paper_metadata.json"' in source
+    assert source.count('"Output format (default: tsv)"') == 1
+    assert source.count('"Optional path to write output"') == 1
+    assert source.count('"rnn_paper_metadata.json"') == 1
+
+
 def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
     source = _read_repo_file("src/foresight/models/kalman.py")
     assert "if not (vf > 0.0):" not in source

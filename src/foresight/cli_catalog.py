@@ -10,6 +10,9 @@ from typing import Any
 from . import cli_shared as _cli_shared
 
 _RNN_PAPER_METADATA_CACHE: dict[str, dict[str, Any]] | None = None
+_OUTPUT_FORMAT_DEFAULT_TSV_HELP = "Output format (default: tsv)"
+_OPTIONAL_OUTPUT_PATH_HELP = "Optional path to write output"
+_RNN_PAPER_METADATA_FILENAME = "rnn_paper_metadata.json"
 
 
 def register_catalog_subparsers(sub: Any) -> None:
@@ -27,13 +30,13 @@ def _register_models_parser(sub: Any) -> None:
         "--format",
         choices=["tsv", "json"],
         default="tsv",
-        help="Output format (default: tsv)",
+        help=_OUTPUT_FORMAT_DEFAULT_TSV_HELP,
     )
     models_list.add_argument(
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     models_list.add_argument(
         "--prefix",
@@ -101,7 +104,7 @@ def _register_models_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     models_info.set_defaults(_handler=_cmd_models_info)
 
@@ -113,13 +116,13 @@ def _register_models_parser(sub: Any) -> None:
         "--format",
         choices=["tsv", "json"],
         default="tsv",
-        help="Output format (default: tsv)",
+        help=_OUTPUT_FORMAT_DEFAULT_TSV_HELP,
     )
     models_search.add_argument(
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     models_search.add_argument(
         "--prefix",
@@ -168,13 +171,13 @@ def _register_papers_parser(sub: Any) -> None:
         "--format",
         choices=["tsv", "json"],
         default="tsv",
-        help="Output format (default: tsv)",
+        help=_OUTPUT_FORMAT_DEFAULT_TSV_HELP,
     )
     papers_list.add_argument(
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     papers_list.add_argument(
         "--query",
@@ -196,7 +199,7 @@ def _register_papers_parser(sub: Any) -> None:
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     papers_info.set_defaults(_handler=_cmd_papers_info)
 
@@ -208,13 +211,13 @@ def _register_papers_parser(sub: Any) -> None:
         "--format",
         choices=["tsv", "json"],
         default="tsv",
-        help="Output format (default: tsv)",
+        help=_OUTPUT_FORMAT_DEFAULT_TSV_HELP,
     )
     papers_models.add_argument(
         "--output",
         type=str,
         default="",
-        help="Optional path to write output",
+        help=_OPTIONAL_OUTPUT_PATH_HELP,
     )
     papers_models.add_argument(
         "--prefix",
@@ -267,13 +270,13 @@ def _load_rnn_paper_metadata() -> dict[str, dict[str, Any]]:
     if env_path:
         candidates.append(Path(env_path))
     try:
-        candidates.append(Path(__file__).resolve().parent / "data" / "rnn_paper_metadata.json")
+        candidates.append(Path(__file__).resolve().parent / "data" / _RNN_PAPER_METADATA_FILENAME)
     except Exception:  # noqa: BLE001
         pass
-    candidates.append(Path.cwd() / "docs" / "rnn_paper_metadata.json")
+    candidates.append(Path.cwd() / "docs" / _RNN_PAPER_METADATA_FILENAME)
     try:
         repo_root = Path(__file__).resolve().parents[2]
-        candidates.append(repo_root / "docs" / "rnn_paper_metadata.json")
+        candidates.append(repo_root / "docs" / _RNN_PAPER_METADATA_FILENAME)
     except Exception:  # noqa: BLE001
         pass
 
@@ -408,9 +411,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     if interface_filter not in {"any", "local", "global"}:
         raise ValueError("--interface must be one of: any, local, global")
 
-    req_set, include_core = _cli_shared._parse_requires_filter(
-        str(getattr(args, "requires", ""))
-    )
+    req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
     )
@@ -554,9 +555,7 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     if bool(getattr(args, "header", False)):
         lines.append("\t".join(columns))
     for r in rows:
-        lines.append(
-            "\t".join(_cli_shared._sanitize_tsv_cell(_col_value(r, c)) for c in columns)
-        )
+        lines.append("\t".join(_cli_shared._sanitize_tsv_cell(_col_value(r, c)) for c in columns))
     _cli_shared._emit_text("\n".join(lines), output=str(args.output))
     return 0
 
@@ -601,9 +600,7 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     if interface_filter not in {"any", "local", "global"}:
         raise ValueError("--interface must be one of: any, local, global")
 
-    req_set, include_core = _cli_shared._parse_requires_filter(
-        str(getattr(args, "requires", ""))
-    )
+    req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
     )
