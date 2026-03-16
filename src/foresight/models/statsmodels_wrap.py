@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -18,6 +19,21 @@ FOURIER_PERIODS_MUST_BE_VALID = "periods must contain integers >= 2"
 FOURIER_ORDERS_MUST_BE_NON_NEGATIVE = "orders must contain integers >= 0"
 UNEXPECTED_MSTL_SEASONAL_SHAPE = "Unexpected MSTL seasonal shape"
 UNEXPECTED_MSTL_COMPONENT_COUNT = "MSTL returned unexpected number of seasonal components"
+
+
+@dataclass(frozen=True)
+class _AutoArimaSearchConfig:
+    max_p: int = 3
+    max_d: int = 2
+    max_q: int = 3
+    max_seasonal_p: int = 0
+    max_seasonal_d: int = 0
+    max_seasonal_q: int = 0
+    seasonal_period: int | None = None
+    trend: str | None = None
+    enforce_stationarity: bool = True
+    enforce_invertibility: bool = True
+    information_criterion: str = "aic"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -220,6 +236,75 @@ def _normalize_auto_arima_search_config(
     return seasonal_period_int, ic_key, trend_final, allow_zero_order
 
 
+def _resolve_auto_arima_search_config(
+    function_name: str,
+    *,
+    max_p: int,
+    max_d: int,
+    max_q: int,
+    max_seasonal_p: int,
+    max_seasonal_d: int,
+    max_seasonal_q: int,
+    seasonal_period: int | None,
+    trend: str | None,
+    enforce_stationarity: bool,
+    enforce_invertibility: bool,
+    information_criterion: str,
+    kwargs: dict[str, Any],
+) -> _AutoArimaSearchConfig:
+    resolved_max_seasonal_p = int(
+        _pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p)
+    )
+    resolved_max_seasonal_d = int(
+        _pop_legacy_keyword(kwargs, legacy_name="max_D", value=max_seasonal_d)
+    )
+    resolved_max_seasonal_q = int(
+        _pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q)
+    )
+    _raise_unexpected_kwargs(function_name, kwargs)
+    return _AutoArimaSearchConfig(
+        max_p=int(max_p),
+        max_d=int(max_d),
+        max_q=int(max_q),
+        max_seasonal_p=resolved_max_seasonal_p,
+        max_seasonal_d=resolved_max_seasonal_d,
+        max_seasonal_q=resolved_max_seasonal_q,
+        seasonal_period=seasonal_period,
+        trend=trend,
+        enforce_stationarity=bool(enforce_stationarity),
+        enforce_invertibility=bool(enforce_invertibility),
+        information_criterion=str(information_criterion),
+    )
+
+
+def _auto_arima_seasonal_grid(
+    *,
+    max_seasonal_p: int,
+    max_seasonal_d: int,
+    max_seasonal_q: int,
+    seasonal_period: int | None,
+) -> list[tuple[int, int, int, int]]:
+    if seasonal_period is None:
+        return [(0, 0, 0, 0)]
+    return [
+        (P, D, Q, seasonal_period)
+        for P in range(0, int(max_seasonal_p) + 1)
+        for D in range(0, int(max_seasonal_d) + 1)
+        for Q in range(0, int(max_seasonal_q) + 1)
+    ]
+
+
+def _auto_arima_skips_zero_order(
+    order: tuple[int, int, int],
+    seasonal_order: tuple[int, int, int, int],
+    *,
+    allow_zero_order: bool,
+) -> bool:
+    if allow_zero_order:
+        return False
+    return sum(order) == 0 and sum(seasonal_order[:3]) == 0
+
+
 def _iter_auto_arima_candidate_orders(
     *,
     max_p: int,
@@ -231,31 +316,25 @@ def _iter_auto_arima_candidate_orders(
     seasonal_period: int | None,
     allow_zero_order: bool,
 ) -> tuple[tuple[int, int, int], tuple[int, int, int, int]]:
-    seasonal_grid = (
-        [(0, 0, 0, 0)]
-        if seasonal_period is None
-        else [
-            (P, D, Q, seasonal_period)
-            for P in range(0, int(max_seasonal_p) + 1)
-            for D in range(0, int(max_seasonal_d) + 1)
-            for Q in range(0, int(max_seasonal_q) + 1)
-        ]
+    seasonal_grid = _auto_arima_seasonal_grid(
+        max_seasonal_p=max_seasonal_p,
+        max_seasonal_d=max_seasonal_d,
+        max_seasonal_q=max_seasonal_q,
+        seasonal_period=seasonal_period,
     )
     for p in range(0, int(max_p) + 1):
         for d in range(0, int(max_d) + 1):
             for q in range(0, int(max_q) + 1):
                 for P, D, Q, s in seasonal_grid:
-                    if (
-                        p == 0
-                        and d == 0
-                        and q == 0
-                        and P == 0
-                        and D == 0
-                        and Q == 0
-                        and not allow_zero_order
+                    order = (int(p), int(d), int(q))
+                    seasonal_order = (int(P), int(D), int(Q), int(s))
+                    if _auto_arima_skips_zero_order(
+                        order,
+                        seasonal_order,
+                        allow_zero_order=allow_zero_order,
                     ):
                         continue
-                    yield (int(p), int(d), int(q)), (int(P), int(D), int(Q), int(s))
+                    yield order, seasonal_order
 
 
 def _fit_auto_arima_candidate_result(
@@ -287,19 +366,9 @@ def _fit_auto_arima_best_result(
     train: Any,
     horizon: int,
     *,
-    max_p: int = 3,
-    max_d: int = 2,
-    max_q: int = 3,
-    max_seasonal_p: int = 0,
-    max_seasonal_d: int = 0,
-    max_seasonal_q: int = 0,
-    seasonal_period: int | None = None,
-    trend: str | None = None,
-    enforce_stationarity: bool = True,
-    enforce_invertibility: bool = True,
+    config: _AutoArimaSearchConfig,
     train_exog: Any | None = None,
     future_exog: Any | None = None,
-    information_criterion: str = "aic",
 ) -> tuple[Any, np.ndarray | None]:
     try:
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
@@ -313,12 +382,12 @@ def _fit_auto_arima_best_result(
     if x.size < 5:
         raise ValueError("auto_arima_forecast requires at least 5 training points")
     _validate_auto_arima_grid_bounds(
-        max_p=int(max_p),
-        max_d=int(max_d),
-        max_q=int(max_q),
-        max_seasonal_p=int(max_seasonal_p),
-        max_seasonal_d=int(max_seasonal_d),
-        max_seasonal_q=int(max_seasonal_q),
+        max_p=int(config.max_p),
+        max_d=int(config.max_d),
+        max_q=int(config.max_q),
+        max_seasonal_p=int(config.max_seasonal_p),
+        max_seasonal_d=int(config.max_seasonal_d),
+        max_seasonal_q=int(config.max_seasonal_q),
     )
 
     exog_train, exog_future = _validate_exog_pair(
@@ -330,13 +399,13 @@ def _fit_auto_arima_best_result(
 
     seasonal_period_int, ic_key, trend_final, allow_zero_order = (
         _normalize_auto_arima_search_config(
-            seasonal_period=seasonal_period,
-            information_criterion=information_criterion,
-            trend=trend,
+            seasonal_period=config.seasonal_period,
+            information_criterion=config.information_criterion,
+            trend=config.trend,
             exog_train=exog_train,
-            max_seasonal_p=int(max_seasonal_p),
-            max_seasonal_d=int(max_seasonal_d),
-            max_seasonal_q=int(max_seasonal_q),
+            max_seasonal_p=int(config.max_seasonal_p),
+            max_seasonal_d=int(config.max_seasonal_d),
+            max_seasonal_q=int(config.max_seasonal_q),
         )
     )
 
@@ -344,12 +413,12 @@ def _fit_auto_arima_best_result(
     best_res = None
 
     for order, seasonal_order in _iter_auto_arima_candidate_orders(
-        max_p=int(max_p),
-        max_d=int(max_d),
-        max_q=int(max_q),
-        max_seasonal_p=int(max_seasonal_p),
-        max_seasonal_d=int(max_seasonal_d),
-        max_seasonal_q=int(max_seasonal_q),
+        max_p=int(config.max_p),
+        max_d=int(config.max_d),
+        max_q=int(config.max_q),
+        max_seasonal_p=int(config.max_seasonal_p),
+        max_seasonal_d=int(config.max_seasonal_d),
+        max_seasonal_q=int(config.max_seasonal_q),
         seasonal_period=seasonal_period_int,
         allow_zero_order=allow_zero_order,
     ):
@@ -360,8 +429,8 @@ def _fit_auto_arima_best_result(
             order=order,
             seasonal_order=seasonal_order,
             trend_final=trend_final,
-            enforce_stationarity=bool(enforce_stationarity),
-            enforce_invertibility=bool(enforce_invertibility),
+            enforce_stationarity=bool(config.enforce_stationarity),
+            enforce_invertibility=bool(config.enforce_invertibility),
         )
         if res is None:
             continue
@@ -876,7 +945,7 @@ def stl_auto_arima_forecast(
     return np.asarray(fc_adj + seasonal_fc, dtype=float)
 
 
-def auto_arima_forecast(
+def auto_arima_forecast(  # NOSONAR - public API keeps explicit tuning knobs
     train: Any,
     horizon: int,
     *,
@@ -901,14 +970,8 @@ def auto_arima_forecast(
     This tries orders in a small (p,d,q) grid, optionally with seasonal
     (P,D,Q,s), and selects the best by AIC/BIC.
     """
-    max_seasonal_p = int(_pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p))
-    max_seasonal_d = int(_pop_legacy_keyword(kwargs, legacy_name="max_D", value=max_seasonal_d))
-    max_seasonal_q = int(_pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q))
-    _raise_unexpected_kwargs("auto_arima_forecast", kwargs)
-
-    best_res, exog_future = _fit_auto_arima_best_result(
-        train,
-        horizon,
+    config = _resolve_auto_arima_search_config(
+        "auto_arima_forecast",
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
@@ -919,9 +982,16 @@ def auto_arima_forecast(
         trend=trend,
         enforce_stationarity=enforce_stationarity,
         enforce_invertibility=enforce_invertibility,
+        information_criterion=information_criterion,
+        kwargs=kwargs,
+    )
+
+    best_res, exog_future = _fit_auto_arima_best_result(
+        train,
+        horizon,
+        config=config,
         train_exog=train_exog,
         future_exog=future_exog,
-        information_criterion=information_criterion,
     )
     if exog_future is None:
         fc = best_res.forecast(steps=int(horizon))
@@ -930,7 +1000,7 @@ def auto_arima_forecast(
     return np.asarray(fc, dtype=float)
 
 
-def auto_arima_forecast_with_intervals(
+def auto_arima_forecast_with_intervals(  # NOSONAR - public API keeps explicit tuning knobs
     train: Any,
     horizon: int,
     *,
@@ -950,14 +1020,8 @@ def auto_arima_forecast_with_intervals(
     information_criterion: str = "aic",
     **kwargs: Any,
 ) -> dict[str, Any]:
-    max_seasonal_p = int(_pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p))
-    max_seasonal_d = int(_pop_legacy_keyword(kwargs, legacy_name="max_D", value=max_seasonal_d))
-    max_seasonal_q = int(_pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q))
-    _raise_unexpected_kwargs("auto_arima_forecast_with_intervals", kwargs)
-
-    best_res, exog_future = _fit_auto_arima_best_result(
-        train,
-        horizon,
+    config = _resolve_auto_arima_search_config(
+        "auto_arima_forecast_with_intervals",
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
@@ -968,9 +1032,16 @@ def auto_arima_forecast_with_intervals(
         trend=trend,
         enforce_stationarity=enforce_stationarity,
         enforce_invertibility=enforce_invertibility,
+        information_criterion=information_criterion,
+        kwargs=kwargs,
+    )
+
+    best_res, exog_future = _fit_auto_arima_best_result(
+        train,
+        horizon,
+        config=config,
         train_exog=train_exog,
         future_exog=future_exog,
-        information_criterion=information_criterion,
     )
     return _forecast_with_interval_levels(
         best_res,

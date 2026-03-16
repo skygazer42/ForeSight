@@ -813,7 +813,6 @@ def _ensure_metadata_entry(
     paper_id: str,
     desc: str,
     expected_year: int | None,
-    existing: dict[str, Any],
     updated: dict[str, Any],
     url_overrides: dict[str, str],
 ) -> dict[str, Any]:
@@ -1134,7 +1133,6 @@ def fetch_all(*, output_path: Path, refresh: bool, sleep_s: float, only: str) ->
             paper_id=paper_id,
             desc=desc,
             expected_year=expected_year,
-            existing=existing,
             updated=updated,
             url_overrides=url_overrides,
         )

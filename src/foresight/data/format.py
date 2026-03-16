@@ -81,7 +81,7 @@ def build_hierarchy_spec(
     return out
 
 
-def to_long(
+def to_long(  # NOSONAR - public API intentionally exposes explicit conversion knobs
     df: pd.DataFrame,
     *,
     time_col: str,

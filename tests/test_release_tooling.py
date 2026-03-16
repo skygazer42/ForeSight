@@ -177,6 +177,24 @@ def test_sonar_project_configuration_targets_maintained_code() -> None:
     )
 
 
+def test_automatic_analysis_configuration_scopes_autoscan() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    config = (repo_root / ".sonarcloud.properties").read_text(encoding="utf-8")
+
+    assert "sonar.organization=skygazer42" in config
+    assert "sonar.projectKey=skygazer42_ForeSight" in config
+    assert "sonar.sources=src,tools,.github/workflows" in config
+    assert "sonar.tests=tests" in config
+    assert "src/foresight/cli_catalog.py" in config
+    assert "src/foresight/models/runtime.py" in config
+    assert "src/foresight/models/regression.py" in config
+    assert "src/foresight/models/global_regression.py" in config
+    assert "src/foresight/models/torch_global.py" in config
+    assert "src/foresight/models/torch_nn.py" in config
+    assert "src/foresight/models/torch_seq2seq.py" in config
+    assert "src/foresight/models/torch_xformer.py" in config
+
+
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     release_doc = (repo_root / "docs" / "RELEASE.md").read_text(encoding="utf-8")

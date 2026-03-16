@@ -16,13 +16,13 @@ def test_foundation_scaffold_modules_import() -> None:
     reservoir = importlib.import_module("foresight.models.torch_reservoir")
     structured = importlib.import_module("foresight.models.torch_structured_rnn")
 
-    assert foundation is not None
-    assert graph_attention is not None
-    assert graph_spectral is not None
-    assert graph_structure is not None
-    assert probabilistic is not None
-    assert reservoir is not None
-    assert structured is not None
+    assert foundation.__name__ == "foresight.models.foundation"
+    assert graph_attention.__name__ == "foresight.models.torch_graph_attention"
+    assert graph_spectral.__name__ == "foresight.models.torch_graph_spectral"
+    assert graph_structure.__name__ == "foresight.models.torch_graph_structure"
+    assert probabilistic.__name__ == "foresight.models.torch_probabilistic"
+    assert reservoir.__name__ == "foresight.models.torch_reservoir"
+    assert structured.__name__ == "foresight.models.torch_structured_rnn"
 
 
 @pytest.mark.parametrize(
