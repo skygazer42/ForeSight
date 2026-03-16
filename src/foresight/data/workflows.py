@@ -15,6 +15,7 @@ from ..features.tabular import (
     normalize_str_tuple,
 )
 from ..features.time import build_fourier_features, build_time_features
+from .format import resolve_covariate_roles
 from .prep import infer_series_frequency
 
 _ALLOWED_ALIGN_AGG = frozenset({"first", "last", "max", "mean", "min", "sum"})
@@ -1014,6 +1015,183 @@ def make_supervised_predict_arrays(
         "feature_names": feature_names,
         "index": index,
         "metadata": metadata,
+    }
+
+
+def _validate_forecast_long_df_input(long_df: Any) -> pd.DataFrame:
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    if df.loc[:, ["unique_id", "ds"]].duplicated().any():
+        raise ValueError("long_df contains duplicate unique_id/ds rows")
+    return df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+
+
+def _coerce_forecast_future_df(future_df: Any) -> pd.DataFrame:
+    if not isinstance(future_df, pd.DataFrame):
+        raise TypeError("future_df must be a pandas DataFrame")
+    required = {"unique_id", "ds"}
+    missing = required.difference(future_df.columns)
+    if missing:
+        raise KeyError(f"future_df missing required columns: {sorted(missing)}")
+    if future_df.empty:
+        raise ValueError("future_df is empty")
+
+    out = future_df.copy()
+    out["ds"] = pd.to_datetime(out["ds"], errors="raise")
+    if out.loc[:, ["unique_id", "ds"]].duplicated().any():
+        raise ValueError("future_df contains duplicate unique_id/ds rows")
+    if "y" not in out.columns:
+        out["y"] = np.nan
+    elif out["y"].notna().any():
+        raise ValueError("future_df must not contain observed y values")
+    return out
+
+
+def _merge_forecast_long_and_future_df(long_df: pd.DataFrame, future_df: pd.DataFrame) -> pd.DataFrame:
+    overlap = (
+        long_df.loc[:, ["unique_id", "ds"]]
+        .merge(future_df.loc[:, ["unique_id", "ds"]], on=["unique_id", "ds"], how="inner")
+        .drop_duplicates()
+    )
+    if not overlap.empty:
+        raise ValueError("future_df overlaps with long_df on unique_id/ds")
+
+    cols = list(long_df.columns)
+    for col in future_df.columns:
+        if col not in cols:
+            cols.append(col)
+
+    left = long_df.copy()
+    right = future_df.copy()
+    for col in cols:
+        if col not in left.columns:
+            left[col] = np.nan
+        if col not in right.columns:
+            right[col] = np.nan
+
+    return (
+        pd.concat(
+            [left.loc[:, cols], right.loc[:, cols]],
+            axis=0,
+            ignore_index=True,
+            sort=False,
+        )
+        .sort_values(["unique_id", "ds"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+
+
+def _prepare_local_xreg_bundle_group(
+    group: pd.DataFrame,
+    *,
+    horizon: int,
+    x_cols: tuple[str, ...],
+) -> tuple[pd.DataFrame, pd.DataFrame, Any]:
+    horizon_int = int(horizon)
+    if horizon_int <= 0:
+        raise ValueError("horizon must be >= 1")
+
+    missing_x_cols = [col for col in x_cols if col not in group.columns]
+    if missing_x_cols:
+        raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
+
+    g = group.sort_values(["ds"], kind="mergesort").reset_index(drop=True)
+    y_notna = g["y"].notna().to_numpy(dtype=bool, copy=False)
+    if not y_notna.any():
+        raise ValueError(
+            f"Local forecast with x_cols requires observed history for unique_id={g['unique_id'].iloc[0]!r}"
+        )
+
+    missing_idx = np.flatnonzero(~y_notna)
+    if missing_idx.size > 0:
+        first_missing = int(missing_idx[0])
+        if y_notna[first_missing:].any():
+            raise ValueError(
+                "Local forecast with x_cols requires missing y values only after the observed history"
+            )
+
+    observed_count = int(y_notna.sum())
+    observed = g.iloc[:observed_count].copy()
+    future = g.iloc[observed_count:].copy()
+    if len(future) < horizon_int:
+        raise ValueError("Local forecast with x_cols requires at least horizon future rows per series")
+    future = future.iloc[:horizon_int].copy()
+
+    missing_observed_x = [col for col in x_cols if observed[col].isna().any()]
+    if missing_observed_x:
+        raise ValueError(f"Local forecast observed rows are missing required x_cols: {missing_observed_x}")
+
+    missing_future_x = [col for col in x_cols if future[col].isna().any()]
+    if missing_future_x:
+        raise ValueError(f"Local forecast future rows are missing required x_cols: {missing_future_x}")
+
+    cutoff = observed["ds"].iloc[-1]
+    return observed, future, cutoff
+
+
+def make_local_xreg_forecast_bundle(
+    long_df: Any,
+    *,
+    horizon: int,
+    x_cols: Any = (),
+    future_x_cols: Any = (),
+    historic_x_cols: Any = (),
+    future_df: Any | None = None,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build per-series forecast-time arrays for local models that require known future covariates.
+    """
+    historic_cols, future_cols, _all_cols = resolve_covariate_roles(
+        x_cols=x_cols,
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+    )
+    if historic_cols:
+        raise ValueError("historic_x_cols are not yet supported in make_local_xreg_forecast_bundle")
+    if not future_cols:
+        raise ValueError("make_local_xreg_forecast_bundle requires future covariates via x_cols")
+
+    observed_df = _validate_forecast_long_df_input(long_df)
+    uses_future_df = future_df is not None
+    if future_df is not None:
+        observed_df = _merge_forecast_long_and_future_df(
+            observed_df,
+            _coerce_forecast_future_df(future_df),
+        )
+
+    groups: list[dict[str, Any]] = []
+    series_ids: list[str] = []
+    for unique_id, group in observed_df.groupby("unique_id", sort=False):
+        observed, future, cutoff = _prepare_local_xreg_bundle_group(
+            group,
+            horizon=int(horizon),
+            x_cols=future_cols,
+        )
+        series_ids.append(str(unique_id))
+        groups.append(
+            {
+                "unique_id": unique_id,
+                "cutoff_ds": cutoff,
+                "x_cols": future_cols,
+                "train_y": observed["y"].to_numpy(dtype=dtype, copy=False).copy(),
+                "train_exog": observed.loc[:, list(future_cols)].to_numpy(dtype=dtype, copy=False).copy(),
+                "future_exog": future.loc[:, list(future_cols)].to_numpy(dtype=dtype, copy=False).copy(),
+                "train_index": observed.loc[:, ["unique_id", "ds"]].reset_index(drop=True),
+                "future_index": future.loc[:, ["unique_id", "ds"]]
+                .assign(step=np.arange(1, len(future) + 1, dtype=int))
+                .reset_index(drop=True),
+            }
+        )
+
+    return {
+        "groups": groups,
+        "metadata": {
+            "horizon": int(horizon),
+            "x_cols": future_cols,
+            "n_series": int(len(groups)),
+            "uses_future_df": bool(uses_future_df),
+            "series_ids": tuple(series_ids),
+        },
     }
 
 

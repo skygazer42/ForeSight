@@ -12,6 +12,7 @@ from foresight.data import (
     make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
+    make_local_xreg_forecast_bundle,
     make_panel_window_predict_arrays,
     make_panel_window_predict_frame,
     make_supervised_arrays,
@@ -441,6 +442,108 @@ def test_make_supervised_predict_frame_allows_missing_future_y() -> None:
     assert frame["target_start_ds"].tolist() == [pd.Timestamp("2020-01-07")]
     assert frame["target_end_ds"].tolist() == [pd.Timestamp("2020-01-08")]
     assert frame["feat_x_promo"].tolist() == [1.0]
+
+
+def test_make_local_xreg_forecast_bundle_merged_long_df_shapes_and_values() -> None:
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "y": [np.nan, np.nan, np.nan],
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    bundle = make_local_xreg_forecast_bundle(long_df, horizon=3, x_cols=("promo",))
+
+    assert set(bundle) == {"groups", "metadata"}
+    assert bundle["metadata"]["horizon"] == 3
+    assert bundle["metadata"]["x_cols"] == ("promo",)
+    assert bundle["metadata"]["n_series"] == 1
+    assert bundle["metadata"]["uses_future_df"] is False
+    assert bundle["metadata"]["series_ids"] == ("s0",)
+
+    group = bundle["groups"][0]
+    assert group["unique_id"] == "s0"
+    assert group["cutoff_ds"] == pd.Timestamp("2020-01-06")
+    assert group["x_cols"] == ("promo",)
+    assert np.allclose(group["train_y"], history["y"].to_numpy(dtype=float))
+    assert np.allclose(group["train_exog"], history.loc[:, ["promo"]].to_numpy(dtype=float))
+    assert np.allclose(group["future_exog"], future.loc[:, ["promo"]].to_numpy(dtype=float))
+    assert group["train_index"].equals(history.loc[:, ["unique_id", "ds"]].reset_index(drop=True))
+    assert group["future_index"].equals(
+        future.loc[:, ["unique_id", "ds"]]
+        .assign(step=np.asarray([1, 2, 3], dtype=int))
+        .reset_index(drop=True)
+    )
+
+
+def test_make_local_xreg_forecast_bundle_future_df_matches_merged_long_df() -> None:
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    merged = pd.concat([history, future_df.assign(y=np.nan)], ignore_index=True, sort=False)
+
+    merged_bundle = make_local_xreg_forecast_bundle(merged, horizon=3, x_cols=("promo",))
+    split_bundle = make_local_xreg_forecast_bundle(
+        history,
+        future_df=future_df,
+        horizon=3,
+        future_x_cols=("promo",),
+    )
+
+    assert split_bundle["metadata"]["uses_future_df"] is True
+    assert split_bundle["metadata"]["x_cols"] == ("promo",)
+    assert len(merged_bundle["groups"]) == len(split_bundle["groups"]) == 1
+
+    merged_group = merged_bundle["groups"][0]
+    split_group = split_bundle["groups"][0]
+    assert np.allclose(split_group["train_y"], merged_group["train_y"])
+    assert np.allclose(split_group["train_exog"], merged_group["train_exog"])
+    assert np.allclose(split_group["future_exog"], merged_group["future_exog"])
+    assert split_group["train_index"].equals(merged_group["train_index"])
+    assert split_group["future_index"].equals(merged_group["future_index"])
+
+
+def test_make_local_xreg_forecast_bundle_rejects_historic_x_cols() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, np.nan, np.nan],
+            "promo_hist": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="historic_x_cols are not yet supported"):
+        make_local_xreg_forecast_bundle(
+            long_df,
+            horizon=2,
+            historic_x_cols=("promo_hist",),
+            future_x_cols=("promo",),
+        )
 
 
 def test_split_long_df_sizes_respects_per_series_order() -> None:
