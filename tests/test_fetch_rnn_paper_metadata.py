@@ -82,3 +82,21 @@ def test_fetch_tool_avoids_nested_conditionals_for_metadata_sources() -> None:
         '"arxiv" if (arxiv and arxiv.doi) else ("crossref" if (crossref and crossref.doi) else "")'
         not in source
     )
+
+
+def test_parse_desc_handles_parenthesized_metadata_without_regex_backtracking() -> None:
+    mod = _load_tool()
+    parse_desc = mod["_parse_desc"]
+
+    name, authors, year = parse_desc("Bidirectional RNN (Schuster & Paliwal, 1997)")
+
+    assert name == "Bidirectional RNN"
+    assert authors == ["Schuster", "Paliwal"]
+    assert year == 1997
+
+
+def test_arxiv_query_uses_https_transport() -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "tools" / "fetch_rnn_paper_metadata.py").read_text(encoding="utf-8")
+
+    assert "https://export.arxiv.org/api/query?" in source

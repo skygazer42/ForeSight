@@ -96,13 +96,22 @@ def _parse_desc(desc: str) -> tuple[str, list[str], int | None]:
     """
 
     text = _normalize_spaces(desc)
-    m = re.match(r"^(.*?)\s*\((.*?)\s*,\s*(\d{4})\)\s*$", text)
-    if not m:
+    close_idx = text.rfind(")")
+    open_idx = text.rfind("(", 0, close_idx if close_idx >= 0 else len(text))
+    if open_idx < 0 or close_idx != len(text) - 1:
         return text, [], None
 
-    name_part = _normalize_spaces(m.group(1))
-    author_part = _normalize_spaces(m.group(2))
-    year = int(m.group(3))
+    inside = text[open_idx + 1 : close_idx].strip()
+    if "," not in inside:
+        return text, [], None
+    author_raw, year_raw = inside.rsplit(",", 1)
+    year_text = year_raw.strip()
+    if len(year_text) != 4 or not year_text.isdigit():
+        return text, [], None
+
+    name_part = _normalize_spaces(text[:open_idx])
+    author_part = _normalize_spaces(author_raw)
+    year = int(year_text)
 
     author_part = author_part.replace("et al.", "").replace("et al", "")
     author_part = author_part.replace("&", ",").replace(" and ", ",")
@@ -261,7 +270,7 @@ def _parse_arxiv_entry(entry: ET.Element, ns: dict[str, str]) -> ArxivHit | None
 
 
 def _arxiv_query(search_query: str, *, max_results: int = 5) -> list[ArxivHit]:
-    url = "http://export.arxiv.org/api/query?" + urllib.parse.urlencode(
+    url = "https://export.arxiv.org/api/query?" + urllib.parse.urlencode(
         {"search_query": search_query, "start": 0, "max_results": int(max_results)}
     )
     xml = _http_get_text(url, timeout=30)

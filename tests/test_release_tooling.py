@@ -64,6 +64,14 @@ def test_docs_workflow_scopes_write_permissions_to_jobs() -> None:
     assert deploy_permissions.get("id-token") == "write"
 
 
+def test_release_workflow_pins_publish_action_to_full_sha() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = (repo_root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e" in workflow
+    assert "pypa/gh-action-pypi-publish@release/v1" not in workflow
+
+
 def test_ci_workflow_includes_sonar_analysis_job() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow = _load_workflow(repo_root / ".github" / "workflows" / "ci.yml")
