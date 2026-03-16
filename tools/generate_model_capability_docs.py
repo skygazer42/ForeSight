@@ -203,6 +203,16 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Persist a fitted forecaster and its schema/version metadata to disk.",
     },
+    "split_panel_window_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split panel-window training arrays into train, validation, and test partitions by window origin.",
+    },
+    "split_panel_window_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split panel-window training rows into train, validation, and test partitions by window origin.",
+    },
     "split_panel_sequence_blocks": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
