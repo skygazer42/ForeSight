@@ -10,7 +10,11 @@ from .workflows import (
     align_long_df,
     clip_long_df_outliers,
     enrich_long_df_calendar,
+    fit_long_df_scaler,
+    inverse_transform_long_df_with_scaler,
     make_supervised_frame,
+    split_long_df,
+    transform_long_df_with_scaler,
 )
 
 __all__ = [
@@ -25,5 +29,9 @@ __all__ = [
     "align_long_df",
     "clip_long_df_outliers",
     "enrich_long_df_calendar",
+    "fit_long_df_scaler",
+    "inverse_transform_long_df_with_scaler",
     "make_supervised_frame",
+    "split_long_df",
+    "transform_long_df_with_scaler",
 ]

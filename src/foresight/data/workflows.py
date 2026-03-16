@@ -19,6 +19,8 @@ from .prep import infer_series_frequency
 
 _ALLOWED_ALIGN_AGG = frozenset({"first", "last", "max", "mean", "min", "sum"})
 _ALLOWED_OUTLIER_METHODS = frozenset({"iqr", "zscore"})
+_ALLOWED_SCALER_METHODS = frozenset({"maxabs", "minmax", "standard"})
+_ALLOWED_SCALER_SCOPES = frozenset({"global", "per_series"})
 
 
 def _coerce_long_df(long_df: Any, *, require_non_empty: bool = True) -> pd.DataFrame:
@@ -519,3 +521,283 @@ def make_supervised_frame(
         )
 
     return pd.concat(frames, axis=0, ignore_index=True, sort=False)
+
+
+def _normalize_split_size(value: int | None, *, name: str) -> int:
+    if value is None:
+        return 0
+    value_int = int(value)
+    if value_int < 0:
+        raise ValueError(f"{name} must be >= 0")
+    return value_int
+
+
+def _normalize_split_frac(value: float | None, *, name: str) -> float:
+    if value is None:
+        return 0.0
+    value_float = float(value)
+    if not (0.0 <= value_float < 1.0):
+        raise ValueError(f"{name} must be in [0, 1)")
+    return value_float
+
+
+def _resolved_partition_size(
+    *,
+    n_rows: int,
+    size: int | None,
+    frac: float | None,
+    name: str,
+) -> int:
+    if size is not None and frac is not None:
+        raise ValueError(f"{name} and {name.replace('size', 'frac')} cannot both be set")
+    if size is not None:
+        return _normalize_split_size(size, name=name)
+    return int(np.floor(_normalize_split_frac(frac, name=name.replace("size", "frac")) * float(n_rows)))
+
+
+def split_long_df(
+    long_df: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, pd.DataFrame]:
+    """
+    Chronologically split each series in a long-format DataFrame into train/valid/test partitions.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    gap_int = int(gap)
+    min_train_size_int = int(min_train_size)
+    if gap_int < 0:
+        raise ValueError("gap must be >= 0")
+    if min_train_size_int <= 0:
+        raise ValueError("min_train_size must be >= 1")
+
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    frames: dict[str, list[pd.DataFrame]] = {"train": [], "valid": [], "test": []}
+
+    for unique_id, group in out.groupby("unique_id", sort=False):
+        group = group.reset_index(drop=True)
+        n_rows = int(len(group))
+        valid_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=valid_size,
+            frac=valid_frac,
+            name="valid_size",
+        )
+        test_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=test_size,
+            frac=test_frac,
+            name="test_size",
+        )
+        if valid_n == 0 and test_n == 0:
+            raise ValueError("at least one of valid/test size or frac must be positive")
+
+        gap_before_valid = gap_int if valid_n > 0 else 0
+        gap_before_test = gap_int if test_n > 0 else 0
+        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
+        if train_end < min_train_size_int:
+            raise ValueError(
+                f"split_long_df leaves fewer than min_train_size={min_train_size_int} "
+                f"rows for unique_id={unique_id!r}"
+            )
+
+        valid_start = train_end + gap_before_valid
+        valid_end = valid_start + valid_n
+        test_start = valid_end + gap_before_test
+        if test_start + test_n > n_rows:
+            raise ValueError(f"split_long_df consumes more rows than available for unique_id={unique_id!r}")
+
+        frames["train"].append(group.iloc[:train_end].copy())
+        frames["valid"].append(group.iloc[valid_start:valid_end].copy())
+        frames["test"].append(group.iloc[test_start : test_start + test_n].copy())
+
+    result: dict[str, pd.DataFrame] = {}
+    for name, part_frames in frames.items():
+        non_empty = [frame for frame in part_frames if not frame.empty]
+        if non_empty:
+            result[name] = pd.concat(non_empty, axis=0, ignore_index=True, sort=False)
+        else:
+            result[name] = out.iloc[0:0].copy()
+    return result
+
+
+def _normalize_scaler_method(method: str) -> str:
+    normalized = str(method).strip().lower()
+    if normalized not in _ALLOWED_SCALER_METHODS:
+        raise ValueError(f"method must be one of: {sorted(_ALLOWED_SCALER_METHODS)}")
+    return normalized
+
+
+def _normalize_scaler_scope(scope: str) -> str:
+    normalized = str(scope).strip().lower()
+    if normalized not in _ALLOWED_SCALER_SCOPES:
+        raise ValueError(f"scope must be one of: {sorted(_ALLOWED_SCALER_SCOPES)}")
+    return normalized
+
+
+def fit_long_df_scaler(
+    long_df: Any,
+    *,
+    method: str = "standard",
+    scope: str = "per_series",
+    columns: tuple[str, ...] = ("y",),
+) -> pd.DataFrame:
+    """
+    Fit reversible scaling statistics for selected long-format numeric columns.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    method_name = _normalize_scaler_method(method)
+    scope_name = _normalize_scaler_scope(scope)
+    value_cols = _resolve_numeric_columns(df, columns=columns, default_columns=("y",))
+    ordered = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+
+    if scope_name == "global":
+        groups = [("__global__", ordered)]
+    else:
+        groups = list(ordered.groupby("unique_id", sort=False))
+
+    rows: list[dict[str, Any]] = []
+    for unique_id, group in groups:
+        for col in value_cols:
+            values = group[col].to_numpy(dtype=float, copy=False)
+            finite = values[np.isfinite(values)]
+            if finite.size == 0:
+                raise ValueError(f"cannot fit scaler for column={col!r}, unique_id={unique_id!r} with no finite values")
+
+            data_min = float(np.min(finite))
+            data_max = float(np.max(finite))
+            if method_name == "standard":
+                center = float(np.mean(finite))
+                scale = float(np.std(finite, ddof=0))
+                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
+            elif method_name == "minmax":
+                center = data_min
+                scale = data_max - data_min
+                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else float(scale)
+            else:
+                center = 0.0
+                scale = float(np.max(np.abs(finite)))
+                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
+
+            rows.append(
+                {
+                    "scope": scope_name,
+                    "unique_id": str(unique_id),
+                    "column": col,
+                    "method": method_name,
+                    "center": float(center),
+                    "scale": float(scale),
+                    "data_min": data_min,
+                    "data_max": data_max,
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=["scope", "unique_id", "column", "method", "center", "scale", "data_min", "data_max"],
+    )
+
+
+def _validate_scaler_df(scaler_df: Any) -> pd.DataFrame:
+    if not isinstance(scaler_df, pd.DataFrame):
+        raise TypeError("scaler_df must be a pandas DataFrame")
+    required = {"scope", "unique_id", "column", "method", "center", "scale", "data_min", "data_max"}
+    missing = required.difference(scaler_df.columns)
+    if missing:
+        raise KeyError(f"scaler_df missing required columns: {sorted(missing)}")
+    if scaler_df.empty:
+        raise ValueError("scaler_df is empty")
+    return scaler_df.copy()
+
+
+def _apply_scale_values(values: np.ndarray, *, center: float, scale: float, inverse: bool) -> np.ndarray:
+    out = values.astype(float, copy=True)
+    mask = ~np.isnan(out)
+    if not np.all(np.isfinite(out[mask])):
+        raise ValueError("values to transform must be finite or null")
+    if inverse:
+        out[mask] = out[mask] * float(scale) + float(center)
+    else:
+        out[mask] = (out[mask] - float(center)) / float(scale)
+    return out
+
+
+def _scaler_row_lookup(scaler_df: pd.DataFrame, *, scope: str, unique_id: str, column: str) -> pd.Series:
+    lookup_uid = "__global__" if scope == "global" else str(unique_id)
+    matches = scaler_df.loc[
+        (scaler_df["scope"] == scope)
+        & (scaler_df["unique_id"].astype(str) == lookup_uid)
+        & (scaler_df["column"].astype(str) == str(column))
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected exactly one scaler row for scope={scope!r}, unique_id={lookup_uid!r}, column={column!r}"
+        )
+    return matches.iloc[0]
+
+
+def transform_long_df_with_scaler(
+    long_df: Any,
+    scaler_df: Any,
+    *,
+    columns: tuple[str, ...] = ("y",),
+) -> pd.DataFrame:
+    """
+    Apply fitted scaling statistics to selected long-format numeric columns.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    scaler = _validate_scaler_df(scaler_df)
+    value_cols = _resolve_numeric_columns(df, columns=columns, default_columns=("y",))
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+
+    scopes = {str(scope) for scope in scaler["scope"].astype(str)}
+    if len(scopes) != 1:
+        raise ValueError("scaler_df must contain a single scope")
+    scope_name = _normalize_scaler_scope(next(iter(scopes)))
+
+    for unique_id, idx in out.groupby("unique_id", sort=False).groups.items():
+        for col in value_cols:
+            row = _scaler_row_lookup(scaler, scope=scope_name, unique_id=str(unique_id), column=col)
+            out.loc[idx, col] = _apply_scale_values(
+                out.loc[idx, col].to_numpy(dtype=float, copy=False),
+                center=float(row["center"]),
+                scale=float(row["scale"]),
+                inverse=False,
+            )
+    return out
+
+
+def inverse_transform_long_df_with_scaler(
+    long_df: Any,
+    scaler_df: Any,
+    *,
+    columns: tuple[str, ...] = ("y",),
+) -> pd.DataFrame:
+    """
+    Reverse fitted scaling statistics for selected long-format numeric columns.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    scaler = _validate_scaler_df(scaler_df)
+    value_cols = _resolve_numeric_columns(df, columns=columns, default_columns=("y",))
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+
+    scopes = {str(scope) for scope in scaler["scope"].astype(str)}
+    if len(scopes) != 1:
+        raise ValueError("scaler_df must contain a single scope")
+    scope_name = _normalize_scaler_scope(next(iter(scopes)))
+
+    for unique_id, idx in out.groupby("unique_id", sort=False).groups.items():
+        for col in value_cols:
+            row = _scaler_row_lookup(scaler, scope=scope_name, unique_id=str(unique_id), column=col)
+            out.loc[idx, col] = _apply_scale_values(
+                out.loc[idx, col].to_numpy(dtype=float, copy=False),
+                center=float(row["center"]),
+                scale=float(row["scale"]),
+                inverse=True,
+            )
+    return out

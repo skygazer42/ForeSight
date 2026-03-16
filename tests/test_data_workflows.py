@@ -5,8 +5,12 @@ from foresight.data import (
     align_long_df,
     clip_long_df_outliers,
     enrich_long_df_calendar,
+    fit_long_df_scaler,
+    inverse_transform_long_df_with_scaler,
     make_supervised_frame,
     prepare_long_df,
+    split_long_df,
+    transform_long_df_with_scaler,
 )
 
 
@@ -134,3 +138,76 @@ def test_balanced_workflow_smoke_from_prepare_to_supervised() -> None:
     assert not frame.empty
     assert {"feat_x_cal_time_idx", "feat_x_cal_dow_sin", "y_t+1", "y_t+2"} <= set(frame.columns)
     assert np.all(np.isfinite(frame.loc[:, ["feat_x_cal_time_idx", "feat_x_cal_dow_sin"]].to_numpy()))
+
+
+def test_split_long_df_sizes_respects_per_series_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 5 + ["s1"] * 5,
+            "ds": list(pd.date_range("2020-01-01", periods=5, freq="D")) * 2,
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 11.0, 12.0, 13.0, 14.0],
+        }
+    )
+
+    parts = split_long_df(long_df, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert len(parts["train"]) == 6
+    assert len(parts["valid"]) == 2
+    assert len(parts["test"]) == 2
+    assert parts["train"].loc[parts["train"]["unique_id"] == "s0", "y"].tolist() == [1.0, 2.0, 3.0]
+    assert parts["valid"].loc[parts["valid"]["unique_id"] == "s0", "y"].tolist() == [4.0]
+    assert parts["test"].loc[parts["test"]["unique_id"] == "s0", "y"].tolist() == [5.0]
+
+
+def test_split_long_df_gap_reserves_rows_between_train_and_test() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    parts = split_long_df(long_df, test_size=1, gap=1)
+
+    assert parts["train"]["y"].tolist() == [1.0, 2.0, 3.0, 4.0]
+    assert parts["test"]["y"].tolist() == [6.0]
+    assert parts["valid"].empty
+
+
+def test_per_series_scaler_round_trip_restores_original_values() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 4 + ["s1"] * 4,
+            "ds": list(pd.date_range("2020-01-01", periods=4, freq="D")) * 2,
+            "y": [1.0, 2.0, 3.0, 4.0, 10.0, 20.0, 30.0, 40.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 10.0, 20.0, 10.0, 20.0],
+        }
+    )
+
+    scaler = fit_long_df_scaler(long_df, method="standard", scope="per_series", columns=("y", "promo"))
+    scaled = transform_long_df_with_scaler(long_df, scaler, columns=("y", "promo"))
+    restored = inverse_transform_long_df_with_scaler(scaled, scaler, columns=("y", "promo"))
+
+    assert {"scope", "unique_id", "column", "method", "center", "scale"} <= set(scaler.columns)
+    assert np.allclose(restored["y"].to_numpy(dtype=float), long_df["y"].to_numpy(dtype=float))
+    assert np.allclose(restored["promo"].to_numpy(dtype=float), long_df["promo"].to_numpy(dtype=float))
+
+
+def test_global_scaler_uses_single_stats_row_per_column() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3 + ["s1"] * 3,
+            "ds": list(pd.date_range("2020-01-01", periods=3, freq="D")) * 2,
+            "y": [1.0, 2.0, 4.0, 10.0, 20.0, 40.0],
+        }
+    )
+
+    scaler = fit_long_df_scaler(long_df, method="maxabs", scope="global", columns=("y",))
+    scaled = transform_long_df_with_scaler(long_df, scaler, columns=("y",))
+
+    assert len(scaler) == 1
+    assert scaler.loc[0, "unique_id"] == "__global__"
+    assert scaler.loc[0, "method"] == "maxabs"
+    assert float(np.abs(scaled["y"]).max()) == 1.0
