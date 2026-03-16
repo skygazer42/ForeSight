@@ -193,6 +193,10 @@ def test_automatic_analysis_configuration_scopes_autoscan() -> None:
     assert "src/foresight/models/torch_nn.py" in config
     assert "src/foresight/models/torch_seq2seq.py" in config
     assert "src/foresight/models/torch_xformer.py" in config
+    assert "sonar.cpd.exclusions=" in config
+    assert "src/foresight/models/catalog/ml.py" in config
+    assert "src/foresight/models/catalog/torch_global.py" in config
+    assert "src/foresight/models/statsmodels_wrap.py" in config
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:

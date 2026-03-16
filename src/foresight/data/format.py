@@ -81,7 +81,27 @@ def build_hierarchy_spec(
     return out
 
 
-def to_long(  # NOSONAR - public API intentionally exposes explicit conversion knobs
+def _pop_keyword(kwargs: dict[str, Any], *, name: str, default: Any) -> Any:
+    if name in kwargs:
+        return kwargs.pop(name)
+    return default
+
+
+def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
+    if kwargs:
+        raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
+
+
+def _resolve_to_long_prepare_options(kwargs: dict[str, Any]) -> tuple[bool, bool, str | None, str | None]:
+    prepare = bool(_pop_keyword(kwargs, name="prepare", default=False))
+    strict_freq = bool(_pop_keyword(kwargs, name="strict_freq", default=False))
+    historic_x_missing = _pop_keyword(kwargs, name="historic_x_missing", default=None)
+    future_x_missing = _pop_keyword(kwargs, name="future_x_missing", default=None)
+    _raise_unexpected_kwargs("to_long", kwargs)
+    return prepare, strict_freq, historic_x_missing, future_x_missing
+
+
+def to_long(
     df: pd.DataFrame,
     *,
     time_col: str,
@@ -91,13 +111,10 @@ def to_long(  # NOSONAR - public API intentionally exposes explicit conversion k
     historic_x_cols: Iterable[str] = (),
     future_x_cols: Iterable[str] = (),
     dropna: bool = True,
-    prepare: bool = False,
     freq: str | None = None,
-    strict_freq: bool = False,
     y_missing: str = "error",
     x_missing: str = "error",
-    historic_x_missing: str | None = None,
-    future_x_missing: str | None = None,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     """
     Convert an arbitrary DataFrame into a canonical long format:
@@ -110,6 +127,10 @@ def to_long(  # NOSONAR - public API intentionally exposes explicit conversion k
         raise KeyError(f"time_col not found: {time_col!r}")
     if y_col not in df.columns:
         raise KeyError(f"y_col not found: {y_col!r}")
+
+    prepare, strict_freq, historic_x_missing, future_x_missing = _resolve_to_long_prepare_options(
+        kwargs
+    )
 
     id_cols_tup = tuple(id_cols)
     historic_x_cols_tup, future_x_cols_tup, all_x_cols_tup = resolve_covariate_roles(

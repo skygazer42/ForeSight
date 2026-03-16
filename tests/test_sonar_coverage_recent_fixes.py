@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import argparse
+import inspect
 import importlib.util
 import json
 import re
@@ -16,6 +17,7 @@ import pytest
 
 from foresight.cli import build_parser
 from foresight.cv import cross_validation_predictions_long_df
+from foresight.data.format import to_long
 from foresight.metrics import _validate_seasonal_training_window, mase, msis, rmsse
 from foresight.models import intermittent as intermittent_mod
 from foresight.models import global_regression as global_regression_mod
@@ -1692,6 +1694,44 @@ def test_statsmodels_auto_arima_accepts_lowercase_seasonal_bound_names(
         future_exog=future_exog,
     )
     assert out["mean"].shape == (2,)
+
+
+def test_public_api_signatures_stay_under_sonar_parameter_threshold() -> None:
+    assert len(inspect.signature(to_long).parameters) <= 13
+    assert len(inspect.signature(statsmodels_wrap_mod.auto_arima_forecast).parameters) <= 13
+    assert len(inspect.signature(statsmodels_wrap_mod.auto_arima_forecast_with_intervals).parameters) <= 13
+
+
+def test_to_long_accepts_prepare_options_via_public_keywords() -> None:
+    df = pd.DataFrame(
+        {
+            "store": [1, 1],
+            "week": pd.to_datetime(["2020-01-01", "2020-01-03"]),
+            "sales": [10.0, 12.0],
+            "promo_hist": [1.0, 1.0],
+            "promo_futr": [2.0, 2.0],
+        }
+    )
+
+    out = to_long(
+        df,
+        time_col="week",
+        y_col="sales",
+        id_cols=("store",),
+        historic_x_cols=("promo_hist",),
+        future_x_cols=("promo_futr",),
+        prepare=True,
+        freq="D",
+        y_missing="zero",
+        x_missing="ffill",
+        strict_freq=False,
+        historic_x_missing="ffill",
+        future_x_missing="ffill",
+    )
+
+    assert out["ds"].tolist() == list(pd.date_range("2020-01-01", periods=3, freq="D"))
+    assert out["promo_hist"].tolist() == [1.0, 1.0, 1.0]
+    assert out["promo_futr"].tolist() == [2.0, 2.0, 2.0]
 
 
 def test_statsmodels_refactor_wrappers_cover_stl_and_fourier_paths(

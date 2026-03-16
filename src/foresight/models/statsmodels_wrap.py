@@ -49,6 +49,12 @@ def _pop_legacy_keyword(kwargs: dict[str, Any], *, legacy_name: str, value: Any)
     return value
 
 
+def _pop_keyword(kwargs: dict[str, Any], *, name: str, default: Any) -> Any:
+    if name in kwargs:
+        return kwargs.pop(name)
+    return default
+
+
 def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None:
     if kwargs:
         raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
@@ -242,16 +248,12 @@ def _resolve_auto_arima_search_config(
     max_p: int,
     max_d: int,
     max_q: int,
-    max_seasonal_p: int,
-    max_seasonal_d: int,
-    max_seasonal_q: int,
     seasonal_period: int | None,
-    trend: str | None,
-    enforce_stationarity: bool,
-    enforce_invertibility: bool,
-    information_criterion: str,
     kwargs: dict[str, Any],
 ) -> _AutoArimaSearchConfig:
+    max_seasonal_p = _pop_keyword(kwargs, name="max_seasonal_p", default=0)
+    max_seasonal_d = _pop_keyword(kwargs, name="max_seasonal_d", default=0)
+    max_seasonal_q = _pop_keyword(kwargs, name="max_seasonal_q", default=0)
     resolved_max_seasonal_p = int(
         _pop_legacy_keyword(kwargs, legacy_name="max_P", value=max_seasonal_p)
     )
@@ -261,6 +263,10 @@ def _resolve_auto_arima_search_config(
     resolved_max_seasonal_q = int(
         _pop_legacy_keyword(kwargs, legacy_name="max_Q", value=max_seasonal_q)
     )
+    trend = _pop_keyword(kwargs, name="trend", default=None)
+    enforce_stationarity = bool(_pop_keyword(kwargs, name="enforce_stationarity", default=True))
+    enforce_invertibility = bool(_pop_keyword(kwargs, name="enforce_invertibility", default=True))
+    information_criterion = str(_pop_keyword(kwargs, name="information_criterion", default="aic"))
     _raise_unexpected_kwargs(function_name, kwargs)
     return _AutoArimaSearchConfig(
         max_p=int(max_p),
@@ -945,23 +951,16 @@ def stl_auto_arima_forecast(
     return np.asarray(fc_adj + seasonal_fc, dtype=float)
 
 
-def auto_arima_forecast(  # NOSONAR - public API keeps explicit tuning knobs
+def auto_arima_forecast(
     train: Any,
     horizon: int,
     *,
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_seasonal_p: int = 0,
-    max_seasonal_d: int = 0,
-    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
-    trend: str | None = None,
-    enforce_stationarity: bool = True,
-    enforce_invertibility: bool = True,
     train_exog: Any | None = None,
     future_exog: Any | None = None,
-    information_criterion: str = "aic",
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -975,14 +974,7 @@ def auto_arima_forecast(  # NOSONAR - public API keeps explicit tuning knobs
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
-        max_seasonal_p=max_seasonal_p,
-        max_seasonal_d=max_seasonal_d,
-        max_seasonal_q=max_seasonal_q,
         seasonal_period=seasonal_period,
-        trend=trend,
-        enforce_stationarity=enforce_stationarity,
-        enforce_invertibility=enforce_invertibility,
-        information_criterion=information_criterion,
         kwargs=kwargs,
     )
 
@@ -1000,7 +992,7 @@ def auto_arima_forecast(  # NOSONAR - public API keeps explicit tuning knobs
     return np.asarray(fc, dtype=float)
 
 
-def auto_arima_forecast_with_intervals(  # NOSONAR - public API keeps explicit tuning knobs
+def auto_arima_forecast_with_intervals(
     train: Any,
     horizon: int,
     *,
@@ -1008,16 +1000,9 @@ def auto_arima_forecast_with_intervals(  # NOSONAR - public API keeps explicit t
     max_p: int = 3,
     max_d: int = 2,
     max_q: int = 3,
-    max_seasonal_p: int = 0,
-    max_seasonal_d: int = 0,
-    max_seasonal_q: int = 0,
     seasonal_period: int | None = None,
-    trend: str | None = None,
-    enforce_stationarity: bool = True,
-    enforce_invertibility: bool = True,
     train_exog: Any | None = None,
     future_exog: Any | None = None,
-    information_criterion: str = "aic",
     **kwargs: Any,
 ) -> dict[str, Any]:
     config = _resolve_auto_arima_search_config(
@@ -1025,14 +1010,7 @@ def auto_arima_forecast_with_intervals(  # NOSONAR - public API keeps explicit t
         max_p=max_p,
         max_d=max_d,
         max_q=max_q,
-        max_seasonal_p=max_seasonal_p,
-        max_seasonal_d=max_seasonal_d,
-        max_seasonal_q=max_seasonal_q,
         seasonal_period=seasonal_period,
-        trend=trend,
-        enforce_stationarity=enforce_stationarity,
-        enforce_invertibility=enforce_invertibility,
-        information_criterion=information_criterion,
         kwargs=kwargs,
     )
 
