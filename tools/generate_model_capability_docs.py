@@ -128,6 +128,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Reverse fitted long-format scaling statistics to restore original numeric units.",
     },
+    "make_local_xreg_forecast_bundle": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Build per-series forecast-time arrays and index metadata for local models that require known future covariates.",
+    },
     "load_forecaster": {
         "group": "Artifacts",
         "source": SOURCE_FORESIGHT_SERIALIZATION,
