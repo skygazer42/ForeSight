@@ -12,8 +12,10 @@ from foresight.data import (
     make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
+    make_supervised_arrays,
     make_supervised_frame,
     prepare_long_df,
+    split_supervised_arrays,
     split_panel_window_arrays,
     split_panel_window_frame,
     split_panel_sequence_blocks,
@@ -127,6 +129,52 @@ def test_make_supervised_frame_long_multi_step_outputs_direct_targets() -> None:
     assert float(out.loc[0, "y_t+2"]) == 5.0
 
 
+def test_make_supervised_arrays_matches_frame_output() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+        }
+    )
+
+    frame = make_supervised_frame(long_df, lags=3, horizon=1, x_cols=("promo",))
+    bundle = make_supervised_arrays(long_df, lags=3, horizon=1, x_cols=("promo",))
+
+    feature_cols = tuple(frame.columns[3:-1])
+    assert bundle["X"].shape == (3, len(feature_cols))
+    assert bundle["y"].shape == (3,)
+    assert bundle["feature_names"] == feature_cols
+    assert bundle["target_names"] == ("y_target",)
+    assert bundle["index"].equals(frame.loc[:, ["unique_id", "ds", "target_t"]])
+    assert np.allclose(bundle["X"], frame.loc[:, list(feature_cols)].to_numpy(dtype=float))
+    assert np.allclose(bundle["y"], frame["y_target"].to_numpy(dtype=float))
+    assert bundle["metadata"]["horizon"] == 1
+    assert bundle["metadata"]["n_rows"] == 3
+    assert bundle["metadata"]["n_features"] == len(feature_cols)
+    assert bundle["metadata"]["n_targets"] == 1
+
+
+def test_make_supervised_arrays_multistep_target_is_2d() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    frame = make_supervised_frame(long_df, lags=3, horizon=2)
+    bundle = make_supervised_arrays(long_df, lags=3, horizon=2)
+
+    target_cols = ("y_t+1", "y_t+2")
+    assert bundle["X"].shape == (2, len(frame.columns) - 3 - len(target_cols))
+    assert bundle["y"].shape == (2, 2)
+    assert bundle["target_names"] == target_cols
+    assert np.allclose(bundle["y"], frame.loc[:, list(target_cols)].to_numpy(dtype=float))
+
+
 def test_balanced_workflow_smoke_from_prepare_to_supervised() -> None:
     long_df = pd.DataFrame(
         {
@@ -147,6 +195,50 @@ def test_balanced_workflow_smoke_from_prepare_to_supervised() -> None:
     assert not frame.empty
     assert {"feat_x_cal_time_idx", "feat_x_cal_dow_sin", "y_t+1", "y_t+2"} <= set(frame.columns)
     assert np.all(np.isfinite(frame.loc[:, ["feat_x_cal_time_idx", "feat_x_cal_dow_sin"]].to_numpy()))
+
+
+def test_split_supervised_arrays_respects_per_series_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+        }
+    )
+
+    bundle = make_supervised_arrays(long_df, lags=2, horizon=1)
+    parts = split_supervised_arrays(bundle, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert parts["train"]["X"].shape[0] == 8
+    assert parts["valid"]["X"].shape[0] == 2
+    assert parts["test"]["X"].shape[0] == 2
+    assert (
+        parts["train"]["index"]
+        .loc[parts["train"]["index"]["unique_id"] == "s0", "ds"]
+        .tolist()
+        == [
+            pd.Timestamp("2020-01-03"),
+            pd.Timestamp("2020-01-04"),
+            pd.Timestamp("2020-01-05"),
+            pd.Timestamp("2020-01-06"),
+        ]
+    )
+    assert (
+        parts["valid"]["index"]
+        .loc[parts["valid"]["index"]["unique_id"] == "s0", "ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-07")]
+    )
+    assert (
+        parts["test"]["index"]
+        .loc[parts["test"]["index"]["unique_id"] == "s0", "ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-08")]
+    )
+    assert parts["train"]["metadata"]["n_rows"] == 8
+    assert parts["valid"]["metadata"]["n_rows"] == 2
+    assert parts["test"]["metadata"]["n_rows"] == 2
 
 
 def test_split_long_df_sizes_respects_per_series_order() -> None:

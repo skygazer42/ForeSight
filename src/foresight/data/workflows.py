@@ -523,6 +523,236 @@ def make_supervised_frame(
     return pd.concat(frames, axis=0, ignore_index=True, sort=False)
 
 
+def _validate_supervised_frame_output(frame: Any) -> pd.DataFrame:
+    if not isinstance(frame, pd.DataFrame):
+        raise TypeError("frame must be a pandas DataFrame returned by make_supervised_frame")
+    required = {"unique_id", "ds", "target_t"}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise TypeError(f"frame missing required columns: {sorted(missing)}")
+    if frame.empty:
+        raise ValueError("frame is empty")
+    out = frame.copy()
+    out["ds"] = pd.to_datetime(out["ds"], errors="raise")
+    return out.sort_values(["unique_id", "ds", "target_t"], kind="mergesort").reset_index(drop=True)
+
+
+def _supervised_target_columns(frame: pd.DataFrame) -> tuple[str, ...]:
+    target_names = tuple(
+        str(col) for col in frame.columns if str(col) == "y_target" or str(col).startswith("y_t+")
+    )
+    if not target_names:
+        raise TypeError("frame does not contain supervised target columns")
+    return target_names
+
+
+def make_supervised_arrays(
+    data: Any,
+    *,
+    input_format: str = "auto",
+    ds_col: str = "ds",
+    target_cols: tuple[str, ...] = (),
+    lags: Any = 5,
+    horizon: int = 1,
+    x_cols: tuple[str, ...] = (),
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    add_time_features: bool = False,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build dense supervised training arrays from the dataframe returned by make_supervised_frame.
+    """
+    format_name = _normalize_supervised_input_format(input_format)
+    frame = _validate_supervised_frame_output(
+        make_supervised_frame(
+            data,
+            input_format=format_name,
+            ds_col=ds_col,
+            target_cols=target_cols,
+            lags=lags,
+            horizon=int(horizon),
+            x_cols=x_cols,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+            add_time_features=bool(add_time_features),
+        )
+    )
+    target_names = _supervised_target_columns(frame)
+    target_name_set = set(target_names)
+    feature_names = tuple(
+        str(col)
+        for col in frame.columns
+        if str(col) not in {"unique_id", "ds", "target_t"} and str(col) not in target_name_set
+    )
+
+    X = frame.loc[:, list(feature_names)].to_numpy(dtype=dtype, copy=False)
+    if len(target_names) == 1:
+        y: np.ndarray = frame[target_names[0]].to_numpy(dtype=dtype, copy=False)
+    else:
+        y = frame.loc[:, list(target_names)].to_numpy(dtype=dtype, copy=False)
+    index = frame.loc[:, ["unique_id", "ds", "target_t"]].copy()
+    metadata = {
+        "input_format": format_name,
+        "horizon": int(horizon),
+        "n_series": int(index["unique_id"].nunique()),
+        "n_rows": int(len(index)),
+        "n_features": int(len(feature_names)),
+        "n_targets": int(len(target_names)),
+        "feature_names": feature_names,
+        "target_names": target_names,
+    }
+    return {
+        "X": X,
+        "y": y,
+        "feature_names": feature_names,
+        "target_names": target_names,
+        "index": index,
+        "metadata": metadata,
+    }
+
+
+def _validate_supervised_arrays_bundle(
+    bundle: Any,
+) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], tuple[str, ...], pd.DataFrame, dict[str, Any]]:
+    if not isinstance(bundle, dict):
+        raise TypeError("bundle must be a dict returned by make_supervised_arrays")
+    required = {"X", "y", "feature_names", "target_names", "index", "metadata"}
+    missing = required.difference(bundle)
+    if missing:
+        raise TypeError(f"bundle missing required keys: {sorted(missing)}")
+
+    X = np.asarray(bundle["X"])
+    y = np.asarray(bundle["y"])
+    feature_names = tuple(str(name) for name in bundle["feature_names"])
+    target_names = tuple(str(name) for name in bundle["target_names"])
+    index = bundle["index"]
+    metadata = bundle["metadata"]
+
+    if not isinstance(index, pd.DataFrame):
+        raise TypeError("bundle['index'] must be a pandas DataFrame")
+    if not isinstance(metadata, dict):
+        raise TypeError("bundle['metadata'] must be a dict")
+    required_index = {"unique_id", "ds", "target_t"}
+    missing_index = required_index.difference(index.columns)
+    if missing_index:
+        raise TypeError(f"bundle['index'] missing required columns: {sorted(missing_index)}")
+    if X.ndim != 2:
+        raise ValueError("bundle['X'] must be a 2D array")
+    if y.ndim not in {1, 2}:
+        raise ValueError("bundle['y'] must be a 1D or 2D array")
+    if int(X.shape[0]) != int(len(index)) or int(y.shape[0]) != int(len(index)):
+        raise ValueError("bundle X, y, and index must have the same number of rows")
+    if int(X.shape[1]) != int(len(feature_names)):
+        raise ValueError("bundle feature_names must match the X column dimension")
+    if y.ndim == 1 and int(len(target_names)) != 1:
+        raise ValueError("1D supervised y requires exactly one target name")
+    if y.ndim == 2 and int(y.shape[1]) != int(len(target_names)):
+        raise ValueError("bundle target_names must match the y column dimension")
+
+    index_out = index.copy()
+    index_out["ds"] = pd.to_datetime(index_out["ds"], errors="raise")
+    order = index_out.sort_values(["unique_id", "ds", "target_t"], kind="mergesort").index.to_numpy()
+    return (
+        X[order].copy(),
+        y[order].copy(),
+        feature_names,
+        target_names,
+        index_out.iloc[order].reset_index(drop=True),
+        dict(metadata),
+    )
+
+
+def split_supervised_arrays(
+    bundle: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """
+    Chronologically split supervised training arrays into train/valid/test partitions per series.
+    """
+    X, y, feature_names, target_names, index, metadata = _validate_supervised_arrays_bundle(bundle)
+    gap_int = int(gap)
+    min_train_size_int = int(min_train_size)
+    if gap_int < 0:
+        raise ValueError("gap must be >= 0")
+    if min_train_size_int <= 0:
+        raise ValueError("min_train_size must be >= 1")
+
+    positions: dict[str, list[np.ndarray]] = {"train": [], "valid": [], "test": []}
+    for unique_id, group in index.groupby("unique_id", sort=False):
+        group = group.reset_index()
+        n_rows = int(len(group))
+        valid_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=valid_size,
+            frac=valid_frac,
+            name="valid_size",
+        )
+        test_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=test_size,
+            frac=test_frac,
+            name="test_size",
+        )
+        if valid_n == 0 and test_n == 0:
+            raise ValueError("at least one of valid/test size or frac must be positive")
+
+        gap_before_valid = gap_int if valid_n > 0 else 0
+        gap_before_test = gap_int if test_n > 0 else 0
+        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
+        if train_end < min_train_size_int:
+            raise ValueError(
+                f"supervised array split leaves fewer than min_train_size={min_train_size_int} "
+                f"rows for unique_id={unique_id!r}"
+            )
+
+        valid_start = train_end + gap_before_valid
+        valid_end = valid_start + valid_n
+        test_start = valid_end + gap_before_test
+        if test_start + test_n > n_rows:
+            raise ValueError(
+                f"supervised array split consumes more rows than available for unique_id={unique_id!r}"
+            )
+
+        row_positions = group["index"].to_numpy(dtype=int, copy=False)
+        positions["train"].append(row_positions[:train_end])
+        positions["valid"].append(row_positions[valid_start:valid_end])
+        positions["test"].append(row_positions[test_start : test_start + test_n])
+
+    parts: dict[str, dict[str, Any]] = {}
+    for name, chunks in positions.items():
+        take = np.concatenate(chunks) if chunks else np.asarray([], dtype=int)
+        part_index = index.iloc[take].reset_index(drop=True)
+        part_metadata = dict(metadata)
+        part_metadata["n_rows"] = int(len(part_index))
+        part_metadata["partition"] = name
+        parts[name] = {
+            "X": X[take].copy(),
+            "y": y[take].copy(),
+            "feature_names": feature_names,
+            "target_names": target_names,
+            "index": part_index,
+            "metadata": part_metadata,
+        }
+    return parts
+
+
 def _resolve_panel_target_lags(*, lags: Any, target_lags: Any = ()) -> tuple[int, ...]:
     spec = target_lags
     if isinstance(spec, str) and not spec.strip():
