@@ -14,6 +14,8 @@ from foresight.data import (
     make_panel_window_frame,
     make_supervised_frame,
     prepare_long_df,
+    split_panel_window_arrays,
+    split_panel_window_frame,
     split_panel_sequence_blocks,
     split_panel_sequence_tensors,
     split_long_df,
@@ -338,6 +340,119 @@ def test_make_panel_window_frame_raises_when_no_windows_can_be_built() -> None:
 
     with pytest.raises(ValueError, match="enough history"):
         make_panel_window_frame(long_df, horizon=2, target_lags=(1, 2, 3))
+
+
+def test_split_panel_window_frame_respects_per_series_window_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0] * 2,
+        }
+    )
+
+    frame = make_panel_window_frame(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0,),
+        x_cols=("promo",),
+    )
+    parts = split_panel_window_frame(frame, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert len(parts["train"]) == 12
+    assert len(parts["valid"]) == 4
+    assert len(parts["test"]) == 4
+    assert (
+        parts["train"]
+        .loc[parts["train"]["unique_id"] == "s0", "cutoff_ds"]
+        .drop_duplicates()
+        .tolist()
+        == [
+            pd.Timestamp("2020-01-02"),
+            pd.Timestamp("2020-01-03"),
+            pd.Timestamp("2020-01-04"),
+        ]
+    )
+    assert (
+        parts["valid"]
+        .loc[parts["valid"]["unique_id"] == "s0", "cutoff_ds"]
+        .drop_duplicates()
+        .tolist()
+        == [pd.Timestamp("2020-01-05")]
+    )
+    assert (
+        parts["test"]
+        .loc[parts["test"]["unique_id"] == "s0", "cutoff_ds"]
+        .drop_duplicates()
+        .tolist()
+        == [pd.Timestamp("2020-01-06")]
+    )
+    assert parts["test"].groupby(["unique_id", "cutoff_ds"]).size().tolist() == [2, 2]
+
+
+def test_split_panel_window_arrays_matches_frame_partitions() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0] * 2,
+        }
+    )
+
+    frame = make_panel_window_frame(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+    arrays = make_panel_window_arrays(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+
+    frame_parts = split_panel_window_frame(frame, valid_size=1, test_size=1)
+    array_parts = split_panel_window_arrays(arrays, valid_size=1, test_size=1)
+
+    assert set(array_parts) == {"train", "valid", "test"}
+    for name in ("train", "valid", "test"):
+        expected = frame_parts[name]
+        actual = array_parts[name]
+        assert actual["X"].shape == (len(expected), len(expected.columns) - 5)
+        assert actual["y"].shape == (len(expected),)
+        assert tuple(actual["feature_names"]) == tuple(expected.columns[5:])
+        assert actual["index"].reset_index(drop=True).equals(
+            expected.loc[:, ["unique_id", "cutoff_ds", "target_ds", "step"]].reset_index(drop=True)
+        )
+        assert np.allclose(actual["X"], expected.loc[:, expected.columns[5:]].to_numpy(dtype=float))
+        assert np.allclose(actual["y"], expected["y"].to_numpy(dtype=float))
+    assert array_parts["train"]["metadata"]["n_windows"] == 6
+    assert array_parts["valid"]["metadata"]["n_windows"] == 2
+    assert array_parts["test"]["metadata"]["n_windows"] == 2
+
+
+def test_split_panel_window_arrays_rejects_misaligned_bundle() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    arrays = make_panel_window_arrays(long_df, horizon=2, target_lags=(1, 2))
+    broken = dict(arrays)
+    broken["X"] = arrays["X"][:-1]
+
+    with pytest.raises(ValueError, match="same number of rows"):
+        split_panel_window_arrays(broken, valid_size=1, test_size=1)
 
 
 def test_make_panel_sequence_tensors_shapes_channel_order_and_predict_block() -> None:

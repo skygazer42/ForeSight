@@ -789,6 +789,214 @@ def make_panel_window_arrays(
     }
 
 
+def _validate_panel_window_frame_for_split(frame: Any) -> pd.DataFrame:
+    if not isinstance(frame, pd.DataFrame):
+        raise TypeError("frame must be a pandas DataFrame returned by make_panel_window_frame")
+    required = {"unique_id", "cutoff_ds", "target_ds", "step", "y"}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise TypeError(f"frame missing required columns: {sorted(missing)}")
+    if frame.empty:
+        raise ValueError("frame is empty")
+    out = frame.copy()
+    out["cutoff_ds"] = pd.to_datetime(out["cutoff_ds"], errors="raise")
+    out["target_ds"] = pd.to_datetime(out["target_ds"], errors="raise")
+    return out.sort_values(["unique_id", "cutoff_ds", "target_ds", "step"], kind="mergesort").reset_index(drop=True)
+
+
+def _panel_window_origin_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return (
+        frame.loc[:, ["unique_id", "cutoff_ds"]]
+        .drop_duplicates()
+        .sort_values(["unique_id", "cutoff_ds"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+
+
+def _split_panel_window_origins(
+    window_index: pd.DataFrame,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, pd.DataFrame]:
+    gap_int = int(gap)
+    min_train_size_int = int(min_train_size)
+    if gap_int < 0:
+        raise ValueError("gap must be >= 0")
+    if min_train_size_int <= 0:
+        raise ValueError("min_train_size must be >= 1")
+
+    origins = window_index.copy()
+    origins["cutoff_ds"] = pd.to_datetime(origins["cutoff_ds"], errors="raise")
+    parts: dict[str, list[pd.DataFrame]] = {"train": [], "valid": [], "test": []}
+
+    for unique_id, group in origins.groupby("unique_id", sort=False):
+        group = group.sort_values("cutoff_ds", kind="mergesort").reset_index(drop=True)
+        n_rows = int(len(group))
+        valid_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=valid_size,
+            frac=valid_frac,
+            name="valid_size",
+        )
+        test_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=test_size,
+            frac=test_frac,
+            name="test_size",
+        )
+        if valid_n == 0 and test_n == 0:
+            raise ValueError("at least one of valid/test size or frac must be positive")
+
+        gap_before_valid = gap_int if valid_n > 0 else 0
+        gap_before_test = gap_int if test_n > 0 else 0
+        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
+        if train_end < min_train_size_int:
+            raise ValueError(
+                f"panel window split leaves fewer than min_train_size={min_train_size_int} "
+                f"windows for unique_id={unique_id!r}"
+            )
+
+        valid_start = train_end + gap_before_valid
+        valid_end = valid_start + valid_n
+        test_start = valid_end + gap_before_test
+        if test_start + test_n > n_rows:
+            raise ValueError(
+                f"panel window split consumes more windows than available for unique_id={unique_id!r}"
+            )
+
+        parts["train"].append(group.iloc[:train_end].copy())
+        parts["valid"].append(group.iloc[valid_start:valid_end].copy())
+        parts["test"].append(group.iloc[test_start : test_start + test_n].copy())
+
+    result: dict[str, pd.DataFrame] = {}
+    for name, frames in parts.items():
+        non_empty = [frame for frame in frames if not frame.empty]
+        if non_empty:
+            result[name] = pd.concat(non_empty, axis=0, ignore_index=True, sort=False)
+        else:
+            result[name] = origins.iloc[0:0].copy()
+    return result
+
+
+def _panel_window_origin_mask(rows: pd.DataFrame, window_index: pd.DataFrame) -> np.ndarray:
+    row_keys = pd.MultiIndex.from_frame(rows.loc[:, ["unique_id", "cutoff_ds"]])
+    origin_keys = pd.MultiIndex.from_frame(window_index.loc[:, ["unique_id", "cutoff_ds"]])
+    return np.asarray(row_keys.isin(origin_keys), dtype=bool)
+
+
+def split_panel_window_frame(
+    frame: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, pd.DataFrame]:
+    """
+    Chronologically split panel-window training rows into train/valid/test partitions by window origin.
+    """
+    frame_df = _validate_panel_window_frame_for_split(frame)
+    origin_parts = _split_panel_window_origins(
+        _panel_window_origin_frame(frame_df),
+        valid_size=valid_size,
+        test_size=test_size,
+        valid_frac=valid_frac,
+        test_frac=test_frac,
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
+    return {
+        name: frame_df.loc[_panel_window_origin_mask(frame_df, origins)].reset_index(drop=True)
+        for name, origins in origin_parts.items()
+    }
+
+
+def _validate_panel_window_arrays_bundle(bundle: Any) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], pd.DataFrame, dict[str, Any]]:
+    if not isinstance(bundle, dict):
+        raise TypeError("bundle must be a dict returned by make_panel_window_arrays")
+    required = {"X", "y", "feature_names", "index", "metadata"}
+    missing = required.difference(bundle)
+    if missing:
+        raise TypeError(f"bundle missing required keys: {sorted(missing)}")
+
+    X = np.asarray(bundle["X"])
+    y = np.asarray(bundle["y"])
+    feature_names = tuple(str(name) for name in bundle["feature_names"])
+    index = bundle["index"]
+    metadata = bundle["metadata"]
+
+    if not isinstance(index, pd.DataFrame):
+        raise TypeError("bundle['index'] must be a pandas DataFrame")
+    if not isinstance(metadata, dict):
+        raise TypeError("bundle['metadata'] must be a dict")
+    required_index = {"unique_id", "cutoff_ds", "target_ds", "step"}
+    missing_index = required_index.difference(index.columns)
+    if missing_index:
+        raise TypeError(f"bundle['index'] missing required columns: {sorted(missing_index)}")
+    if X.ndim != 2:
+        raise ValueError("bundle['X'] must be a 2D array")
+    if y.ndim != 1:
+        raise ValueError("bundle['y'] must be a 1D array")
+    if int(X.shape[0]) != int(y.shape[0]) or int(X.shape[0]) != int(len(index)):
+        raise ValueError("bundle X, y, and index must have the same number of rows")
+    if int(X.shape[1]) != int(len(feature_names)):
+        raise ValueError("bundle feature_names must match the X column dimension")
+
+    index_out = index.copy()
+    index_out["cutoff_ds"] = pd.to_datetime(index_out["cutoff_ds"], errors="raise")
+    index_out["target_ds"] = pd.to_datetime(index_out["target_ds"], errors="raise")
+    return X, y, feature_names, index_out, dict(metadata)
+
+
+def split_panel_window_arrays(
+    bundle: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """
+    Chronologically split panel-window array bundles into train/valid/test partitions by window origin.
+    """
+    X, y, feature_names, index, metadata = _validate_panel_window_arrays_bundle(bundle)
+    origin_parts = _split_panel_window_origins(
+        _panel_window_origin_frame(index),
+        valid_size=valid_size,
+        test_size=test_size,
+        valid_frac=valid_frac,
+        test_frac=test_frac,
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
+
+    parts: dict[str, dict[str, Any]] = {}
+    for name, origins in origin_parts.items():
+        mask = _panel_window_origin_mask(index, origins)
+        part_index = index.loc[mask].reset_index(drop=True)
+        part_metadata = dict(metadata)
+        part_metadata["n_windows"] = int(len(origins))
+        part_metadata["n_rows"] = int(len(part_index))
+        part_metadata["partition"] = name
+        parts[name] = {
+            "X": X[mask].copy(),
+            "y": y[mask].copy(),
+            "feature_names": feature_names,
+            "index": part_index,
+            "metadata": part_metadata,
+        }
+    return parts
+
+
 def _normalize_panel_sequence_dtype(dtype: Any) -> np.dtype:
     return np.dtype(dtype)
 
