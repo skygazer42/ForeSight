@@ -75,6 +75,8 @@ def test_root_import_exports_stable_public_api() -> None:
             "make_panel_sequence_tensors",
             "make_panel_window_arrays",
             "make_panel_window_frame",
+            "make_panel_window_predict_arrays",
+            "make_panel_window_predict_frame",
             "make_supervised_arrays",
             "make_supervised_frame",
             "make_forecaster",

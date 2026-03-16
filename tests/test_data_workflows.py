@@ -12,6 +12,8 @@ from foresight.data import (
     make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
+    make_panel_window_predict_arrays,
+    make_panel_window_predict_frame,
     make_supervised_arrays,
     make_supervised_frame,
     prepare_long_df,
@@ -601,6 +603,110 @@ def test_split_panel_window_arrays_rejects_misaligned_bundle() -> None:
 
     with pytest.raises(ValueError, match="same number of rows"):
         split_panel_window_arrays(broken, valid_size=1, test_size=1)
+
+
+def test_make_panel_window_predict_frame_matches_training_features_at_cutoff() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0] * 2,
+        }
+    )
+
+    train_frame = make_panel_window_frame(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+        add_time_features=True,
+    )
+    pred_frame = make_panel_window_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+        add_time_features=True,
+    )
+
+    expected = (
+        train_frame.loc[train_frame["cutoff_ds"] == pd.Timestamp("2020-01-06")]
+        .drop(columns=["y"])
+        .reset_index(drop=True)
+    )
+    assert list(pred_frame.columns[:4]) == ["unique_id", "cutoff_ds", "target_ds", "step"]
+    assert pred_frame.reset_index(drop=True).equals(expected)
+
+
+def test_make_panel_window_predict_arrays_matches_predict_frame() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(1, 9)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    frame = make_panel_window_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+    arrays = make_panel_window_predict_arrays(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+
+    feature_cols = tuple(frame.columns[4:])
+    assert arrays["X"].shape == (2, len(feature_cols))
+    assert tuple(arrays["feature_names"]) == feature_cols
+    assert arrays["index"].equals(frame.loc[:, ["unique_id", "cutoff_ds", "target_ds", "step"]])
+    assert np.allclose(arrays["X"], frame.loc[:, list(feature_cols)].to_numpy(dtype=float))
+
+
+def test_make_panel_window_predict_frame_allows_missing_future_y() -> None:
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 2,
+            "ds": pd.date_range("2020-01-07", periods=2, freq="D"),
+            "y": [np.nan, np.nan],
+            "promo": [1.0, 0.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    frame = make_panel_window_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0,),
+        x_cols=("promo",),
+    )
+
+    assert len(frame) == 2
+    assert frame["target_ds"].tolist() == list(pd.date_range("2020-01-07", periods=2, freq="D"))
+    assert frame["future_x__promo_lag_0"].tolist() == [1.0, 0.0]
 
 
 def test_make_panel_sequence_tensors_shapes_channel_order_and_predict_block() -> None:
