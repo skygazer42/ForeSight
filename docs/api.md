@@ -54,10 +54,14 @@ from foresight import (
 | `align_long_df` | `foresight.data` | Regularize per-series timestamps to a target frequency, with optional resampling aggregation. |
 | `clip_long_df_outliers` | `foresight.data` | Clip per-series numeric outliers in long-format data without dropping rows. |
 | `enrich_long_df_calendar` | `foresight.data` | Append deterministic calendar and cyclical time features onto long-format panel data. |
+| `fit_long_df_scaler` | `foresight.data` | Fit reversible per-series or global scaling statistics for long-format numeric columns. |
 | `infer_series_frequency` | `foresight.data` | Infer a sensible pandas-compatible series frequency from timestamps. |
+| `inverse_transform_long_df_with_scaler` | `foresight.data` | Reverse fitted long-format scaling statistics to restore original numeric units. |
 | `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
+| `split_long_df` | `foresight.data` | Chronologically split each long-format series into train, validation, and test partitions. |
 | `to_long` | `foresight.data` | Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support. |
+| `transform_long_df_with_scaler` | `foresight.data` | Apply fitted scaling statistics to long-format numeric columns for training or evaluation workflows. |
 | `validate_long_df` | `foresight.data` | Check that long-format inputs satisfy required schema and null rules. |
 
 ## Hierarchical forecasting
@@ -106,9 +110,11 @@ from foresight import (
 - `eval_model_long_df`
 - `eval_multivariate_model_df`
 - `enrich_long_df_calendar`
+- `fit_long_df_scaler`
 - `forecast_model`
 - `forecast_model_long_df`
 - `infer_series_frequency`
+- `inverse_transform_long_df_with_scaler`
 - `load_forecaster`
 - `load_forecaster_artifact`
 - `make_supervised_frame`
@@ -120,7 +126,9 @@ from foresight import (
 - `prepare_long_df`
 - `reconcile_hierarchical_forecasts`
 - `save_forecaster`
+- `split_long_df`
 - `to_long`
+- `transform_long_df_with_scaler`
 - `tune_model`
 - `tune_model_long_df`
 - `validate_long_df`

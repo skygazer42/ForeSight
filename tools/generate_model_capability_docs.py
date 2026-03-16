@@ -103,6 +103,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Append deterministic calendar and cyclical time features onto long-format panel data.",
     },
+    "fit_long_df_scaler": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Fit reversible per-series or global scaling statistics for long-format numeric columns.",
+    },
     "forecast_model": {
         "group": "Forecasting",
         "source": "foresight.forecast",
@@ -117,6 +122,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Infer a sensible pandas-compatible series frequency from timestamps.",
+    },
+    "inverse_transform_long_df_with_scaler": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Reverse fitted long-format scaling statistics to restore original numeric units.",
     },
     "load_forecaster": {
         "group": "Artifacts",
@@ -173,10 +183,20 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Persist a fitted forecaster and its schema/version metadata to disk.",
     },
+    "split_long_df": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split each long-format series into train, validation, and test partitions.",
+    },
     "to_long": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support.",
+    },
+    "transform_long_df_with_scaler": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Apply fitted scaling statistics to long-format numeric columns for training or evaluation workflows.",
     },
     "tune_model": {
         "group": GROUP_INTERVALS_AND_TUNING,
