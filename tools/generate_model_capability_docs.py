@@ -163,6 +163,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Build sklearn-style supervised training tables from long or wide time-series inputs.",
     },
+    "make_supervised_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Convert supervised training tables into dense feature and target arrays with stable index and metadata.",
+    },
     "make_forecaster": {
         "group": "Forecasting",
         "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
@@ -212,6 +217,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Chronologically split panel-window training rows into train, validation, and test partitions by window origin.",
+    },
+    "split_supervised_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split supervised training arrays into train, validation, and test partitions per series.",
     },
     "split_panel_sequence_blocks": {
         "group": GROUP_DATA_PREPARATION,
