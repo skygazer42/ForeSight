@@ -12,10 +12,12 @@ from .workflows import (
     enrich_long_df_calendar,
     fit_long_df_scaler,
     inverse_transform_long_df_with_scaler,
+    make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
     make_supervised_frame,
     split_long_df,
+    split_panel_sequence_tensors,
     transform_long_df_with_scaler,
 )
 
@@ -33,9 +35,11 @@ __all__ = [
     "enrich_long_df_calendar",
     "fit_long_df_scaler",
     "inverse_transform_long_df_with_scaler",
+    "make_panel_sequence_tensors",
     "make_panel_window_arrays",
     "make_panel_window_frame",
     "make_supervised_frame",
+    "split_panel_sequence_tensors",
     "split_long_df",
     "transform_long_df_with_scaler",
 ]

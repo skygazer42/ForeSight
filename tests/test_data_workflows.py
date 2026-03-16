@@ -8,10 +8,12 @@ from foresight.data import (
     enrich_long_df_calendar,
     fit_long_df_scaler,
     inverse_transform_long_df_with_scaler,
+    make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
     make_supervised_frame,
     prepare_long_df,
+    split_panel_sequence_tensors,
     split_long_df,
     transform_long_df_with_scaler,
 )
@@ -334,3 +336,185 @@ def test_make_panel_window_frame_raises_when_no_windows_can_be_built() -> None:
 
     with pytest.raises(ValueError, match="enough history"):
         make_panel_window_frame(long_df, horizon=2, target_lags=(1, 2, 3))
+
+
+def test_make_panel_sequence_tensors_shapes_channel_order_and_predict_block() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                10.0,
+                20.0,
+                30.0,
+                40.0,
+                50.0,
+                60.0,
+                70.0,
+                80.0,
+            ],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0] * 2,
+        }
+    )
+
+    bundle = make_panel_sequence_tensors(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        context_length=3,
+        x_cols=("promo",),
+        normalize=False,
+        add_time_features=True,
+    )
+
+    assert set(bundle) == {"train", "predict", "metadata"}
+    assert bundle["train"]["X"].shape == (4, 5, 11)
+    assert bundle["train"]["y"].shape == (4, 2)
+    assert bundle["train"]["series_id"].shape == (4,)
+    assert bundle["predict"]["X"].shape == (2, 5, 11)
+    assert bundle["predict"]["series_id"].shape == (2,)
+    assert list(bundle["train"]["window_index"].columns) == [
+        "unique_id",
+        "cutoff_ds",
+        "target_start_ds",
+        "target_end_ds",
+    ]
+    assert list(bundle["predict"]["index"].columns) == [
+        "unique_id",
+        "cutoff_ds",
+        "target_start_ds",
+        "target_end_ds",
+    ]
+    assert bundle["metadata"]["channel_names"] == (
+        "y",
+        "promo",
+        "time_idx",
+        "dow_sin",
+        "dow_cos",
+        "month_sin",
+        "month_cos",
+        "doy_sin",
+        "doy_cos",
+        "hour_sin",
+        "hour_cos",
+    )
+    assert bundle["metadata"]["time_feature_names"] == (
+        "time_idx",
+        "dow_sin",
+        "dow_cos",
+        "month_sin",
+        "month_cos",
+        "doy_sin",
+        "doy_cos",
+        "hour_sin",
+        "hour_cos",
+    )
+    assert bundle["metadata"]["n_series"] == 2
+    assert bundle["metadata"]["n_train_windows"] == 4
+    assert bundle["metadata"]["n_predict_windows"] == 2
+    assert bundle["metadata"]["input_dim"] == 11
+    assert np.allclose(bundle["train"]["X"][0, :, 0], np.asarray([1.0, 2.0, 3.0, 0.0, 0.0]))
+    assert np.allclose(bundle["train"]["y"][0], np.asarray([4.0, 5.0]))
+    assert np.allclose(bundle["predict"]["X"][0, :, 0], np.asarray([4.0, 5.0, 6.0, 0.0, 0.0]))
+
+
+def test_make_panel_sequence_tensors_returns_target_norm_stats() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+
+    bundle = make_panel_sequence_tensors(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        context_length=3,
+        x_cols=("promo",),
+        normalize=True,
+        add_time_features=False,
+    )
+
+    expected_mean = float(np.mean([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+    expected_std = float(np.std([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+
+    assert np.isclose(float(bundle["predict"]["target_mean"][0]), expected_mean)
+    assert np.isclose(float(bundle["predict"]["target_std"][0]), expected_std)
+    assert np.allclose(
+        bundle["train"]["y"][0],
+        (np.asarray([4.0, 5.0]) - expected_mean) / expected_std,
+    )
+
+
+def test_split_panel_sequence_tensors_respects_per_series_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 10 + ["s1"] * 10,
+            "ds": list(pd.date_range("2020-01-01", periods=10, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 11)] + [float(i) for i in range(101, 111)],
+        }
+    )
+
+    bundle = make_panel_sequence_tensors(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-08"),
+        horizon=2,
+        context_length=3,
+        normalize=False,
+        add_time_features=False,
+    )
+    parts = split_panel_sequence_tensors(bundle, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert parts["train"]["X"].shape[0] == 4
+    assert parts["valid"]["X"].shape[0] == 2
+    assert parts["test"]["X"].shape[0] == 2
+    assert (
+        parts["train"]["window_index"]
+        .loc[parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
+    )
+    assert (
+        parts["valid"]["window_index"]
+        .loc[parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-05")]
+    )
+    assert (
+        parts["test"]["window_index"]
+        .loc[parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-06")]
+    )
+
+
+def test_make_panel_sequence_tensors_rejects_duplicate_timestamps() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s0", "s0"],
+            "ds": pd.to_datetime(
+                ["2020-01-01", "2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"]
+            ),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="align_long_df"):
+        make_panel_sequence_tensors(
+            long_df,
+            cutoff=pd.Timestamp("2020-01-03"),
+            horizon=1,
+            context_length=2,
+        )

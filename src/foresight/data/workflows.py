@@ -789,6 +789,487 @@ def make_panel_window_arrays(
     }
 
 
+def _normalize_panel_sequence_dtype(dtype: Any) -> np.dtype:
+    return np.dtype(dtype)
+
+
+def _normalize_panel_sequence_max_train_size(max_train_size: int | None) -> int | None:
+    if max_train_size is None:
+        return None
+    value = int(max_train_size)
+    if value <= 0:
+        raise ValueError("max_train_size must be >= 1 or None")
+    return value
+
+
+def _normalize_panel_sequence_context_length(context_length: int) -> int:
+    value = int(context_length)
+    if value <= 0:
+        raise ValueError("context_length must be >= 1")
+    return value
+
+
+def _normalize_panel_sequence_sample_step(sample_step: int) -> int:
+    value = int(sample_step)
+    if value <= 0:
+        raise ValueError("sample_step must be >= 1")
+    return value
+
+
+def _normalize_panel_sequence_horizon(horizon: int) -> int:
+    value = int(horizon)
+    if value <= 0:
+        raise ValueError("horizon must be >= 1")
+    return value
+
+
+def _panel_sequence_cutoff_index(ds_arr: np.ndarray, cutoff: Any) -> int | None:
+    idx = pd.Index(ds_arr).get_indexer([cutoff])[0]
+    if int(idx) < 0:
+        return None
+    return int(idx)
+
+
+def _panel_sequence_normalize_target(
+    y: np.ndarray,
+    *,
+    normalize: bool,
+) -> tuple[np.ndarray, float, float]:
+    if not bool(normalize):
+        return np.asarray(y, dtype=float), 0.0, 1.0
+    mean = float(np.mean(y))
+    std = float(np.std(y))
+    if std < 1e-8:
+        std = 1.0
+    return (np.asarray(y, dtype=float) - mean) / std, mean, std
+
+
+def _panel_sequence_time_block(
+    group: pd.DataFrame,
+    *,
+    add_time_features: bool,
+) -> tuple[np.ndarray, tuple[str, ...]]:
+    if not add_time_features:
+        return np.empty((len(group), 0), dtype=float), ()
+    time_matrix, feature_names = build_time_features(group["ds"])
+    return time_matrix.astype(float, copy=False), tuple(feature_names)
+
+
+def _panel_sequence_train_window_rows(
+    *,
+    unique_id: Any,
+    ds_arr: np.ndarray,
+    y_train_scaled: np.ndarray,
+    x_train_seg: np.ndarray,
+    time_train_seg: np.ndarray,
+    slice_start: int,
+    series_code: int,
+    context_length: int,
+    horizon: int,
+    sample_step: int,
+    dtype: np.dtype,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    n_train = int(y_train_scaled.size)
+    seq_len = int(context_length) + int(horizon)
+    input_dim = 1 + int(x_train_seg.shape[1]) + int(time_train_seg.shape[1])
+    n_windows = n_train - int(context_length) - int(horizon) + 1
+    if n_windows <= 0:
+        return (
+            np.empty((0, seq_len, input_dim), dtype=dtype),
+            np.empty((0, int(horizon)), dtype=dtype),
+            np.empty((0,), dtype=int),
+            pd.DataFrame(columns=["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"]),
+        )
+
+    win_indices = list(range(0, n_windows, int(sample_step)))
+    n_samples = int(len(win_indices))
+    X = np.empty((n_samples, seq_len, input_dim), dtype=dtype)
+    Y = np.empty((n_samples, int(horizon)), dtype=dtype)
+    series_id = np.full((n_samples,), int(series_code), dtype=int)
+    rows: list[dict[str, Any]] = []
+
+    for j, w0 in enumerate(win_indices):
+        t = int(w0 + int(context_length))
+        past = slice(int(t - int(context_length)), int(t))
+        fut = slice(int(t), int(t + int(horizon)))
+
+        y_feat = np.concatenate(
+            [
+                y_train_scaled[past],
+                np.zeros((int(horizon),), dtype=float),
+            ],
+            axis=0,
+        ).reshape(seq_len, 1)
+        x_feat = np.concatenate([x_train_seg[past], x_train_seg[fut]], axis=0)
+        time_feat = np.concatenate([time_train_seg[past], time_train_seg[fut]], axis=0)
+
+        X[j] = np.concatenate([y_feat, x_feat, time_feat], axis=1).astype(dtype, copy=False)
+        Y[j] = np.asarray(y_train_scaled[fut], dtype=dtype)
+
+        cutoff_global = int(slice_start) + int(t) - 1
+        target_start_global = int(slice_start) + int(t)
+        target_end_global = target_start_global + int(horizon) - 1
+        rows.append(
+            {
+                "unique_id": unique_id,
+                "cutoff_ds": ds_arr[cutoff_global],
+                "target_start_ds": ds_arr[target_start_global],
+                "target_end_ds": ds_arr[target_end_global],
+            }
+        )
+
+    return X, Y, series_id, pd.DataFrame(rows)
+
+
+def _panel_sequence_predict_row(
+    *,
+    unique_id: Any,
+    ds_arr: np.ndarray,
+    y_arr: np.ndarray,
+    x_full: np.ndarray,
+    time_full: np.ndarray,
+    train_end: int,
+    context_length: int,
+    horizon: int,
+    mean: float,
+    std: float,
+    normalize: bool,
+    series_code: int,
+    dtype: np.dtype,
+) -> tuple[np.ndarray, int, dict[str, Any], float, float] | None:
+    if int(train_end) + int(horizon) > int(y_arr.size):
+        return None
+    if int(train_end) < int(context_length):
+        return None
+
+    y_ctx = y_arr[int(train_end) - int(context_length) : int(train_end)]
+    if bool(normalize):
+        y_ctx = (y_ctx - float(mean)) / float(std)
+    y_feat = np.concatenate(
+        [
+            np.asarray(y_ctx, dtype=float),
+            np.zeros((int(horizon),), dtype=float),
+        ],
+        axis=0,
+    ).reshape(int(context_length) + int(horizon), 1)
+
+    x_ctx = x_full[int(train_end) - int(context_length) : int(train_end)]
+    x_fut = x_full[int(train_end) : int(train_end) + int(horizon)]
+    time_ctx = time_full[int(train_end) - int(context_length) : int(train_end)]
+    time_fut = time_full[int(train_end) : int(train_end) + int(horizon)]
+    x_pred = np.concatenate(
+        [
+            y_feat,
+            np.concatenate([x_ctx, x_fut], axis=0),
+            np.concatenate([time_ctx, time_fut], axis=0),
+        ],
+        axis=1,
+    ).astype(dtype, copy=False)
+    row = {
+        "unique_id": unique_id,
+        "cutoff_ds": ds_arr[int(train_end) - 1],
+        "target_start_ds": ds_arr[int(train_end)],
+        "target_end_ds": ds_arr[int(train_end) + int(horizon) - 1],
+    }
+    return x_pred, int(series_code), row, float(mean), float(std)
+
+
+def make_panel_sequence_tensors(
+    long_df: Any,
+    *,
+    cutoff: Any,
+    horizon: int,
+    context_length: int = 96,
+    x_cols: tuple[str, ...] = (),
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    add_time_features: bool = True,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build packed sequence-model training and prediction bundles from long-format panel data.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    horizon_int = _normalize_panel_sequence_horizon(horizon)
+    context_length_int = _normalize_panel_sequence_context_length(context_length)
+    sample_step_int = _normalize_panel_sequence_sample_step(sample_step)
+    max_train_size_int = _normalize_panel_sequence_max_train_size(max_train_size)
+    dtype_norm = _normalize_panel_sequence_dtype(dtype)
+    x_cols_tup = _normalize_panel_x_cols(df, x_cols)
+
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    x_dim = int(len(x_cols_tup))
+
+    X_parts: list[np.ndarray] = []
+    y_parts: list[np.ndarray] = []
+    series_id_parts: list[np.ndarray] = []
+    train_index_parts: list[pd.DataFrame] = []
+
+    pred_x_parts: list[np.ndarray] = []
+    pred_series_ids: list[int] = []
+    pred_rows: list[dict[str, Any]] = []
+    pred_means: list[float] = []
+    pred_stds: list[float] = []
+    time_feature_names: tuple[str, ...] = ()
+
+    for series_code, (unique_id, group) in enumerate(out.groupby("unique_id", sort=False)):
+        group = group.reset_index(drop=True)
+        _validate_panel_window_group(group, x_cols=x_cols_tup)
+
+        ds_arr = group["ds"].to_numpy(copy=False)
+        y_arr = group["y"].to_numpy(dtype=float, copy=False)
+        cut_idx = _panel_sequence_cutoff_index(ds_arr, cutoff)
+        if cut_idx is None:
+            continue
+
+        train_end = int(cut_idx) + 1
+        slice_start = 0
+        if max_train_size_int is not None:
+            slice_start = max(0, int(train_end) - int(max_train_size_int))
+        y_train = y_arr[slice_start:train_end]
+        if int(y_train.size) < int(context_length_int) + int(horizon_int):
+            continue
+
+        y_train_scaled, mean, std = _panel_sequence_normalize_target(
+            y_train,
+            normalize=bool(normalize),
+        )
+        if x_dim > 0:
+            x_full = group.loc[:, list(x_cols_tup)].to_numpy(dtype=float, copy=False)
+        else:
+            x_full = np.empty((len(group), 0), dtype=float)
+
+        time_full, group_time_names = _panel_sequence_time_block(
+            group,
+            add_time_features=bool(add_time_features),
+        )
+        if not time_feature_names:
+            time_feature_names = group_time_names
+
+        X_series, y_series, series_ids, window_index = _panel_sequence_train_window_rows(
+            unique_id=unique_id,
+            ds_arr=ds_arr,
+            y_train_scaled=y_train_scaled,
+            x_train_seg=x_full[slice_start:train_end],
+            time_train_seg=time_full[slice_start:train_end],
+            slice_start=slice_start,
+            series_code=series_code,
+            context_length=context_length_int,
+            horizon=horizon_int,
+            sample_step=sample_step_int,
+            dtype=dtype_norm,
+        )
+        if X_series.size == 0:
+            continue
+
+        X_parts.append(X_series)
+        y_parts.append(y_series)
+        series_id_parts.append(series_ids)
+        train_index_parts.append(window_index)
+
+        pred_row = _panel_sequence_predict_row(
+            unique_id=unique_id,
+            ds_arr=ds_arr,
+            y_arr=y_arr,
+            x_full=x_full,
+            time_full=time_full,
+            train_end=train_end,
+            context_length=context_length_int,
+            horizon=horizon_int,
+            mean=mean,
+            std=std,
+            normalize=bool(normalize),
+            series_code=series_code,
+            dtype=dtype_norm,
+        )
+        if pred_row is None:
+            continue
+        pred_x, pred_series_id, pred_index_row, pred_mean, pred_std = pred_row
+        pred_x_parts.append(pred_x)
+        pred_series_ids.append(pred_series_id)
+        pred_rows.append(pred_index_row)
+        pred_means.append(pred_mean)
+        pred_stds.append(pred_std)
+
+    if not X_parts:
+        raise ValueError("No training windows could be constructed for the given cutoff.")
+    if not pred_x_parts:
+        raise ValueError("No prediction windows could be constructed for the given cutoff.")
+
+    X_train = np.concatenate(X_parts, axis=0).astype(dtype_norm, copy=False)
+    y_train = np.concatenate(y_parts, axis=0).astype(dtype_norm, copy=False)
+    series_id = np.concatenate(series_id_parts, axis=0)
+    window_index = pd.concat(train_index_parts, axis=0, ignore_index=True, sort=False)
+
+    pred_X = np.stack(pred_x_parts, axis=0).astype(dtype_norm, copy=False)
+    pred_series_id = np.asarray(pred_series_ids, dtype=int)
+    pred_index = pd.DataFrame(pred_rows)
+    pred_mean_arr = np.asarray(pred_means, dtype=dtype_norm)
+    pred_std_arr = np.asarray(pred_stds, dtype=dtype_norm)
+
+    channel_names = ("y", *x_cols_tup, *time_feature_names)
+    metadata = {
+        "cutoff": pd.Timestamp(cutoff),
+        "context_length": int(context_length_int),
+        "horizon": int(horizon_int),
+        "x_cols": x_cols_tup,
+        "normalize": bool(normalize),
+        "sample_step": int(sample_step_int),
+        "max_train_size": max_train_size_int,
+        "add_time_features": bool(add_time_features),
+        "channel_names": tuple(channel_names),
+        "time_feature_names": tuple(time_feature_names),
+        "n_series": int(out["unique_id"].nunique()),
+        "n_train_windows": int(X_train.shape[0]),
+        "n_predict_windows": int(pred_X.shape[0]),
+        "input_dim": int(X_train.shape[2]),
+    }
+    return {
+        "train": {
+            "X": X_train,
+            "y": y_train,
+            "series_id": series_id,
+            "window_index": window_index,
+        },
+        "predict": {
+            "X": pred_X,
+            "series_id": pred_series_id,
+            "index": pred_index,
+            "target_mean": pred_mean_arr,
+            "target_std": pred_std_arr,
+        },
+        "metadata": metadata,
+    }
+
+
+def _validate_panel_sequence_bundle(bundle: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    if not isinstance(bundle, dict):
+        raise TypeError("bundle must be a dict returned by make_panel_sequence_tensors")
+    if "train" not in bundle or "predict" not in bundle or "metadata" not in bundle:
+        raise TypeError("bundle must contain train, predict, and metadata keys")
+    train = bundle["train"]
+    predict = bundle["predict"]
+    metadata = bundle["metadata"]
+    if not isinstance(train, dict) or not isinstance(predict, dict) or not isinstance(metadata, dict):
+        raise TypeError("bundle sections must be dicts")
+    required_train = {"X", "y", "series_id", "window_index"}
+    missing_train = required_train.difference(train)
+    if missing_train:
+        raise TypeError(f"bundle['train'] missing required keys: {sorted(missing_train)}")
+    if not isinstance(train["window_index"], pd.DataFrame):
+        raise TypeError("bundle['train']['window_index'] must be a pandas DataFrame")
+    return train, predict, metadata
+
+
+def _subset_panel_sequence_partition(
+    *,
+    train: dict[str, Any],
+    metadata: dict[str, Any],
+    indices: list[int],
+) -> dict[str, Any]:
+    X = np.asarray(train["X"])
+    y = np.asarray(train["y"])
+    series_id = np.asarray(train["series_id"])
+    window_index = train["window_index"].iloc[indices].reset_index(drop=True).copy()
+    part_metadata = dict(metadata)
+    part_metadata["n_train_windows"] = int(len(indices))
+    return {
+        "X": X[indices],
+        "y": y[indices],
+        "series_id": series_id[indices],
+        "window_index": window_index,
+        "metadata": part_metadata,
+    }
+
+
+def split_panel_sequence_tensors(
+    bundle: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """
+    Chronologically split packed panel training windows into train/valid/test partitions.
+    """
+    train, _predict, metadata = _validate_panel_sequence_bundle(bundle)
+    gap_int = int(gap)
+    min_train_size_int = int(min_train_size)
+    if gap_int < 0:
+        raise ValueError("gap must be >= 0")
+    if min_train_size_int <= 0:
+        raise ValueError("min_train_size must be >= 1")
+
+    X = np.asarray(train["X"])
+    y = np.asarray(train["y"])
+    series_id = np.asarray(train["series_id"])
+    window_index = train["window_index"].copy()
+    order = window_index.sort_values(["unique_id", "cutoff_ds", "target_start_ds"], kind="mergesort").index
+    X_sorted = X[order]
+    y_sorted = y[order]
+    series_id_sorted = series_id[order]
+    window_index_sorted = window_index.iloc[order].reset_index(drop=True)
+
+    partition_indices: dict[str, list[int]] = {"train": [], "valid": [], "test": []}
+    for unique_id, group in window_index_sorted.groupby("unique_id", sort=False):
+        positions = group.index.to_list()
+        n_rows = int(len(positions))
+        valid_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=valid_size,
+            frac=valid_frac,
+            name="valid_size",
+        )
+        test_n = _resolved_partition_size(
+            n_rows=n_rows,
+            size=test_size,
+            frac=test_frac,
+            name="test_size",
+        )
+        if valid_n == 0 and test_n == 0:
+            raise ValueError("at least one of valid/test size or frac must be positive")
+
+        gap_before_valid = gap_int if valid_n > 0 else 0
+        gap_before_test = gap_int if test_n > 0 else 0
+        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
+        if train_end < min_train_size_int:
+            raise ValueError(
+                f"split_panel_sequence_tensors leaves fewer than min_train_size={min_train_size_int} "
+                f"windows for unique_id={unique_id!r}"
+            )
+
+        valid_start = train_end + gap_before_valid
+        valid_end = valid_start + valid_n
+        test_start = valid_end + gap_before_test
+        if test_start + test_n > n_rows:
+            raise ValueError(
+                f"split_panel_sequence_tensors consumes more windows than available for unique_id={unique_id!r}"
+            )
+
+        partition_indices["train"].extend(positions[:train_end])
+        partition_indices["valid"].extend(positions[valid_start:valid_end])
+        partition_indices["test"].extend(positions[test_start : test_start + test_n])
+
+    sorted_train = {
+        "X": X_sorted,
+        "y": y_sorted,
+        "series_id": series_id_sorted,
+        "window_index": window_index_sorted,
+    }
+    return {
+        name: _subset_panel_sequence_partition(
+            train=sorted_train,
+            metadata=metadata,
+            indices=indices,
+        )
+        for name, indices in partition_indices.items()
+    }
+
+
 def _normalize_split_size(value: int | None, *, name: str) -> int:
     if value is None:
         return 0
