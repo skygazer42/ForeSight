@@ -8,6 +8,7 @@ from foresight.data import (
     enrich_long_df_calendar,
     fit_long_df_scaler,
     inverse_transform_long_df_with_scaler,
+    make_local_xreg_eval_bundle,
     make_panel_sequence_blocks,
     make_panel_sequence_tensors,
     make_panel_window_arrays,
@@ -541,6 +542,132 @@ def test_make_local_xreg_forecast_bundle_rejects_historic_x_cols() -> None:
         make_local_xreg_forecast_bundle(
             long_df,
             horizon=2,
+            historic_x_cols=("promo_hist",),
+            future_x_cols=("promo",),
+        )
+
+
+def test_make_local_xreg_eval_bundle_matches_rolling_origin_windows() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(1, 9)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    bundle = make_local_xreg_eval_bundle(
+        long_df,
+        horizon=2,
+        step=2,
+        min_train_size=4,
+        x_cols=("promo",),
+    )
+
+    assert set(bundle) == {"windows", "metadata"}
+    assert bundle["metadata"]["horizon"] == 2
+    assert bundle["metadata"]["step"] == 2
+    assert bundle["metadata"]["min_train_size"] == 4
+    assert bundle["metadata"]["max_train_size"] is None
+    assert bundle["metadata"]["max_windows"] is None
+    assert bundle["metadata"]["x_cols"] == ("promo",)
+    assert bundle["metadata"]["n_series"] == 1
+    assert bundle["metadata"]["n_series_skipped"] == 0
+    assert bundle["metadata"]["n_windows"] == 2
+    assert bundle["metadata"]["series_ids"] == ("s0",)
+
+    first = bundle["windows"][0]
+    second = bundle["windows"][1]
+
+    assert first["unique_id"] == "s0"
+    assert first["window"] == 1
+    assert first["cutoff_ds"] == pd.Timestamp("2020-01-04")
+    assert first["target_start_ds"] == pd.Timestamp("2020-01-05")
+    assert first["target_end_ds"] == pd.Timestamp("2020-01-06")
+    assert first["x_cols"] == ("promo",)
+    assert np.allclose(first["train_y"], np.asarray([1.0, 2.0, 3.0, 4.0]))
+    assert np.allclose(first["actual_y"], np.asarray([5.0, 6.0]))
+    assert np.allclose(first["train_exog"], np.asarray([[10.0], [11.0], [12.0], [13.0]]))
+    assert np.allclose(first["future_exog"], np.asarray([[14.0], [15.0]]))
+    assert first["train_index"].equals(long_df.loc[:3, ["unique_id", "ds"]].reset_index(drop=True))
+    assert first["test_index"].equals(
+        long_df.loc[4:5, ["unique_id", "ds"]]
+        .assign(step=np.asarray([1, 2], dtype=int))
+        .reset_index(drop=True)
+    )
+
+    assert second["window"] == 2
+    assert second["cutoff_ds"] == pd.Timestamp("2020-01-06")
+    assert second["target_start_ds"] == pd.Timestamp("2020-01-07")
+    assert second["target_end_ds"] == pd.Timestamp("2020-01-08")
+    assert np.allclose(second["train_y"], np.asarray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+    assert np.allclose(second["actual_y"], np.asarray([7.0, 8.0]))
+
+
+def test_make_local_xreg_eval_bundle_max_train_size_rolls_train_window() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 10,
+            "ds": pd.date_range("2020-01-01", periods=10, freq="D"),
+            "y": [float(i) for i in range(10)],
+            "promo": [float(i) for i in range(10)],
+        }
+    )
+
+    bundle = make_local_xreg_eval_bundle(
+        long_df,
+        horizon=2,
+        step=2,
+        min_train_size=4,
+        max_train_size=4,
+        x_cols=("promo",),
+    )
+
+    assert bundle["metadata"]["n_windows"] == 3
+    assert bundle["windows"][0]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-01", periods=4, freq="D"))
+    assert bundle["windows"][1]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-03", periods=4, freq="D"))
+    assert bundle["windows"][2]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-05", periods=4, freq="D"))
+
+
+def test_make_local_xreg_eval_bundle_supports_future_x_cols_alias() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(8)],
+            "promo": [float(i % 2) for i in range(8)],
+        }
+    )
+
+    bundle = make_local_xreg_eval_bundle(
+        long_df,
+        horizon=2,
+        step=2,
+        min_train_size=4,
+        future_x_cols=("promo",),
+    )
+
+    assert bundle["metadata"]["x_cols"] == ("promo",)
+
+
+def test_make_local_xreg_eval_bundle_rejects_historic_x_cols() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(8)],
+            "promo_hist": [float(i % 2) for i in range(8)],
+            "promo": [float(i % 2) for i in range(8)],
+        }
+    )
+
+    with pytest.raises(ValueError, match="historic_x_cols are not yet supported"):
+        make_local_xreg_eval_bundle(
+            long_df,
+            horizon=2,
+            step=2,
+            min_train_size=4,
             historic_x_cols=("promo_hist",),
             future_x_cols=("promo",),
         )

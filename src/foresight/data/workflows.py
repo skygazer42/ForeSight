@@ -15,6 +15,7 @@ from ..features.tabular import (
     normalize_str_tuple,
 )
 from ..features.time import build_fourier_features, build_time_features
+from ..splits import rolling_origin_splits
 from .format import resolve_covariate_roles
 from .prep import infer_series_frequency
 
@@ -1190,6 +1191,119 @@ def make_local_xreg_forecast_bundle(
             "x_cols": future_cols,
             "n_series": int(len(groups)),
             "uses_future_df": bool(uses_future_df),
+            "series_ids": tuple(series_ids),
+        },
+    }
+
+
+def _local_xreg_eval_arrays(
+    group: pd.DataFrame,
+    *,
+    x_cols: tuple[str, ...],
+    dtype: Any,
+) -> tuple[np.ndarray, np.ndarray]:
+    missing_x_cols = [col for col in x_cols if col not in group.columns]
+    if missing_x_cols:
+        raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
+
+    y = group["y"].to_numpy(dtype=dtype, copy=False)
+    x = group.loc[:, list(x_cols)].to_numpy(dtype=dtype, copy=False)
+    if np.isnan(y).any():
+        raise ValueError("make_local_xreg_eval_bundle does not support missing y values")
+    if np.isnan(x).any():
+        raise ValueError("make_local_xreg_eval_bundle does not support missing x_cols values")
+    return y, x
+
+
+def make_local_xreg_eval_bundle(
+    long_df: Any,
+    *,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    x_cols: Any = (),
+    future_x_cols: Any = (),
+    historic_x_cols: Any = (),
+    max_windows: int | None = None,
+    max_train_size: int | None = None,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build walk-forward evaluation windows for local models that require known future covariates.
+    """
+    historic_cols, future_cols, _all_cols = resolve_covariate_roles(
+        x_cols=x_cols,
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+    )
+    if historic_cols:
+        raise ValueError("historic_x_cols are not yet supported in make_local_xreg_eval_bundle")
+    if not future_cols:
+        raise ValueError("make_local_xreg_eval_bundle requires future covariates via x_cols")
+
+    df = _validate_forecast_long_df_input(long_df)
+    windows: list[dict[str, Any]] = []
+    series_ids: list[str] = []
+    n_series = 0
+    n_series_skipped = 0
+
+    for unique_id, group in df.groupby("unique_id", sort=False):
+        n_series += 1
+        series_ids.append(str(unique_id))
+        y, x = _local_xreg_eval_arrays(group, x_cols=future_cols, dtype=dtype)
+
+        min_required = int(min_train_size) + int(horizon)
+        if int(y.shape[0]) < min_required:
+            n_series_skipped += 1
+            continue
+
+        series_df = group.reset_index(drop=True)
+        windows_run = 0
+        for split in rolling_origin_splits(
+            int(y.shape[0]),
+            horizon=int(horizon),
+            step_size=int(step),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+        ):
+            train_index = series_df.iloc[split.train_start : split.train_end].loc[:, ["unique_id", "ds"]]
+            test_index = (
+                series_df.iloc[split.test_start : split.test_end]
+                .loc[:, ["unique_id", "ds"]]
+                .assign(step=np.arange(1, int(horizon) + 1, dtype=int))
+            )
+            windows.append(
+                {
+                    "unique_id": unique_id,
+                    "window": int(windows_run) + 1,
+                    "cutoff_ds": series_df["ds"].iloc[int(split.train_end) - 1],
+                    "target_start_ds": series_df["ds"].iloc[int(split.test_start)],
+                    "target_end_ds": series_df["ds"].iloc[int(split.test_end) - 1],
+                    "x_cols": future_cols,
+                    "train_y": y[split.train_start : split.train_end].copy(),
+                    "actual_y": y[split.test_start : split.test_end].copy(),
+                    "train_exog": x[split.train_start : split.train_end, :].copy(),
+                    "future_exog": x[split.test_start : split.test_end, :].copy(),
+                    "train_index": train_index.reset_index(drop=True),
+                    "test_index": test_index.reset_index(drop=True),
+                }
+            )
+            windows_run += 1
+            if max_windows is not None and windows_run >= int(max_windows):
+                break
+
+    return {
+        "windows": windows,
+        "metadata": {
+            "horizon": int(horizon),
+            "step": int(step),
+            "min_train_size": int(min_train_size),
+            "max_train_size": None if max_train_size is None else int(max_train_size),
+            "max_windows": None if max_windows is None else int(max_windows),
+            "x_cols": future_cols,
+            "n_series": int(n_series),
+            "n_series_skipped": int(n_series_skipped),
+            "n_windows": int(len(windows)),
             "series_ids": tuple(series_ids),
         },
     }
