@@ -673,8 +673,8 @@ def _validate_supervised_arrays_bundle(
     )
 
 
-def split_supervised_arrays(
-    bundle: Any,
+def _split_supervised_row_positions(
+    index: pd.DataFrame,
     *,
     valid_size: int | None = None,
     test_size: int | None = None,
@@ -682,11 +682,8 @@ def split_supervised_arrays(
     test_frac: float | None = None,
     gap: int = 0,
     min_train_size: int = 1,
-) -> dict[str, dict[str, Any]]:
-    """
-    Chronologically split supervised training arrays into train/valid/test partitions per series.
-    """
-    X, y, feature_names, target_names, index, metadata = _validate_supervised_arrays_bundle(bundle)
+    error_prefix: str,
+) -> dict[str, np.ndarray]:
     gap_int = int(gap)
     min_train_size_int = int(min_train_size)
     if gap_int < 0:
@@ -718,7 +715,7 @@ def split_supervised_arrays(
         train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
         if train_end < min_train_size_int:
             raise ValueError(
-                f"supervised array split leaves fewer than min_train_size={min_train_size_int} "
+                f"{error_prefix} leaves fewer than min_train_size={min_train_size_int} "
                 f"rows for unique_id={unique_id!r}"
             )
 
@@ -727,7 +724,7 @@ def split_supervised_arrays(
         test_start = valid_end + gap_before_test
         if test_start + test_n > n_rows:
             raise ValueError(
-                f"supervised array split consumes more rows than available for unique_id={unique_id!r}"
+                f"{error_prefix} consumes more rows than available for unique_id={unique_id!r}"
             )
 
         row_positions = group["index"].to_numpy(dtype=int, copy=False)
@@ -735,9 +732,69 @@ def split_supervised_arrays(
         positions["valid"].append(row_positions[valid_start:valid_end])
         positions["test"].append(row_positions[test_start : test_start + test_n])
 
+    return {
+        name: np.concatenate(chunks) if chunks else np.asarray([], dtype=int)
+        for name, chunks in positions.items()
+    }
+
+
+def split_supervised_frame(
+    frame: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, pd.DataFrame]:
+    """
+    Chronologically split supervised training rows into train/valid/test partitions per series.
+    """
+    frame_df = _validate_supervised_frame_output(frame)
+    positions = _split_supervised_row_positions(
+        frame_df.loc[:, ["unique_id", "ds", "target_t"]],
+        valid_size=valid_size,
+        test_size=test_size,
+        valid_frac=valid_frac,
+        test_frac=test_frac,
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+        error_prefix="supervised frame split",
+    )
+    return {
+        name: frame_df.iloc[take].reset_index(drop=True)
+        for name, take in positions.items()
+    }
+
+
+def split_supervised_arrays(
+    bundle: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """
+    Chronologically split supervised training arrays into train/valid/test partitions per series.
+    """
+    X, y, feature_names, target_names, index, metadata = _validate_supervised_arrays_bundle(bundle)
+    positions = _split_supervised_row_positions(
+        index,
+        valid_size=valid_size,
+        test_size=test_size,
+        valid_frac=valid_frac,
+        test_frac=test_frac,
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+        error_prefix="supervised array split",
+    )
+
     parts: dict[str, dict[str, Any]] = {}
-    for name, chunks in positions.items():
-        take = np.concatenate(chunks) if chunks else np.asarray([], dtype=int)
+    for name, take in positions.items():
         part_index = index.iloc[take].reset_index(drop=True)
         part_metadata = dict(metadata)
         part_metadata["n_rows"] = int(len(part_index))

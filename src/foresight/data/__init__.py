@@ -24,6 +24,7 @@ from .workflows import (
     split_panel_window_arrays,
     split_panel_window_frame,
     split_supervised_arrays,
+    split_supervised_frame,
     transform_long_df_with_scaler,
 )
 
@@ -50,6 +51,7 @@ __all__ = [
     "split_panel_window_arrays",
     "split_panel_window_frame",
     "split_supervised_arrays",
+    "split_supervised_frame",
     "split_panel_sequence_blocks",
     "split_panel_sequence_tensors",
     "split_long_df",

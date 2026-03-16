@@ -85,6 +85,7 @@ def test_root_import_exports_stable_public_api() -> None:
             "prepare_long_df",
             "reconcile_hierarchical_forecasts",
             "save_forecaster",
+            "split_supervised_frame",
             "split_supervised_arrays",
             "split_panel_window_arrays",
             "split_panel_window_frame",

@@ -16,6 +16,7 @@ from foresight.data import (
     make_supervised_frame,
     prepare_long_df,
     split_supervised_arrays,
+    split_supervised_frame,
     split_panel_window_arrays,
     split_panel_window_frame,
     split_panel_sequence_blocks,
@@ -239,6 +240,61 @@ def test_split_supervised_arrays_respects_per_series_order() -> None:
     assert parts["train"]["metadata"]["n_rows"] == 8
     assert parts["valid"]["metadata"]["n_rows"] == 2
     assert parts["test"]["metadata"]["n_rows"] == 2
+
+
+def test_split_supervised_frame_respects_per_series_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+        }
+    )
+
+    frame = make_supervised_frame(long_df, lags=2, horizon=1)
+    parts = split_supervised_frame(frame, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert len(parts["train"]) == 8
+    assert len(parts["valid"]) == 2
+    assert len(parts["test"]) == 2
+    assert parts["train"].loc[parts["train"]["unique_id"] == "s0", "ds"].tolist() == [
+        pd.Timestamp("2020-01-03"),
+        pd.Timestamp("2020-01-04"),
+        pd.Timestamp("2020-01-05"),
+        pd.Timestamp("2020-01-06"),
+    ]
+    assert parts["valid"].loc[parts["valid"]["unique_id"] == "s0", "ds"].tolist() == [
+        pd.Timestamp("2020-01-07")
+    ]
+    assert parts["test"].loc[parts["test"]["unique_id"] == "s0", "ds"].tolist() == [
+        pd.Timestamp("2020-01-08")
+    ]
+
+
+def test_split_supervised_frame_matches_array_partitions() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0] * 2,
+        }
+    )
+
+    frame = make_supervised_frame(long_df, lags=2, horizon=1, x_cols=("promo",))
+    bundle = make_supervised_arrays(long_df, lags=2, horizon=1, x_cols=("promo",))
+
+    frame_parts = split_supervised_frame(frame, valid_size=1, test_size=1)
+    array_parts = split_supervised_arrays(bundle, valid_size=1, test_size=1)
+
+    for name in ("train", "valid", "test"):
+        expected = frame_parts[name].reset_index(drop=True)
+        actual = array_parts[name]
+        feature_cols = tuple(expected.columns[3:-1])
+        assert actual["index"].reset_index(drop=True).equals(expected.loc[:, ["unique_id", "ds", "target_t"]])
+        assert np.allclose(actual["X"], expected.loc[:, list(feature_cols)].to_numpy(dtype=float))
+        assert np.allclose(actual["y"], expected["y_target"].to_numpy(dtype=float))
 
 
 def test_split_long_df_sizes_respects_per_series_order() -> None:
