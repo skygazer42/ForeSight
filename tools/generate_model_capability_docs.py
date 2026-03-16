@@ -138,6 +138,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Inspect the structured artifact payload before reconstructing an object.",
     },
+    "make_panel_sequence_blocks": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Expose packed panel sequence tensors as explicit past/future target, covariate, and time blocks for encoder-decoder style models.",
+    },
     "make_panel_sequence_tensors": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
@@ -197,6 +202,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": "Artifacts",
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Persist a fitted forecaster and its schema/version metadata to disk.",
+    },
+    "split_panel_sequence_blocks": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split structured panel sequence blocks into train, validation, and test partitions.",
     },
     "split_panel_sequence_tensors": {
         "group": GROUP_DATA_PREPARATION,
