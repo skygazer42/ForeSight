@@ -8,11 +8,13 @@ from foresight.data import (
     enrich_long_df_calendar,
     fit_long_df_scaler,
     inverse_transform_long_df_with_scaler,
+    make_panel_sequence_blocks,
     make_panel_sequence_tensors,
     make_panel_window_arrays,
     make_panel_window_frame,
     make_supervised_frame,
     prepare_long_df,
+    split_panel_sequence_blocks,
     split_panel_sequence_tensors,
     split_long_df,
     transform_long_df_with_scaler,
@@ -518,3 +520,146 @@ def test_make_panel_sequence_tensors_rejects_duplicate_timestamps() -> None:
             horizon=1,
             context_length=2,
         )
+
+
+def test_make_panel_sequence_blocks_matches_packed_sequence_values() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                10.0,
+                20.0,
+                30.0,
+                40.0,
+                50.0,
+                60.0,
+                70.0,
+                80.0,
+            ],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0] * 2,
+        }
+    )
+
+    packed = make_panel_sequence_tensors(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        context_length=3,
+        x_cols=("promo",),
+        normalize=False,
+        add_time_features=True,
+    )
+    blocks = make_panel_sequence_blocks(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        context_length=3,
+        x_cols=("promo",),
+        normalize=False,
+        add_time_features=True,
+    )
+
+    assert set(blocks) == {"train", "predict", "metadata"}
+    assert blocks["train"]["past_y"].shape == (4, 3, 1)
+    assert blocks["train"]["future_y_seed"].shape == (4, 2, 1)
+    assert blocks["train"]["past_x"].shape == (4, 3, 1)
+    assert blocks["train"]["future_x"].shape == (4, 2, 1)
+    assert blocks["train"]["past_time"].shape == (4, 3, 9)
+    assert blocks["train"]["future_time"].shape == (4, 2, 9)
+    assert blocks["train"]["target_y"].shape == (4, 2)
+    assert np.allclose(blocks["train"]["past_y"], packed["train"]["X"][:, :3, 0:1])
+    assert np.allclose(blocks["train"]["future_y_seed"], packed["train"]["X"][:, 3:, 0:1])
+    assert np.allclose(blocks["train"]["past_x"], packed["train"]["X"][:, :3, 1:2])
+    assert np.allclose(blocks["train"]["future_x"], packed["train"]["X"][:, 3:, 1:2])
+    assert np.allclose(blocks["train"]["past_time"], packed["train"]["X"][:, :3, 2:])
+    assert np.allclose(blocks["train"]["future_time"], packed["train"]["X"][:, 3:, 2:])
+    assert np.allclose(blocks["train"]["target_y"], packed["train"]["y"])
+    assert np.allclose(blocks["predict"]["past_y"], packed["predict"]["X"][:, :3, 0:1])
+    assert np.allclose(blocks["predict"]["future_y_seed"], packed["predict"]["X"][:, 3:, 0:1])
+    assert np.allclose(blocks["predict"]["past_x"], packed["predict"]["X"][:, :3, 1:2])
+    assert np.allclose(blocks["predict"]["future_x"], packed["predict"]["X"][:, 3:, 1:2])
+    assert np.allclose(blocks["predict"]["past_time"], packed["predict"]["X"][:, :3, 2:])
+    assert np.allclose(blocks["predict"]["future_time"], packed["predict"]["X"][:, 3:, 2:])
+    assert np.allclose(blocks["predict"]["target_mean"], packed["predict"]["target_mean"])
+    assert np.allclose(blocks["predict"]["target_std"], packed["predict"]["target_std"])
+
+
+def test_make_panel_sequence_blocks_keeps_zero_width_optional_blocks() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        }
+    )
+
+    blocks = make_panel_sequence_blocks(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        context_length=3,
+        normalize=False,
+        x_cols=(),
+        add_time_features=False,
+    )
+
+    assert blocks["train"]["past_x"].shape == (2, 3, 0)
+    assert blocks["train"]["future_x"].shape == (2, 2, 0)
+    assert blocks["train"]["past_time"].shape == (2, 3, 0)
+    assert blocks["train"]["future_time"].shape == (2, 2, 0)
+    assert blocks["predict"]["past_x"].shape == (1, 3, 0)
+    assert blocks["predict"]["future_x"].shape == (1, 2, 0)
+    assert blocks["predict"]["past_time"].shape == (1, 3, 0)
+    assert blocks["predict"]["future_time"].shape == (1, 2, 0)
+
+
+def test_split_panel_sequence_blocks_respects_per_series_order() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 10 + ["s1"] * 10,
+            "ds": list(pd.date_range("2020-01-01", periods=10, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 11)] + [float(i) for i in range(101, 111)],
+        }
+    )
+
+    bundle = make_panel_sequence_blocks(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-08"),
+        horizon=2,
+        context_length=3,
+        normalize=False,
+        add_time_features=False,
+    )
+    parts = split_panel_sequence_blocks(bundle, valid_size=1, test_size=1)
+
+    assert set(parts) == {"train", "valid", "test"}
+    assert parts["train"]["past_y"].shape == (4, 3, 1)
+    assert parts["valid"]["past_y"].shape == (2, 3, 1)
+    assert parts["test"]["past_y"].shape == (2, 3, 1)
+    assert (
+        parts["train"]["window_index"]
+        .loc[parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
+    )
+    assert (
+        parts["valid"]["window_index"]
+        .loc[parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-05")]
+    )
+    assert (
+        parts["test"]["window_index"]
+        .loc[parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
+        .tolist()
+        == [pd.Timestamp("2020-01-06")]
+    )

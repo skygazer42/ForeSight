@@ -1120,6 +1120,8 @@ def make_panel_sequence_tensors(
         "add_time_features": bool(add_time_features),
         "channel_names": tuple(channel_names),
         "time_feature_names": tuple(time_feature_names),
+        "x_dim": int(len(x_cols_tup)),
+        "time_dim": int(len(time_feature_names)),
         "n_series": int(out["unique_id"].nunique()),
         "n_train_windows": int(X_train.shape[0]),
         "n_predict_windows": int(pred_X.shape[0]),
@@ -1267,6 +1269,225 @@ def split_panel_sequence_tensors(
             indices=indices,
         )
         for name, indices in partition_indices.items()
+    }
+
+
+def _panel_sequence_block_dims(metadata: dict[str, Any]) -> tuple[int, int, int, int]:
+    context_length = int(metadata["context_length"])
+    horizon = int(metadata["horizon"])
+    x_dim = int(metadata.get("x_dim", len(tuple(metadata.get("x_cols", ())))))
+    time_dim = int(metadata.get("time_dim", len(tuple(metadata.get("time_feature_names", ())))))
+    return context_length, horizon, x_dim, time_dim
+
+
+def _packed_partition_to_sequence_blocks(
+    section: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+    include_target_y: bool,
+    index_key: str,
+) -> dict[str, Any]:
+    X = np.asarray(section["X"])
+    series_id = np.asarray(section["series_id"])
+    index = section[index_key].copy()
+    context_length, horizon, x_dim, time_dim = _panel_sequence_block_dims(metadata)
+
+    if X.ndim != 3:
+        raise ValueError("packed sequence X must be a 3D array")
+    expected_input_dim = 1 + int(x_dim) + int(time_dim)
+    if int(X.shape[1]) != int(context_length) + int(horizon):
+        raise ValueError("packed sequence X has incompatible sequence length for metadata")
+    if int(X.shape[2]) != expected_input_dim:
+        raise ValueError("packed sequence X has incompatible channel dimension for metadata")
+
+    x_start = 1
+    time_start = 1 + int(x_dim)
+    blocks = {
+        "past_y": X[:, :context_length, 0:1],
+        "future_y_seed": X[:, context_length:, 0:1],
+        "past_x": X[:, :context_length, x_start:time_start],
+        "future_x": X[:, context_length:, x_start:time_start],
+        "past_time": X[:, :context_length, time_start:],
+        "future_time": X[:, context_length:, time_start:],
+        "series_id": series_id,
+        index_key: index,
+    }
+    if include_target_y:
+        blocks["target_y"] = np.asarray(section["y"])
+    else:
+        blocks["target_mean"] = np.asarray(section["target_mean"])
+        blocks["target_std"] = np.asarray(section["target_std"])
+    return blocks
+
+
+def make_panel_sequence_blocks(
+    long_df: Any,
+    *,
+    cutoff: Any,
+    horizon: int,
+    context_length: int = 96,
+    x_cols: tuple[str, ...] = (),
+    normalize: bool = True,
+    max_train_size: int | None = None,
+    sample_step: int = 1,
+    add_time_features: bool = True,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build structured encoder-decoder style sequence blocks from long-format panel data.
+    """
+    packed = make_panel_sequence_tensors(
+        long_df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        context_length=int(context_length),
+        x_cols=x_cols,
+        normalize=bool(normalize),
+        max_train_size=max_train_size,
+        sample_step=int(sample_step),
+        add_time_features=bool(add_time_features),
+        dtype=dtype,
+    )
+    metadata = dict(packed["metadata"])
+    context_length_int, horizon_int, x_dim, time_dim = _panel_sequence_block_dims(metadata)
+    metadata["block_layout"] = {
+        "past_y": (context_length_int, 1),
+        "future_y_seed": (horizon_int, 1),
+        "past_x": (context_length_int, x_dim),
+        "future_x": (horizon_int, x_dim),
+        "past_time": (context_length_int, time_dim),
+        "future_time": (horizon_int, time_dim),
+        "target_y": (horizon_int,),
+    }
+    return {
+        "train": _packed_partition_to_sequence_blocks(
+            packed["train"],
+            metadata=metadata,
+            include_target_y=True,
+            index_key="window_index",
+        ),
+        "predict": _packed_partition_to_sequence_blocks(
+            packed["predict"],
+            metadata=metadata,
+            include_target_y=False,
+            index_key="index",
+        ),
+        "metadata": metadata,
+    }
+
+
+def _validate_panel_sequence_blocks_bundle(
+    bundle: Any,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    if not isinstance(bundle, dict):
+        raise TypeError("bundle must be a dict returned by make_panel_sequence_blocks")
+    if "train" not in bundle or "predict" not in bundle or "metadata" not in bundle:
+        raise TypeError("bundle must contain train, predict, and metadata keys")
+    train = bundle["train"]
+    predict = bundle["predict"]
+    metadata = bundle["metadata"]
+    if not isinstance(train, dict) or not isinstance(predict, dict) or not isinstance(metadata, dict):
+        raise TypeError("bundle sections must be dicts")
+    required_train = {
+        "past_y",
+        "future_y_seed",
+        "past_x",
+        "future_x",
+        "past_time",
+        "future_time",
+        "series_id",
+        "target_y",
+        "window_index",
+    }
+    missing_train = required_train.difference(train)
+    if missing_train:
+        raise TypeError(f"bundle['train'] missing required keys: {sorted(missing_train)}")
+    if not isinstance(train["window_index"], pd.DataFrame):
+        raise TypeError("bundle['train']['window_index'] must be a pandas DataFrame")
+    return train, predict, metadata
+
+
+def _sequence_blocks_train_to_packed(
+    train: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    _context_length, _horizon, _x_dim, _time_dim = _panel_sequence_block_dims(metadata)
+    past = np.concatenate(
+        [
+            np.asarray(train["past_y"]),
+            np.asarray(train["past_x"]),
+            np.asarray(train["past_time"]),
+        ],
+        axis=2,
+    )
+    future = np.concatenate(
+        [
+            np.asarray(train["future_y_seed"]),
+            np.asarray(train["future_x"]),
+            np.asarray(train["future_time"]),
+        ],
+        axis=2,
+    )
+    return {
+        "X": np.concatenate([past, future], axis=1),
+        "y": np.asarray(train["target_y"]),
+        "series_id": np.asarray(train["series_id"]),
+        "window_index": train["window_index"].copy(),
+    }
+
+
+def _sequence_blocks_partition_from_tensor_split(
+    part: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    blocks = _packed_partition_to_sequence_blocks(
+        {
+            "X": part["X"],
+            "y": part["y"],
+            "series_id": part["series_id"],
+            "window_index": part["window_index"],
+        },
+        metadata=metadata,
+        include_target_y=True,
+        index_key="window_index",
+    )
+    blocks["metadata"] = part["metadata"]
+    return blocks
+
+
+def split_panel_sequence_blocks(
+    bundle: Any,
+    *,
+    valid_size: int | None = None,
+    test_size: int | None = None,
+    valid_frac: float | None = None,
+    test_frac: float | None = None,
+    gap: int = 0,
+    min_train_size: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """
+    Chronologically split structured sequence blocks into train/valid/test partitions.
+    """
+    train, _predict, metadata = _validate_panel_sequence_blocks_bundle(bundle)
+    packed_bundle = {
+        "train": _sequence_blocks_train_to_packed(train, metadata=metadata),
+        "predict": {},
+        "metadata": metadata,
+    }
+    parts = split_panel_sequence_tensors(
+        packed_bundle,
+        valid_size=valid_size,
+        test_size=test_size,
+        valid_frac=valid_frac,
+        test_frac=test_frac,
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
+    return {
+        name: _sequence_blocks_partition_from_tensor_split(part, metadata=metadata)
+        for name, part in parts.items()
     }
 
 
