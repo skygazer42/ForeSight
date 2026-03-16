@@ -108,6 +108,7 @@ from .regression import (
     decision_tree_lag_direct_forecast,
     elasticnet_lag_direct_forecast,
     extra_trees_lag_direct_forecast,
+    gamma_lag_direct_forecast,
     gbrt_lag_direct_forecast,
     hgb_lag_direct_forecast,
     huber_lag_direct_forecast,
@@ -128,12 +129,14 @@ from .regression import (
     mlp_lag_direct_forecast,
     omp_lag_direct_forecast,
     passive_aggressive_lag_direct_forecast,
+    poisson_lag_direct_forecast,
     quantile_lag_direct_forecast,
     rf_lag_direct_forecast,
     ridge_lag_direct_forecast,
     ridge_lag_forecast,
     sgd_lag_direct_forecast,
     svr_lag_direct_forecast,
+    tweedie_lag_direct_forecast,
     xgb_custom_lag_direct_forecast,
     xgb_custom_lag_recursive_forecast,
     xgb_dart_lag_direct_forecast,
@@ -1710,6 +1713,123 @@ def _factory_huber_lag(
             seasonal_diff_lags=seasonal_diff_lags,
             fourier_periods=fourier_periods,
             fourier_orders=fourier_orders,
+        )
+
+    return _f
+
+
+def _factory_poisson_lag(
+    *,
+    lags: int = 12,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    fourier_orders_int = int(fourier_orders)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return poisson_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders_int,
+        )
+
+    return _f
+
+
+def _factory_gamma_lag(
+    *,
+    lags: int = 12,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    fourier_orders_int = int(fourier_orders)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return gamma_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha=alpha_f,
+            max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders_int,
+        )
+
+    return _f
+
+
+def _factory_tweedie_lag(
+    *,
+    lags: int = 12,
+    power: float = 1.5,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    power_f = float(power)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    fourier_orders_int = int(fourier_orders)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return tweedie_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            power=power_f,
+            alpha=alpha_f,
+            max_iter=max_iter_int,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders_int,
         )
 
     return _f

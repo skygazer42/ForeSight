@@ -29,8 +29,11 @@ ML_MODELS = [
     "kernel-ridge-lag",
     "mlp-lag",
     "huber-lag",
+    "poisson-lag",
+    "gamma-lag",
     "quantile-lag",
     "sgd-lag",
+    "tweedie-lag",
 ]
 
 GLOBAL_ML_MODELS = [

@@ -113,6 +113,70 @@ def _require_optional_non_zero_int_param(
         raise ValueError(error)
 
 
+def _validate_tweedie_targets(*, model_key: str, power: float, y_train: np.ndarray) -> None:
+    if np.any(y_train < 0.0) and power == 1.0:
+        raise ValueError(f"{model_key} with power=1 requires non-negative training targets")
+    if np.any(y_train <= 0.0) and power > 1.0:
+        raise ValueError(f"{model_key} with power>1 requires strictly positive training targets")
+
+
+def _fit_direct_multioutput_lag_model(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    roll_windows: Any,
+    roll_stats: Any,
+    diff_lags: Any,
+    seasonal_lags: Any,
+    seasonal_diff_lags: Any,
+    fourier_periods: Any,
+    fourier_orders: Any,
+    validate_y_train: Any,
+    model: Any,
+) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError(HORIZON_MIN_ERROR)
+    if lags <= 0:
+        raise ValueError(LAGS_MIN_ERROR)
+
+    start_t = _compute_feature_start_t(
+        lags=lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+    )
+    x_base, Y, t_idx = _make_lagged_xy_multi(x, lags=lags, horizon=int(horizon), start_t=start_t)
+    X = _augment_lag_matrix(
+        x_base,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        t_index=t_idx,
+        series=x,
+    )
+    validate_y_train(Y)
+    model.fit(X, Y)
+
+    feat_base = x[-lags:].astype(float, copy=False).reshape(1, -1)
+    feat = _augment_lag_feat_row(
+        feat_base,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        t_next=int(x.size),
+        history=x,
+    )
+    yhat = model.predict(feat)[0]
+    return np.asarray(yhat, dtype=float)
+
+
 def _wants_lag_derived_features(*, roll_windows: Any, roll_stats: Any, diff_lags: Any) -> bool:
     return bool(roll_windows) or bool(roll_stats) or bool(diff_lags)
 
@@ -2234,6 +2298,170 @@ def quantile_lag_direct_forecast(
     )
     yhat = model.predict(feat)[0]
     return np.asarray(yhat, dtype=float)
+
+
+def poisson_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon PoissonRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import PoissonRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'poisson_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    if alpha_f < 0:
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
+    if max_iter_int <= 0:
+        raise ValueError(MAX_ITER_MIN_ERROR)
+
+    def _validate_y_train(y_train: np.ndarray) -> None:
+        if np.any(y_train < 0.0):
+            raise ValueError("poisson-lag requires non-negative training targets")
+
+    return _fit_direct_multioutput_lag_model(
+        train,
+        horizon,
+        lags=lags,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        validate_y_train=_validate_y_train,
+        model=MultiOutputRegressor(PoissonRegressor(alpha=alpha_f, max_iter=max_iter_int)),
+    )
+
+
+def gamma_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon GammaRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import GammaRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'gamma_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    if alpha_f < 0:
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
+    if max_iter_int <= 0:
+        raise ValueError(MAX_ITER_MIN_ERROR)
+
+    def _validate_y_train(y_train: np.ndarray) -> None:
+        if np.any(y_train <= 0.0):
+            raise ValueError("gamma-lag requires strictly positive training targets")
+
+    return _fit_direct_multioutput_lag_model(
+        train,
+        horizon,
+        lags=lags,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        validate_y_train=_validate_y_train,
+        model=MultiOutputRegressor(GammaRegressor(alpha=alpha_f, max_iter=max_iter_int)),
+    )
+
+
+def tweedie_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: int,
+    power: float = 1.5,
+    alpha: float = 1.0,
+    max_iter: int = 100,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon TweedieRegressor on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import TweedieRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'tweedie_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    power_f = float(power)
+    alpha_f = float(alpha)
+    max_iter_int = int(max_iter)
+    if 0.0 < power_f < 1.0:
+        raise ValueError("power must be <= 0 or >= 1")
+    if alpha_f < 0:
+        raise ValueError(ALPHA_NON_NEGATIVE_ERROR)
+    if max_iter_int <= 0:
+        raise ValueError(MAX_ITER_MIN_ERROR)
+
+    def _validate_y_train(y_train: np.ndarray) -> None:
+        _validate_tweedie_targets(model_key="tweedie-lag", power=power_f, y_train=y_train)
+
+    return _fit_direct_multioutput_lag_model(
+        train,
+        horizon,
+        lags=lags,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        validate_y_train=_validate_y_train,
+        model=MultiOutputRegressor(
+            TweedieRegressor(power=power_f, alpha=alpha_f, max_iter=max_iter_int)
+        ),
+    )
 
 
 def sgd_lag_direct_forecast(

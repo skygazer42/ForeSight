@@ -22,6 +22,7 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
     _factory_decision_tree_lag = context._factory_decision_tree_lag
     _factory_elasticnet_lag = context._factory_elasticnet_lag
     _factory_extra_trees_lag = context._factory_extra_trees_lag
+    _factory_gamma_lag = context._factory_gamma_lag
     _factory_gbrt_lag = context._factory_gbrt_lag
     _factory_hgb_lag = context._factory_hgb_lag
     _factory_huber_lag = context._factory_huber_lag
@@ -42,12 +43,14 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
     _factory_mlp_lag = context._factory_mlp_lag
     _factory_omp_lag = context._factory_omp_lag
     _factory_passive_aggressive_lag = context._factory_passive_aggressive_lag
+    _factory_poisson_lag = context._factory_poisson_lag
     _factory_quantile_lag = context._factory_quantile_lag
     _factory_rf_lag = context._factory_rf_lag
     _factory_ridge_lag = context._factory_ridge_lag
     _factory_ridge_lag_direct = context._factory_ridge_lag_direct
     _factory_sgd_lag = context._factory_sgd_lag
     _factory_svr_lag = context._factory_svr_lag
+    _factory_tweedie_lag = context._factory_tweedie_lag
     _factory_xgb_custom_dirrec_lag = context._factory_xgb_custom_dirrec_lag
     _factory_xgb_custom_lag = context._factory_xgb_custom_lag
     _factory_xgb_custom_lag_recursive = context._factory_xgb_custom_lag_recursive
@@ -624,6 +627,62 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         param_help={
             "lags": LAGS_PARAM_HELP,
             "epsilon": "Huber epsilon (>1.0)",
+            "alpha": L2_REG_STRENGTH_PARAM_HELP,
+            "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "poisson-lag": model_spec(
+        key="poisson-lag",
+        description=(
+            "PoissonRegressor on lag features (direct multi-horizon). "
+            "Requires non-negative targets and scikit-learn."
+        ),
+        factory=_factory_poisson_lag,
+        default_params={"lags": 12, "alpha": 1.0, "max_iter": 100, **_LAG_DERIVED_DEFAULTS},
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "alpha": L2_REG_STRENGTH_PARAM_HELP,
+            "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "gamma-lag": model_spec(
+        key="gamma-lag",
+        description=(
+            "GammaRegressor on lag features (direct multi-horizon). "
+            "Requires strictly positive targets and scikit-learn."
+        ),
+        factory=_factory_gamma_lag,
+        default_params={"lags": 12, "alpha": 1.0, "max_iter": 100, **_LAG_DERIVED_DEFAULTS},
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "alpha": L2_REG_STRENGTH_PARAM_HELP,
+            "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "tweedie-lag": model_spec(
+        key="tweedie-lag",
+        description=(
+            "TweedieRegressor on lag features (direct multi-horizon). "
+            "Useful for non-negative or strictly positive targets depending on power. "
+            "Requires scikit-learn."
+        ),
+        factory=_factory_tweedie_lag,
+        default_params={
+            "lags": 12,
+            "power": 1.5,
+            "alpha": 1.0,
+            "max_iter": 100,
+            **_LAG_DERIVED_DEFAULTS,
+        },
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "power": "Tweedie power (<=0 or >=1); power=1 is Poisson-like, power>1 needs positive targets",
             "alpha": L2_REG_STRENGTH_PARAM_HELP,
             "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
             **_LAG_DERIVED_PARAM_HELP,

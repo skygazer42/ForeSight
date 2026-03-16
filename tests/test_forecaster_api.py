@@ -184,3 +184,46 @@ def test_make_forecaster_passive_aggressive_accepts_legacy_uppercase_c_keyword(
         "max_iter": 321.0,
         "random_state": 7.0,
     }
+
+
+def test_make_forecaster_tweedie_lag_coerces_string_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, float] = {}
+
+    def _fake_tweedie_lag_direct_forecast(
+        train: object,
+        horizon: int,
+        *,
+        lags: int,
+        power: float,
+        alpha: float,
+        max_iter: int,
+        **kwargs: object,
+    ) -> np.ndarray:
+        captured["lags"] = float(lags)
+        captured["power"] = float(power)
+        captured["alpha"] = float(alpha)
+        captured["max_iter"] = float(max_iter)
+        captured["seasonal_orders"] = float(kwargs["fourier_orders"])
+        return np.zeros(int(horizon), dtype=float)
+
+    monkeypatch.setattr(runtime_mod, "tweedie_lag_direct_forecast", _fake_tweedie_lag_direct_forecast)
+
+    yhat = make_forecaster(
+        "tweedie-lag",
+        lags="4",
+        power="1.5",
+        alpha="0.25",
+        max_iter="123",
+        fourier_orders="3",
+    )([1.0] * 12, 2)
+
+    assert yhat.shape == (2,)
+    assert captured == {
+        "lags": 4.0,
+        "power": 1.5,
+        "alpha": 0.25,
+        "max_iter": 123.0,
+        "seasonal_orders": 3.0,
+    }
