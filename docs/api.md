@@ -65,6 +65,8 @@ from foresight import (
 | `make_panel_window_predict_frame` | `foresight.data` | Build step-wise panel prediction windows from long-format data for a cutoff and forecast horizon. |
 | `make_supervised_arrays` | `foresight.data` | Convert supervised training tables into dense feature and target arrays with stable index and metadata. |
 | `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
+| `make_supervised_predict_arrays` | `foresight.data` | Convert direct supervised prediction rows into dense arrays plus index metadata for forecast-time inference. |
+| `make_supervised_predict_frame` | `foresight.data` | Build one direct supervised prediction row per eligible series for a cutoff and forecast horizon. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
 | `split_supervised_frame` | `foresight.data` | Chronologically split supervised training rows into train, validation, and test partitions per series. |
 | `split_supervised_arrays` | `foresight.data` | Chronologically split supervised training arrays into train, validation, and test partitions per series. |
@@ -138,6 +140,8 @@ from foresight import (
 - `make_panel_window_predict_frame`
 - `make_supervised_arrays`
 - `make_supervised_frame`
+- `make_supervised_predict_arrays`
+- `make_supervised_predict_frame`
 - `make_forecaster`
 - `make_forecaster_object`
 - `make_global_forecaster`

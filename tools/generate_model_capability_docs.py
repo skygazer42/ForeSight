@@ -178,6 +178,16 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Convert supervised training tables into dense feature and target arrays with stable index and metadata.",
     },
+    "make_supervised_predict_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Build one direct supervised prediction row per eligible series for a cutoff and forecast horizon.",
+    },
+    "make_supervised_predict_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Convert direct supervised prediction rows into dense arrays plus index metadata for forecast-time inference.",
+    },
     "make_forecaster": {
         "group": "Forecasting",
         "source": SOURCE_FORESIGHT_MODELS_REGISTRY,
