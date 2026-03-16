@@ -57,6 +57,8 @@ from foresight import (
 | `fit_long_df_scaler` | `foresight.data` | Fit reversible per-series or global scaling statistics for long-format numeric columns. |
 | `infer_series_frequency` | `foresight.data` | Infer a sensible pandas-compatible series frequency from timestamps. |
 | `inverse_transform_long_df_with_scaler` | `foresight.data` | Reverse fitted long-format scaling statistics to restore original numeric units. |
+| `make_panel_window_arrays` | `foresight.data` | Convert long-format panel series into dense training arrays plus window metadata for sklearn-style estimators. |
+| `make_panel_window_frame` | `foresight.data` | Build step-wise panel training windows from long-format data with target, seasonal, and exogenous lag features. |
 | `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
 | `split_long_df` | `foresight.data` | Chronologically split each long-format series into train, validation, and test partitions. |
@@ -117,6 +119,8 @@ from foresight import (
 - `inverse_transform_long_df_with_scaler`
 - `load_forecaster`
 - `load_forecaster_artifact`
+- `make_panel_window_arrays`
+- `make_panel_window_frame`
 - `make_supervised_frame`
 - `make_forecaster`
 - `make_forecaster_object`

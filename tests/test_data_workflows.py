@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from foresight.data import (
     align_long_df,
@@ -7,6 +8,8 @@ from foresight.data import (
     enrich_long_df_calendar,
     fit_long_df_scaler,
     inverse_transform_long_df_with_scaler,
+    make_panel_window_arrays,
+    make_panel_window_frame,
     make_supervised_frame,
     prepare_long_df,
     split_long_df,
@@ -211,3 +214,123 @@ def test_global_scaler_uses_single_stats_row_per_column() -> None:
     assert scaler.loc[0, "unique_id"] == "__global__"
     assert scaler.loc[0, "method"] == "maxabs"
     assert float(np.abs(scaled["y"]).max()) == 1.0
+
+
+def test_make_panel_window_frame_multi_series_multi_step_schema_and_values() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6 + ["s1"] * 6,
+            "ds": list(pd.date_range("2020-01-01", periods=6, freq="D")) * 2,
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],
+        }
+    )
+
+    out = make_panel_window_frame(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        seasonal_lags=(3,),
+        historic_x_lags=(1,),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+
+    assert len(out) == 8
+    assert list(out.columns[:5]) == ["unique_id", "cutoff_ds", "target_ds", "step", "y"]
+    assert {
+        "y_lag_1",
+        "y_lag_2",
+        "y_seasonal_lag_3",
+        "historic_x__promo_lag_1",
+        "future_x__promo_lag_0",
+        "future_x__promo_lag_1",
+    } <= set(out.columns)
+
+    first = out.iloc[0]
+    second = out.iloc[1]
+
+    assert first["unique_id"] == "s0"
+    assert first["cutoff_ds"] == pd.Timestamp("2020-01-03")
+    assert first["target_ds"] == pd.Timestamp("2020-01-04")
+    assert int(first["step"]) == 1
+    assert float(first["y"]) == 4.0
+    assert float(first["y_lag_1"]) == 3.0
+    assert float(first["y_lag_2"]) == 2.0
+    assert float(first["y_seasonal_lag_3"]) == 1.0
+    assert float(first["historic_x__promo_lag_1"]) == 12.0
+    assert float(first["future_x__promo_lag_0"]) == 13.0
+    assert float(first["future_x__promo_lag_1"]) == 12.0
+
+    assert second["cutoff_ds"] == pd.Timestamp("2020-01-03")
+    assert second["target_ds"] == pd.Timestamp("2020-01-05")
+    assert int(second["step"]) == 2
+    assert float(second["y"]) == 5.0
+    assert float(second["future_x__promo_lag_0"]) == 14.0
+    assert float(second["future_x__promo_lag_1"]) == 13.0
+
+
+def test_make_panel_window_arrays_matches_frame_output() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+        }
+    )
+
+    frame = make_panel_window_frame(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+    arrays = make_panel_window_arrays(
+        long_df,
+        horizon=2,
+        target_lags=(1, 2),
+        future_x_lags=(0, 1),
+        x_cols=("promo",),
+    )
+
+    assert arrays["X"].shape == (6, len(frame.columns) - 5)
+    assert arrays["y"].shape == (6,)
+    assert tuple(arrays["feature_names"]) == tuple(frame.columns[5:])
+    assert list(arrays["index"].columns) == ["unique_id", "cutoff_ds", "target_ds", "step"]
+    assert np.allclose(arrays["X"], frame.loc[:, frame.columns[5:]].to_numpy(dtype=float))
+    assert np.allclose(arrays["y"], frame["y"].to_numpy(dtype=float))
+    assert arrays["metadata"]["horizon"] == 2
+    assert arrays["metadata"]["target_lags"] == (2, 1)
+    assert arrays["metadata"]["future_x_lags"] == (1, 0)
+    assert arrays["metadata"]["x_cols"] == ("promo",)
+    assert arrays["metadata"]["n_series"] == 1
+    assert arrays["metadata"]["n_windows"] == 3
+    assert arrays["metadata"]["n_rows"] == 6
+
+
+def test_make_panel_window_frame_rejects_duplicate_timestamps() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s0"],
+            "ds": pd.to_datetime(["2020-01-01", "2020-01-01", "2020-01-02", "2020-01-03"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="align_long_df"):
+        make_panel_window_frame(long_df, horizon=1, target_lags=(1,))
+
+
+def test_make_panel_window_frame_raises_when_no_windows_can_be_built() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-01", periods=3, freq="D"),
+            "y": [1.0, 2.0, 3.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="enough history"):
+        make_panel_window_frame(long_df, horizon=2, target_lags=(1, 2, 3))

@@ -523,6 +523,272 @@ def make_supervised_frame(
     return pd.concat(frames, axis=0, ignore_index=True, sort=False)
 
 
+def _resolve_panel_target_lags(*, lags: Any, target_lags: Any = ()) -> tuple[int, ...]:
+    spec = target_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        spec = lags
+    return normalize_lag_steps(spec, allow_zero=False, name="target_lags")
+
+
+def _resolve_panel_historic_x_lags(historic_x_lags: Any) -> tuple[int, ...]:
+    spec = historic_x_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return ()
+    return normalize_lag_steps(spec, allow_zero=False, name="historic_x_lags")
+
+
+def _resolve_panel_future_x_lags(*, x_cols: tuple[str, ...], future_x_lags: Any) -> tuple[int, ...]:
+    if not x_cols:
+        return ()
+    spec = future_x_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return (0,)
+    return normalize_lag_steps(spec, allow_zero=True, name="future_x_lags")
+
+
+def _resolve_panel_seasonal_lags(seasonal_lags: Any) -> tuple[int, ...]:
+    spec = seasonal_lags
+    if isinstance(spec, str) and not spec.strip():
+        spec = ()
+    if spec in (None, (), []):
+        return ()
+    return normalize_lag_steps(spec, allow_zero=False, name="seasonal_lags")
+
+
+def _normalize_panel_x_cols(long_df: pd.DataFrame, x_cols: Any) -> tuple[str, ...]:
+    cols = normalize_str_tuple(x_cols)
+    if not cols:
+        return ()
+    missing = [col for col in cols if col not in long_df.columns]
+    if missing:
+        raise KeyError(f"x_cols not found: {missing}")
+    reserved = [col for col in cols if col in {"unique_id", "ds", "y"}]
+    if reserved:
+        raise ValueError(f"x_cols cannot include reserved column names: {reserved}")
+    non_numeric = [col for col in cols if not is_numeric_dtype(long_df[col])]
+    if non_numeric:
+        raise ValueError(f"x_cols must be numeric: {non_numeric}")
+    return cols
+
+
+def _panel_window_required_start(
+    *,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+    historic_x_lags: tuple[int, ...],
+    future_x_lags: tuple[int, ...],
+) -> int:
+    return max(
+        [
+            int(max(target_lags)),
+            *([int(max(seasonal_lags))] if seasonal_lags else []),
+            *([int(max(historic_x_lags))] if historic_x_lags else []),
+            *([int(max(future_x_lags))] if future_x_lags else []),
+        ]
+    )
+
+
+def _validate_panel_window_group(group: pd.DataFrame, *, x_cols: tuple[str, ...]) -> None:
+    if group["ds"].duplicated().any():
+        raise ValueError("duplicate timestamps found within a series; run align_long_df() first")
+    y = group["y"].to_numpy(dtype=float, copy=False)
+    if not np.all(np.isfinite(y)):
+        raise ValueError("y must contain only finite values to build panel windows")
+    if not x_cols:
+        return
+    values = group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("x_cols must contain only finite values to build panel windows")
+
+
+def _empty_panel_window_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=["unique_id", "cutoff_ds", "target_ds", "step", "y"])
+
+
+def _group_panel_window_frame(
+    group: pd.DataFrame,
+    *,
+    horizon: int,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+    historic_x_lags: tuple[int, ...],
+    future_x_lags: tuple[int, ...],
+    x_cols: tuple[str, ...],
+    add_time_features: bool,
+) -> pd.DataFrame:
+    _validate_panel_window_group(group, x_cols=x_cols)
+
+    y = group["y"].to_numpy(dtype=float, copy=False)
+    ds_arr = group["ds"].to_numpy(copy=False)
+    exog = None if not x_cols else group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    time_matrix: np.ndarray | None = None
+    time_names: list[str] = []
+    if add_time_features:
+        time_matrix, base_time_names = build_time_features(group["ds"])
+        time_names = [f"time_{name}" for name in base_time_names]
+
+    required_start = _panel_window_required_start(
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+    )
+    rows: list[dict[str, Any]] = []
+    horizon_int = int(horizon)
+
+    for t in range(int(required_start), int(len(group)) - horizon_int + 1):
+        cutoff_idx = int(t) - 1
+        base_row: dict[str, Any] = {}
+        for lag in target_lags:
+            base_row[f"y_lag_{int(lag)}"] = float(y[int(t) - int(lag)])
+        for lag in seasonal_lags:
+            base_row[f"y_seasonal_lag_{int(lag)}"] = float(y[int(t) - int(lag)])
+        if exog is not None:
+            for lag in historic_x_lags:
+                source_idx = int(t) - int(lag)
+                for col_idx, col_name in enumerate(x_cols):
+                    base_row[f"historic_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
+
+        for step_idx in range(horizon_int):
+            target_idx = int(t) + int(step_idx)
+            row = {
+                "unique_id": group["unique_id"].iloc[0],
+                "cutoff_ds": ds_arr[cutoff_idx],
+                "target_ds": ds_arr[target_idx],
+                "step": int(step_idx) + 1,
+                "y": float(y[target_idx]),
+                **base_row,
+            }
+            if exog is not None:
+                for lag in future_x_lags:
+                    source_idx = target_idx - int(lag)
+                    for col_idx, col_name in enumerate(x_cols):
+                        row[f"future_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
+            if time_matrix is not None:
+                for col_idx, col_name in enumerate(time_names):
+                    row[col_name] = float(time_matrix[target_idx, col_idx])
+            rows.append(row)
+
+    if not rows:
+        return _empty_panel_window_frame()
+    return pd.DataFrame(rows)
+
+
+def make_panel_window_frame(
+    long_df: Any,
+    *,
+    horizon: int = 1,
+    lags: Any = 24,
+    target_lags: Any = (),
+    seasonal_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
+    x_cols: tuple[str, ...] = (),
+    add_time_features: bool = False,
+) -> pd.DataFrame:
+    """
+    Build a panel training table where each row represents one target step from one sliding window.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    horizon_int = int(horizon)
+    if horizon_int <= 0:
+        raise ValueError("horizon must be >= 1")
+
+    x_cols_tup = _normalize_panel_x_cols(df, x_cols)
+    target_lag_steps = _resolve_panel_target_lags(lags=lags, target_lags=target_lags)
+    seasonal_lag_steps = _resolve_panel_seasonal_lags(seasonal_lags)
+    historic_lag_steps = _resolve_panel_historic_x_lags(historic_x_lags)
+    future_lag_steps = _resolve_panel_future_x_lags(x_cols=x_cols_tup, future_x_lags=future_x_lags)
+
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    frames: list[pd.DataFrame] = []
+    for _unique_id, group in out.groupby("unique_id", sort=False):
+        frame = _group_panel_window_frame(
+            group.reset_index(drop=True),
+            horizon=horizon_int,
+            target_lags=target_lag_steps,
+            seasonal_lags=seasonal_lag_steps,
+            historic_x_lags=historic_lag_steps,
+            future_x_lags=future_lag_steps,
+            x_cols=x_cols_tup,
+            add_time_features=bool(add_time_features),
+        )
+        if not frame.empty:
+            frames.append(frame)
+
+    if not frames:
+        raise ValueError("No series had enough history to build panel windows")
+    return pd.concat(frames, axis=0, ignore_index=True, sort=False)
+
+
+def make_panel_window_arrays(
+    long_df: Any,
+    *,
+    horizon: int = 1,
+    lags: Any = 24,
+    target_lags: Any = (),
+    seasonal_lags: Any = (),
+    historic_x_lags: Any = (),
+    future_x_lags: Any = (),
+    x_cols: tuple[str, ...] = (),
+    add_time_features: bool = False,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build dense training arrays from panel sliding windows plus feature/index metadata.
+    """
+    frame = make_panel_window_frame(
+        long_df,
+        horizon=int(horizon),
+        lags=lags,
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+        x_cols=x_cols,
+        add_time_features=bool(add_time_features),
+    )
+
+    feature_names = tuple(str(col) for col in frame.columns[5:])
+    index_cols = ["unique_id", "cutoff_ds", "target_ds", "step"]
+    target_lag_steps = _resolve_panel_target_lags(lags=lags, target_lags=target_lags)
+    seasonal_lag_steps = _resolve_panel_seasonal_lags(seasonal_lags)
+    x_cols_tup = _normalize_panel_x_cols(_coerce_long_df(long_df, require_non_empty=True), x_cols)
+    historic_lag_steps = _resolve_panel_historic_x_lags(historic_x_lags)
+    future_lag_steps = _resolve_panel_future_x_lags(x_cols=x_cols_tup, future_x_lags=future_x_lags)
+
+    X = frame.loc[:, list(feature_names)].to_numpy(dtype=dtype, copy=False)
+    y = frame["y"].to_numpy(dtype=dtype, copy=False)
+    index = frame.loc[:, index_cols].copy()
+    window_index = index.loc[:, ["unique_id", "cutoff_ds"]].drop_duplicates()
+    metadata = {
+        "horizon": int(horizon),
+        "target_lags": target_lag_steps,
+        "seasonal_lags": seasonal_lag_steps,
+        "historic_x_lags": historic_lag_steps,
+        "future_x_lags": future_lag_steps,
+        "x_cols": x_cols_tup,
+        "add_time_features": bool(add_time_features),
+        "n_series": int(index["unique_id"].nunique()),
+        "n_windows": int(len(window_index)),
+        "n_rows": int(len(frame)),
+        "n_features": int(len(feature_names)),
+    }
+    return {
+        "X": X,
+        "y": y,
+        "feature_names": feature_names,
+        "index": index,
+        "metadata": metadata,
+    }
+
+
 def _normalize_split_size(value: int | None, *, name: str) -> int:
     if value is None:
         return 0

@@ -138,6 +138,16 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Inspect the structured artifact payload before reconstructing an object.",
     },
+    "make_panel_window_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Convert long-format panel series into dense training arrays plus window metadata for sklearn-style estimators.",
+    },
+    "make_panel_window_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Build step-wise panel training windows from long-format data with target, seasonal, and exogenous lag features.",
+    },
     "make_supervised_frame": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,

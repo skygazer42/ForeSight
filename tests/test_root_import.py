@@ -71,6 +71,8 @@ def test_root_import_exports_stable_public_api() -> None:
             "inverse_transform_long_df_with_scaler",
             "load_forecaster",
             "load_forecaster_artifact",
+            "make_panel_window_arrays",
+            "make_panel_window_frame",
             "make_supervised_frame",
             "make_forecaster",
             "make_forecaster_object",
