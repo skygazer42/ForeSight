@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -23,6 +25,36 @@ _ALLOWED_ALIGN_AGG = frozenset({"first", "last", "max", "mean", "min", "sum"})
 _ALLOWED_OUTLIER_METHODS = frozenset({"iqr", "zscore"})
 _ALLOWED_SCALER_METHODS = frozenset({"maxabs", "minmax", "standard"})
 _ALLOWED_SCALER_SCOPES = frozenset({"global", "per_series"})
+_ALLOWED_SUPERVISED_FEATURE_OPTION_KEYS = frozenset(
+    {
+        "roll_windows",
+        "roll_stats",
+        "diff_lags",
+        "seasonal_lags",
+        "seasonal_diff_lags",
+        "fourier_periods",
+        "fourier_orders",
+        "add_time_features",
+    }
+)
+
+_ERR_DUPLICATE_TIMESTAMPS = "duplicate timestamps found within a series; run align_long_df() first"
+_ERR_GAP_MIN = "gap must be >= 0"
+_ERR_HORIZON_MIN = "horizon must be >= 1"
+_ERR_MIN_TRAIN_SIZE = "min_train_size must be >= 1"
+_ERR_VALID_OR_TEST_REQUIRED = "at least one of valid/test size or frac must be positive"
+
+
+@dataclass(frozen=True)
+class _SupervisedFeatureOptions:
+    roll_windows: Any = ()
+    roll_stats: Any = ()
+    diff_lags: Any = ()
+    seasonal_lags: Any = ()
+    seasonal_diff_lags: Any = ()
+    fourier_periods: Any = ()
+    fourier_orders: Any = 2
+    add_time_features: bool = False
 
 
 def _coerce_long_df(long_df: Any, *, require_non_empty: bool = True) -> pd.DataFrame:
@@ -319,6 +351,139 @@ def _infer_supervised_x_cols(df: pd.DataFrame, x_cols: tuple[str, ...]) -> tuple
     return inferred
 
 
+def _coerce_supervised_feature_options(
+    feature_options: Any = None,
+    *,
+    feature_kwargs: dict[str, Any] | None = None,
+) -> _SupervisedFeatureOptions:
+    option_values: dict[str, Any]
+    if feature_options is None:
+        option_values = {}
+    elif isinstance(feature_options, _SupervisedFeatureOptions):
+        option_values = {
+            "roll_windows": feature_options.roll_windows,
+            "roll_stats": feature_options.roll_stats,
+            "diff_lags": feature_options.diff_lags,
+            "seasonal_lags": feature_options.seasonal_lags,
+            "seasonal_diff_lags": feature_options.seasonal_diff_lags,
+            "fourier_periods": feature_options.fourier_periods,
+            "fourier_orders": feature_options.fourier_orders,
+            "add_time_features": feature_options.add_time_features,
+        }
+    elif isinstance(feature_options, dict):
+        option_values = dict(feature_options)
+    else:
+        raise TypeError("feature_options must be a dict or _SupervisedFeatureOptions")
+
+    unknown = set(option_values).difference(_ALLOWED_SUPERVISED_FEATURE_OPTION_KEYS)
+    if unknown:
+        raise TypeError(f"unexpected feature_options keys: {sorted(unknown)}")
+
+    kwarg_values = dict(feature_kwargs or {})
+    unknown = set(kwarg_values).difference(_ALLOWED_SUPERVISED_FEATURE_OPTION_KEYS)
+    if unknown:
+        raise TypeError(f"unexpected supervised feature keywords: {sorted(unknown)}")
+
+    overlap = set(option_values).intersection(kwarg_values)
+    if overlap:
+        raise TypeError(f"feature_options overlaps with explicit keywords: {sorted(overlap)}")
+
+    merged = {**option_values, **kwarg_values}
+    return _SupervisedFeatureOptions(
+        roll_windows=merged.get("roll_windows", ()),
+        roll_stats=merged.get("roll_stats", ()),
+        diff_lags=merged.get("diff_lags", ()),
+        seasonal_lags=merged.get("seasonal_lags", ()),
+        seasonal_diff_lags=merged.get("seasonal_diff_lags", ()),
+        fourier_periods=merged.get("fourier_periods", ()),
+        fourier_orders=merged.get("fourier_orders", 2),
+        add_time_features=bool(merged.get("add_time_features", False)),
+    )
+
+
+def _kwonly_parameter(
+    name: str,
+    *,
+    default: Any = inspect.Parameter.empty,
+    annotation: Any = Any,
+) -> inspect.Parameter:
+    return inspect.Parameter(
+        name,
+        inspect.Parameter.KEYWORD_ONLY,
+        default=default,
+        annotation=annotation,
+    )
+
+
+def _supervised_feature_signature_parameters() -> tuple[inspect.Parameter, ...]:
+    return (
+        _kwonly_parameter("roll_windows", default=(), annotation=Any),
+        _kwonly_parameter("roll_stats", default=(), annotation=Any),
+        _kwonly_parameter("diff_lags", default=(), annotation=Any),
+        _kwonly_parameter("seasonal_lags", default=(), annotation=Any),
+        _kwonly_parameter("seasonal_diff_lags", default=(), annotation=Any),
+        _kwonly_parameter("fourier_periods", default=(), annotation=Any),
+        _kwonly_parameter("fourier_orders", default=2, annotation=Any),
+        _kwonly_parameter("add_time_features", default=False, annotation=bool),
+        _kwonly_parameter("feature_options", default=None, annotation=Any),
+    )
+
+
+def _apply_supervised_api_signatures() -> None:
+    feature_params = _supervised_feature_signature_parameters()
+
+    make_supervised_frame.__signature__ = inspect.Signature(
+        parameters=[
+            inspect.Parameter("data", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Any),
+            _kwonly_parameter("input_format", default="auto", annotation=str),
+            _kwonly_parameter("ds_col", default="ds", annotation=str),
+            _kwonly_parameter("target_cols", default=(), annotation=tuple[str, ...]),
+            _kwonly_parameter("lags", default=5, annotation=Any),
+            _kwonly_parameter("horizon", default=1, annotation=int),
+            _kwonly_parameter("x_cols", default=(), annotation=tuple[str, ...]),
+            *feature_params,
+        ],
+        return_annotation=pd.DataFrame,
+    )
+    make_supervised_arrays.__signature__ = inspect.Signature(
+        parameters=[
+            inspect.Parameter("data", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Any),
+            _kwonly_parameter("input_format", default="auto", annotation=str),
+            _kwonly_parameter("ds_col", default="ds", annotation=str),
+            _kwonly_parameter("target_cols", default=(), annotation=tuple[str, ...]),
+            _kwonly_parameter("lags", default=5, annotation=Any),
+            _kwonly_parameter("horizon", default=1, annotation=int),
+            _kwonly_parameter("x_cols", default=(), annotation=tuple[str, ...]),
+            *feature_params,
+            _kwonly_parameter("dtype", default=np.float64, annotation=Any),
+        ],
+        return_annotation=dict[str, Any],
+    )
+    make_supervised_predict_frame.__signature__ = inspect.Signature(
+        parameters=[
+            inspect.Parameter("long_df", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Any),
+            _kwonly_parameter("cutoff", annotation=Any),
+            _kwonly_parameter("horizon", default=1, annotation=int),
+            _kwonly_parameter("lags", default=5, annotation=Any),
+            _kwonly_parameter("x_cols", default=(), annotation=tuple[str, ...]),
+            *feature_params,
+        ],
+        return_annotation=pd.DataFrame,
+    )
+    make_supervised_predict_arrays.__signature__ = inspect.Signature(
+        parameters=[
+            inspect.Parameter("long_df", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Any),
+            _kwonly_parameter("cutoff", annotation=Any),
+            _kwonly_parameter("horizon", default=1, annotation=int),
+            _kwonly_parameter("lags", default=5, annotation=Any),
+            _kwonly_parameter("x_cols", default=(), annotation=tuple[str, ...]),
+            *feature_params,
+            _kwonly_parameter("dtype", default=np.float64, annotation=Any),
+        ],
+        return_annotation=dict[str, Any],
+    )
+
+
 def _compute_supervised_start_t(
     *,
     lags: Any,
@@ -352,11 +517,11 @@ def _group_target_frame(
     start_t: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if int(horizon) <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
     if int(horizon) == 1:
-        X_base, y_target = make_lagged_xy(y, lags=lag_steps, start_t=start_t)
+        x_base, y_target = make_lagged_xy(y, lags=lag_steps, start_t=start_t)
         t_index = np.arange(int(start_t), int(y.size), dtype=int)
-        return X_base, y_target.reshape(-1, 1), t_index
+        return x_base, y_target.reshape(-1, 1), t_index
     return make_lagged_xy_multi(y, lags=lag_steps, horizon=int(horizon), start_t=start_t)
 
 
@@ -372,9 +537,9 @@ def _prefixed_feature_frame(
     return pd.DataFrame(feature_matrix, columns=names)
 
 
-def _base_lag_feature_frame(X_base: np.ndarray, lag_steps: tuple[int, ...]) -> pd.DataFrame:
+def _base_lag_feature_frame(x_base: np.ndarray, lag_steps: tuple[int, ...]) -> pd.DataFrame:
     names = [f"feat_y_lag{int(lag)}" for lag in lag_steps]
-    return pd.DataFrame(X_base, columns=names)
+    return pd.DataFrame(x_base, columns=names)
 
 
 def _group_x_feature_frame(group: pd.DataFrame, *, t_index: np.ndarray, x_cols: tuple[str, ...]) -> pd.DataFrame:
@@ -401,43 +566,36 @@ def _group_supervised_frame(
     horizon: int,
     start_t: int,
     x_cols: tuple[str, ...],
-    roll_windows: Any,
-    roll_stats: Any,
-    diff_lags: Any,
-    seasonal_lags: Any,
-    seasonal_diff_lags: Any,
-    fourier_periods: Any,
-    fourier_orders: Any,
-    add_time_features: bool,
+    feature_options: _SupervisedFeatureOptions,
 ) -> pd.DataFrame:
     y = group["y"].to_numpy(dtype=float, copy=False)
     if not np.all(np.isfinite(y)):
         raise ValueError("y must contain only finite values to build supervised frame")
 
-    X_base, Y, t_index = _group_target_frame(
+    x_base, y_target_matrix, t_index = _group_target_frame(
         y,
         lag_steps=lag_steps,
         horizon=int(horizon),
         start_t=int(start_t),
     )
-    base_df = _base_lag_feature_frame(X_base, lag_steps)
+    base_df = _base_lag_feature_frame(x_base, lag_steps)
 
     derived_matrix, derived_names = build_lag_derived_features(
-        X_base,
-        roll_windows=roll_windows,
-        roll_stats=roll_stats,
-        diff_lags=diff_lags,
+        x_base,
+        roll_windows=feature_options.roll_windows,
+        roll_stats=feature_options.roll_stats,
+        diff_lags=feature_options.diff_lags,
     )
     seasonal_matrix, seasonal_names = build_seasonal_lag_features(
         y,
         t=t_index,
-        seasonal_lags=seasonal_lags,
-        seasonal_diff_lags=seasonal_diff_lags,
+        seasonal_lags=feature_options.seasonal_lags,
+        seasonal_diff_lags=feature_options.seasonal_diff_lags,
     )
     fourier_matrix, fourier_names = build_fourier_features(
         t_index,
-        periods=fourier_periods,
-        orders=fourier_orders,
+        periods=feature_options.fourier_periods,
+        orders=feature_options.fourier_orders,
     )
 
     feature_frames = [base_df, _group_x_feature_frame(group, t_index=t_index, x_cols=x_cols)]
@@ -447,7 +605,11 @@ def _group_supervised_frame(
         feature_frames.append(_prefixed_feature_frame(seasonal_matrix, seasonal_names))
     if fourier_names:
         feature_frames.append(_prefixed_feature_frame(fourier_matrix, fourier_names))
-    time_df = _group_time_feature_frame(group, t_index=t_index, add_time_features=bool(add_time_features))
+    time_df = _group_time_feature_frame(
+        group,
+        t_index=t_index,
+        add_time_features=bool(feature_options.add_time_features),
+    )
     if not time_df.empty:
         feature_frames.append(time_df)
 
@@ -459,7 +621,7 @@ def _group_supervised_frame(
         }
     )
     target_names = ["y_target"] if int(horizon) == 1 else [f"y_t+{i}" for i in range(1, int(horizon) + 1)]
-    target_df = pd.DataFrame(Y, columns=target_names)
+    target_df = pd.DataFrame(y_target_matrix, columns=target_names)
     if not np.all(np.isfinite(target_df.to_numpy(dtype=float, copy=False))):
         raise ValueError("target window contains non-finite values")
 
@@ -475,19 +637,17 @@ def make_supervised_frame(
     lags: Any = 5,
     horizon: int = 1,
     x_cols: tuple[str, ...] = (),
-    roll_windows: Any = (),
-    roll_stats: Any = (),
-    diff_lags: Any = (),
-    seasonal_lags: Any = (),
-    seasonal_diff_lags: Any = (),
-    fourier_periods: Any = (),
-    fourier_orders: Any = 2,
-    add_time_features: bool = False,
+    feature_options: Any = None,
+    **feature_kwargs: Any,
 ) -> pd.DataFrame:
     """
     Build a supervised training table from long or wide time-series data.
     """
     format_name = _normalize_supervised_input_format(input_format)
+    options = _coerce_supervised_feature_options(
+        feature_options,
+        feature_kwargs=feature_kwargs,
+    )
     long_df = _coerce_supervised_long_df(
         data,
         input_format=format_name,
@@ -498,8 +658,8 @@ def make_supervised_frame(
     selected_x_cols = _infer_supervised_x_cols(long_df, x_cols)
     start_t, lag_steps = _compute_supervised_start_t(
         lags=lags,
-        seasonal_lags=seasonal_lags,
-        seasonal_diff_lags=seasonal_diff_lags,
+        seasonal_lags=options.seasonal_lags,
+        seasonal_diff_lags=options.seasonal_diff_lags,
     )
 
     frames: list[pd.DataFrame] = []
@@ -511,14 +671,7 @@ def make_supervised_frame(
                 horizon=int(horizon),
                 start_t=int(start_t),
                 x_cols=selected_x_cols,
-                roll_windows=roll_windows,
-                roll_stats=roll_stats,
-                diff_lags=diff_lags,
-                seasonal_lags=seasonal_lags,
-                seasonal_diff_lags=seasonal_diff_lags,
-                fourier_periods=fourier_periods,
-                fourier_orders=fourier_orders,
-                add_time_features=bool(add_time_features),
+                feature_options=options,
             )
         )
 
@@ -557,20 +710,18 @@ def make_supervised_arrays(
     lags: Any = 5,
     horizon: int = 1,
     x_cols: tuple[str, ...] = (),
-    roll_windows: Any = (),
-    roll_stats: Any = (),
-    diff_lags: Any = (),
-    seasonal_lags: Any = (),
-    seasonal_diff_lags: Any = (),
-    fourier_periods: Any = (),
-    fourier_orders: Any = 2,
-    add_time_features: bool = False,
+    feature_options: Any = None,
     dtype: Any = np.float64,
+    **feature_kwargs: Any,
 ) -> dict[str, Any]:
     """
     Build dense supervised training arrays from the dataframe returned by make_supervised_frame.
     """
     format_name = _normalize_supervised_input_format(input_format)
+    options = _coerce_supervised_feature_options(
+        feature_options,
+        feature_kwargs=feature_kwargs,
+    )
     frame = _validate_supervised_frame_output(
         make_supervised_frame(
             data,
@@ -580,14 +731,7 @@ def make_supervised_arrays(
             lags=lags,
             horizon=int(horizon),
             x_cols=x_cols,
-            roll_windows=roll_windows,
-            roll_stats=roll_stats,
-            diff_lags=diff_lags,
-            seasonal_lags=seasonal_lags,
-            seasonal_diff_lags=seasonal_diff_lags,
-            fourier_periods=fourier_periods,
-            fourier_orders=fourier_orders,
-            add_time_features=bool(add_time_features),
+            feature_options=options,
         )
     )
     target_names = _supervised_target_columns(frame)
@@ -675,6 +819,82 @@ def _validate_supervised_arrays_bundle(
     )
 
 
+def _validate_gap_and_min_train_size(*, gap: int, min_train_size: int) -> tuple[int, int]:
+    gap_int = int(gap)
+    min_train_size_int = int(min_train_size)
+    if gap_int < 0:
+        raise ValueError(_ERR_GAP_MIN)
+    if min_train_size_int <= 0:
+        raise ValueError(_ERR_MIN_TRAIN_SIZE)
+    return gap_int, min_train_size_int
+
+
+def _resolved_valid_test_sizes(
+    *,
+    n_rows: int,
+    valid_size: int | None,
+    test_size: int | None,
+    valid_frac: float | None,
+    test_frac: float | None,
+) -> tuple[int, int]:
+    return (
+        _resolved_partition_size(
+            n_rows=n_rows,
+            size=valid_size,
+            frac=valid_frac,
+            name="valid_size",
+        ),
+        _resolved_partition_size(
+            n_rows=n_rows,
+            size=test_size,
+            frac=test_frac,
+            name="test_size",
+        ),
+    )
+
+
+def _partition_bounds(
+    *,
+    n_rows: int,
+    valid_n: int,
+    test_n: int,
+    gap: int,
+    min_train_size: int,
+    insufficient_message: str,
+    overflow_message: str,
+) -> tuple[int, int, int, int]:
+    if valid_n == 0 and test_n == 0:
+        raise ValueError(_ERR_VALID_OR_TEST_REQUIRED)
+
+    gap_before_valid = int(gap) if valid_n > 0 else 0
+    gap_before_test = int(gap) if test_n > 0 else 0
+    train_end = int(n_rows) - int(valid_n) - int(test_n) - gap_before_valid - gap_before_test
+    if train_end < int(min_train_size):
+        raise ValueError(insufficient_message)
+
+    valid_start = train_end + gap_before_valid
+    valid_end = valid_start + int(valid_n)
+    test_start = valid_end + gap_before_test
+    if test_start + int(test_n) > int(n_rows):
+        raise ValueError(overflow_message)
+    return train_end, valid_start, valid_end, test_start
+
+
+def _concat_partition_frames(
+    parts: dict[str, list[pd.DataFrame]],
+    *,
+    empty_template: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    result: dict[str, pd.DataFrame] = {}
+    for name, frames in parts.items():
+        non_empty = [frame for frame in frames if not frame.empty]
+        if non_empty:
+            result[name] = pd.concat(non_empty, axis=0, ignore_index=True, sort=False)
+        else:
+            result[name] = empty_template.iloc[0:0].copy()
+    return result
+
+
 def _split_supervised_row_positions(
     index: pd.DataFrame,
     *,
@@ -686,48 +906,36 @@ def _split_supervised_row_positions(
     min_train_size: int = 1,
     error_prefix: str,
 ) -> dict[str, np.ndarray]:
-    gap_int = int(gap)
-    min_train_size_int = int(min_train_size)
-    if gap_int < 0:
-        raise ValueError("gap must be >= 0")
-    if min_train_size_int <= 0:
-        raise ValueError("min_train_size must be >= 1")
+    gap_int, min_train_size_int = _validate_gap_and_min_train_size(
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
 
     positions: dict[str, list[np.ndarray]] = {"train": [], "valid": [], "test": []}
     for unique_id, group in index.groupby("unique_id", sort=False):
         group = group.reset_index()
         n_rows = int(len(group))
-        valid_n = _resolved_partition_size(
+        valid_n, test_n = _resolved_valid_test_sizes(
             n_rows=n_rows,
-            size=valid_size,
-            frac=valid_frac,
-            name="valid_size",
+            valid_size=valid_size,
+            test_size=test_size,
+            valid_frac=valid_frac,
+            test_frac=test_frac,
         )
-        test_n = _resolved_partition_size(
+        train_end, valid_start, valid_end, test_start = _partition_bounds(
             n_rows=n_rows,
-            size=test_size,
-            frac=test_frac,
-            name="test_size",
-        )
-        if valid_n == 0 and test_n == 0:
-            raise ValueError("at least one of valid/test size or frac must be positive")
-
-        gap_before_valid = gap_int if valid_n > 0 else 0
-        gap_before_test = gap_int if test_n > 0 else 0
-        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
-        if train_end < min_train_size_int:
-            raise ValueError(
+            valid_n=valid_n,
+            test_n=test_n,
+            gap=gap_int,
+            min_train_size=min_train_size_int,
+            insufficient_message=(
                 f"{error_prefix} leaves fewer than min_train_size={min_train_size_int} "
                 f"rows for unique_id={unique_id!r}"
-            )
-
-        valid_start = train_end + gap_before_valid
-        valid_end = valid_start + valid_n
-        test_start = valid_end + gap_before_test
-        if test_start + test_n > n_rows:
-            raise ValueError(
+            ),
+            overflow_message=(
                 f"{error_prefix} consumes more rows than available for unique_id={unique_id!r}"
-            )
+            ),
+        )
 
         row_positions = group["index"].to_numpy(dtype=int, copy=False)
         positions["train"].append(row_positions[:train_end])
@@ -824,17 +1032,10 @@ def _group_supervised_predict_frame(
     lag_steps: tuple[int, ...],
     start_t: int,
     x_cols: tuple[str, ...],
-    roll_windows: Any,
-    roll_stats: Any,
-    diff_lags: Any,
-    seasonal_lags: Any,
-    seasonal_diff_lags: Any,
-    fourier_periods: Any,
-    fourier_orders: Any,
-    add_time_features: bool,
+    feature_options: _SupervisedFeatureOptions,
 ) -> pd.DataFrame:
     if group["ds"].duplicated().any():
-        raise ValueError("duplicate timestamps found within a series; run align_long_df() first")
+        raise ValueError(_ERR_DUPLICATE_TIMESTAMPS)
 
     ds_arr = group["ds"].to_numpy(copy=False)
     cutoff_idx = pd.Index(ds_arr).get_indexer([cutoff])[0]
@@ -859,20 +1060,20 @@ def _group_supervised_predict_frame(
 
     derived_matrix, derived_names = build_lag_derived_features(
         lag_matrix,
-        roll_windows=roll_windows,
-        roll_stats=roll_stats,
-        diff_lags=diff_lags,
+        roll_windows=feature_options.roll_windows,
+        roll_stats=feature_options.roll_stats,
+        diff_lags=feature_options.diff_lags,
     )
     seasonal_matrix, seasonal_names = build_seasonal_lag_features(
         history_y,
         t=t_index,
-        seasonal_lags=seasonal_lags,
-        seasonal_diff_lags=seasonal_diff_lags,
+        seasonal_lags=feature_options.seasonal_lags,
+        seasonal_diff_lags=feature_options.seasonal_diff_lags,
     )
     fourier_matrix, fourier_names = build_fourier_features(
         t_index,
-        periods=fourier_periods,
-        orders=fourier_orders,
+        periods=feature_options.fourier_periods,
+        orders=feature_options.fourier_orders,
     )
 
     feature_frames = [base_df, _group_x_feature_frame(group, t_index=t_index, x_cols=x_cols)]
@@ -882,7 +1083,7 @@ def _group_supervised_predict_frame(
         feature_frames.append(_prefixed_feature_frame(seasonal_matrix, seasonal_names))
     if fourier_names:
         feature_frames.append(_prefixed_feature_frame(fourier_matrix, fourier_names))
-    if add_time_features:
+    if feature_options.add_time_features:
         candidate_t_index = np.arange(
             int(start_t),
             int(len(group)) - horizon_int + 1,
@@ -914,29 +1115,27 @@ def make_supervised_predict_frame(
     horizon: int = 1,
     lags: Any = 5,
     x_cols: tuple[str, ...] = (),
-    roll_windows: Any = (),
-    roll_stats: Any = (),
-    diff_lags: Any = (),
-    seasonal_lags: Any = (),
-    seasonal_diff_lags: Any = (),
-    fourier_periods: Any = (),
-    fourier_orders: Any = 2,
-    add_time_features: bool = False,
+    feature_options: Any = None,
+    **feature_kwargs: Any,
 ) -> pd.DataFrame:
     """
     Build one direct supervised prediction row per eligible series for a cutoff and horizon.
     """
     df = _coerce_long_df(long_df, require_non_empty=True)
+    options = _coerce_supervised_feature_options(
+        feature_options,
+        feature_kwargs=feature_kwargs,
+    )
     horizon_int = int(horizon)
     if horizon_int <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
 
     out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
     selected_x_cols = _infer_supervised_x_cols(out, x_cols)
     start_t, lag_steps = _compute_supervised_start_t(
         lags=lags,
-        seasonal_lags=seasonal_lags,
-        seasonal_diff_lags=seasonal_diff_lags,
+        seasonal_lags=options.seasonal_lags,
+        seasonal_diff_lags=options.seasonal_diff_lags,
     )
 
     frames: list[pd.DataFrame] = []
@@ -948,14 +1147,7 @@ def make_supervised_predict_frame(
             lag_steps=lag_steps,
             start_t=start_t,
             x_cols=selected_x_cols,
-            roll_windows=roll_windows,
-            roll_stats=roll_stats,
-            diff_lags=diff_lags,
-            seasonal_lags=seasonal_lags,
-            seasonal_diff_lags=seasonal_diff_lags,
-            fourier_periods=fourier_periods,
-            fourier_orders=fourier_orders,
-            add_time_features=bool(add_time_features),
+            feature_options=options,
         )
         if not frame.empty:
             frames.append(frame)
@@ -972,33 +1164,24 @@ def make_supervised_predict_arrays(
     horizon: int = 1,
     lags: Any = 5,
     x_cols: tuple[str, ...] = (),
-    roll_windows: Any = (),
-    roll_stats: Any = (),
-    diff_lags: Any = (),
-    seasonal_lags: Any = (),
-    seasonal_diff_lags: Any = (),
-    fourier_periods: Any = (),
-    fourier_orders: Any = 2,
-    add_time_features: bool = False,
+    feature_options: Any = None,
     dtype: Any = np.float64,
+    **feature_kwargs: Any,
 ) -> dict[str, Any]:
     """
     Build dense direct supervised prediction arrays plus index/metadata from a prediction frame.
     """
+    options = _coerce_supervised_feature_options(
+        feature_options,
+        feature_kwargs=feature_kwargs,
+    )
     frame = make_supervised_predict_frame(
         long_df,
         cutoff=cutoff,
         horizon=int(horizon),
         lags=lags,
         x_cols=x_cols,
-        roll_windows=roll_windows,
-        roll_stats=roll_stats,
-        diff_lags=diff_lags,
-        seasonal_lags=seasonal_lags,
-        seasonal_diff_lags=seasonal_diff_lags,
-        fourier_periods=fourier_periods,
-        fourier_orders=fourier_orders,
-        add_time_features=bool(add_time_features),
+        feature_options=options,
     )
 
     feature_names = tuple(str(col) for col in frame.columns[4:])
@@ -1017,6 +1200,9 @@ def make_supervised_predict_arrays(
         "index": index,
         "metadata": metadata,
     }
+
+
+_apply_supervised_api_signatures()
 
 
 def _validate_forecast_long_df_input(long_df: Any) -> pd.DataFrame:
@@ -1089,7 +1275,7 @@ def _prepare_local_xreg_bundle_group(
 ) -> tuple[pd.DataFrame, pd.DataFrame, Any]:
     horizon_int = int(horizon)
     if horizon_int <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
 
     missing_x_cols = [col for col in x_cols if col not in group.columns]
     if missing_x_cols:
@@ -1382,7 +1568,7 @@ def _panel_window_required_start(
 
 def _validate_panel_window_group(group: pd.DataFrame, *, x_cols: tuple[str, ...]) -> None:
     if group["ds"].duplicated().any():
-        raise ValueError("duplicate timestamps found within a series; run align_long_df() first")
+        raise ValueError(_ERR_DUPLICATE_TIMESTAMPS)
     y = group["y"].to_numpy(dtype=float, copy=False)
     if not np.all(np.isfinite(y)):
         raise ValueError("y must contain only finite values to build panel windows")
@@ -1391,6 +1577,234 @@ def _validate_panel_window_group(group: pd.DataFrame, *, x_cols: tuple[str, ...]
     values = group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
     if not np.all(np.isfinite(values)):
         raise ValueError("x_cols must contain only finite values to build panel windows")
+
+
+def _panel_window_optional_blocks(
+    group: pd.DataFrame,
+    *,
+    x_cols: tuple[str, ...],
+    add_time_features: bool,
+) -> tuple[np.ndarray | None, np.ndarray | None, tuple[str, ...]]:
+    exog = None if not x_cols else group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    if not add_time_features:
+        return exog, None, ()
+
+    time_matrix, base_time_names = build_time_features(group["ds"])
+    time_names = tuple(f"time_{name}" for name in base_time_names)
+    return exog, time_matrix, time_names
+
+
+def _panel_window_base_features(
+    *,
+    y: np.ndarray,
+    exog: np.ndarray | None,
+    origin_idx: int,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+    historic_x_lags: tuple[int, ...],
+    x_cols: tuple[str, ...],
+) -> dict[str, float]:
+    base_row = {f"y_lag_{int(lag)}": float(y[int(origin_idx) - int(lag)]) for lag in target_lags}
+    base_row.update(
+        {
+            f"y_seasonal_lag_{int(lag)}": float(y[int(origin_idx) - int(lag)])
+            for lag in seasonal_lags
+        }
+    )
+    if exog is None:
+        return base_row
+
+    for lag in historic_x_lags:
+        source_idx = int(origin_idx) - int(lag)
+        for col_idx, col_name in enumerate(x_cols):
+            base_row[f"historic_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
+    return base_row
+
+
+def _panel_window_future_x_features(
+    *,
+    exog: np.ndarray | None,
+    target_idx: int,
+    future_x_lags: tuple[int, ...],
+    x_cols: tuple[str, ...],
+) -> dict[str, float]:
+    if exog is None:
+        return {}
+
+    row: dict[str, float] = {}
+    for lag in future_x_lags:
+        source_idx = int(target_idx) - int(lag)
+        for col_idx, col_name in enumerate(x_cols):
+            row[f"future_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
+    return row
+
+
+def _panel_window_time_features(
+    *,
+    time_matrix: np.ndarray | None,
+    time_names: tuple[str, ...],
+    target_idx: int,
+) -> dict[str, float]:
+    if time_matrix is None:
+        return {}
+    return {
+        col_name: float(time_matrix[int(target_idx), col_idx])
+        for col_idx, col_name in enumerate(time_names)
+    }
+
+
+def _panel_window_train_rows_for_origin(
+    *,
+    unique_id: Any,
+    ds_arr: np.ndarray,
+    y: np.ndarray,
+    exog: np.ndarray | None,
+    time_matrix: np.ndarray | None,
+    time_names: tuple[str, ...],
+    origin_idx: int,
+    horizon: int,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+    historic_x_lags: tuple[int, ...],
+    future_x_lags: tuple[int, ...],
+    x_cols: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    base_row = _panel_window_base_features(
+        y=y,
+        exog=exog,
+        origin_idx=origin_idx,
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+        historic_x_lags=historic_x_lags,
+        x_cols=x_cols,
+    )
+    cutoff_idx = int(origin_idx) - 1
+    rows: list[dict[str, Any]] = []
+    for step_idx in range(int(horizon)):
+        target_idx = int(origin_idx) + int(step_idx)
+        row = {
+            "unique_id": unique_id,
+            "cutoff_ds": ds_arr[cutoff_idx],
+            "target_ds": ds_arr[target_idx],
+            "step": int(step_idx) + 1,
+            "y": float(y[target_idx]),
+            **base_row,
+        }
+        row.update(
+            _panel_window_future_x_features(
+                exog=exog,
+                target_idx=target_idx,
+                future_x_lags=future_x_lags,
+                x_cols=x_cols,
+            )
+        )
+        row.update(
+            _panel_window_time_features(
+                time_matrix=time_matrix,
+                time_names=time_names,
+                target_idx=target_idx,
+            )
+        )
+        rows.append(row)
+    return rows
+
+
+def _panel_window_required_y_indices(
+    *,
+    pred_start: int,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+) -> np.ndarray:
+    required = {int(pred_start) - int(lag) for lag in (*target_lags, *seasonal_lags)}
+    return np.asarray(sorted(required), dtype=int)
+
+
+def _panel_window_required_x_indices(
+    *,
+    pred_start: int,
+    horizon: int,
+    historic_x_lags: tuple[int, ...],
+    future_x_lags: tuple[int, ...],
+) -> np.ndarray:
+    required = {int(pred_start) - int(lag) for lag in historic_x_lags}
+    for step_idx in range(int(horizon)):
+        target_idx = int(pred_start) + int(step_idx)
+        required.update(int(target_idx) - int(lag) for lag in future_x_lags)
+    return np.asarray(sorted(required), dtype=int)
+
+
+def _validate_panel_window_prediction_inputs(
+    *,
+    y: np.ndarray,
+    exog: np.ndarray | None,
+    pred_start: int,
+    horizon: int,
+    target_lags: tuple[int, ...],
+    seasonal_lags: tuple[int, ...],
+    historic_x_lags: tuple[int, ...],
+    future_x_lags: tuple[int, ...],
+) -> None:
+    required_y_idx = _panel_window_required_y_indices(
+        pred_start=pred_start,
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+    )
+    if required_y_idx.size and not np.all(np.isfinite(y[required_y_idx])):
+        raise ValueError("y must contain finite history through cutoff to build panel window predictions")
+
+    if exog is None:
+        return
+    required_x_idx = _panel_window_required_x_indices(
+        pred_start=pred_start,
+        horizon=horizon,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+    )
+    if required_x_idx.size and not np.all(np.isfinite(exog[required_x_idx, :])):
+        raise ValueError("x_cols must contain finite values at required prediction rows")
+
+
+def _panel_window_predict_rows_for_origin(
+    *,
+    unique_id: Any,
+    ds_arr: np.ndarray,
+    exog: np.ndarray | None,
+    time_matrix: np.ndarray | None,
+    time_names: tuple[str, ...],
+    cutoff_idx: int,
+    pred_start: int,
+    horizon: int,
+    base_row: dict[str, float],
+    future_x_lags: tuple[int, ...],
+    x_cols: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for step_idx in range(int(horizon)):
+        target_idx = int(pred_start) + int(step_idx)
+        row = {
+            "unique_id": unique_id,
+            "cutoff_ds": ds_arr[int(cutoff_idx)],
+            "target_ds": ds_arr[target_idx],
+            "step": int(step_idx) + 1,
+            **base_row,
+        }
+        row.update(
+            _panel_window_future_x_features(
+                exog=exog,
+                target_idx=target_idx,
+                future_x_lags=future_x_lags,
+                x_cols=x_cols,
+            )
+        )
+        row.update(
+            _panel_window_time_features(
+                time_matrix=time_matrix,
+                time_names=time_names,
+                target_idx=target_idx,
+            )
+        )
+        rows.append(row)
+    return rows
 
 
 def _empty_panel_window_frame() -> pd.DataFrame:
@@ -1412,12 +1826,11 @@ def _group_panel_window_frame(
 
     y = group["y"].to_numpy(dtype=float, copy=False)
     ds_arr = group["ds"].to_numpy(copy=False)
-    exog = None if not x_cols else group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-    time_matrix: np.ndarray | None = None
-    time_names: list[str] = []
-    if add_time_features:
-        time_matrix, base_time_names = build_time_features(group["ds"])
-        time_names = [f"time_{name}" for name in base_time_names]
+    exog, time_matrix, time_names = _panel_window_optional_blocks(
+        group,
+        x_cols=x_cols,
+        add_time_features=add_time_features,
+    )
 
     required_start = _panel_window_required_start(
         target_lags=target_lags,
@@ -1427,39 +1840,26 @@ def _group_panel_window_frame(
     )
     rows: list[dict[str, Any]] = []
     horizon_int = int(horizon)
+    unique_id = group["unique_id"].iloc[0]
 
-    for t in range(int(required_start), int(len(group)) - horizon_int + 1):
-        cutoff_idx = int(t) - 1
-        base_row: dict[str, Any] = {}
-        for lag in target_lags:
-            base_row[f"y_lag_{int(lag)}"] = float(y[int(t) - int(lag)])
-        for lag in seasonal_lags:
-            base_row[f"y_seasonal_lag_{int(lag)}"] = float(y[int(t) - int(lag)])
-        if exog is not None:
-            for lag in historic_x_lags:
-                source_idx = int(t) - int(lag)
-                for col_idx, col_name in enumerate(x_cols):
-                    base_row[f"historic_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
-
-        for step_idx in range(horizon_int):
-            target_idx = int(t) + int(step_idx)
-            row = {
-                "unique_id": group["unique_id"].iloc[0],
-                "cutoff_ds": ds_arr[cutoff_idx],
-                "target_ds": ds_arr[target_idx],
-                "step": int(step_idx) + 1,
-                "y": float(y[target_idx]),
-                **base_row,
-            }
-            if exog is not None:
-                for lag in future_x_lags:
-                    source_idx = target_idx - int(lag)
-                    for col_idx, col_name in enumerate(x_cols):
-                        row[f"future_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
-            if time_matrix is not None:
-                for col_idx, col_name in enumerate(time_names):
-                    row[col_name] = float(time_matrix[target_idx, col_idx])
-            rows.append(row)
+    for origin_idx in range(int(required_start), int(len(group)) - horizon_int + 1):
+        rows.extend(
+            _panel_window_train_rows_for_origin(
+                unique_id=unique_id,
+                ds_arr=ds_arr,
+                y=y,
+                exog=exog,
+                time_matrix=time_matrix,
+                time_names=time_names,
+                origin_idx=origin_idx,
+                horizon=horizon_int,
+                target_lags=target_lags,
+                seasonal_lags=seasonal_lags,
+                historic_x_lags=historic_x_lags,
+                future_x_lags=future_x_lags,
+                x_cols=x_cols,
+            )
+        )
 
     if not rows:
         return _empty_panel_window_frame()
@@ -1484,7 +1884,7 @@ def make_panel_window_frame(
     df = _coerce_long_df(long_df, require_non_empty=True)
     horizon_int = int(horizon)
     if horizon_int <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
 
     x_cols_tup = _normalize_panel_x_cols(df, x_cols)
     target_lag_steps = _resolve_panel_target_lags(lags=lags, target_lags=target_lags)
@@ -1599,16 +1999,15 @@ def _group_panel_window_predict_frame(
     add_time_features: bool,
 ) -> pd.DataFrame:
     if group["ds"].duplicated().any():
-        raise ValueError("duplicate timestamps found within a series; run align_long_df() first")
+        raise ValueError(_ERR_DUPLICATE_TIMESTAMPS)
 
     y = group["y"].to_numpy(dtype=float, copy=False)
     ds_arr = group["ds"].to_numpy(copy=False)
-    exog = None if not x_cols else group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-    time_matrix: np.ndarray | None = None
-    time_names: list[str] = []
-    if add_time_features:
-        time_matrix, base_time_names = build_time_features(group["ds"])
-        time_names = [f"time_{name}" for name in base_time_names]
+    exog, time_matrix, time_names = _panel_window_optional_blocks(
+        group,
+        x_cols=x_cols,
+        add_time_features=add_time_features,
+    )
 
     required_start = _panel_window_required_start(
         target_lags=target_lags,
@@ -1626,56 +2025,38 @@ def _group_panel_window_predict_frame(
     if pred_start < int(required_start) or pred_end > int(len(group)):
         return _empty_panel_window_predict_frame()
 
-    required_y_idx = sorted({int(pred_start) - int(lag) for lag in (*target_lags, *seasonal_lags)})
-    if required_y_idx:
-        history_values = y[np.asarray(required_y_idx, dtype=int)]
-        if not np.all(np.isfinite(history_values)):
-            raise ValueError("y must contain finite history through cutoff to build panel window predictions")
-
-    if exog is not None:
-        required_x_idx = {
-            int(pred_start) - int(lag)
-            for lag in historic_x_lags
-        }
-        for step_idx in range(horizon_int):
-            target_idx = int(pred_start) + int(step_idx)
-            for lag in future_x_lags:
-                required_x_idx.add(int(target_idx) - int(lag))
-        if required_x_idx:
-            required_x = exog[np.asarray(sorted(required_x_idx), dtype=int), :]
-            if not np.all(np.isfinite(required_x)):
-                raise ValueError("x_cols must contain finite values at required prediction rows")
-
-    base_row: dict[str, Any] = {}
-    for lag in target_lags:
-        base_row[f"y_lag_{int(lag)}"] = float(y[int(pred_start) - int(lag)])
-    for lag in seasonal_lags:
-        base_row[f"y_seasonal_lag_{int(lag)}"] = float(y[int(pred_start) - int(lag)])
-    if exog is not None:
-        for lag in historic_x_lags:
-            source_idx = int(pred_start) - int(lag)
-            for col_idx, col_name in enumerate(x_cols):
-                base_row[f"historic_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
-
-    rows: list[dict[str, Any]] = []
-    for step_idx in range(horizon_int):
-        target_idx = int(pred_start) + int(step_idx)
-        row = {
-            "unique_id": group["unique_id"].iloc[0],
-            "cutoff_ds": ds_arr[int(cutoff_idx)],
-            "target_ds": ds_arr[target_idx],
-            "step": int(step_idx) + 1,
-            **base_row,
-        }
-        if exog is not None:
-            for lag in future_x_lags:
-                source_idx = target_idx - int(lag)
-                for col_idx, col_name in enumerate(x_cols):
-                    row[f"future_x__{col_name}_lag_{int(lag)}"] = float(exog[source_idx, col_idx])
-        if time_matrix is not None:
-            for col_idx, col_name in enumerate(time_names):
-                row[col_name] = float(time_matrix[target_idx, col_idx])
-        rows.append(row)
+    _validate_panel_window_prediction_inputs(
+        y=y,
+        exog=exog,
+        pred_start=pred_start,
+        horizon=horizon_int,
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+        historic_x_lags=historic_x_lags,
+        future_x_lags=future_x_lags,
+    )
+    base_row = _panel_window_base_features(
+        y=y,
+        exog=exog,
+        origin_idx=pred_start,
+        target_lags=target_lags,
+        seasonal_lags=seasonal_lags,
+        historic_x_lags=historic_x_lags,
+        x_cols=x_cols,
+    )
+    rows = _panel_window_predict_rows_for_origin(
+        unique_id=group["unique_id"].iloc[0],
+        ds_arr=ds_arr,
+        exog=exog,
+        time_matrix=time_matrix,
+        time_names=time_names,
+        cutoff_idx=cutoff_idx,
+        pred_start=pred_start,
+        horizon=horizon_int,
+        base_row=base_row,
+        future_x_lags=future_x_lags,
+        x_cols=x_cols,
+    )
 
     if not rows:
         return _empty_panel_window_predict_frame()
@@ -1701,7 +2082,7 @@ def make_panel_window_predict_frame(
     df = _coerce_long_df(long_df, require_non_empty=True)
     horizon_int = int(horizon)
     if horizon_int <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
 
     x_cols_tup = _normalize_panel_x_cols(df, x_cols)
     target_lag_steps = _resolve_panel_target_lags(lags=lags, target_lags=target_lags)
@@ -1826,12 +2207,10 @@ def _split_panel_window_origins(
     gap: int = 0,
     min_train_size: int = 1,
 ) -> dict[str, pd.DataFrame]:
-    gap_int = int(gap)
-    min_train_size_int = int(min_train_size)
-    if gap_int < 0:
-        raise ValueError("gap must be >= 0")
-    if min_train_size_int <= 0:
-        raise ValueError("min_train_size must be >= 1")
+    gap_int, min_train_size_int = _validate_gap_and_min_train_size(
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
 
     origins = window_index.copy()
     origins["cutoff_ds"] = pd.to_datetime(origins["cutoff_ds"], errors="raise")
@@ -1840,50 +2219,33 @@ def _split_panel_window_origins(
     for unique_id, group in origins.groupby("unique_id", sort=False):
         group = group.sort_values("cutoff_ds", kind="mergesort").reset_index(drop=True)
         n_rows = int(len(group))
-        valid_n = _resolved_partition_size(
+        valid_n, test_n = _resolved_valid_test_sizes(
             n_rows=n_rows,
-            size=valid_size,
-            frac=valid_frac,
-            name="valid_size",
+            valid_size=valid_size,
+            test_size=test_size,
+            valid_frac=valid_frac,
+            test_frac=test_frac,
         )
-        test_n = _resolved_partition_size(
+        train_end, valid_start, valid_end, test_start = _partition_bounds(
             n_rows=n_rows,
-            size=test_size,
-            frac=test_frac,
-            name="test_size",
-        )
-        if valid_n == 0 and test_n == 0:
-            raise ValueError("at least one of valid/test size or frac must be positive")
-
-        gap_before_valid = gap_int if valid_n > 0 else 0
-        gap_before_test = gap_int if test_n > 0 else 0
-        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
-        if train_end < min_train_size_int:
-            raise ValueError(
+            valid_n=valid_n,
+            test_n=test_n,
+            gap=gap_int,
+            min_train_size=min_train_size_int,
+            insufficient_message=(
                 f"panel window split leaves fewer than min_train_size={min_train_size_int} "
                 f"windows for unique_id={unique_id!r}"
-            )
-
-        valid_start = train_end + gap_before_valid
-        valid_end = valid_start + valid_n
-        test_start = valid_end + gap_before_test
-        if test_start + test_n > n_rows:
-            raise ValueError(
+            ),
+            overflow_message=(
                 f"panel window split consumes more windows than available for unique_id={unique_id!r}"
-            )
+            ),
+        )
 
         parts["train"].append(group.iloc[:train_end].copy())
         parts["valid"].append(group.iloc[valid_start:valid_end].copy())
         parts["test"].append(group.iloc[test_start : test_start + test_n].copy())
 
-    result: dict[str, pd.DataFrame] = {}
-    for name, frames in parts.items():
-        non_empty = [frame for frame in frames if not frame.empty]
-        if non_empty:
-            result[name] = pd.concat(non_empty, axis=0, ignore_index=True, sort=False)
-        else:
-            result[name] = origins.iloc[0:0].copy()
-    return result
+    return _concat_partition_frames(parts, empty_template=origins)
 
 
 def _panel_window_origin_mask(rows: pd.DataFrame, window_index: pd.DataFrame) -> np.ndarray:
@@ -2030,7 +2392,7 @@ def _normalize_panel_sequence_sample_step(sample_step: int) -> int:
 def _normalize_panel_sequence_horizon(horizon: int) -> int:
     value = int(horizon)
     if value <= 0:
-        raise ValueError("horizon must be >= 1")
+        raise ValueError(_ERR_HORIZON_MIN)
     return value
 
 
@@ -2185,6 +2547,102 @@ def _panel_sequence_predict_row(
     return x_pred, int(series_code), row, float(mean), float(std)
 
 
+def _panel_sequence_series_payload(
+    *,
+    unique_id: Any,
+    group: pd.DataFrame,
+    cutoff: Any,
+    x_cols: tuple[str, ...],
+    normalize: bool,
+    max_train_size: int | None,
+    sample_step: int,
+    add_time_features: bool,
+    context_length: int,
+    horizon: int,
+    series_code: int,
+    dtype: np.dtype,
+) -> dict[str, Any] | None:
+    _validate_panel_window_group(group, x_cols=x_cols)
+
+    ds_arr = group["ds"].to_numpy(copy=False)
+    y_arr = group["y"].to_numpy(dtype=float, copy=False)
+    cut_idx = _panel_sequence_cutoff_index(ds_arr, cutoff)
+    if cut_idx is None:
+        return None
+
+    train_end = int(cut_idx) + 1
+    slice_start = 0
+    if max_train_size is not None:
+        slice_start = max(0, int(train_end) - int(max_train_size))
+    y_train = y_arr[slice_start:train_end]
+    if int(y_train.size) < int(context_length) + int(horizon):
+        return None
+
+    y_train_scaled, mean, std = _panel_sequence_normalize_target(
+        y_train,
+        normalize=bool(normalize),
+    )
+    if x_cols:
+        x_full = group.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
+    else:
+        x_full = np.empty((len(group), 0), dtype=float)
+
+    time_full, group_time_names = _panel_sequence_time_block(
+        group,
+        add_time_features=bool(add_time_features),
+    )
+    x_series, y_series, series_ids, window_index = _panel_sequence_train_window_rows(
+        unique_id=unique_id,
+        ds_arr=ds_arr,
+        y_train_scaled=y_train_scaled,
+        x_train_seg=x_full[slice_start:train_end],
+        time_train_seg=time_full[slice_start:train_end],
+        slice_start=slice_start,
+        series_code=series_code,
+        context_length=context_length,
+        horizon=horizon,
+        sample_step=sample_step,
+        dtype=dtype,
+    )
+    if x_series.size == 0:
+        return None
+
+    pred_row = _panel_sequence_predict_row(
+        unique_id=unique_id,
+        ds_arr=ds_arr,
+        y_arr=y_arr,
+        x_full=x_full,
+        time_full=time_full,
+        train_end=train_end,
+        context_length=context_length,
+        horizon=horizon,
+        mean=mean,
+        std=std,
+        normalize=bool(normalize),
+        series_code=series_code,
+        dtype=dtype,
+    )
+    pred_x: np.ndarray | None = None
+    pred_series_id: int | None = None
+    pred_index_row: dict[str, Any] | None = None
+    pred_mean: float | None = None
+    pred_std: float | None = None
+    if pred_row is not None:
+        pred_x, pred_series_id, pred_index_row, pred_mean, pred_std = pred_row
+    return {
+        "time_feature_names": group_time_names,
+        "x_series": x_series,
+        "y_series": y_series,
+        "series_ids": series_ids,
+        "window_index": window_index,
+        "pred_x": pred_x,
+        "pred_series_id": pred_series_id,
+        "pred_index_row": pred_index_row,
+        "pred_mean": pred_mean,
+        "pred_std": pred_std,
+    }
+
+
 def make_panel_sequence_tensors(
     long_df: Any,
     *,
@@ -2210,9 +2668,8 @@ def make_panel_sequence_tensors(
     x_cols_tup = _normalize_panel_x_cols(df, x_cols)
 
     out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
-    x_dim = int(len(x_cols_tup))
 
-    X_parts: list[np.ndarray] = []
+    x_parts: list[np.ndarray] = []
     y_parts: list[np.ndarray] = []
     series_id_parts: list[np.ndarray] = []
     train_index_parts: list[pd.DataFrame] = []
@@ -2225,95 +2682,47 @@ def make_panel_sequence_tensors(
     time_feature_names: tuple[str, ...] = ()
 
     for series_code, (unique_id, group) in enumerate(out.groupby("unique_id", sort=False)):
-        group = group.reset_index(drop=True)
-        _validate_panel_window_group(group, x_cols=x_cols_tup)
-
-        ds_arr = group["ds"].to_numpy(copy=False)
-        y_arr = group["y"].to_numpy(dtype=float, copy=False)
-        cut_idx = _panel_sequence_cutoff_index(ds_arr, cutoff)
-        if cut_idx is None:
-            continue
-
-        train_end = int(cut_idx) + 1
-        slice_start = 0
-        if max_train_size_int is not None:
-            slice_start = max(0, int(train_end) - int(max_train_size_int))
-        y_train = y_arr[slice_start:train_end]
-        if int(y_train.size) < int(context_length_int) + int(horizon_int):
-            continue
-
-        y_train_scaled, mean, std = _panel_sequence_normalize_target(
-            y_train,
-            normalize=bool(normalize),
-        )
-        if x_dim > 0:
-            x_full = group.loc[:, list(x_cols_tup)].to_numpy(dtype=float, copy=False)
-        else:
-            x_full = np.empty((len(group), 0), dtype=float)
-
-        time_full, group_time_names = _panel_sequence_time_block(
-            group,
-            add_time_features=bool(add_time_features),
-        )
-        if not time_feature_names:
-            time_feature_names = group_time_names
-
-        X_series, y_series, series_ids, window_index = _panel_sequence_train_window_rows(
+        payload = _panel_sequence_series_payload(
             unique_id=unique_id,
-            ds_arr=ds_arr,
-            y_train_scaled=y_train_scaled,
-            x_train_seg=x_full[slice_start:train_end],
-            time_train_seg=time_full[slice_start:train_end],
-            slice_start=slice_start,
-            series_code=series_code,
-            context_length=context_length_int,
-            horizon=horizon_int,
+            group=group.reset_index(drop=True),
+            cutoff=cutoff,
+            x_cols=x_cols_tup,
+            normalize=bool(normalize),
+            max_train_size=max_train_size_int,
             sample_step=sample_step_int,
-            dtype=dtype_norm,
-        )
-        if X_series.size == 0:
-            continue
-
-        X_parts.append(X_series)
-        y_parts.append(y_series)
-        series_id_parts.append(series_ids)
-        train_index_parts.append(window_index)
-
-        pred_row = _panel_sequence_predict_row(
-            unique_id=unique_id,
-            ds_arr=ds_arr,
-            y_arr=y_arr,
-            x_full=x_full,
-            time_full=time_full,
-            train_end=train_end,
+            add_time_features=bool(add_time_features),
             context_length=context_length_int,
             horizon=horizon_int,
-            mean=mean,
-            std=std,
-            normalize=bool(normalize),
             series_code=series_code,
             dtype=dtype_norm,
         )
-        if pred_row is None:
+        if payload is None:
             continue
-        pred_x, pred_series_id, pred_index_row, pred_mean, pred_std = pred_row
-        pred_x_parts.append(pred_x)
-        pred_series_ids.append(pred_series_id)
-        pred_rows.append(pred_index_row)
-        pred_means.append(pred_mean)
-        pred_stds.append(pred_std)
 
-    if not X_parts:
+        if not time_feature_names:
+            time_feature_names = payload["time_feature_names"]
+        x_parts.append(payload["x_series"])
+        y_parts.append(payload["y_series"])
+        series_id_parts.append(payload["series_ids"])
+        train_index_parts.append(payload["window_index"])
+        if payload["pred_x"] is not None:
+            pred_x_parts.append(payload["pred_x"])
+            pred_series_ids.append(payload["pred_series_id"])
+            pred_rows.append(payload["pred_index_row"])
+            pred_means.append(payload["pred_mean"])
+            pred_stds.append(payload["pred_std"])
+
+    if not x_parts:
         raise ValueError("No training windows could be constructed for the given cutoff.")
     if not pred_x_parts:
         raise ValueError("No prediction windows could be constructed for the given cutoff.")
 
-    X_train = np.concatenate(X_parts, axis=0).astype(dtype_norm, copy=False)
+    x_train = np.concatenate(x_parts, axis=0).astype(dtype_norm, copy=False)
     y_train = np.concatenate(y_parts, axis=0).astype(dtype_norm, copy=False)
     series_id = np.concatenate(series_id_parts, axis=0)
     window_index = pd.concat(train_index_parts, axis=0, ignore_index=True, sort=False)
 
-    pred_X = np.stack(pred_x_parts, axis=0).astype(dtype_norm, copy=False)
+    pred_x = np.stack(pred_x_parts, axis=0).astype(dtype_norm, copy=False)
     pred_series_id = np.asarray(pred_series_ids, dtype=int)
     pred_index = pd.DataFrame(pred_rows)
     pred_mean_arr = np.asarray(pred_means, dtype=dtype_norm)
@@ -2334,19 +2743,19 @@ def make_panel_sequence_tensors(
         "x_dim": int(len(x_cols_tup)),
         "time_dim": int(len(time_feature_names)),
         "n_series": int(out["unique_id"].nunique()),
-        "n_train_windows": int(X_train.shape[0]),
-        "n_predict_windows": int(pred_X.shape[0]),
-        "input_dim": int(X_train.shape[2]),
+        "n_train_windows": int(x_train.shape[0]),
+        "n_predict_windows": int(pred_x.shape[0]),
+        "input_dim": int(x_train.shape[2]),
     }
     return {
         "train": {
-            "X": X_train,
+            "X": x_train,
             "y": y_train,
             "series_id": series_id,
             "window_index": window_index,
         },
         "predict": {
-            "X": pred_X,
+            "X": pred_x,
             "series_id": pred_series_id,
             "index": pred_index,
             "target_mean": pred_mean_arr,
@@ -2410,19 +2819,17 @@ def split_panel_sequence_tensors(
     Chronologically split packed panel training windows into train/valid/test partitions.
     """
     train, _predict, metadata = _validate_panel_sequence_bundle(bundle)
-    gap_int = int(gap)
-    min_train_size_int = int(min_train_size)
-    if gap_int < 0:
-        raise ValueError("gap must be >= 0")
-    if min_train_size_int <= 0:
-        raise ValueError("min_train_size must be >= 1")
+    gap_int, min_train_size_int = _validate_gap_and_min_train_size(
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
 
-    X = np.asarray(train["X"])
+    x = np.asarray(train["X"])
     y = np.asarray(train["y"])
     series_id = np.asarray(train["series_id"])
     window_index = train["window_index"].copy()
     order = window_index.sort_values(["unique_id", "cutoff_ds", "target_start_ds"], kind="mergesort").index
-    X_sorted = X[order]
+    x_sorted = x[order]
     y_sorted = y[order]
     series_id_sorted = series_id[order]
     window_index_sorted = window_index.iloc[order].reset_index(drop=True)
@@ -2431,44 +2838,34 @@ def split_panel_sequence_tensors(
     for unique_id, group in window_index_sorted.groupby("unique_id", sort=False):
         positions = group.index.to_list()
         n_rows = int(len(positions))
-        valid_n = _resolved_partition_size(
+        valid_n, test_n = _resolved_valid_test_sizes(
             n_rows=n_rows,
-            size=valid_size,
-            frac=valid_frac,
-            name="valid_size",
+            valid_size=valid_size,
+            test_size=test_size,
+            valid_frac=valid_frac,
+            test_frac=test_frac,
         )
-        test_n = _resolved_partition_size(
+        train_end, valid_start, valid_end, test_start = _partition_bounds(
             n_rows=n_rows,
-            size=test_size,
-            frac=test_frac,
-            name="test_size",
-        )
-        if valid_n == 0 and test_n == 0:
-            raise ValueError("at least one of valid/test size or frac must be positive")
-
-        gap_before_valid = gap_int if valid_n > 0 else 0
-        gap_before_test = gap_int if test_n > 0 else 0
-        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
-        if train_end < min_train_size_int:
-            raise ValueError(
+            valid_n=valid_n,
+            test_n=test_n,
+            gap=gap_int,
+            min_train_size=min_train_size_int,
+            insufficient_message=(
                 f"split_panel_sequence_tensors leaves fewer than min_train_size={min_train_size_int} "
                 f"windows for unique_id={unique_id!r}"
-            )
-
-        valid_start = train_end + gap_before_valid
-        valid_end = valid_start + valid_n
-        test_start = valid_end + gap_before_test
-        if test_start + test_n > n_rows:
-            raise ValueError(
+            ),
+            overflow_message=(
                 f"split_panel_sequence_tensors consumes more windows than available for unique_id={unique_id!r}"
-            )
+            ),
+        )
 
         partition_indices["train"].extend(positions[:train_end])
         partition_indices["valid"].extend(positions[valid_start:valid_end])
         partition_indices["test"].extend(positions[test_start : test_start + test_n])
 
     sorted_train = {
-        "X": X_sorted,
+        "X": x_sorted,
         "y": y_sorted,
         "series_id": series_id_sorted,
         "window_index": window_index_sorted,
@@ -2748,12 +3145,10 @@ def split_long_df(
     Chronologically split each series in a long-format DataFrame into train/valid/test partitions.
     """
     df = _coerce_long_df(long_df, require_non_empty=True)
-    gap_int = int(gap)
-    min_train_size_int = int(min_train_size)
-    if gap_int < 0:
-        raise ValueError("gap must be >= 0")
-    if min_train_size_int <= 0:
-        raise ValueError("min_train_size must be >= 1")
+    gap_int, min_train_size_int = _validate_gap_and_min_train_size(
+        gap=int(gap),
+        min_train_size=int(min_train_size),
+    )
 
     out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
     frames: dict[str, list[pd.DataFrame]] = {"train": [], "valid": [], "test": []}
@@ -2761,48 +3156,33 @@ def split_long_df(
     for unique_id, group in out.groupby("unique_id", sort=False):
         group = group.reset_index(drop=True)
         n_rows = int(len(group))
-        valid_n = _resolved_partition_size(
+        valid_n, test_n = _resolved_valid_test_sizes(
             n_rows=n_rows,
-            size=valid_size,
-            frac=valid_frac,
-            name="valid_size",
+            valid_size=valid_size,
+            test_size=test_size,
+            valid_frac=valid_frac,
+            test_frac=test_frac,
         )
-        test_n = _resolved_partition_size(
+        train_end, valid_start, valid_end, test_start = _partition_bounds(
             n_rows=n_rows,
-            size=test_size,
-            frac=test_frac,
-            name="test_size",
-        )
-        if valid_n == 0 and test_n == 0:
-            raise ValueError("at least one of valid/test size or frac must be positive")
-
-        gap_before_valid = gap_int if valid_n > 0 else 0
-        gap_before_test = gap_int if test_n > 0 else 0
-        train_end = n_rows - valid_n - test_n - gap_before_valid - gap_before_test
-        if train_end < min_train_size_int:
-            raise ValueError(
+            valid_n=valid_n,
+            test_n=test_n,
+            gap=gap_int,
+            min_train_size=min_train_size_int,
+            insufficient_message=(
                 f"split_long_df leaves fewer than min_train_size={min_train_size_int} "
                 f"rows for unique_id={unique_id!r}"
-            )
-
-        valid_start = train_end + gap_before_valid
-        valid_end = valid_start + valid_n
-        test_start = valid_end + gap_before_test
-        if test_start + test_n > n_rows:
-            raise ValueError(f"split_long_df consumes more rows than available for unique_id={unique_id!r}")
+            ),
+            overflow_message=(
+                f"split_long_df consumes more rows than available for unique_id={unique_id!r}"
+            ),
+        )
 
         frames["train"].append(group.iloc[:train_end].copy())
         frames["valid"].append(group.iloc[valid_start:valid_end].copy())
         frames["test"].append(group.iloc[test_start : test_start + test_n].copy())
 
-    result: dict[str, pd.DataFrame] = {}
-    for name, part_frames in frames.items():
-        non_empty = [frame for frame in part_frames if not frame.empty]
-        if non_empty:
-            result[name] = pd.concat(non_empty, axis=0, ignore_index=True, sort=False)
-        else:
-            result[name] = out.iloc[0:0].copy()
-    return result
+    return _concat_partition_frames(frames, empty_template=out)
 
 
 def _normalize_scaler_method(method: str) -> str:
@@ -2817,6 +3197,30 @@ def _normalize_scaler_scope(scope: str) -> str:
     if normalized not in _ALLOWED_SCALER_SCOPES:
         raise ValueError(f"scope must be one of: {sorted(_ALLOWED_SCALER_SCOPES)}")
     return normalized
+
+
+def _scaler_groups(ordered: pd.DataFrame, *, scope_name: str) -> list[tuple[Any, pd.DataFrame]]:
+    if scope_name == "global":
+        return [("__global__", ordered)]
+    return list(ordered.groupby("unique_id", sort=False))
+
+
+def _scaler_stats(finite: np.ndarray, *, method_name: str) -> tuple[float, float, float, float]:
+    data_min = float(np.min(finite))
+    data_max = float(np.max(finite))
+    if method_name == "standard":
+        center = float(np.mean(finite))
+        scale = float(np.std(finite, ddof=0))
+        scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
+        return center, scale, data_min, data_max
+    if method_name == "minmax":
+        scale = data_max - data_min
+        scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else float(scale)
+        return data_min, scale, data_min, data_max
+
+    scale = float(np.max(np.abs(finite)))
+    scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
+    return 0.0, scale, data_min, data_max
 
 
 def fit_long_df_scaler(
@@ -2835,33 +3239,17 @@ def fit_long_df_scaler(
     value_cols = _resolve_numeric_columns(df, columns=columns, default_columns=("y",))
     ordered = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
 
-    if scope_name == "global":
-        groups = [("__global__", ordered)]
-    else:
-        groups = list(ordered.groupby("unique_id", sort=False))
-
     rows: list[dict[str, Any]] = []
-    for unique_id, group in groups:
+    for unique_id, group in _scaler_groups(ordered, scope_name=scope_name):
         for col in value_cols:
             values = group[col].to_numpy(dtype=float, copy=False)
             finite = values[np.isfinite(values)]
             if finite.size == 0:
                 raise ValueError(f"cannot fit scaler for column={col!r}, unique_id={unique_id!r} with no finite values")
-
-            data_min = float(np.min(finite))
-            data_max = float(np.max(finite))
-            if method_name == "standard":
-                center = float(np.mean(finite))
-                scale = float(np.std(finite, ddof=0))
-                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
-            elif method_name == "minmax":
-                center = data_min
-                scale = data_max - data_min
-                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else float(scale)
-            else:
-                center = 0.0
-                scale = float(np.max(np.abs(finite)))
-                scale = 1.0 if not np.isfinite(scale) or scale <= 0.0 else scale
+            center, scale, data_min, data_max = _scaler_stats(
+                finite,
+                method_name=method_name,
+            )
 
             rows.append(
                 {

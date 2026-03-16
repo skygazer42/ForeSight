@@ -1,3 +1,5 @@
+import inspect
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -161,6 +163,68 @@ def test_make_supervised_arrays_matches_frame_output() -> None:
     assert bundle["metadata"]["n_rows"] == 3
     assert bundle["metadata"]["n_features"] == len(feature_cols)
     assert bundle["metadata"]["n_targets"] == 1
+
+
+def test_make_supervised_frame_accepts_feature_options_dict() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(1, 9)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    expected = make_supervised_frame(
+        long_df,
+        lags=3,
+        horizon=2,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+    actual = make_supervised_frame(
+        long_df,
+        lags=3,
+        horizon=2,
+        x_cols=("promo",),
+        feature_options={
+            "roll_windows": (2,),
+            "roll_stats": ("mean",),
+            "diff_lags": (1,),
+            "seasonal_lags": (2,),
+            "seasonal_diff_lags": (2,),
+            "fourier_periods": (7,),
+            "add_time_features": True,
+        },
+    )
+
+    assert actual.equals(expected)
+
+
+def test_make_supervised_signatures_keep_legacy_feature_kwargs_visible() -> None:
+    frame_sig = inspect.signature(make_supervised_frame)
+    predict_sig = inspect.signature(make_supervised_predict_arrays)
+
+    for name in (
+        "roll_windows",
+        "roll_stats",
+        "diff_lags",
+        "seasonal_lags",
+        "seasonal_diff_lags",
+        "fourier_periods",
+        "fourier_orders",
+        "add_time_features",
+    ):
+        assert name in frame_sig.parameters
+        assert name in predict_sig.parameters
+    assert "feature_options" in frame_sig.parameters
+    assert "feature_options" in predict_sig.parameters
 
 
 def test_make_supervised_arrays_multistep_target_is_2d() -> None:
@@ -410,6 +474,53 @@ def test_make_supervised_predict_arrays_matches_predict_frame() -> None:
     assert arrays["metadata"]["horizon"] == 2
     assert arrays["metadata"]["n_rows"] == 1
     assert arrays["metadata"]["n_features"] == len(feature_cols)
+
+
+def test_make_supervised_predict_arrays_accepts_feature_options_dict() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(1, 9)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    expected = make_supervised_predict_arrays(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+    actual = make_supervised_predict_arrays(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+        feature_options={
+            "roll_windows": (2,),
+            "roll_stats": ("mean",),
+            "diff_lags": (1,),
+            "seasonal_lags": (2,),
+            "seasonal_diff_lags": (2,),
+            "fourier_periods": (7,),
+            "add_time_features": True,
+        },
+    )
+
+    assert actual["index"].equals(expected["index"])
+    assert actual["feature_names"] == expected["feature_names"]
+    assert np.allclose(actual["X"], expected["X"])
+    assert actual["metadata"] == expected["metadata"]
 
 
 def test_make_supervised_predict_frame_allows_missing_future_y() -> None:
@@ -1200,6 +1311,38 @@ def test_make_panel_sequence_tensors_returns_target_norm_stats() -> None:
         bundle["train"]["y"][0],
         (np.asarray([4.0, 5.0]) - expected_mean) / expected_std,
     )
+
+
+def test_make_panel_sequence_tensors_keeps_train_windows_from_series_without_predict_row() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 9 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=9, freq="D"))
+            + list(pd.date_range("2020-01-01", periods=8, freq="D")),
+            "y": [float(i) for i in range(1, 10)] + [float(i) for i in range(101, 109)],
+        }
+    )
+
+    bundle = make_panel_sequence_tensors(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-07"),
+        horizon=2,
+        context_length=3,
+        normalize=False,
+        add_time_features=False,
+    )
+
+    assert bundle["train"]["X"].shape[0] == 6
+    assert bundle["predict"]["X"].shape[0] == 1
+    assert bundle["train"]["window_index"]["unique_id"].tolist() == [
+        "s0",
+        "s0",
+        "s0",
+        "s1",
+        "s1",
+        "s1",
+    ]
+    assert bundle["predict"]["index"]["unique_id"].tolist() == ["s0"]
 
 
 def test_split_panel_sequence_tensors_respects_per_series_order() -> None:

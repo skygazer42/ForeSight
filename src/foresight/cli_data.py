@@ -10,6 +10,9 @@ from . import cli_shared as _cli_shared
 
 _OUTPUT_PATH_HELP = "Optional path to write output"
 _OUTPUT_CSV_FORMAT_HELP = "Output format (default: csv)"
+_CSV_PATH_HELP = "Path to a CSV file"
+_LONG_CSV_PATH_HELP = "Path to a long-format CSV file"
+_STRICT_FREQ_HELP = "Reject irregular timestamps when inferring frequency"
 
 
 def register_data_subparsers(sub: Any) -> None:
@@ -66,7 +69,7 @@ def _register_data_parser(sub: Any) -> None:
     data_sub = data_p.add_subparsers(dest="data_command", required=True)
 
     data_to_long = data_sub.add_parser("to-long", help="Convert an arbitrary CSV into long format")
-    data_to_long.add_argument("--path", required=True, help="Path to a CSV file")
+    data_to_long.add_argument("--path", required=True, help=_CSV_PATH_HELP)
     data_to_long.add_argument("--time-col", required=True, help="Time column name")
     data_to_long.add_argument("--y-col", required=True, help="Target column name")
     data_to_long.add_argument(
@@ -117,7 +120,7 @@ def _register_data_parser(sub: Any) -> None:
     data_to_long.add_argument(
         "--strict-freq",
         action="store_true",
-        help="Reject irregular timestamps when inferring frequency",
+        help=_STRICT_FREQ_HELP,
     )
     data_to_long.add_argument(
         "--y-missing",
@@ -160,7 +163,7 @@ def _register_data_parser(sub: Any) -> None:
     data_prepare_long = data_sub.add_parser(
         "prepare-long", help="Regularize an existing long-format CSV (unique_id/ds/y)"
     )
-    data_prepare_long.add_argument("--path", required=True, help="Path to a long-format CSV file")
+    data_prepare_long.add_argument("--path", required=True, help=_LONG_CSV_PATH_HELP)
     data_prepare_long.add_argument(
         "--parse-dates",
         action="store_true",
@@ -175,7 +178,7 @@ def _register_data_parser(sub: Any) -> None:
     data_prepare_long.add_argument(
         "--strict-freq",
         action="store_true",
-        help="Reject irregular timestamps when inferring frequency",
+        help=_STRICT_FREQ_HELP,
     )
     data_prepare_long.add_argument(
         "--y-missing",
@@ -230,7 +233,7 @@ def _register_data_parser(sub: Any) -> None:
     data_align_long = data_sub.add_parser(
         "align-long", help="Align an existing long-format CSV to a regular frequency"
     )
-    data_align_long.add_argument("--path", required=True, help="Path to a long-format CSV file")
+    data_align_long.add_argument("--path", required=True, help=_LONG_CSV_PATH_HELP)
     data_align_long.add_argument(
         "--parse-dates",
         action="store_true",
@@ -257,7 +260,7 @@ def _register_data_parser(sub: Any) -> None:
     data_align_long.add_argument(
         "--strict-freq",
         action="store_true",
-        help="Reject irregular timestamps when inferring frequency",
+        help=_STRICT_FREQ_HELP,
     )
     data_align_long.add_argument("--output", type=str, default="", help=_OUTPUT_PATH_HELP)
     data_align_long.add_argument(
@@ -271,7 +274,7 @@ def _register_data_parser(sub: Any) -> None:
     data_clip_outliers = data_sub.add_parser(
         "clip-outliers", help="Clip per-series outliers in a long-format CSV"
     )
-    data_clip_outliers.add_argument("--path", required=True, help="Path to a long-format CSV file")
+    data_clip_outliers.add_argument("--path", required=True, help=_LONG_CSV_PATH_HELP)
     data_clip_outliers.add_argument(
         "--parse-dates",
         action="store_true",
@@ -314,7 +317,7 @@ def _register_data_parser(sub: Any) -> None:
         "calendar-features", help="Append calendar/time features to a long-format CSV"
     )
     data_calendar_features.add_argument(
-        "--path", required=True, help="Path to a long-format CSV file"
+        "--path", required=True, help=_LONG_CSV_PATH_HELP
     )
     data_calendar_features.add_argument(
         "--parse-dates",
@@ -339,7 +342,7 @@ def _register_data_parser(sub: Any) -> None:
     data_make_supervised = data_sub.add_parser(
         "make-supervised", help="Build a supervised training frame from long or wide CSV data"
     )
-    data_make_supervised.add_argument("--path", required=True, help="Path to a CSV file")
+    data_make_supervised.add_argument("--path", required=True, help=_CSV_PATH_HELP)
     data_make_supervised.add_argument(
         "--parse-dates",
         action="store_true",
@@ -430,7 +433,7 @@ def _register_data_parser(sub: Any) -> None:
     data_infer_freq = data_sub.add_parser(
         "infer-freq", help="Infer a regular datetime frequency from timestamps"
     )
-    data_infer_freq.add_argument("--path", required=True, help="Path to a CSV file")
+    data_infer_freq.add_argument("--path", required=True, help=_CSV_PATH_HELP)
     data_infer_freq.add_argument("--time-col", required=True, help="Time column name")
     data_infer_freq.add_argument(
         "--id-cols",
