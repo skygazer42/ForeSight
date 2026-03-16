@@ -57,6 +57,7 @@ from foresight import (
 | `fit_long_df_scaler` | `foresight.data` | Fit reversible per-series or global scaling statistics for long-format numeric columns. |
 | `infer_series_frequency` | `foresight.data` | Infer a sensible pandas-compatible series frequency from timestamps. |
 | `inverse_transform_long_df_with_scaler` | `foresight.data` | Reverse fitted long-format scaling statistics to restore original numeric units. |
+| `make_local_xreg_eval_bundle` | `foresight.data` | Build walk-forward local xreg evaluation windows with per-window arrays and index metadata. |
 | `make_local_xreg_forecast_bundle` | `foresight.data` | Build per-series forecast-time arrays and index metadata for local models that require known future covariates. |
 | `make_panel_sequence_blocks` | `foresight.data` | Expose packed panel sequence tensors as explicit past/future target, covariate, and time blocks for encoder-decoder style models. |
 | `make_panel_sequence_tensors` | `foresight.data` | Build packed sequence-model training and prediction bundles from long-format panel data for global neural workflows. |
@@ -133,6 +134,7 @@ from foresight import (
 - `inverse_transform_long_df_with_scaler`
 - `load_forecaster`
 - `load_forecaster_artifact`
+- `make_local_xreg_eval_bundle`
 - `make_local_xreg_forecast_bundle`
 - `make_panel_sequence_blocks`
 - `make_panel_sequence_tensors`
