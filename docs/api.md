@@ -61,6 +61,8 @@ from foresight import (
 | `make_panel_sequence_tensors` | `foresight.data` | Build packed sequence-model training and prediction bundles from long-format panel data for global neural workflows. |
 | `make_panel_window_arrays` | `foresight.data` | Convert long-format panel series into dense training arrays plus window metadata for sklearn-style estimators. |
 | `make_panel_window_frame` | `foresight.data` | Build step-wise panel training windows from long-format data with target, seasonal, and exogenous lag features. |
+| `make_panel_window_predict_arrays` | `foresight.data` | Convert panel prediction-time window features into dense arrays plus index metadata for global step-lag inference. |
+| `make_panel_window_predict_frame` | `foresight.data` | Build step-wise panel prediction windows from long-format data for a cutoff and forecast horizon. |
 | `make_supervised_arrays` | `foresight.data` | Convert supervised training tables into dense feature and target arrays with stable index and metadata. |
 | `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
@@ -132,6 +134,8 @@ from foresight import (
 - `make_panel_sequence_tensors`
 - `make_panel_window_arrays`
 - `make_panel_window_frame`
+- `make_panel_window_predict_arrays`
+- `make_panel_window_predict_frame`
 - `make_supervised_arrays`
 - `make_supervised_frame`
 - `make_forecaster`

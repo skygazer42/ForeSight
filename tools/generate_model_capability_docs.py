@@ -158,6 +158,16 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Build step-wise panel training windows from long-format data with target, seasonal, and exogenous lag features.",
     },
+    "make_panel_window_predict_arrays": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Convert panel prediction-time window features into dense arrays plus index metadata for global step-lag inference.",
+    },
+    "make_panel_window_predict_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Build step-wise panel prediction windows from long-format data for a cutoff and forecast horizon.",
+    },
     "make_supervised_frame": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
