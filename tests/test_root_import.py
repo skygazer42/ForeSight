@@ -79,6 +79,8 @@ def test_root_import_exports_stable_public_api() -> None:
             "make_panel_window_predict_frame",
             "make_supervised_arrays",
             "make_supervised_frame",
+            "make_supervised_predict_arrays",
+            "make_supervised_predict_frame",
             "make_forecaster",
             "make_forecaster_object",
             "make_global_forecaster",

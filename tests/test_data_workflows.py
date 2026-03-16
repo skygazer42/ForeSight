@@ -16,6 +16,8 @@ from foresight.data import (
     make_panel_window_predict_frame,
     make_supervised_arrays,
     make_supervised_frame,
+    make_supervised_predict_arrays,
+    make_supervised_predict_frame,
     prepare_long_df,
     split_supervised_arrays,
     split_supervised_frame,
@@ -297,6 +299,148 @@ def test_split_supervised_frame_matches_array_partitions() -> None:
         assert actual["index"].reset_index(drop=True).equals(expected.loc[:, ["unique_id", "ds", "target_t"]])
         assert np.allclose(actual["X"], expected.loc[:, list(feature_cols)].to_numpy(dtype=float))
         assert np.allclose(actual["y"], expected["y_target"].to_numpy(dtype=float))
+
+
+def test_make_supervised_predict_frame_matches_training_features_at_cutoff() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8 + ["s1"] * 8,
+            "ds": list(pd.date_range("2020-01-01", periods=8, freq="D")) * 2,
+            "y": [float(i) for i in range(1, 9)] + [float(i) for i in range(101, 109)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0] * 2,
+        }
+    )
+
+    train_frame = make_supervised_frame(
+        long_df,
+        lags=3,
+        horizon=2,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+    pred_frame = make_supervised_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+
+    expected = train_frame.loc[train_frame["ds"] == pd.Timestamp("2020-01-07")].reset_index(drop=True)
+    target_cols = {"y_t+1", "y_t+2"}
+    feature_cols = tuple(
+        col
+        for col in expected.columns
+        if col not in {"unique_id", "ds", "target_t"} and col not in target_cols
+    )
+
+    assert list(pred_frame.columns[:4]) == ["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"]
+    assert pred_frame["unique_id"].tolist() == ["s0", "s1"]
+    assert pred_frame["cutoff_ds"].tolist() == [pd.Timestamp("2020-01-06")] * 2
+    assert pred_frame["target_start_ds"].tolist() == [pd.Timestamp("2020-01-07")] * 2
+    assert pred_frame["target_end_ds"].tolist() == [pd.Timestamp("2020-01-08")] * 2
+    assert tuple(pred_frame.columns[4:]) == feature_cols
+    assert np.allclose(
+        pred_frame.loc[:, list(feature_cols)].to_numpy(dtype=float),
+        expected.loc[:, list(feature_cols)].to_numpy(dtype=float),
+    )
+
+
+def test_make_supervised_predict_arrays_matches_predict_frame() -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 8,
+            "ds": pd.date_range("2020-01-01", periods=8, freq="D"),
+            "y": [float(i) for i in range(1, 9)],
+            "promo": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+        }
+    )
+
+    frame = make_supervised_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+    arrays = make_supervised_predict_arrays(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+        roll_windows=(2,),
+        roll_stats=("mean",),
+        diff_lags=(1,),
+        seasonal_lags=(2,),
+        seasonal_diff_lags=(2,),
+        fourier_periods=(7,),
+        add_time_features=True,
+    )
+
+    feature_cols = tuple(frame.columns[4:])
+    assert arrays["X"].shape == (1, len(feature_cols))
+    assert arrays["feature_names"] == feature_cols
+    assert arrays["index"].equals(
+        frame.loc[:, ["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"]]
+    )
+    assert np.allclose(arrays["X"], frame.loc[:, list(feature_cols)].to_numpy(dtype=float))
+    assert arrays["metadata"]["horizon"] == 2
+    assert arrays["metadata"]["n_rows"] == 1
+    assert arrays["metadata"]["n_features"] == len(feature_cols)
+
+
+def test_make_supervised_predict_frame_allows_missing_future_y() -> None:
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 2,
+            "ds": pd.date_range("2020-01-07", periods=2, freq="D"),
+            "y": [np.nan, np.nan],
+            "promo": [1.0, 0.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    frame = make_supervised_predict_frame(
+        long_df,
+        cutoff=pd.Timestamp("2020-01-06"),
+        horizon=2,
+        lags=3,
+        x_cols=("promo",),
+    )
+
+    assert len(frame) == 1
+    assert frame["target_start_ds"].tolist() == [pd.Timestamp("2020-01-07")]
+    assert frame["target_end_ds"].tolist() == [pd.Timestamp("2020-01-08")]
+    assert frame["feat_x_promo"].tolist() == [1.0]
 
 
 def test_split_long_df_sizes_respects_per_series_order() -> None:

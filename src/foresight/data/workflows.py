@@ -810,6 +810,213 @@ def split_supervised_arrays(
     return parts
 
 
+def _empty_supervised_predict_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"])
+
+
+def _group_supervised_predict_frame(
+    group: pd.DataFrame,
+    *,
+    cutoff: Any,
+    horizon: int,
+    lag_steps: tuple[int, ...],
+    start_t: int,
+    x_cols: tuple[str, ...],
+    roll_windows: Any,
+    roll_stats: Any,
+    diff_lags: Any,
+    seasonal_lags: Any,
+    seasonal_diff_lags: Any,
+    fourier_periods: Any,
+    fourier_orders: Any,
+    add_time_features: bool,
+) -> pd.DataFrame:
+    if group["ds"].duplicated().any():
+        raise ValueError("duplicate timestamps found within a series; run align_long_df() first")
+
+    ds_arr = group["ds"].to_numpy(copy=False)
+    cutoff_idx = pd.Index(ds_arr).get_indexer([cutoff])[0]
+    if int(cutoff_idx) < 0:
+        return _empty_supervised_predict_frame()
+
+    pred_start = int(cutoff_idx) + 1
+    horizon_int = int(horizon)
+    if pred_start < int(start_t) or pred_start + horizon_int > int(len(group)):
+        return _empty_supervised_predict_frame()
+
+    history_y = group.iloc[:pred_start]["y"].to_numpy(dtype=float, copy=False)
+    if not np.all(np.isfinite(history_y)):
+        raise ValueError("y must contain finite history through cutoff to build supervised predictions")
+
+    t_index = np.asarray([pred_start], dtype=int)
+    lag_matrix = np.asarray(
+        [[history_y[int(pred_start) - int(lag)] for lag in lag_steps]],
+        dtype=float,
+    )
+    base_df = _base_lag_feature_frame(lag_matrix, lag_steps)
+
+    derived_matrix, derived_names = build_lag_derived_features(
+        lag_matrix,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+    )
+    seasonal_matrix, seasonal_names = build_seasonal_lag_features(
+        history_y,
+        t=t_index,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+    )
+    fourier_matrix, fourier_names = build_fourier_features(
+        t_index,
+        periods=fourier_periods,
+        orders=fourier_orders,
+    )
+
+    feature_frames = [base_df, _group_x_feature_frame(group, t_index=t_index, x_cols=x_cols)]
+    if derived_names:
+        feature_frames.append(_prefixed_feature_frame(derived_matrix, derived_names))
+    if seasonal_names:
+        feature_frames.append(_prefixed_feature_frame(seasonal_matrix, seasonal_names))
+    if fourier_names:
+        feature_frames.append(_prefixed_feature_frame(fourier_matrix, fourier_names))
+    if add_time_features:
+        candidate_t_index = np.arange(
+            int(start_t),
+            int(len(group)) - horizon_int + 1,
+            dtype=int,
+        )
+        time_matrix, time_names = build_time_features(group.iloc[candidate_t_index]["ds"])
+        feature_frames.append(
+            _prefixed_feature_frame(
+                time_matrix[int(pred_start) - int(start_t) : int(pred_start) - int(start_t) + 1, :],
+                time_names,
+            )
+        )
+
+    metadata = pd.DataFrame(
+        {
+            "unique_id": [group["unique_id"].iloc[0]],
+            "cutoff_ds": [ds_arr[int(cutoff_idx)]],
+            "target_start_ds": [ds_arr[pred_start]],
+            "target_end_ds": [ds_arr[pred_start + horizon_int - 1]],
+        }
+    )
+    return pd.concat([metadata, *feature_frames], axis=1)
+
+
+def make_supervised_predict_frame(
+    long_df: Any,
+    *,
+    cutoff: Any,
+    horizon: int = 1,
+    lags: Any = 5,
+    x_cols: tuple[str, ...] = (),
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    add_time_features: bool = False,
+) -> pd.DataFrame:
+    """
+    Build one direct supervised prediction row per eligible series for a cutoff and horizon.
+    """
+    df = _coerce_long_df(long_df, require_non_empty=True)
+    horizon_int = int(horizon)
+    if horizon_int <= 0:
+        raise ValueError("horizon must be >= 1")
+
+    out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    selected_x_cols = _infer_supervised_x_cols(out, x_cols)
+    start_t, lag_steps = _compute_supervised_start_t(
+        lags=lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+    )
+
+    frames: list[pd.DataFrame] = []
+    for _unique_id, group in out.groupby("unique_id", sort=False):
+        frame = _group_supervised_predict_frame(
+            group.reset_index(drop=True),
+            cutoff=cutoff,
+            horizon=horizon_int,
+            lag_steps=lag_steps,
+            start_t=start_t,
+            x_cols=selected_x_cols,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+            add_time_features=bool(add_time_features),
+        )
+        if not frame.empty:
+            frames.append(frame)
+
+    if not frames:
+        raise ValueError("No series had enough history or future rows to build supervised prediction rows")
+    return pd.concat(frames, axis=0, ignore_index=True, sort=False)
+
+
+def make_supervised_predict_arrays(
+    long_df: Any,
+    *,
+    cutoff: Any,
+    horizon: int = 1,
+    lags: Any = 5,
+    x_cols: tuple[str, ...] = (),
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    add_time_features: bool = False,
+    dtype: Any = np.float64,
+) -> dict[str, Any]:
+    """
+    Build dense direct supervised prediction arrays plus index/metadata from a prediction frame.
+    """
+    frame = make_supervised_predict_frame(
+        long_df,
+        cutoff=cutoff,
+        horizon=int(horizon),
+        lags=lags,
+        x_cols=x_cols,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        add_time_features=bool(add_time_features),
+    )
+
+    feature_names = tuple(str(col) for col in frame.columns[4:])
+    index = frame.loc[:, ["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"]].copy()
+    X = frame.loc[:, list(feature_names)].to_numpy(dtype=dtype, copy=False)
+    metadata = {
+        "horizon": int(horizon),
+        "n_series": int(index["unique_id"].nunique()),
+        "n_rows": int(len(index)),
+        "n_features": int(len(feature_names)),
+        "feature_names": feature_names,
+    }
+    return {
+        "X": X,
+        "feature_names": feature_names,
+        "index": index,
+        "metadata": metadata,
+    }
+
+
 def _resolve_panel_target_lags(*, lags: Any, target_lags: Any = ()) -> tuple[int, ...]:
     spec = target_lags
     if isinstance(spec, str) and not spec.strip():
