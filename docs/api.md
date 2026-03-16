@@ -51,7 +51,11 @@ from foresight import (
 
 | symbol | source | purpose |
 | --- | --- | --- |
+| `align_long_df` | `foresight.data` | Regularize per-series timestamps to a target frequency, with optional resampling aggregation. |
+| `clip_long_df_outliers` | `foresight.data` | Clip per-series numeric outliers in long-format data without dropping rows. |
+| `enrich_long_df_calendar` | `foresight.data` | Append deterministic calendar and cyclical time features onto long-format panel data. |
 | `infer_series_frequency` | `foresight.data` | Infer a sensible pandas-compatible series frequency from timestamps. |
+| `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
 | `to_long` | `foresight.data` | Convert wide or column-mapped inputs into ForeSight long format with role-aware historic_x_cols / future_x_cols support. |
 | `validate_long_df` | `foresight.data` | Check that long-format inputs satisfy required schema and null rules. |
@@ -90,20 +94,24 @@ from foresight import (
 ## Root package export list
 
 - `__version__`
+- `align_long_df`
 - `BaseForecaster`
 - `BaseGlobalForecaster`
 - `bootstrap_intervals`
 - `build_hierarchy_spec`
 - `check_hierarchical_consistency`
+- `clip_long_df_outliers`
 - `eval_hierarchical_forecast_df`
 - `eval_model`
 - `eval_model_long_df`
 - `eval_multivariate_model_df`
+- `enrich_long_df_calendar`
 - `forecast_model`
 - `forecast_model_long_df`
 - `infer_series_frequency`
 - `load_forecaster`
 - `load_forecaster_artifact`
+- `make_supervised_frame`
 - `make_forecaster`
 - `make_forecaster_object`
 - `make_global_forecaster`

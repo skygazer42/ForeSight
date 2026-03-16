@@ -2,7 +2,7 @@
 
 This page is generated from the central model registry. Do not edit it by hand; run `python tools/generate_model_capability_docs.py`.
 
-ForeSight currently registers **644** models: **521** local, **113** global, and **10** multivariate.
+ForeSight currently registers **651** models: **528** local, **113** global, and **10** multivariate.
 
 ## Capability keys
 
@@ -36,7 +36,7 @@ print(len(list_models()))
 | --- | ---: |
 | `torch` | 451 |
 | `core` | 54 |
-| `ml` | 44 |
+| `ml` | 51 |
 | `xgb` | 43 |
 | `stats` | 33 |
 | `catboost` | 9 |
@@ -54,12 +54,14 @@ print(len(list_models()))
 | `ar-ols` | `local` | `core` | no | no | yes | no | yes | no |
 | `ar-ols-auto` | `local` | `core` | no | no | yes | no | yes | no |
 | `ar-ols-lags` | `local` | `core` | no | no | yes | no | yes | no |
+| `ard-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `ard-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `arima` | `local` | `stats` | no | no | yes | yes | yes | no |
 | `auto-arima` | `local` | `stats` | yes | no | yes | yes | no | no |
 | `autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
 | `bagging-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `bagging-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `bayesian-ridge-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `bayesian-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `catboost-custom-dirrec-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
 | `catboost-custom-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
@@ -95,6 +97,7 @@ print(len(list_models()))
 | `fourier-multi` | `local` | `core` | no | no | yes | no | yes | no |
 | `fourier-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
 | `fourier-uc` | `local` | `stats` | no | no | yes | no | yes | no |
+| `gamma-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `gamma-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `gbrt-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `gbrt-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
@@ -148,9 +151,12 @@ print(len(list_models()))
 | `mstl-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
 | `mstl-uc` | `local` | `stats` | no | no | yes | no | yes | no |
 | `naive-last` | `local` | `core` | no | no | yes | no | yes | no |
+| `omp-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `omp-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
+| `passive-aggressive-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `passive-aggressive-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `pipeline` | `local` | `core` | no | no | yes | no | yes | no |
+| `poisson-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `poisson-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `poly-trend` | `local` | `core` | no | no | yes | no | yes | no |
 | `quantile-lag` | `local` | `ml` | no | no | yes | no | yes | no |
@@ -642,6 +648,7 @@ print(len(list_models()))
 | `torch-xformer-reformer-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `torch-xlstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
 | `tsb` | `local` | `core` | no | no | yes | no | yes | no |
+| `tweedie-lag` | `local` | `ml` | no | no | yes | no | yes | no |
 | `tweedie-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
 | `uc-local-level` | `local` | `stats` | no | no | yes | no | yes | no |
 | `uc-local-linear-trend` | `local` | `stats` | no | no | yes | no | yes | no |

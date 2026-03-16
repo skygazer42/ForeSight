@@ -53,6 +53,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": "foresight.base",
         "purpose": "Stateful panel/global forecaster base class for long-format data.",
     },
+    "align_long_df": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Regularize per-series timestamps to a target frequency, with optional resampling aggregation.",
+    },
     "bootstrap_intervals": {
         "group": GROUP_INTERVALS_AND_TUNING,
         "source": "foresight.intervals",
@@ -67,6 +72,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": GROUP_HIERARCHICAL_FORECASTING,
         "source": "foresight.hierarchical",
         "purpose": "Validate whether hierarchical forecasts reconcile cleanly.",
+    },
+    "clip_long_df_outliers": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Clip per-series numeric outliers in long-format data without dropping rows.",
     },
     "eval_hierarchical_forecast_df": {
         "group": GROUP_HIERARCHICAL_FORECASTING,
@@ -87,6 +97,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": "Evaluation",
         "source": SOURCE_FORESIGHT_EVAL_FORECAST,
         "purpose": "Evaluate multivariate forecasters on wide data frames.",
+    },
+    "enrich_long_df_calendar": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Append deterministic calendar and cyclical time features onto long-format panel data.",
     },
     "forecast_model": {
         "group": "Forecasting",
@@ -112,6 +127,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": "Artifacts",
         "source": SOURCE_FORESIGHT_SERIALIZATION,
         "purpose": "Inspect the structured artifact payload before reconstructing an object.",
+    },
+    "make_supervised_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Build sklearn-style supervised training tables from long or wide time-series inputs.",
     },
     "make_forecaster": {
         "group": "Forecasting",
