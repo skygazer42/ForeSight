@@ -223,6 +223,11 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Chronologically split supervised training arrays into train, validation, and test partitions per series.",
     },
+    "split_supervised_frame": {
+        "group": GROUP_DATA_PREPARATION,
+        "source": SOURCE_FORESIGHT_DATA,
+        "purpose": "Chronologically split supervised training rows into train, validation, and test partitions per series.",
+    },
     "split_panel_sequence_blocks": {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,

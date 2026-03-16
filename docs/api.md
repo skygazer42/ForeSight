@@ -64,6 +64,7 @@ from foresight import (
 | `make_supervised_arrays` | `foresight.data` | Convert supervised training tables into dense feature and target arrays with stable index and metadata. |
 | `make_supervised_frame` | `foresight.data` | Build sklearn-style supervised training tables from long or wide time-series inputs. |
 | `prepare_long_df` | `foresight.data` | Normalize and validate long-format panel data before forecasting/evaluation, with separate missing-value policies for target, historic covariates, and future covariates. |
+| `split_supervised_frame` | `foresight.data` | Chronologically split supervised training rows into train, validation, and test partitions per series. |
 | `split_supervised_arrays` | `foresight.data` | Chronologically split supervised training arrays into train, validation, and test partitions per series. |
 | `split_panel_window_arrays` | `foresight.data` | Chronologically split panel-window training arrays into train, validation, and test partitions by window origin. |
 | `split_panel_window_frame` | `foresight.data` | Chronologically split panel-window training rows into train, validation, and test partitions by window origin. |
@@ -141,6 +142,7 @@ from foresight import (
 - `prepare_long_df`
 - `reconcile_hierarchical_forecasts`
 - `save_forecaster`
+- `split_supervised_frame`
 - `split_supervised_arrays`
 - `split_panel_window_arrays`
 - `split_panel_window_frame`
