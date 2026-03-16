@@ -137,3 +137,50 @@ def test_make_forecaster_svr_variants_accept_legacy_uppercase_c_keyword(
         "max_iter": 123.0,
         "random_state": 9.0,
     }
+
+
+def test_make_forecaster_passive_aggressive_accepts_legacy_uppercase_c_keyword(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, float] = {}
+
+    def _fake_passive_aggressive_lag_direct_forecast(
+        train: object,
+        horizon: int,
+        *,
+        lags: int,
+        epsilon: float,
+        max_iter: int,
+        random_state: int,
+        **kwargs: object,
+    ) -> np.ndarray:
+        captured["lags"] = float(lags)
+        captured["C"] = float(kwargs["C"])
+        captured["epsilon"] = float(epsilon)
+        captured["max_iter"] = float(max_iter)
+        captured["random_state"] = float(random_state)
+        return np.zeros(int(horizon), dtype=float)
+
+    monkeypatch.setattr(
+        runtime_mod,
+        "passive_aggressive_lag_direct_forecast",
+        _fake_passive_aggressive_lag_direct_forecast,
+    )
+
+    yhat = make_forecaster(
+        "passive-aggressive-lag",
+        lags=4,
+        C="2.25",
+        epsilon="0.3",
+        max_iter="321",
+        random_state="7",
+    )([1.0] * 12, 2)
+
+    assert yhat.shape == (2,)
+    assert captured == {
+        "lags": 4.0,
+        "C": 2.25,
+        "epsilon": 0.3,
+        "max_iter": 321.0,
+        "random_state": 7.0,
+    }

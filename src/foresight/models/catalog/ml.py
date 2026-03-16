@@ -8,7 +8,9 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
     _LAG_DERIVED_DEFAULTS = context._LAG_DERIVED_DEFAULTS
     _LAG_DERIVED_PARAM_HELP = context._LAG_DERIVED_PARAM_HELP
     _factory_adaboost_lag = context._factory_adaboost_lag
+    _factory_ard_lag = context._factory_ard_lag
     _factory_bagging_lag = context._factory_bagging_lag
+    _factory_bayesian_ridge_lag = context._factory_bayesian_ridge_lag
     _factory_catboost_custom_dirrec_lag = context._factory_catboost_custom_dirrec_lag
     _factory_catboost_custom_lag = context._factory_catboost_custom_lag
     _factory_catboost_custom_lag_recursive = context._factory_catboost_custom_lag_recursive
@@ -38,6 +40,8 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
     _factory_lr_lag = context._factory_lr_lag
     _factory_lr_lag_direct = context._factory_lr_lag_direct
     _factory_mlp_lag = context._factory_mlp_lag
+    _factory_omp_lag = context._factory_omp_lag
+    _factory_passive_aggressive_lag = context._factory_passive_aggressive_lag
     _factory_quantile_lag = context._factory_quantile_lag
     _factory_rf_lag = context._factory_rf_lag
     _factory_ridge_lag = context._factory_ridge_lag
@@ -184,6 +188,10 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
     )
     SAMPLE_STEP_PARAM_HELP = "Stride when generating training windows (>=1)"
     TREE_MAX_DEPTH_OPTIONAL_PARAM_HELP = "Tree max_depth (>=1) or None"
+    TOL_POSITIVE_PARAM_HELP = "Solver tolerance (>0) or None"
+    PRIOR_PARAM_HELP = "Prior hyperparameter (>0)"
+    N_NONZERO_COEFS_PARAM_HELP = "Maximum selected non-zero coefficients (>=1) or None"
+    AGGRESSIVENESS_PARAM_HELP = "Passive-aggressive C (>0)"
     QUANTILES_OUTPUT_PARAM_HELP = (
         "Optional quantiles for pinball loss, e.g. 0.1,0.5,0.9 (adds yhat_pXX columns)"
     )
@@ -310,6 +318,100 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
             "n_estimators": BOOSTING_STAGES_PARAM_HELP,
             "learning_rate": BOOSTING_LR_PARAM_HELP,
             "max_depth": "Tree max_depth",
+            "random_state": RANDOM_SEED_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "bayesian-ridge-lag": model_spec(
+        key="bayesian-ridge-lag",
+        description="BayesianRidge on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_bayesian_ridge_lag,
+        default_params={
+            "lags": 12,
+            "alpha_1": 1e-6,
+            "alpha_2": 1e-6,
+            "lambda_1": 1e-6,
+            "lambda_2": 1e-6,
+            **_LAG_DERIVED_DEFAULTS,
+        },
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "alpha_1": PRIOR_PARAM_HELP,
+            "alpha_2": PRIOR_PARAM_HELP,
+            "lambda_1": PRIOR_PARAM_HELP,
+            "lambda_2": PRIOR_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "ard-lag": model_spec(
+        key="ard-lag",
+        description="ARDRegression on lag features (direct multi-horizon). Requires scikit-learn.",
+        factory=_factory_ard_lag,
+        default_params={
+            "lags": 12,
+            "alpha_1": 1e-6,
+            "alpha_2": 1e-6,
+            "lambda_1": 1e-6,
+            "lambda_2": 1e-6,
+            "max_iter": 300,
+            "tol": 1e-3,
+            **_LAG_DERIVED_DEFAULTS,
+        },
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "alpha_1": PRIOR_PARAM_HELP,
+            "alpha_2": PRIOR_PARAM_HELP,
+            "lambda_1": PRIOR_PARAM_HELP,
+            "lambda_2": PRIOR_PARAM_HELP,
+            "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
+            "tol": TOL_POSITIVE_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "omp-lag": model_spec(
+        key="omp-lag",
+        description=(
+            "OrthogonalMatchingPursuit on lag features (direct multi-horizon). "
+            "Requires scikit-learn."
+        ),
+        factory=_factory_omp_lag,
+        default_params={
+            "lags": 12,
+            "n_nonzero_coefs": None,
+            "tol": None,
+            **_LAG_DERIVED_DEFAULTS,
+        },
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "n_nonzero_coefs": N_NONZERO_COEFS_PARAM_HELP,
+            "tol": TOL_POSITIVE_PARAM_HELP,
+            **_LAG_DERIVED_PARAM_HELP,
+        },
+        requires=("ml",),
+    ),
+    "passive-aggressive-lag": model_spec(
+        key="passive-aggressive-lag",
+        description=(
+            "PassiveAggressiveRegressor on lag features (direct multi-horizon). "
+            "Requires scikit-learn."
+        ),
+        factory=_factory_passive_aggressive_lag,
+        default_params={
+            "lags": 12,
+            "c": 1.0,
+            "epsilon": 0.1,
+            "max_iter": 1000,
+            "random_state": 0,
+            **_LAG_DERIVED_DEFAULTS,
+        },
+        param_help={
+            "lags": LAGS_PARAM_HELP,
+            "c": AGGRESSIVENESS_PARAM_HELP,
+            "epsilon": EPSILON_TUBE_PARAM_HELP,
+            "max_iter": MAX_SOLVER_ITER_PARAM_HELP,
             "random_state": RANDOM_SEED_PARAM_HELP,
             **_LAG_DERIVED_PARAM_HELP,
         },
@@ -4201,4 +4303,3 @@ def build_ml_catalog(context: Any) -> dict[str, Any]:
         interface="global",
     ),
     }
-

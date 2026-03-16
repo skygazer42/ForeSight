@@ -5,20 +5,24 @@ from typing import Any
 
 __all__ = [
     "__version__",
+    "align_long_df",
     "BaseForecaster",
     "BaseGlobalForecaster",
     "bootstrap_intervals",
     "build_hierarchy_spec",
     "check_hierarchical_consistency",
+    "clip_long_df_outliers",
     "eval_hierarchical_forecast_df",
     "eval_model",
     "eval_model_long_df",
     "eval_multivariate_model_df",
+    "enrich_long_df_calendar",
     "forecast_model",
     "forecast_model_long_df",
     "infer_series_frequency",
     "load_forecaster",
     "load_forecaster_artifact",
+    "make_supervised_frame",
     "make_forecaster",
     "make_forecaster_object",
     "make_global_forecaster",
@@ -41,8 +45,12 @@ def __getattr__(name: str) -> Any:
         module = import_module(".base", __name__)
         return getattr(module, name)
     if name in {
+        "align_long_df",
         "build_hierarchy_spec",
+        "clip_long_df_outliers",
+        "enrich_long_df_calendar",
         "infer_series_frequency",
+        "make_supervised_frame",
         "prepare_long_df",
         "to_long",
         "validate_long_df",

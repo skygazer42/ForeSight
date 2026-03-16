@@ -7,6 +7,10 @@ from foresight.models.registry import get_model_spec, make_forecaster, make_glob
 
 ML_MODELS = [
     # Existing scikit-learn models
+    "bayesian-ridge-lag",
+    "ard-lag",
+    "omp-lag",
+    "passive-aggressive-lag",
     "ridge-lag",
     "rf-lag",
     "lasso-lag",

@@ -52,6 +52,30 @@ def test_ridge_lag_rejects_invalid_roll_windows_when_sklearn_installed() -> None
         _ = f(y, 2)
 
 
+def test_wave1_local_ml_models_smoke_when_sklearn_installed() -> None:
+    if not _has_module("sklearn"):
+        pytest.skip("scikit-learn not installed; this test targets the installed path")
+
+    rng = np.random.default_rng(0)
+    y = (
+        1.0
+        + 0.03 * np.arange(80, dtype=float)
+        + np.sin(np.arange(80, dtype=float) / 4.0)
+        + 0.05 * rng.standard_normal(80)
+    )
+    configs = [
+        ("bayesian-ridge-lag", {"lags": 8}),
+        ("ard-lag", {"lags": 8, "max_iter": 300}),
+        ("omp-lag", {"lags": 8, "n_nonzero_coefs": 3}),
+        ("passive-aggressive-lag", {"lags": 8, "max_iter": 500}),
+    ]
+
+    for key, params in configs:
+        yhat = make_forecaster(key, **params)(y, 3)
+        assert yhat.shape == (3,)
+        assert np.all(np.isfinite(yhat))
+
+
 def test_lr_lag_supports_target_lags_via_registry() -> None:
     y = 1.0 + np.sin(np.arange(60, dtype=float) / 3.0)
     f = make_forecaster(

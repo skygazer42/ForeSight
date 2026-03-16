@@ -94,7 +94,9 @@ from .multivariate import (
 from .naive import naive_last, seasonal_naive, seasonal_naive_auto
 from .regression import (
     adaboost_lag_direct_forecast,
+    ard_lag_direct_forecast,
     bagging_lag_direct_forecast,
+    bayesian_ridge_lag_direct_forecast,
     catboost_custom_dirrec_lag_forecast,
     catboost_custom_lag_direct_forecast,
     catboost_custom_lag_recursive_forecast,
@@ -124,6 +126,8 @@ from .regression import (
     lr_lag_direct_forecast,
     lr_lag_forecast,
     mlp_lag_direct_forecast,
+    omp_lag_direct_forecast,
+    passive_aggressive_lag_direct_forecast,
     quantile_lag_direct_forecast,
     rf_lag_direct_forecast,
     ridge_lag_direct_forecast,
@@ -1110,6 +1114,179 @@ def _factory_ridge_lag_direct(
             horizon,
             lags=lag_spec,
             alpha=alpha_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
+
+    return _f
+
+
+def _factory_bayesian_ridge_lag(
+    *,
+    lags: int = 12,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_1_f = float(alpha_1)
+    alpha_2_f = float(alpha_2)
+    lambda_1_f = float(lambda_1)
+    lambda_2_f = float(lambda_2)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return bayesian_ridge_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha_1=alpha_1_f,
+            alpha_2=alpha_2_f,
+            lambda_1=lambda_1_f,
+            lambda_2=lambda_2_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
+
+    return _f
+
+
+def _factory_ard_lag(
+    *,
+    lags: int = 12,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    max_iter: int = 300,
+    tol: float = 1e-3,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    alpha_1_f = float(alpha_1)
+    alpha_2_f = float(alpha_2)
+    lambda_1_f = float(lambda_1)
+    lambda_2_f = float(lambda_2)
+    max_iter_int = int(max_iter)
+    tol_f = float(tol)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return ard_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            alpha_1=alpha_1_f,
+            alpha_2=alpha_2_f,
+            lambda_1=lambda_1_f,
+            lambda_2=lambda_2_f,
+            max_iter=max_iter_int,
+            tol=tol_f,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
+
+    return _f
+
+
+def _factory_omp_lag(
+    *,
+    lags: int = 12,
+    n_nonzero_coefs: int | None = None,
+    tol: float | None = None,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    n_nonzero_opt = None if n_nonzero_coefs is None else int(n_nonzero_coefs)
+    tol_opt = None if tol is None else float(tol)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return omp_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            n_nonzero_coefs=n_nonzero_opt,
+            tol=tol_opt,
+            roll_windows=roll_windows,
+            roll_stats=roll_stats,
+            diff_lags=diff_lags,
+            seasonal_lags=seasonal_lags,
+            seasonal_diff_lags=seasonal_diff_lags,
+            fourier_periods=fourier_periods,
+            fourier_orders=fourier_orders,
+        )
+
+    return _f
+
+
+def _factory_passive_aggressive_lag(
+    *,
+    lags: int = 12,
+    c: float = 1.0,
+    epsilon: float = 0.1,
+    max_iter: int = 1000,
+    random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+    **_params: Any,
+) -> ForecasterFn:
+    legacy_c = _params.pop("C", c)
+    lags_int = int(lags)
+    c_value = float(legacy_c)
+    epsilon_f = float(epsilon)
+    max_iter_int = int(max_iter)
+    random_state_int = int(random_state)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return passive_aggressive_lag_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            C=c_value,
+            epsilon=epsilon_f,
+            max_iter=max_iter_int,
+            random_state=random_state_int,
             roll_windows=roll_windows,
             roll_stats=roll_stats,
             diff_lags=diff_lags,

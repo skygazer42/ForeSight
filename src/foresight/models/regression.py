@@ -15,6 +15,7 @@ N_ESTIMATORS_MIN_ERROR = "n_estimators must be >= 1"
 MAX_DEPTH_MIN_ERROR = "max_depth must be >= 1"
 MAX_DEPTH_MIN_OR_NONE_ERROR = "max_depth must be >= 1 or None"
 MAX_ITER_MIN_ERROR = "max_iter must be >= 1"
+N_NONZERO_COEFS_MIN_ERROR = "n_nonzero_coefs must be >= 1"
 ALPHA_NON_NEGATIVE_ERROR = "alpha must be >= 0"
 STEP_SCALE_OPTIONS_ERROR = "step_scale must be one of: one_based, zero_based, unit"
 LEARNING_RATE_POSITIVE_ERROR = "learning_rate must be > 0"
@@ -502,6 +503,63 @@ def _make_lagged_xy_multi(
     return X, Y, t_idx
 
 
+def _direct_multioutput_sklearn_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    estimator: Any,
+    multi_output_regressor_cls: Any,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError(HORIZON_MIN_ERROR)
+
+    target_lags = normalize_lag_steps(lags, allow_zero=False, name="lags")
+    start_t = _compute_feature_start_t(
+        lags=target_lags, seasonal_lags=seasonal_lags, seasonal_diff_lags=seasonal_diff_lags
+    )
+    x_base, Y, t_idx = _make_lagged_xy_multi(
+        x, lags=target_lags, horizon=int(horizon), start_t=start_t
+    )
+    X = _augment_lag_matrix(
+        x_base,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        t_index=t_idx,
+        series=x,
+    )
+    model = multi_output_regressor_cls(estimator)
+    model.fit(X, Y)
+
+    feat_base = _make_target_feat_row(x, lags=target_lags)
+    feat = _augment_lag_feat_row(
+        feat_base,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+        t_next=int(x.size),
+        history=x,
+    )
+    return np.asarray(model.predict(feat)[0], dtype=float)
+
+
 def lr_lag_direct_forecast(
     train: Any,
     horizon: int,
@@ -865,6 +923,248 @@ def elasticnet_lag_direct_forecast(
     )
     yhat = model.predict(feat)[0]
     return np.asarray(yhat, dtype=float)
+
+
+def bayesian_ridge_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon Bayesian ridge regression on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import BayesianRidge  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'bayesian_ridge_lag_direct_forecast requires scikit-learn. '
+            'Install with: pip install -e ".[ml]"'
+        ) from e
+
+    priors = {
+        "alpha_1": float(alpha_1),
+        "alpha_2": float(alpha_2),
+        "lambda_1": float(lambda_1),
+        "lambda_2": float(lambda_2),
+    }
+    for key, value in priors.items():
+        if value <= 0.0:
+            raise ValueError(f"{key} must be > 0")
+
+    estimator = BayesianRidge(
+        alpha_1=priors["alpha_1"],
+        alpha_2=priors["alpha_2"],
+        lambda_1=priors["lambda_1"],
+        lambda_2=priors["lambda_2"],
+        fit_intercept=True,
+    )
+    return _direct_multioutput_sklearn_forecast(
+        train,
+        horizon,
+        lags=lags,
+        estimator=estimator,
+        multi_output_regressor_cls=MultiOutputRegressor,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+    )
+
+
+def ard_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    alpha_1: float = 1e-6,
+    alpha_2: float = 1e-6,
+    lambda_1: float = 1e-6,
+    lambda_2: float = 1e-6,
+    max_iter: int = 300,
+    tol: float = 1e-3,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon ARD regression on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import ARDRegression  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'ard_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    priors = {
+        "alpha_1": float(alpha_1),
+        "alpha_2": float(alpha_2),
+        "lambda_1": float(lambda_1),
+        "lambda_2": float(lambda_2),
+    }
+    for key, value in priors.items():
+        if value <= 0.0:
+            raise ValueError(f"{key} must be > 0")
+    if int(max_iter) <= 0:
+        raise ValueError(MAX_ITER_MIN_ERROR)
+    if float(tol) <= 0.0:
+        raise ValueError("tol must be > 0")
+
+    estimator = ARDRegression(
+        alpha_1=priors["alpha_1"],
+        alpha_2=priors["alpha_2"],
+        lambda_1=priors["lambda_1"],
+        lambda_2=priors["lambda_2"],
+        max_iter=int(max_iter),
+        tol=float(tol),
+        fit_intercept=True,
+    )
+    return _direct_multioutput_sklearn_forecast(
+        train,
+        horizon,
+        lags=lags,
+        estimator=estimator,
+        multi_output_regressor_cls=MultiOutputRegressor,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+    )
+
+
+def omp_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    n_nonzero_coefs: int | None = None,
+    tol: float | None = None,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon Orthogonal Matching Pursuit on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import OrthogonalMatchingPursuit  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            'omp_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
+        ) from e
+
+    if n_nonzero_coefs is not None and int(n_nonzero_coefs) <= 0:
+        raise ValueError(N_NONZERO_COEFS_MIN_ERROR)
+    if tol is not None and float(tol) <= 0.0:
+        raise ValueError("tol must be > 0 or None")
+
+    estimator = OrthogonalMatchingPursuit(
+        n_nonzero_coefs=None if n_nonzero_coefs is None else int(n_nonzero_coefs),
+        tol=None if tol is None else float(tol),
+        fit_intercept=True,
+    )
+    return _direct_multioutput_sklearn_forecast(
+        train,
+        horizon,
+        lags=lags,
+        estimator=estimator,
+        multi_output_regressor_cls=MultiOutputRegressor,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+    )
+
+
+def passive_aggressive_lag_direct_forecast(
+    train: Any,
+    horizon: int,
+    *,
+    lags: Any,
+    C: float = 1.0,
+    epsilon: float = 0.1,
+    max_iter: int = 1000,
+    random_state: int = 0,
+    roll_windows: Any = (),
+    roll_stats: Any = (),
+    diff_lags: Any = (),
+    seasonal_lags: Any = (),
+    seasonal_diff_lags: Any = (),
+    fourier_periods: Any = (),
+    fourier_orders: Any = 2,
+) -> np.ndarray:
+    """
+    Direct multi-horizon Passive Aggressive regression on lag features (requires scikit-learn).
+    """
+    try:
+        from sklearn.linear_model import PassiveAggressiveRegressor  # type: ignore
+        from sklearn.multioutput import MultiOutputRegressor  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            "passive_aggressive_lag_direct_forecast requires scikit-learn. "
+            'Install with: pip install -e ".[ml]"'
+        ) from e
+
+    if float(C) <= 0.0:
+        raise ValueError(SVR_C_ERROR)
+    if float(epsilon) < 0.0:
+        raise ValueError(SVR_EPSILON_ERROR)
+    if int(max_iter) <= 0:
+        raise ValueError(MAX_ITER_MIN_ERROR)
+
+    estimator = PassiveAggressiveRegressor(
+        C=float(C),
+        epsilon=float(epsilon),
+        max_iter=int(max_iter),
+        random_state=int(random_state),
+        loss="epsilon_insensitive",
+    )
+    return _direct_multioutput_sklearn_forecast(
+        train,
+        horizon,
+        lags=lags,
+        estimator=estimator,
+        multi_output_regressor_cls=MultiOutputRegressor,
+        roll_windows=roll_windows,
+        roll_stats=roll_stats,
+        diff_lags=diff_lags,
+        seasonal_lags=seasonal_lags,
+        seasonal_diff_lags=seasonal_diff_lags,
+        fourier_periods=fourier_periods,
+        fourier_orders=fourier_orders,
+    )
 
 
 def knn_lag_direct_forecast(

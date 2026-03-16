@@ -227,6 +227,206 @@ def _register_data_parser(sub: Any) -> None:
     )
     data_prepare_long.set_defaults(_handler=_cmd_data_prepare_long)
 
+    data_align_long = data_sub.add_parser(
+        "align-long", help="Align an existing long-format CSV to a regular frequency"
+    )
+    data_align_long.add_argument("--path", required=True, help="Path to a long-format CSV file")
+    data_align_long.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse ds with pandas.to_datetime before aligning",
+    )
+    data_align_long.add_argument(
+        "--freq",
+        type=str,
+        default="",
+        help="Optional frequency string, e.g. D, W, M",
+    )
+    data_align_long.add_argument(
+        "--agg",
+        type=str,
+        default="last",
+        help="Aggregation for duplicate timestamps / resampling buckets",
+    )
+    data_align_long.add_argument(
+        "--columns",
+        type=str,
+        default="",
+        help="Optional comma-separated numeric columns to align (default: all numeric value columns)",
+    )
+    data_align_long.add_argument(
+        "--strict-freq",
+        action="store_true",
+        help="Reject irregular timestamps when inferring frequency",
+    )
+    data_align_long.add_argument("--output", type=str, default="", help=_OUTPUT_PATH_HELP)
+    data_align_long.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_CSV_FORMAT_HELP,
+    )
+    data_align_long.set_defaults(_handler=_cmd_data_align_long)
+
+    data_clip_outliers = data_sub.add_parser(
+        "clip-outliers", help="Clip per-series outliers in a long-format CSV"
+    )
+    data_clip_outliers.add_argument("--path", required=True, help="Path to a long-format CSV file")
+    data_clip_outliers.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse ds with pandas.to_datetime before clipping",
+    )
+    data_clip_outliers.add_argument(
+        "--method",
+        type=str,
+        default="iqr",
+        help="Clipping method: iqr or zscore",
+    )
+    data_clip_outliers.add_argument(
+        "--columns",
+        type=str,
+        default="y",
+        help="Comma-separated numeric columns to clip (default: y)",
+    )
+    data_clip_outliers.add_argument(
+        "--iqr-k",
+        type=float,
+        default=1.5,
+        help="IQR multiplier for method=iqr",
+    )
+    data_clip_outliers.add_argument(
+        "--zmax",
+        type=float,
+        default=3.0,
+        help="Max z-score for method=zscore",
+    )
+    data_clip_outliers.add_argument("--output", type=str, default="", help=_OUTPUT_PATH_HELP)
+    data_clip_outliers.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_CSV_FORMAT_HELP,
+    )
+    data_clip_outliers.set_defaults(_handler=_cmd_data_clip_outliers)
+
+    data_calendar_features = data_sub.add_parser(
+        "calendar-features", help="Append calendar/time features to a long-format CSV"
+    )
+    data_calendar_features.add_argument(
+        "--path", required=True, help="Path to a long-format CSV file"
+    )
+    data_calendar_features.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse ds with pandas.to_datetime before generating features",
+    )
+    data_calendar_features.add_argument(
+        "--prefix",
+        type=str,
+        default="cal_",
+        help="Prefix for generated feature columns",
+    )
+    data_calendar_features.add_argument("--output", type=str, default="", help=_OUTPUT_PATH_HELP)
+    data_calendar_features.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_CSV_FORMAT_HELP,
+    )
+    data_calendar_features.set_defaults(_handler=_cmd_data_calendar_features)
+
+    data_make_supervised = data_sub.add_parser(
+        "make-supervised", help="Build a supervised training frame from long or wide CSV data"
+    )
+    data_make_supervised.add_argument("--path", required=True, help="Path to a CSV file")
+    data_make_supervised.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse ds/ds_col with pandas.to_datetime before building the frame",
+    )
+    data_make_supervised.add_argument(
+        "--input-format",
+        choices=["auto", "long", "wide"],
+        default="auto",
+        help="Input format hint (default: auto-detect)",
+    )
+    data_make_supervised.add_argument(
+        "--ds-col",
+        type=str,
+        default="ds",
+        help="Timestamp column for wide input",
+    )
+    data_make_supervised.add_argument(
+        "--target-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated target columns for wide input",
+    )
+    data_make_supervised.add_argument("--lags", type=str, default="5", help="Lag window or lag list")
+    data_make_supervised.add_argument("--horizon", type=int, default=1, help="Forecast horizon")
+    data_make_supervised.add_argument(
+        "--x-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated numeric feature columns for long input",
+    )
+    data_make_supervised.add_argument(
+        "--roll-windows",
+        type=str,
+        default="",
+        help="Optional comma-separated rolling windows for lag-derived features",
+    )
+    data_make_supervised.add_argument(
+        "--roll-stats",
+        type=str,
+        default="",
+        help="Optional comma-separated lag-derived stats",
+    )
+    data_make_supervised.add_argument(
+        "--diff-lags",
+        type=str,
+        default="",
+        help="Optional comma-separated diff lag specs",
+    )
+    data_make_supervised.add_argument(
+        "--seasonal-lags",
+        type=str,
+        default="",
+        help="Optional comma-separated seasonal lag periods",
+    )
+    data_make_supervised.add_argument(
+        "--seasonal-diff-lags",
+        type=str,
+        default="",
+        help="Optional comma-separated seasonal diff lag periods",
+    )
+    data_make_supervised.add_argument(
+        "--fourier-periods",
+        type=str,
+        default="",
+        help="Optional comma-separated Fourier periods",
+    )
+    data_make_supervised.add_argument(
+        "--fourier-orders",
+        type=str,
+        default="2",
+        help="Fourier order or comma-separated order list",
+    )
+    data_make_supervised.add_argument(
+        "--add-time-features",
+        action="store_true",
+        help="Append dependency-free time features from ds",
+    )
+    data_make_supervised.add_argument("--output", type=str, default="", help=_OUTPUT_PATH_HELP)
+    data_make_supervised.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_CSV_FORMAT_HELP,
+    )
+    data_make_supervised.set_defaults(_handler=_cmd_data_make_supervised)
+
     data_infer_freq = data_sub.add_parser(
         "infer-freq", help="Infer a regular datetime frequency from timestamps"
     )
@@ -458,6 +658,92 @@ def _cmd_data_prepare_long(args: argparse.Namespace) -> int:
         future_x_missing=future_x_missing,
     )
 
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    return 0
+
+
+def _cmd_data_align_long(args: argparse.Namespace) -> int:
+    from .data.workflows import align_long_df
+    from .io import ensure_datetime, load_csv, parse_cols
+
+    df = load_csv(str(args.path))
+    if bool(args.parse_dates):
+        ensure_datetime(df, "ds")
+
+    freq = str(getattr(args, "freq", "")).strip() or None
+    columns = parse_cols(str(getattr(args, "columns", ""))) or None
+    out = align_long_df(
+        df,
+        freq=freq,
+        agg=str(getattr(args, "agg", "last")),
+        columns=columns,
+        strict_freq=bool(getattr(args, "strict_freq", False)),
+    )
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    return 0
+
+
+def _cmd_data_clip_outliers(args: argparse.Namespace) -> int:
+    from .data.workflows import clip_long_df_outliers
+    from .io import ensure_datetime, load_csv, parse_cols
+
+    df = load_csv(str(args.path))
+    if bool(args.parse_dates):
+        ensure_datetime(df, "ds")
+
+    out = clip_long_df_outliers(
+        df,
+        method=str(getattr(args, "method", "iqr")),
+        columns=parse_cols(str(getattr(args, "columns", "y"))),
+        iqr_k=float(getattr(args, "iqr_k", 1.5)),
+        zmax=float(getattr(args, "zmax", 3.0)),
+    )
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    return 0
+
+
+def _cmd_data_calendar_features(args: argparse.Namespace) -> int:
+    from .data.workflows import enrich_long_df_calendar
+    from .io import ensure_datetime, load_csv
+
+    df = load_csv(str(args.path))
+    if bool(args.parse_dates):
+        ensure_datetime(df, "ds")
+
+    out = enrich_long_df_calendar(df, prefix=str(getattr(args, "prefix", "cal_")))
+    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    return 0
+
+
+def _cmd_data_make_supervised(args: argparse.Namespace) -> int:
+    from .data.workflows import make_supervised_frame
+    from .io import ensure_datetime, load_csv, parse_cols
+
+    df = load_csv(str(args.path))
+    ds_col = str(getattr(args, "ds_col", "ds"))
+    if bool(args.parse_dates):
+        if "ds" in df.columns:
+            ensure_datetime(df, "ds")
+        elif ds_col in df.columns:
+            ensure_datetime(df, ds_col)
+
+    out = make_supervised_frame(
+        df,
+        input_format=str(getattr(args, "input_format", "auto")),
+        ds_col=ds_col,
+        target_cols=parse_cols(str(getattr(args, "target_cols", ""))),
+        lags=str(getattr(args, "lags", "5")),
+        horizon=int(getattr(args, "horizon", 1)),
+        x_cols=parse_cols(str(getattr(args, "x_cols", ""))),
+        roll_windows=str(getattr(args, "roll_windows", "")),
+        roll_stats=str(getattr(args, "roll_stats", "")),
+        diff_lags=str(getattr(args, "diff_lags", "")),
+        seasonal_lags=str(getattr(args, "seasonal_lags", "")),
+        seasonal_diff_lags=str(getattr(args, "seasonal_diff_lags", "")),
+        fourier_periods=str(getattr(args, "fourier_periods", "")),
+        fourier_orders=str(getattr(args, "fourier_orders", "2")),
+        add_time_features=bool(getattr(args, "add_time_features", False)),
+    )
     _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
     return 0
 
