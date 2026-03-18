@@ -1721,6 +1721,18 @@ def test_model_spec_capabilities_reflect_model_family_support():
     deepar_global = get_model_spec("torch-deepar-global")
     assert deepar_global.capabilities["supports_static_cols"] is True
 
+    patchtst_global = get_model_spec("torch-patchtst-global")
+    assert patchtst_global.capabilities["supports_static_cols"] is True
+
+    retnet_global = get_model_spec("torch-retnet-global")
+    assert retnet_global.capabilities["supports_static_cols"] is True
+
+    timesnet_global = get_model_spec("torch-timesnet-global")
+    assert timesnet_global.capabilities["supports_static_cols"] is True
+
+    seq2seq_global = get_model_spec("torch-seq2seq-lstm-global")
+    assert seq2seq_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]

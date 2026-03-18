@@ -4678,6 +4678,7 @@ def _predict_torch_retnet_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -4750,6 +4751,7 @@ def _predict_torch_retnet_global(
     F = torch.nn.functional
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -4770,6 +4772,7 @@ def _predict_torch_retnet_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -4963,6 +4966,7 @@ def torch_retnet_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -5041,6 +5045,7 @@ def torch_retnet_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -5119,6 +5124,7 @@ def _predict_torch_patchtst_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -5201,6 +5207,7 @@ def _predict_torch_patchtst_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -5221,6 +5228,7 @@ def _predict_torch_patchtst_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -5410,6 +5418,7 @@ def torch_patchtst_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -5492,6 +5501,7 @@ def torch_patchtst_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -7398,6 +7408,7 @@ def _predict_torch_timesnet_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -7476,6 +7487,7 @@ def _predict_torch_timesnet_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -7496,6 +7508,7 @@ def _predict_torch_timesnet_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -7732,6 +7745,7 @@ def torch_timesnet_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -7811,6 +7825,7 @@ def torch_timesnet_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -17804,6 +17819,7 @@ def _predict_torch_seq2seq_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -17886,6 +17902,7 @@ def _predict_torch_seq2seq_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
     q_point = _pick_point_quantile(qs)
@@ -17908,6 +17925,7 @@ def _predict_torch_seq2seq_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -18631,6 +18649,7 @@ def torch_seq2seq_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -18713,6 +18732,7 @@ def torch_seq2seq_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
