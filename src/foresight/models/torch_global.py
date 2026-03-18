@@ -117,6 +117,10 @@ def _normalize_x_cols(x_cols: Any) -> tuple[str, ...]:
     return (s,) if s else ()
 
 
+def _normalize_static_cols(static_cols: Any) -> tuple[str, ...]:
+    return _normalize_x_cols(static_cols)
+
+
 def _normalize_quantiles(quantiles: Any) -> tuple[float, ...]:
     """
     Parse quantiles like "0.1,0.5,0.9" / (0.1, 0.5, 0.9) into a sorted tuple.
@@ -861,6 +865,7 @@ def _build_panel_dataset(
     horizon: int,
     context_length: int,
     x_cols: tuple[str, ...],
+    static_cols: tuple[str, ...],
     normalize: bool,
     max_train_size: int | None,
     sample_step: int,
@@ -892,9 +897,13 @@ def _build_panel_dataset(
         raise KeyError(f"long_df missing required columns: {sorted(missing)}")
 
     x_cols = _normalize_x_cols(x_cols)
+    static_cols = _normalize_static_cols(static_cols)
     for c in x_cols:
         if c not in df.columns:
             raise KeyError(f"x_cols column not found: {c!r}")
+    for c in static_cols:
+        if c not in df.columns:
+            raise KeyError(f"static_cols column not found: {c!r}")
 
     h = int(horizon)
     ctx = int(context_length)
@@ -913,6 +922,7 @@ def _build_panel_dataset(
     n_total_series = int(len(uid_to_idx))
 
     x_dim = int(len(x_cols))
+    static_dim = int(len(static_cols))
 
     x_chunks: list[np.ndarray] = []
     ids_chunks: list[np.ndarray] = []
@@ -958,13 +968,41 @@ def _build_panel_dataset(
         else:
             x_full = np.empty((int(y_arr.size), 0), dtype=float)
 
+        if static_dim > 0:
+            static_values: list[float] = []
+            for c in static_cols:
+                observed = pd.Series(g[c]).dropna()
+                if observed.empty:
+                    raise ValueError(
+                        f"static_cols column {c!r} has no observed value for unique_id={uid_s!r}"
+                    )
+                unique_values = pd.unique(observed.to_numpy(copy=False))
+                if len(unique_values) != 1:
+                    raise ValueError(
+                        f"static_cols column {c!r} must be constant within unique_id={uid_s!r}"
+                    )
+                try:
+                    value = float(unique_values[0])
+                except (TypeError, ValueError) as e:
+                    raise ValueError(
+                        f"static_cols column {c!r} for unique_id={uid_s!r} must be numeric"
+                    ) from e
+                if not math.isfinite(value):
+                    raise ValueError(
+                        f"static_cols column {c!r} for unique_id={uid_s!r} must be finite"
+                    )
+                static_values.append(value)
+            static_vec = np.asarray(static_values, dtype=float)
+        else:
+            static_vec = np.empty((0,), dtype=float)
+
         if add_time_features:
             time_full, _names = build_time_features(ds_arr)
         else:
             time_full = np.empty((int(y_arr.size), 0), dtype=float)
 
         time_dim = int(time_full.shape[1])
-        input_dim = 1 + x_dim + time_dim
+        input_dim = 1 + x_dim + static_dim + time_dim
         seq_len = ctx + h
 
         # Training windows within the sliced train segment.
@@ -996,9 +1034,13 @@ def _build_panel_dataset(
             y_feat = np.concatenate([y_past, y_future], axis=0).reshape(seq_len, 1)
 
             x_feat = np.concatenate([x_train_seg[past], x_train_seg[fut]], axis=0)
+            if static_dim > 0:
+                static_feat = np.broadcast_to(static_vec.reshape(1, static_dim), (seq_len, static_dim))
+            else:
+                static_feat = np.empty((seq_len, 0), dtype=float)
             time_feat = np.concatenate([time_train_seg[past], time_train_seg[fut]], axis=0)
 
-            x_series[j] = np.concatenate([y_feat, x_feat, time_feat], axis=1)
+            x_series[j] = np.concatenate([y_feat, x_feat, static_feat, time_feat], axis=1)
             y_series[j] = y_scaled_train[fut]
             ids_series[j] = int(uid_to_idx[uid_s])
 
@@ -1021,12 +1063,19 @@ def _build_panel_dataset(
         x_ctx = x_full[train_end - ctx : train_end]
         x_fut = x_full[train_end : train_end + h]
         x_feat_pred = np.concatenate([x_ctx, x_fut], axis=0)
+        if static_dim > 0:
+            static_feat_pred = np.broadcast_to(
+                static_vec.reshape(1, static_dim),
+                (seq_len, static_dim),
+            )
+        else:
+            static_feat_pred = np.empty((seq_len, 0), dtype=float)
 
         time_ctx = time_full[train_end - ctx : train_end]
         time_fut = time_full[train_end : train_end + h]
         time_feat_pred = np.concatenate([time_ctx, time_fut], axis=0)
 
-        x_pred = np.concatenate([y_feat_pred, x_feat_pred, time_feat_pred], axis=1)
+        x_pred = np.concatenate([y_feat_pred, x_feat_pred, static_feat_pred, time_feat_pred], axis=1)
         pred_x.append(x_pred.astype(float, copy=False))
         pred_ids.append(int(uid_to_idx[uid_s]))
         pred_uids.append(uid_s)
@@ -1070,6 +1119,7 @@ def _predict_torch_global(
     model_name: str,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -1145,6 +1195,7 @@ def _predict_torch_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -1165,6 +1216,7 @@ def _predict_torch_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -1409,6 +1461,7 @@ def torch_tft_global_forecaster(
     *,
     context_length: int = 48,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -1489,6 +1542,7 @@ def torch_tft_global_forecaster(
             model_name="tft",
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -1566,6 +1620,7 @@ def torch_informer_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -1647,6 +1702,7 @@ def torch_informer_global_forecaster(
             model_name="informer",
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -2137,6 +2193,7 @@ def torch_autoformer_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -2219,6 +2276,7 @@ def torch_autoformer_global_forecaster(
             model_name="autoformer",
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,

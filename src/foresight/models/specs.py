@@ -28,6 +28,7 @@ class ModelSpec:
     @property
     def capabilities(self) -> dict[str, Any]:
         supports_x_cols = "x_cols" in self.param_help
+        supports_static_cols = "static_cols" in self.param_help
         supports_quantiles = "quantiles" in self.param_help
         supports_interval_forecast = str(self.interface) == "local" or supports_quantiles
         supports_interval_forecast_with_x_cols = supports_x_cols and supports_quantiles
@@ -38,6 +39,7 @@ class ModelSpec:
 
         capabilities = {
             "supports_x_cols": supports_x_cols,
+            "supports_static_cols": supports_static_cols,
             "supports_quantiles": supports_quantiles,
             "supports_interval_forecast": supports_interval_forecast,
             "supports_interval_forecast_with_x_cols": supports_interval_forecast_with_x_cols,

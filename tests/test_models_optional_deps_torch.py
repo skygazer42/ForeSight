@@ -1024,3 +1024,79 @@ def test_torch_global_models_smoke_when_installed():
         assert set(pred.columns) >= {"unique_id", "ds", "yhat"}
         assert len(pred) > 0
         assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))
+
+
+def test_torch_global_models_support_static_covariates_when_installed():
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("torch not installed; smoke test requires it")
+
+    import pandas as pd
+
+    rng = np.random.default_rng(1)
+    ds = pd.date_range("2020-01-01", periods=80, freq="D")
+    cutoff = ds[-6]
+    horizon = 5
+
+    rows = []
+    for uid, amp, store_size in [("s0", 1.0, 10.0), ("s1", 1.5, 20.0), ("s2", 0.8, 30.0)]:
+        base = amp * np.sin(np.arange(ds.size, dtype=float) / 6.0) + 0.01 * np.arange(ds.size)
+        y = base + 0.05 * rng.standard_normal(ds.size)
+        promo = (rng.random(ds.size) < 0.1).astype(float)
+        for t, yv, pv in zip(ds, y, promo, strict=True):
+            is_future = t > cutoff
+            rows.append(
+                {
+                    "unique_id": uid,
+                    "ds": t,
+                    "y": np.nan if is_future else float(yv),
+                    "promo": float(pv),
+                    "store_size": np.nan if is_future else store_size,
+                }
+            )
+    long_df = pd.DataFrame(rows)
+
+    cases = [
+        (
+            "torch-tft-global",
+            {"context_length": 32, "epochs": 2, "batch_size": 32, "x_cols": ("promo",)},
+        ),
+        (
+            "torch-informer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "nhead": 4,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-autoformer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "nhead": 4,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+                "ma_window": 7,
+            },
+        ),
+    ]
+
+    for key, params in cases:
+        g = make_global_forecaster(
+            key,
+            **params,
+            static_cols=("store_size",),
+            seed=0,
+            patience=2,
+            device="cpu",
+        )
+        pred = g(long_df, cutoff, horizon)
+        assert set(pred.columns) >= {"unique_id", "ds", "yhat"}
+        assert len(pred) > 0
+        assert np.all(np.isfinite(pred["yhat"].to_numpy(dtype=float)))

@@ -1647,6 +1647,7 @@ def test_model_spec_exposes_normalized_capabilities():
 
     assert isinstance(spec.capabilities, dict)
     assert spec.capabilities["supports_x_cols"] is False
+    assert spec.capabilities["supports_static_cols"] is False
     assert spec.capabilities["supports_quantiles"] is False
     assert spec.capabilities["supports_interval_forecast"] is True
     assert spec.capabilities["supports_interval_forecast_with_x_cols"] is False
@@ -1670,16 +1671,19 @@ def test_model_spec_capability_overrides_can_require_future_covariates() -> None
 def test_model_spec_capabilities_reflect_model_family_support():
     sarimax = get_model_spec("sarimax")
     assert sarimax.capabilities["supports_x_cols"] is True
+    assert sarimax.capabilities["supports_static_cols"] is False
     assert sarimax.capabilities["supports_interval_forecast"] is True
     assert sarimax.capabilities["supports_interval_forecast_with_x_cols"] is True
 
     auto_arima = get_model_spec("auto-arima")
     assert auto_arima.capabilities["supports_x_cols"] is True
+    assert auto_arima.capabilities["supports_static_cols"] is False
     assert auto_arima.capabilities["supports_interval_forecast"] is True
     assert auto_arima.capabilities["supports_interval_forecast_with_x_cols"] is True
 
     global_xgb = get_model_spec("xgb-step-lag-global")
     assert global_xgb.capabilities["supports_x_cols"] is True
+    assert global_xgb.capabilities["supports_static_cols"] is False
     assert global_xgb.capabilities["supports_quantiles"] is True
     assert global_xgb.capabilities["supports_interval_forecast"] is True
     assert global_xgb.capabilities["supports_interval_forecast_with_x_cols"] is True
@@ -1691,11 +1695,22 @@ def test_model_spec_capabilities_reflect_model_family_support():
 
     timexer_local = get_model_spec("torch-timexer-direct")
     assert timexer_local.capabilities["supports_x_cols"] is True
+    assert timexer_local.capabilities["supports_static_cols"] is False
     assert timexer_local.capabilities["requires_future_covariates"] is True
 
     timexer_global = get_model_spec("torch-timexer-global")
     assert timexer_global.capabilities["supports_x_cols"] is True
+    assert timexer_global.capabilities["supports_static_cols"] is False
     assert timexer_global.capabilities["requires_future_covariates"] is True
+
+    tft_global = get_model_spec("torch-tft-global")
+    assert tft_global.capabilities["supports_static_cols"] is True
+
+    informer_global = get_model_spec("torch-informer-global")
+    assert informer_global.capabilities["supports_static_cols"] is True
+
+    autoformer_global = get_model_spec("torch-autoformer-global")
+    assert autoformer_global.capabilities["supports_static_cols"] is True
 
 
 def test_readme_documents_all_model_capability_flags() -> None:
@@ -1711,6 +1726,7 @@ def test_readme_documents_all_model_capability_flags() -> None:
         "supports_interval_forecast",
         "supports_interval_forecast_with_x_cols",
         "supports_quantiles",
+        "supports_static_cols",
         "supports_x_cols",
     ]
     for key in documented:

@@ -722,6 +722,7 @@ Model discovery surfaces machine-readable capability flags:
 | Flag | Meaning |
 |------|---------|
 | `supports_x_cols` | Accepts future covariates / exogenous regressors |
+| `supports_static_cols` | Accepts series-level static covariates from `long_df` |
 | `supports_quantiles` | Emits quantile forecast columns directly |
 | `supports_interval_forecast` | Supports forecast intervals |
 | `supports_interval_forecast_with_x_cols` | Supports forecast intervals when future covariates are provided |

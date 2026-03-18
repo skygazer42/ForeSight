@@ -4449,6 +4449,9 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
     OPTIONAL_X_COLS_PARAM_HELP = (
         "Optional covariate columns from long_df (comma-separated)"
     )
+    OPTIONAL_STATIC_COLS_PARAM_HELP = (
+        "Optional static covariate columns from long_df (series-constant, numeric)"
+    )
     ADD_TIME_FEATURES_PARAM_HELP = "Add built-in time features from ds (true/false)"
     SAMPLE_STEP_PARAM_HELP = "Stride when generating training windows (>=1)"
     ATTENTION_HEADS_PARAM_HELP = "Attention heads"
@@ -9245,4 +9248,26 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
     catalog.update(_make_wave93_global_seq2seq_attn_lstm_strategy_presets(context, catalog))
     catalog.update(_make_wave94_global_seq2seq_lstm_strategy_presets(context, catalog))
     catalog.update(_make_wave95_global_seq2seq_gru_strategy_presets(context, catalog))
+    static_covariate_factories = {
+        torch_tft_global_forecaster,
+        torch_informer_global_forecaster,
+        torch_autoformer_global_forecaster,
+    }
+    for key, spec in list(catalog.items()):
+        if spec.factory not in static_covariate_factories:
+            continue
+        default_params = dict(spec.default_params)
+        param_help = dict(spec.param_help)
+        default_params.setdefault("static_cols", ())
+        param_help.setdefault("static_cols", OPTIONAL_STATIC_COLS_PARAM_HELP)
+        catalog[key] = model_spec(
+            key=spec.key,
+            description=spec.description,
+            factory=spec.factory,
+            default_params=default_params,
+            param_help=param_help,
+            requires=tuple(spec.requires),
+            interface=str(spec.interface),
+            capability_overrides=dict(spec.capability_overrides),
+        )
     return catalog
