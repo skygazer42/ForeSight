@@ -22,6 +22,34 @@ def resolve_covariate_roles(
     return spec.historic_x_cols, spec.future_x_cols, spec.all_x_cols
 
 
+def _build_static_covariate_lookup(
+    df: pd.DataFrame,
+    *,
+    static_cols: tuple[str, ...],
+) -> dict[str, pd.Series]:
+    lookup: dict[str, pd.Series] = {}
+    if not static_cols:
+        return lookup
+
+    for col in static_cols:
+        values: dict[str, Any] = {}
+        for uid, group in df.groupby("unique_id", sort=False):
+            observed = pd.Series(group[col]).dropna()
+            if observed.empty:
+                raise ValueError(
+                    f"static_cols column {col!r} has no observed value for unique_id={uid!r}"
+                )
+            unique_values = pd.unique(observed.to_numpy(copy=False))
+            if len(unique_values) != 1:
+                raise ValueError(
+                    f"static_cols column {col!r} must be constant within unique_id={uid!r}"
+                )
+            values[str(uid)] = unique_values[0]
+        lookup[col] = pd.Series(values)
+
+    return lookup
+
+
 def _build_unique_id(df: pd.DataFrame, *, id_cols: tuple[str, ...]) -> pd.Series:
     if not id_cols:
         return pd.Series(["series=0"] * len(df), index=df.index, dtype="string")
@@ -110,6 +138,7 @@ def to_long(
     x_cols: Iterable[str] = (),
     historic_x_cols: Iterable[str] = (),
     future_x_cols: Iterable[str] = (),
+    static_cols: Iterable[str] = (),
     dropna: bool = True,
     freq: str | None = None,
     y_missing: str = "error",
@@ -133,25 +162,35 @@ def to_long(
     )
 
     id_cols_tup = tuple(id_cols)
-    historic_x_cols_tup, future_x_cols_tup, all_x_cols_tup = resolve_covariate_roles(
+    covariates = _contracts_resolve_covariate_roles(
         x_cols=x_cols,
         historic_x_cols=historic_x_cols,
         future_x_cols=future_x_cols,
+        static_cols=static_cols,
     )
+    historic_x_cols_tup = covariates.historic_x_cols
+    future_x_cols_tup = covariates.future_x_cols
+    static_cols_tup = covariates.static_cols
+    all_x_cols_tup = covariates.all_x_cols
+    overlap_static = tuple(col for col in static_cols_tup if col in all_x_cols_tup)
+    if overlap_static:
+        raise ValueError(f"static_cols cannot overlap x_cols roles: {list(overlap_static)}")
     out = pd.DataFrame(index=df.index)
     out["unique_id"] = _build_unique_id(df, id_cols=id_cols_tup)
     out["ds"] = df[time_col]
     out["y"] = df[y_col]
 
-    for col in all_x_cols_tup:
+    for col in (*all_x_cols_tup, *static_cols_tup):
         if col in {"unique_id", "ds", "y"}:
-            raise ValueError(f"x_cols cannot include reserved column name: {col!r}")
+            raise ValueError(f"covariates cannot include reserved column name: {col!r}")
         if col not in df.columns:
             raise KeyError(f"x col not found: {col!r}")
         out[col] = df[col]
 
     out.attrs["historic_x_cols"] = historic_x_cols_tup
     out.attrs["future_x_cols"] = future_x_cols_tup
+    out.attrs["static_cols"] = static_cols_tup
+    static_lookup = _build_static_covariate_lookup(out, static_cols=static_cols_tup)
     if dropna:
         out = out.dropna(subset=["ds", "y", *all_x_cols_tup])
 
@@ -159,7 +198,7 @@ def to_long(
         from .prep import prepare_long_df
 
         out = prepare_long_df(
-            out,
+            out.drop(columns=list(static_cols_tup), errors="ignore"),
             freq=freq,
             strict_freq=bool(strict_freq),
             y_missing=str(y_missing),
@@ -169,6 +208,9 @@ def to_long(
             historic_x_missing=historic_x_missing,
             future_x_missing=future_x_missing,
         )
+        for col, value_map in static_lookup.items():
+            out[col] = out["unique_id"].map(value_map)
+        out.attrs["static_cols"] = static_cols_tup
 
     return out.reset_index(drop=True)
 

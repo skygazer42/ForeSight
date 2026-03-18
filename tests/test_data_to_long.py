@@ -57,6 +57,28 @@ def test_to_long_supports_historic_and_future_covariate_roles():
     assert out.attrs["future_x_cols"] == ("promo_futr",)
 
 
+def test_to_long_preserves_static_covariates_and_attrs():
+    df = pd.DataFrame(
+        {
+            "store": [1, 1, 1],
+            "week": pd.to_datetime(["2020-01-01", "2020-01-08", "2020-01-15"]),
+            "sales": [10.0, 11.0, 12.0],
+            "store_size": [100.0, 100.0, 100.0],
+        }
+    )
+    out = to_long(
+        df,
+        time_col="week",
+        y_col="sales",
+        id_cols=("store",),
+        static_cols=("store_size",),
+    )
+
+    assert list(out.columns) == ["unique_id", "ds", "y", "store_size"]
+    assert out["store_size"].tolist() == [100.0, 100.0, 100.0]
+    assert out.attrs["static_cols"] == ("store_size",)
+
+
 def test_to_long_x_cols_alias_merges_into_future_covariates():
     df = pd.DataFrame(
         {
@@ -77,6 +99,34 @@ def test_to_long_x_cols_alias_merges_into_future_covariates():
     )
     assert out.attrs["historic_x_cols"] == ()
     assert out.attrs["future_x_cols"] == ("future_temp", "promo")
+
+
+def test_to_long_can_prepare_regularized_output_with_static_covariates():
+    df = pd.DataFrame(
+        {
+            "store": [1, 1],
+            "week": pd.to_datetime(["2020-01-01", "2020-01-03"]),
+            "sales": [10.0, 12.0],
+            "promo": [1.0, 1.0],
+            "store_size": [100.0, 100.0],
+        }
+    )
+    out = to_long(
+        df,
+        time_col="week",
+        y_col="sales",
+        id_cols=("store",),
+        x_cols=("promo",),
+        static_cols=("store_size",),
+        prepare=True,
+        freq="D",
+        y_missing="zero",
+        x_missing="ffill",
+    )
+
+    assert out["ds"].tolist() == list(pd.date_range("2020-01-01", periods=3, freq="D"))
+    assert out["store_size"].tolist() == [100.0, 100.0, 100.0]
+    assert out.attrs["static_cols"] == ("store_size",)
 
 
 def test_to_long_can_prepare_regularized_output_when_requested():

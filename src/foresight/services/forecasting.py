@@ -25,6 +25,9 @@ from ..contracts.params import (
     normalize_model_params as _contracts_normalize_model_params,
 )
 from ..contracts.params import (
+    normalize_static_cols as _contracts_normalize_static_cols,
+)
+from ..contracts.params import (
     normalize_x_cols as _contracts_normalize_x_cols,
 )
 from ..contracts.params import (
@@ -64,6 +67,10 @@ def _normalize_model_params(model_params: dict[str, Any] | None) -> dict[str, An
 
 def _normalize_x_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
     return _contracts_normalize_x_cols(model_params)
+
+
+def _normalize_static_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
+    return _contracts_normalize_static_cols(model_params)
 
 
 def _normalize_covariate_roles(
@@ -739,12 +746,19 @@ def forecast_model_long_df(
     interface = str(model_spec.interface).lower().strip()
     capabilities = dict(model_spec.capabilities)
     levels = _parse_interval_levels(interval_levels)
+    static_cols = _normalize_static_cols(params)
 
     if interface == "local":
         df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
         historic_x_cols, x_cols = _normalize_covariate_roles(params)
         if historic_x_cols:
             raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
+        if static_cols:
+            if not bool(capabilities.get("supports_static_cols", False)):
+                raise ValueError(
+                    f"Model {model_name!r} does not support static_cols in forecast_model_long_df"
+                )
+            raise ValueError("static_cols are not yet supported for local models in forecast_model_long_df")
         _require_x_cols_if_needed(
             model=model_name,
             capabilities=capabilities,
@@ -778,6 +792,8 @@ def forecast_model_long_df(
         historic_x_cols, x_cols = _normalize_covariate_roles(params)
         if historic_x_cols:
             raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
+        if static_cols and not bool(capabilities.get("supports_static_cols", False)):
+            raise ValueError(f"Model {model_name!r} does not support static_cols in forecast_model_long_df")
         _require_x_cols_if_needed(
             model=model_name,
             capabilities=capabilities,

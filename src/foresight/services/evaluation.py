@@ -14,6 +14,9 @@ from ..contracts.params import (
     normalize_covariate_roles as _contracts_normalize_covariate_roles,
 )
 from ..contracts.params import (
+    normalize_static_cols as _contracts_normalize_static_cols,
+)
+from ..contracts.params import (
     normalize_x_cols as _contracts_normalize_x_cols,
 )
 from ..data.format import to_long
@@ -54,6 +57,10 @@ def _parse_levels(levels: Any) -> tuple[float, ...]:
 
 def _normalize_x_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
     return _contracts_normalize_x_cols(model_params or {})
+
+
+def _normalize_static_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
+    return _contracts_normalize_static_cols(model_params or {})
 
 
 def _normalize_covariate_roles(
@@ -477,6 +484,7 @@ def _validated_eval_long_df_request(
     params = dict(model_params or {})
     capabilities = dict(model_spec.capabilities)
     historic_x_cols, x_cols = _normalize_covariate_roles(params)
+    static_cols = _normalize_static_cols(params)
 
     _require_x_cols_if_needed(
         model=str(model),
@@ -486,6 +494,11 @@ def _validated_eval_long_df_request(
     )
     if historic_x_cols:
         raise ValueError("historic_x_cols are not yet supported in eval_model_long_df")
+    if static_cols:
+        if not bool(capabilities.get("supports_static_cols", False)):
+            raise ValueError(f"Model {model!r} does not support static_cols in eval_model_long_df")
+        if interface != "global":
+            raise ValueError("static_cols are not yet supported for local models in eval_model_long_df")
     if interface == "multivariate":
         raise ValueError(
             f"Model {model!r} is multivariate and cannot be evaluated with `eval_model_long_df()`. "

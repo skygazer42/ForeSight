@@ -12,6 +12,7 @@ from .frames import (
 from .params import (
     normalize_covariate_roles,
     normalize_model_params,
+    normalize_static_cols,
     normalize_x_cols,
     parse_interval_levels,
     parse_quantiles,
@@ -23,6 +24,7 @@ __all__ = [
     "merge_history_and_future_df",
     "normalize_covariate_roles",
     "normalize_model_params",
+    "normalize_static_cols",
     "normalize_x_cols",
     "parse_interval_levels",
     "parse_quantiles",

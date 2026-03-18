@@ -9,12 +9,13 @@ from foresight.contracts.covariates import (
 
 def test_resolve_model_param_covariates_merges_legacy_x_cols() -> None:
     spec = resolve_model_param_covariates(
-        {"x_cols": "promo,price", "historic_x_cols": ("stock",)}
+        {"x_cols": "promo,price", "historic_x_cols": ("stock",), "static_cols": ("store_size",)}
     )
 
     assert isinstance(spec, CovariateSpec)
     assert spec.historic_x_cols == ("stock",)
     assert spec.future_x_cols == ("promo", "price")
+    assert spec.static_cols == ("store_size",)
     assert spec.all_x_cols == ("stock", "promo", "price")
 
 
@@ -23,9 +24,11 @@ def test_resolve_covariate_roles_deduplicates_merged_future_columns() -> None:
         x_cols=("promo", "price"),
         historic_x_cols=("stock", "promo"),
         future_x_cols=("price", "temp"),
+        static_cols=("store_size", "region_code"),
     )
 
     assert isinstance(spec, CovariateSpec)
     assert spec.historic_x_cols == ("stock", "promo")
     assert spec.future_x_cols == ("price", "temp", "promo")
+    assert spec.static_cols == ("store_size", "region_code")
     assert spec.all_x_cols == ("stock", "promo", "price", "temp")

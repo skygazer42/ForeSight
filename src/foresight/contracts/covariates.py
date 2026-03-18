@@ -35,10 +35,15 @@ def _merge_unique_columns(*groups: tuple[str, ...]) -> tuple[str, ...]:
 class CovariateSpec:
     historic_x_cols: tuple[str, ...] = ()
     future_x_cols: tuple[str, ...] = ()
+    static_cols: tuple[str, ...] = ()
 
     @property
     def all_x_cols(self) -> tuple[str, ...]:
         return _merge_unique_columns(self.historic_x_cols, self.future_x_cols)
+
+    @property
+    def all_covariate_cols(self) -> tuple[str, ...]:
+        return _merge_unique_columns(self.historic_x_cols, self.future_x_cols, self.static_cols)
 
 
 def resolve_covariate_roles(
@@ -46,6 +51,7 @@ def resolve_covariate_roles(
     x_cols: Iterable[str] | str | None = (),
     historic_x_cols: Iterable[str] | str | None = (),
     future_x_cols: Iterable[str] | str | None = (),
+    static_cols: Iterable[str] | str | None = (),
 ) -> CovariateSpec:
     """
     Normalize covariate-role arguments.
@@ -57,7 +63,12 @@ def resolve_covariate_roles(
         _normalize_name_list(future_x_cols),
         _normalize_name_list(x_cols),
     )
-    return CovariateSpec(historic_x_cols=historic, future_x_cols=future)
+    static = _normalize_name_list(static_cols)
+    return CovariateSpec(
+        historic_x_cols=historic,
+        future_x_cols=future,
+        static_cols=static,
+    )
 
 
 def resolve_model_param_covariates(model_params: dict[str, Any] | None) -> CovariateSpec:
@@ -66,4 +77,5 @@ def resolve_model_param_covariates(model_params: dict[str, Any] | None) -> Covar
         x_cols=params.get("x_cols"),
         historic_x_cols=params.get("historic_x_cols"),
         future_x_cols=params.get("future_x_cols"),
+        static_cols=params.get("static_cols"),
     )

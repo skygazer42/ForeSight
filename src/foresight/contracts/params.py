@@ -20,6 +20,12 @@ def normalize_x_cols(raw: Any) -> tuple[str, ...]:
     return _resolve_covariate_roles(x_cols=raw).future_x_cols
 
 
+def normalize_static_cols(raw: Any) -> tuple[str, ...]:
+    if isinstance(raw, dict):
+        return _resolve_model_param_covariates(raw).static_cols
+    return _resolve_covariate_roles(static_cols=raw).static_cols
+
+
 def normalize_covariate_roles(
     model_params: dict[str, Any] | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
