@@ -45,3 +45,33 @@ def test_graph_structure_models_smoke_when_torch_installed(key: str) -> None:
 
     assert yhat.shape == (3, 4)
     assert np.all(np.isfinite(yhat))
+
+
+def test_graph_structure_models_forward_horizon_loss_decay_validation() -> None:
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("torch not installed; smoke test requires it")
+
+    t = np.arange(96.0)
+    train = np.stack(
+        [
+            np.sin(t / 6.0) + 0.01 * t,
+            np.cos(t / 7.0) + 0.02 * t,
+            np.sin(t / 8.0 + 0.4) + 0.015 * t,
+            np.cos(t / 9.0 + 0.1) + 0.012 * t,
+        ],
+        axis=1,
+    )
+
+    forecaster = make_multivariate_forecaster(
+        "torch-agcrn-multivariate",
+        lags=24,
+        d_model=16,
+        epochs=2,
+        batch_size=16,
+        seed=0,
+        device="cpu",
+        horizon_loss_decay=0.0,
+    )
+
+    with pytest.raises(ValueError, match="horizon_loss_decay must be > 0"):
+        forecaster(train, 3)

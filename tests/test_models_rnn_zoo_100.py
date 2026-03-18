@@ -1,4 +1,5 @@
 import importlib.util
+import re
 
 import numpy as np
 import pytest
@@ -83,3 +84,46 @@ def test_rnnzoo_models_smoke_when_torch_installed(key: str):
     yhat = f(y, 5)
     assert yhat.shape == (5,)
     assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "torch-rnnzoo-elman-direct",
+        "torch-rnnzoo-peephole-lstm-ln-direct",
+        "torch-rnnzoo-indrnn-attn-direct",
+        "torch-rnnzoo-qrnn-proj-direct",
+        "torch-rnnzoo-phased-lstm-bidir-direct",
+    ],
+)
+@pytest.mark.parametrize(
+    ("param_name", "param_value", "message"),
+    (
+        ("horizon_loss_decay", 0.0, "horizon_loss_decay must be > 0"),
+        ("sam_rho", -0.1, "sam_rho must be >= 0"),
+    ),
+)
+def test_rnnzoo_models_forward_shared_training_validation(
+    key: str,
+    param_name: str,
+    param_value: float,
+    message: str,
+):
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("torch not installed; smoke test requires it")
+
+    y = np.sin(np.arange(80, dtype=float) / 4.0) + 0.03 * np.arange(80, dtype=float)
+    f = make_forecaster(
+        key,
+        lags=16,
+        hidden_size=8,
+        epochs=2,
+        batch_size=16,
+        patience=1,
+        seed=0,
+        device="cpu",
+        **{param_name: param_value},
+    )
+
+    with pytest.raises(ValueError, match=re.escape(message)):
+        f(y, 5)

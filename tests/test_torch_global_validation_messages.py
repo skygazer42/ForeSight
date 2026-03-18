@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from foresight.models import torch_global
 from foresight.models.registry import make_global_forecaster
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
@@ -276,6 +277,288 @@ BASE_PARAMS = {
 }
 
 GLOBAL_VALIDATION_CASES = [
+    (
+        "timexer min epochs",
+        "torch-timexer-global",
+        {"min_epochs": 0},
+        "min_epochs must be >= 1",
+    ),
+    (
+        "timexer min epochs > epochs",
+        "torch-timexer-global",
+        {"epochs": 1, "min_epochs": 2},
+        "min_epochs must be <= epochs",
+    ),
+    (
+        "timexer warmup epochs",
+        "torch-timexer-global",
+        {"warmup_epochs": -1},
+        "warmup_epochs must be >= 0",
+    ),
+    (
+        "timexer warmup epochs > epochs",
+        "torch-timexer-global",
+        {"epochs": 1, "warmup_epochs": 2},
+        "warmup_epochs must be <= epochs",
+    ),
+    (
+        "timexer min lr",
+        "torch-timexer-global",
+        {"min_lr": -0.1},
+        "min_lr must be >= 0",
+    ),
+    (
+        "timexer amp dtype invalid",
+        "torch-timexer-global",
+        {"amp_dtype": "fp8"},
+        "amp_dtype must be one of: auto, float16, bfloat16",
+    ),
+    (
+        "timexer scheduler invalid",
+        "torch-timexer-global",
+        {"scheduler": "triangle"},
+        "scheduler must be one of: none, cosine, step, plateau, onecycle, cosine_restarts",
+    ),
+    (
+        "timexer restart period",
+        "torch-timexer-global",
+        {"scheduler": "cosine_restarts", "scheduler_restart_period": 0},
+        "scheduler_restart_period must be >= 1",
+    ),
+    (
+        "timexer restart mult",
+        "torch-timexer-global",
+        {"scheduler": "cosine_restarts", "scheduler_restart_mult": 0},
+        "scheduler_restart_mult must be >= 1",
+    ),
+    (
+        "timexer pct start",
+        "torch-timexer-global",
+        {"scheduler": "onecycle", "scheduler_pct_start": 1.0},
+        "scheduler_pct_start must be in (0, 1)",
+    ),
+    (
+        "timexer grad accum",
+        "torch-timexer-global",
+        {"grad_accum_steps": 0},
+        "grad_accum_steps must be >= 1",
+    ),
+    (
+        "timexer monitor invalid",
+        "torch-timexer-global",
+        {"monitor": "score"},
+        "monitor must be one of: auto, train_loss, val_loss",
+    ),
+    (
+        "timexer monitor val without split",
+        "torch-timexer-global",
+        {"monitor": "val_loss", "val_split": 0.0},
+        "monitor='val_loss' requires val_split > 0",
+    ),
+    (
+        "timexer monitor mode invalid",
+        "torch-timexer-global",
+        {"monitor_mode": "sideways"},
+        "monitor_mode must be one of: min, max",
+    ),
+    (
+        "timexer min delta",
+        "torch-timexer-global",
+        {"min_delta": -0.1},
+        "min_delta must be >= 0",
+    ),
+    (
+        "timexer num workers",
+        "torch-timexer-global",
+        {"num_workers": -1},
+        "num_workers must be >= 0",
+    ),
+    (
+        "timexer persistent workers",
+        "torch-timexer-global",
+        {"persistent_workers": True, "num_workers": 0},
+        "persistent_workers requires num_workers >= 1",
+    ),
+    (
+        "timexer plateau patience",
+        "torch-timexer-global",
+        {"scheduler": "plateau", "scheduler_patience": 0},
+        "scheduler_patience must be >= 1",
+    ),
+    (
+        "timexer grad clip mode",
+        "torch-timexer-global",
+        {"grad_clip_mode": "percentile"},
+        "grad_clip_mode must be one of: norm, value",
+    ),
+    (
+        "timexer grad clip value",
+        "torch-timexer-global",
+        {"grad_clip_value": -0.1},
+        "grad_clip_value must be >= 0",
+    ),
+    (
+        "timexer plateau factor",
+        "torch-timexer-global",
+        {"scheduler": "plateau", "scheduler_plateau_factor": 1.0},
+        "scheduler_plateau_factor must be in (0, 1)",
+    ),
+    (
+        "timexer plateau threshold",
+        "torch-timexer-global",
+        {"scheduler": "plateau", "scheduler_plateau_threshold": -0.1},
+        "scheduler_plateau_threshold must be >= 0",
+    ),
+    (
+        "timexer ema decay negative",
+        "torch-timexer-global",
+        {"ema_decay": -0.1},
+        "ema_decay must be in [0, 1)",
+    ),
+    (
+        "timexer ema decay one",
+        "torch-timexer-global",
+        {"ema_decay": 1.0},
+        "ema_decay must be in [0, 1)",
+    ),
+    (
+        "timexer ema warmup negative",
+        "torch-timexer-global",
+        {"ema_warmup_epochs": -1},
+        "ema_warmup_epochs must be >= 0",
+    ),
+    (
+        "timexer ema warmup > epochs",
+        "torch-timexer-global",
+        {"epochs": 1, "ema_warmup_epochs": 2},
+        "ema_warmup_epochs must be <= epochs",
+    ),
+    (
+        "timexer swa start < -1",
+        "torch-timexer-global",
+        {"swa_start_epoch": -2},
+        "swa_start_epoch must be >= -1",
+    ),
+    (
+        "timexer swa start > epochs",
+        "torch-timexer-global",
+        {"epochs": 1, "swa_start_epoch": 2},
+        "swa_start_epoch must be <= epochs",
+    ),
+    (
+        "timexer ema and swa conflict",
+        "torch-timexer-global",
+        {"ema_decay": 0.9, "swa_start_epoch": 0},
+        "ema_decay and swa_start_epoch cannot both be enabled",
+    ),
+    (
+        "timexer lookahead steps negative",
+        "torch-timexer-global",
+        {"lookahead_steps": -1},
+        "lookahead_steps must be >= 0",
+    ),
+    (
+        "timexer lookahead alpha zero",
+        "torch-timexer-global",
+        {"lookahead_steps": 1, "lookahead_alpha": 0.0},
+        "lookahead_alpha must be in (0, 1]",
+    ),
+    (
+        "timexer lookahead alpha too large",
+        "torch-timexer-global",
+        {"lookahead_steps": 1, "lookahead_alpha": 1.1},
+        "lookahead_alpha must be in (0, 1]",
+    ),
+    (
+        "timexer sam rho negative",
+        "torch-timexer-global",
+        {"sam_rho": -0.1},
+        "sam_rho must be >= 0",
+    ),
+    (
+        "timexer horizon loss decay negative",
+        "torch-timexer-global",
+        {"horizon_loss_decay": -0.1},
+        "horizon_loss_decay must be > 0",
+    ),
+    (
+        "timexer horizon loss decay zero",
+        "torch-timexer-global",
+        {"horizon_loss_decay": 0.0},
+        "horizon_loss_decay must be > 0",
+    ),
+    (
+        "timexer input dropout negative",
+        "torch-timexer-global",
+        {"input_dropout": -0.1},
+        "input_dropout must be in [0, 1)",
+    ),
+    (
+        "timexer input dropout one",
+        "torch-timexer-global",
+        {"input_dropout": 1.0},
+        "input_dropout must be in [0, 1)",
+    ),
+    (
+        "timexer temporal dropout negative",
+        "torch-timexer-global",
+        {"temporal_dropout": -0.1},
+        "temporal_dropout must be in [0, 1)",
+    ),
+    (
+        "timexer temporal dropout one",
+        "torch-timexer-global",
+        {"temporal_dropout": 1.0},
+        "temporal_dropout must be in [0, 1)",
+    ),
+    (
+        "timexer grad noise std negative",
+        "torch-timexer-global",
+        {"grad_noise_std": -0.1},
+        "grad_noise_std must be >= 0",
+    ),
+    (
+        "timexer gc mode invalid",
+        "torch-timexer-global",
+        {"gc_mode": "layerwise"},
+        "gc_mode must be one of: off, all, conv_only",
+    ),
+    (
+        "timexer agc clip factor negative",
+        "torch-timexer-global",
+        {"agc_clip_factor": -0.1},
+        "agc_clip_factor must be >= 0",
+    ),
+    (
+        "timexer agc eps zero",
+        "torch-timexer-global",
+        {"agc_eps": 0.0},
+        "agc_eps must be > 0",
+    ),
+    (
+        "timexer amp requires cuda",
+        "torch-timexer-global",
+        {"amp": True},
+        "amp=True requires device='cuda'",
+    ),
+    (
+        "timexer best checkpoint without dir",
+        "torch-timexer-global",
+        {"save_best_checkpoint": True},
+        "checkpoint_dir is required when checkpoint saving is enabled",
+    ),
+    (
+        "timexer last checkpoint without dir",
+        "torch-timexer-global",
+        {"save_last_checkpoint": True},
+        "checkpoint_dir is required when checkpoint saving is enabled",
+    ),
+    (
+        "timexer resume checkpoint missing",
+        "torch-timexer-global",
+        {"resume_checkpoint_path": "/tmp/foresight-missing-global-resume.pt"},
+        "resume_checkpoint_path does not exist",
+    ),
     ("timexer d_model", "torch-timexer-global", {"d_model": 0}, "d_model must be >= 1"),
     ("timexer nhead", "torch-timexer-global", {"nhead": 0}, "nhead must be >= 1"),
     (
@@ -524,3 +807,435 @@ def test_torch_global_validation_messages(
     params = dict(BASE_PARAMS[key])
     params.update(overrides)
     _assert_global_validation_error(key, params=params, message=message)
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_cosine_restart_scheduler() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        scheduler="cosine_restarts",
+        scheduler_restart_period=1,
+        scheduler_restart_mult=1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_value_clipping_and_plateau_controls() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        scheduler="plateau",
+        scheduler_plateau_factor=0.5,
+        scheduler_plateau_threshold=0.0,
+        grad_clip_mode="value",
+        grad_clip_value=0.1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_ema_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        ema_decay=0.9,
+        ema_warmup_epochs=0,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_swa_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        swa_start_epoch=0,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_lookahead_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        lookahead_steps=1,
+        lookahead_alpha=0.5,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_sam_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        sam_rho=0.05,
+        sam_adaptive=True,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_horizon_loss_decay_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        horizon_loss_decay=0.5,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_input_dropout_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        input_dropout=0.1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_temporal_dropout_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        temporal_dropout=0.1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_input_dropout_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        input_dropout=0.1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_horizon_loss_decay_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        horizon_loss_decay=0.5,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_temporal_dropout_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        temporal_dropout=0.1,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_grad_noise_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        grad_noise_std=0.01,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_grad_noise_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        grad_noise_std=0.01,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_sam_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        sam_rho=0.05,
+        sam_adaptive=True,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_agc_strategy() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        agc_clip_factor=0.01,
+        agc_eps=1e-3,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_accepts_gc_mode() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        gc_mode="all",
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_writes_checkpoint_files(tmp_path) -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    checkpoint_dir = tmp_path / "global-checkpoints"
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=True,
+        save_last_checkpoint=True,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+    assert (checkpoint_dir / "best.pt").is_file()
+    assert (checkpoint_dir / "last.pt").is_file()
+    torch = torch_global._require_torch()
+    try:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu", weights_only=True)
+    except TypeError:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu")
+    assert "optimizer_state" in last_payload
+    assert "epoch" in last_payload
+    assert "best_monitor" in last_payload
+    assert "bad_epochs" in last_payload
+    assert "best_epoch" in last_payload
+    assert "best_state" in last_payload
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_swa_checkpoints_store_raw_and_swa_state(tmp_path) -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    checkpoint_dir = tmp_path / "global-swa-checkpoints"
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        checkpoint_dir=str(checkpoint_dir),
+        save_last_checkpoint=True,
+        swa_start_epoch=0,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+    torch = torch_global._require_torch()
+    try:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu", weights_only=True)
+    except TypeError:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu")
+    assert "swa_state" in last_payload
+    assert "model_state" in last_payload
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_runtime_lookahead_checkpoints_store_raw_and_slow_state(tmp_path) -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    checkpoint_dir = tmp_path / "global-lookahead-checkpoints"
+    params = dict(BASE_PARAMS["torch-timexer-global"])
+    params["epochs"] = 2
+    params["val_split"] = 0.1
+    forecaster = make_global_forecaster(
+        "torch-timexer-global",
+        **params,
+        seed=0,
+        patience=3,
+        device="cpu",
+        checkpoint_dir=str(checkpoint_dir),
+        save_last_checkpoint=True,
+        lookahead_steps=3,
+        lookahead_alpha=0.5,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+    torch = torch_global._require_torch()
+    try:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu", weights_only=True)
+    except TypeError:
+        last_payload = torch.load(checkpoint_dir / "last.pt", map_location="cpu")
+    assert "lookahead_state" in last_payload
+    assert "lookahead_step" in last_payload
+    assert "model_state" in last_payload

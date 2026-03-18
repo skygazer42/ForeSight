@@ -278,6 +278,7 @@ from .torch_nn import (
     torch_esrnn_direct_forecast,
     torch_etsformer_direct_forecast,
     torch_fedformer_direct_forecast,
+    torch_fits_direct_forecast,
     torch_film_direct_forecast,
     torch_fnet_direct_forecast,
     torch_frets_direct_forecast,
@@ -317,6 +318,7 @@ from .torch_nn import (
     torch_tft_direct_forecast,
     torch_tide_direct_forecast,
     torch_timemixer_direct_forecast,
+    torch_tinytimemixer_direct_forecast,
     torch_timesmamba_direct_forecast,
     torch_timesnet_direct_forecast,
     torch_timexer_direct_forecast,
@@ -478,6 +480,89 @@ def _normalize_bool_like(value: Any) -> bool:
     return bool(value)
 
 
+def _coerce_torch_extra_train_params(params: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if "min_epochs" in params:
+        out["min_epochs"] = int(params["min_epochs"])
+    if "amp" in params:
+        out["amp"] = _normalize_bool_like(params["amp"])
+    if "amp_dtype" in params:
+        out["amp_dtype"] = str(params["amp_dtype"])
+    if "warmup_epochs" in params:
+        out["warmup_epochs"] = int(params["warmup_epochs"])
+    if "min_lr" in params:
+        out["min_lr"] = float(params["min_lr"])
+    if "scheduler_restart_period" in params:
+        out["scheduler_restart_period"] = int(params["scheduler_restart_period"])
+    if "scheduler_restart_mult" in params:
+        out["scheduler_restart_mult"] = int(params["scheduler_restart_mult"])
+    if "scheduler_pct_start" in params:
+        out["scheduler_pct_start"] = float(params["scheduler_pct_start"])
+    if "grad_accum_steps" in params:
+        out["grad_accum_steps"] = int(params["grad_accum_steps"])
+    if "monitor" in params:
+        out["monitor"] = str(params["monitor"])
+    if "monitor_mode" in params:
+        out["monitor_mode"] = str(params["monitor_mode"])
+    if "min_delta" in params:
+        out["min_delta"] = float(params["min_delta"])
+    if "num_workers" in params:
+        out["num_workers"] = int(params["num_workers"])
+    if "pin_memory" in params:
+        out["pin_memory"] = _normalize_bool_like(params["pin_memory"])
+    if "persistent_workers" in params:
+        out["persistent_workers"] = _normalize_bool_like(params["persistent_workers"])
+    if "scheduler_patience" in params:
+        out["scheduler_patience"] = int(params["scheduler_patience"])
+    if "grad_clip_mode" in params:
+        out["grad_clip_mode"] = str(params["grad_clip_mode"])
+    if "grad_clip_value" in params:
+        out["grad_clip_value"] = float(params["grad_clip_value"])
+    if "scheduler_plateau_factor" in params:
+        out["scheduler_plateau_factor"] = float(params["scheduler_plateau_factor"])
+    if "scheduler_plateau_threshold" in params:
+        out["scheduler_plateau_threshold"] = float(params["scheduler_plateau_threshold"])
+    if "ema_decay" in params:
+        out["ema_decay"] = float(params["ema_decay"])
+    if "ema_warmup_epochs" in params:
+        out["ema_warmup_epochs"] = int(params["ema_warmup_epochs"])
+    if "swa_start_epoch" in params:
+        out["swa_start_epoch"] = int(params["swa_start_epoch"])
+    if "lookahead_steps" in params:
+        out["lookahead_steps"] = int(params["lookahead_steps"])
+    if "lookahead_alpha" in params:
+        out["lookahead_alpha"] = float(params["lookahead_alpha"])
+    if "sam_rho" in params:
+        out["sam_rho"] = float(params["sam_rho"])
+    if "sam_adaptive" in params:
+        out["sam_adaptive"] = _normalize_bool_like(params["sam_adaptive"])
+    if "horizon_loss_decay" in params:
+        out["horizon_loss_decay"] = float(params["horizon_loss_decay"])
+    if "input_dropout" in params:
+        out["input_dropout"] = float(params["input_dropout"])
+    if "temporal_dropout" in params:
+        out["temporal_dropout"] = float(params["temporal_dropout"])
+    if "grad_noise_std" in params:
+        out["grad_noise_std"] = float(params["grad_noise_std"])
+    if "gc_mode" in params:
+        out["gc_mode"] = str(params["gc_mode"])
+    if "agc_clip_factor" in params:
+        out["agc_clip_factor"] = float(params["agc_clip_factor"])
+    if "agc_eps" in params:
+        out["agc_eps"] = float(params["agc_eps"])
+    if "checkpoint_dir" in params:
+        out["checkpoint_dir"] = str(params["checkpoint_dir"])
+    if "save_best_checkpoint" in params:
+        out["save_best_checkpoint"] = _normalize_bool_like(params["save_best_checkpoint"])
+    if "save_last_checkpoint" in params:
+        out["save_last_checkpoint"] = _normalize_bool_like(params["save_last_checkpoint"])
+    if "resume_checkpoint_path" in params:
+        out["resume_checkpoint_path"] = str(params["resume_checkpoint_path"])
+    if "resume_checkpoint_strict" in params:
+        out["resume_checkpoint_strict"] = _normalize_bool_like(params["resume_checkpoint_strict"])
+    return out
+
+
 _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
     "epochs": 50,
     "lr": 0.001,
@@ -496,6 +581,45 @@ _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
     "scheduler_step_size": 10,
     "scheduler_gamma": 0.1,
     "restore_best": True,
+    "min_epochs": 1,
+    "amp": False,
+    "amp_dtype": "auto",
+    "warmup_epochs": 0,
+    "min_lr": 0.0,
+    "scheduler_restart_period": 10,
+    "scheduler_restart_mult": 1,
+    "scheduler_pct_start": 0.3,
+    "grad_accum_steps": 1,
+    "monitor": "auto",
+    "monitor_mode": "min",
+    "min_delta": 0.0,
+    "num_workers": 0,
+    "pin_memory": False,
+    "persistent_workers": False,
+    "scheduler_patience": 5,
+    "grad_clip_mode": "norm",
+    "grad_clip_value": 0.0,
+    "scheduler_plateau_factor": 0.1,
+    "scheduler_plateau_threshold": 1e-4,
+    "ema_decay": 0.0,
+    "ema_warmup_epochs": 0,
+    "swa_start_epoch": -1,
+    "lookahead_steps": 0,
+    "lookahead_alpha": 0.5,
+    "sam_rho": 0.0,
+    "sam_adaptive": False,
+    "horizon_loss_decay": 1.0,
+    "input_dropout": 0.0,
+    "temporal_dropout": 0.0,
+    "grad_noise_std": 0.0,
+    "gc_mode": "off",
+    "agc_clip_factor": 0.0,
+    "agc_eps": 1e-3,
+    "checkpoint_dir": "",
+    "save_best_checkpoint": False,
+    "save_last_checkpoint": False,
+    "resume_checkpoint_path": "",
+    "resume_checkpoint_strict": True,
 }
 
 _TORCH_COMMON_PARAM_HELP: dict[str, str] = {
@@ -512,10 +636,49 @@ _TORCH_COMMON_PARAM_HELP: dict[str, str] = {
     "grad_clip_norm": "Gradient clipping max norm (0 disables)",
     "optimizer": "Optimizer: adam, adamw, sgd",
     "momentum": "Momentum (only for sgd)",
-    "scheduler": "LR scheduler: none, cosine, step",
+    "scheduler": "LR scheduler: none, cosine, step, plateau, onecycle, cosine_restarts",
     "scheduler_step_size": "StepLR step_size (only for scheduler=step)",
     "scheduler_gamma": "StepLR gamma (only for scheduler=step)",
     "restore_best": "Restore best checkpoint at end (true/false)",
+    "min_epochs": "Minimum epochs before early stopping can trigger",
+    "amp": "Enable CUDA automatic mixed precision (true/false)",
+    "amp_dtype": "AMP compute dtype: auto, float16, bfloat16",
+    "warmup_epochs": "Linear LR warmup epochs before the main scheduler",
+    "min_lr": "Lower bound for learning rate during scheduler updates",
+    "scheduler_restart_period": "Initial restart period in epochs for scheduler=cosine_restarts",
+    "scheduler_restart_mult": "Cycle-length multiplier for scheduler=cosine_restarts",
+    "scheduler_pct_start": "Warmup fraction for scheduler=onecycle, must be in (0,1)",
+    "grad_accum_steps": "Gradient accumulation steps (>=1)",
+    "monitor": "Early-stop metric: auto, train_loss, val_loss",
+    "monitor_mode": "Whether the monitor should be minimized or maximized: min, max",
+    "min_delta": "Minimum improvement required to reset patience",
+    "num_workers": "DataLoader worker count (0 uses main process)",
+    "pin_memory": "Pin DataLoader memory before host-to-device transfer",
+    "persistent_workers": "Keep DataLoader workers alive across epochs (requires num_workers>0)",
+    "scheduler_patience": "ReduceLROnPlateau patience in epochs (only for scheduler=plateau)",
+    "grad_clip_mode": "Gradient clipping strategy: norm, value",
+    "grad_clip_value": "Gradient clipping absolute value threshold (only for grad_clip_mode=value)",
+    "scheduler_plateau_factor": "ReduceLROnPlateau decay factor in (0,1) (only for scheduler=plateau)",
+    "scheduler_plateau_threshold": "ReduceLROnPlateau minimum monitored change before a decay step",
+    "ema_decay": "EMA decay in [0,1); 0 disables exponential moving average weights",
+    "ema_warmup_epochs": "Warmup epochs before EMA updates start",
+    "swa_start_epoch": "Epoch index where stochastic weight averaging starts; -1 disables SWA",
+    "lookahead_steps": "Lookahead sync interval in optimizer steps; 0 disables Lookahead",
+    "lookahead_alpha": "Lookahead slow-weight interpolation factor in (0,1]",
+    "sam_rho": "SAM neighborhood size rho; 0 disables Sharpness-Aware Minimization",
+    "sam_adaptive": "Use adaptive SAM scaling based on parameter magnitudes",
+    "horizon_loss_decay": "Per-step exponential horizon loss decay (>0); 1 disables weighting",
+    "input_dropout": "Feature dropout applied to training inputs only; 0 disables",
+    "temporal_dropout": "Drop whole training timesteps across all features; 0 disables",
+    "grad_noise_std": "Gradient noise stddev before AGC/clipping; 0 disables",
+    "gc_mode": "Gradient centralization mode: off, all, conv_only",
+    "agc_clip_factor": "Adaptive Gradient Clipping factor; 0 disables AGC",
+    "agc_eps": "Adaptive Gradient Clipping epsilon for parameter-norm stabilization",
+    "checkpoint_dir": "Directory for trainer checkpoints (writes best.pt/last.pt when enabled)",
+    "save_best_checkpoint": "Persist the best training checkpoint to checkpoint_dir/best.pt",
+    "save_last_checkpoint": "Persist the last training checkpoint to checkpoint_dir/last.pt",
+    "resume_checkpoint_path": "Load initial model weights from this checkpoint path before training",
+    "resume_checkpoint_strict": "Use strict state_dict loading when resume_checkpoint_path is set",
 }
 
 _LAG_DERIVED_DEFAULTS: dict[str, Any] = {"roll_windows": (), "roll_stats": (), "diff_lags": ()}
@@ -4613,6 +4776,9 @@ def _factory_torch_mlp_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -4659,7 +4825,12 @@ def _factory_torch_mlp_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -4687,6 +4858,9 @@ def _factory_torch_lstm_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -4736,7 +4910,12 @@ def _factory_torch_lstm_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -4764,6 +4943,9 @@ def _factory_torch_gru_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -4813,7 +4995,12 @@ def _factory_torch_gru_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -4841,6 +5028,9 @@ def _factory_torch_tcn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -4889,7 +5079,12 @@ def _factory_torch_tcn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -4918,6 +5113,9 @@ def _factory_torch_nbeats_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -4969,7 +5167,12 @@ def _factory_torch_nbeats_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -4994,6 +5197,9 @@ def _factory_torch_nlinear_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5037,7 +5243,12 @@ def _factory_torch_nlinear_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5063,6 +5274,9 @@ def _factory_torch_dlinear_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5108,7 +5322,12 @@ def _factory_torch_dlinear_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5138,6 +5357,9 @@ def _factory_torch_transformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5191,7 +5413,12 @@ def _factory_torch_transformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5221,6 +5448,9 @@ def _factory_torch_informer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5274,7 +5504,12 @@ def _factory_torch_informer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5305,6 +5540,9 @@ def _factory_torch_autoformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5360,7 +5598,12 @@ def _factory_torch_autoformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5390,6 +5633,9 @@ def _factory_torch_nonstationary_transformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5443,7 +5689,12 @@ def _factory_torch_nonstationary_transformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5474,6 +5725,9 @@ def _factory_torch_fedformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5529,7 +5783,12 @@ def _factory_torch_fedformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5559,6 +5818,9 @@ def _factory_torch_itransformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5612,7 +5874,12 @@ def _factory_torch_itransformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5641,6 +5908,9 @@ def _factory_torch_timesnet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5692,7 +5962,12 @@ def _factory_torch_timesnet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5721,6 +5996,9 @@ def _factory_torch_tft_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5772,7 +6050,12 @@ def _factory_torch_tft_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5803,6 +6086,9 @@ def _factory_torch_timemixer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5857,7 +6143,105 @@ def _factory_torch_timemixer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
+        )
+
+    return _f
+
+
+def _factory_torch_tinytimemixer_direct(
+    *,
+    lags: int = 96,
+    patch_len: int = 8,
+    d_model: int = 64,
+    num_blocks: int = 4,
+    token_mixing_hidden: int = 128,
+    channel_mixing_hidden: int = 128,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    patch_len_int = int(patch_len)
+    d_model_int = int(d_model)
+    num_blocks_int = int(num_blocks)
+    token_mixing_hidden_int = int(token_mixing_hidden)
+    channel_mixing_hidden_int = int(channel_mixing_hidden)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_tinytimemixer_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            patch_len=patch_len_int,
+            d_model=d_model_int,
+            num_blocks=num_blocks_int,
+            token_mixing_hidden=token_mixing_hidden_int,
+            channel_mixing_hidden=channel_mixing_hidden_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
+            restore_best=restore_best_bool,
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5884,6 +6268,9 @@ def _factory_torch_sparsetsf_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -5931,7 +6318,12 @@ def _factory_torch_sparsetsf_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -5959,6 +6351,9 @@ def _factory_torch_lightts_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6008,7 +6403,12 @@ def _factory_torch_lightts_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6037,6 +6437,9 @@ def _factory_torch_frets_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6088,7 +6491,12 @@ def _factory_torch_frets_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6118,6 +6526,9 @@ def _factory_torch_film_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6171,7 +6582,12 @@ def _factory_torch_film_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6201,6 +6617,9 @@ def _factory_torch_micn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6253,7 +6672,12 @@ def _factory_torch_micn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6283,6 +6707,9 @@ def _factory_torch_koopa_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6336,7 +6763,12 @@ def _factory_torch_koopa_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6365,6 +6797,9 @@ def _factory_torch_samformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6416,7 +6851,12 @@ def _factory_torch_samformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6446,6 +6886,9 @@ def _factory_torch_retnet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6499,7 +6942,12 @@ def _factory_torch_retnet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6529,6 +6977,9 @@ def _factory_torch_retnet_recursive(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6582,7 +7033,12 @@ def _factory_torch_retnet_recursive(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6612,6 +7068,9 @@ def _factory_torch_timexer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6671,9 +7130,101 @@ def _factory_torch_timexer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
             train_exog=train_exog,
             future_exog=future_exog,
+        )
+
+    return _f
+
+
+def _factory_torch_fits_direct(
+    *,
+    lags: int = 96,
+    low_freq_bins: int = 12,
+    hidden_size: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.1,
+    epochs: int = 50,
+    lr: float = 0.001,
+    weight_decay: float = 0.0,
+    batch_size: int = 32,
+    seed: int = 0,
+    normalize: bool = True,
+    device: str = "cpu",
+    patience: int = 10,
+    loss: str = "mse",
+    val_split: float = 0.0,
+    grad_clip_norm: float = 0.0,
+    optimizer: str = "adam",
+    momentum: float = 0.9,
+    scheduler: str = "none",
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
+    restore_best: bool = True,
+    **_params: Any,
+) -> ForecasterFn:
+    lags_int = int(lags)
+    low_freq_bins_int = int(low_freq_bins)
+    hidden_size_int = int(hidden_size)
+    num_layers_int = int(num_layers)
+    dropout_f = float(dropout)
+    epochs_int = int(epochs)
+    lr_f = float(lr)
+    weight_decay_f = float(weight_decay)
+    batch_size_int = int(batch_size)
+    seed_int = int(seed)
+    normalize_bool = bool(normalize)
+    device_s = str(device)
+    patience_int = int(patience)
+    loss_s = str(loss)
+    val_split_f = float(val_split)
+    grad_clip_norm_f = float(grad_clip_norm)
+    optimizer_s = str(optimizer)
+    momentum_f = float(momentum)
+    scheduler_s = str(scheduler)
+    scheduler_step_size_int = int(scheduler_step_size)
+    scheduler_gamma_f = float(scheduler_gamma)
+    restore_best_bool = bool(restore_best)
+
+    def _f(train: Any, horizon: int) -> np.ndarray:
+        return torch_fits_direct_forecast(
+            train,
+            horizon,
+            lags=lags_int,
+            low_freq_bins=low_freq_bins_int,
+            hidden_size=hidden_size_int,
+            num_layers=num_layers_int,
+            dropout=dropout_f,
+            epochs=epochs_int,
+            lr=lr_f,
+            weight_decay=weight_decay_f,
+            batch_size=batch_size_int,
+            seed=seed_int,
+            normalize=normalize_bool,
+            device=device_s,
+            patience=patience_int,
+            loss=loss_s,
+            val_split=val_split_f,
+            grad_clip_norm=grad_clip_norm_f,
+            optimizer=optimizer_s,
+            momentum=momentum_f,
+            scheduler=scheduler_s,
+            scheduler_step_size=scheduler_step_size_int,
+            scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
+            restore_best=restore_best_bool,
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6702,6 +7253,9 @@ def _factory_torch_lmu_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6753,7 +7307,12 @@ def _factory_torch_lmu_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6781,6 +7340,9 @@ def _factory_torch_ltc_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6830,7 +7392,12 @@ def _factory_torch_ltc_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6859,6 +7426,9 @@ def _factory_torch_cfc_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6910,7 +7480,12 @@ def _factory_torch_cfc_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -6939,6 +7514,9 @@ def _factory_torch_xlstm_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -6990,7 +7568,12 @@ def _factory_torch_xlstm_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7019,6 +7602,9 @@ def _factory_torch_griffin_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7070,7 +7656,12 @@ def _factory_torch_griffin_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7099,6 +7690,9 @@ def _factory_torch_hawk_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7150,7 +7744,12 @@ def _factory_torch_hawk_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7178,6 +7777,9 @@ def _factory_torch_s4d_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7227,7 +7829,12 @@ def _factory_torch_s4d_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7256,6 +7863,9 @@ def _factory_torch_mamba2_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7307,7 +7917,12 @@ def _factory_torch_mamba2_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7336,6 +7951,9 @@ def _factory_torch_s4_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7387,7 +8005,12 @@ def _factory_torch_s4_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7417,6 +8040,9 @@ def _factory_torch_s5_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7470,7 +8096,12 @@ def _factory_torch_s5_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7498,6 +8129,9 @@ def _factory_torch_timexer_global(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     device: str = "cpu",
     d_model: int = 64,
@@ -7528,7 +8162,12 @@ def _factory_torch_timexer_global(
         scheduler=str(scheduler),
         scheduler_step_size=int(scheduler_step_size),
         scheduler_gamma=float(scheduler_gamma),
+        scheduler_restart_period=int(scheduler_restart_period),
+        scheduler_restart_mult=int(scheduler_restart_mult),
+        scheduler_pct_start=float(scheduler_pct_start),
         restore_best=bool(restore_best),
+
+        **_coerce_torch_extra_train_params(_params),
         device=str(device),
         d_model=int(d_model),
         nhead=int(nhead),
@@ -7561,6 +8200,9 @@ def _factory_torch_mamba_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7612,7 +8254,12 @@ def _factory_torch_mamba_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7641,6 +8288,9 @@ def _factory_torch_rwkv_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7692,7 +8342,12 @@ def _factory_torch_rwkv_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7722,6 +8377,9 @@ def _factory_torch_hyena_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7775,7 +8433,12 @@ def _factory_torch_hyena_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7805,6 +8468,9 @@ def _factory_torch_dilated_rnn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7858,7 +8524,12 @@ def _factory_torch_dilated_rnn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7889,6 +8560,9 @@ def _factory_torch_kan_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -7944,7 +8618,12 @@ def _factory_torch_kan_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -7974,6 +8653,9 @@ def _factory_torch_scinet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8027,7 +8709,12 @@ def _factory_torch_scinet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8059,6 +8746,9 @@ def _factory_torch_etsformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8116,7 +8806,12 @@ def _factory_torch_etsformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8147,6 +8842,9 @@ def _factory_torch_esrnn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8202,7 +8900,12 @@ def _factory_torch_esrnn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8234,6 +8937,9 @@ def _factory_torch_patchtst_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8291,7 +8997,12 @@ def _factory_torch_patchtst_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8324,6 +9035,9 @@ def _factory_torch_crossformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8383,7 +9097,12 @@ def _factory_torch_crossformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8416,6 +9135,9 @@ def _factory_torch_pyraformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8475,7 +9197,12 @@ def _factory_torch_pyraformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8506,6 +9233,9 @@ def _factory_torch_perceiver_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8561,7 +9291,12 @@ def _factory_torch_perceiver_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8591,6 +9326,9 @@ def _factory_torch_tsmixer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8644,7 +9382,12 @@ def _factory_torch_tsmixer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8673,6 +9416,9 @@ def _factory_torch_cnn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8723,7 +9469,12 @@ def _factory_torch_cnn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8753,6 +9504,9 @@ def _factory_torch_resnet1d_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8806,7 +9560,12 @@ def _factory_torch_resnet1d_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8835,6 +9594,9 @@ def _factory_torch_wavenet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8886,7 +9648,12 @@ def _factory_torch_wavenet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8914,6 +9681,9 @@ def _factory_torch_bilstm_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -8963,7 +9733,12 @@ def _factory_torch_bilstm_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -8991,6 +9766,9 @@ def _factory_torch_bigru_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9040,7 +9818,12 @@ def _factory_torch_bigru_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9068,6 +9851,9 @@ def _factory_torch_attn_gru_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9117,7 +9903,12 @@ def _factory_torch_attn_gru_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9147,6 +9938,9 @@ def _factory_torch_segrnn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9200,7 +9994,12 @@ def _factory_torch_segrnn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9231,6 +10030,9 @@ def _factory_torch_moderntcn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9286,7 +10088,12 @@ def _factory_torch_moderntcn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9318,6 +10125,9 @@ def _factory_torch_basisformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9375,7 +10185,12 @@ def _factory_torch_basisformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9406,6 +10221,9 @@ def _factory_torch_witran_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9461,7 +10279,12 @@ def _factory_torch_witran_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9490,6 +10313,9 @@ def _factory_torch_crossgnn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9541,7 +10367,12 @@ def _factory_torch_crossgnn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9571,6 +10402,9 @@ def _factory_torch_pathformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9623,7 +10457,12 @@ def _factory_torch_pathformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9653,6 +10492,9 @@ def _factory_torch_timesmamba_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9706,7 +10548,12 @@ def _factory_torch_timesmamba_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9735,6 +10582,9 @@ def _factory_torch_fnet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9786,7 +10636,12 @@ def _factory_torch_fnet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9815,6 +10670,9 @@ def _factory_torch_gmlp_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9866,7 +10724,12 @@ def _factory_torch_gmlp_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9896,6 +10759,9 @@ def _factory_torch_nhits_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -9948,7 +10814,12 @@ def _factory_torch_nhits_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -9976,6 +10847,9 @@ def _factory_torch_tide_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10025,7 +10899,12 @@ def _factory_torch_tide_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10053,6 +10932,9 @@ def _factory_torch_deepar_recursive(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10101,7 +10983,12 @@ def _factory_torch_deepar_recursive(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10130,6 +11017,9 @@ def _factory_torch_qrnn_recursive(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10180,7 +11070,12 @@ def _factory_torch_qrnn_recursive(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10227,6 +11122,9 @@ def _factory_torch_xformer_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10314,7 +11212,12 @@ def _factory_torch_xformer_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10346,6 +11249,9 @@ def _factory_torch_seq2seq_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10405,7 +11311,12 @@ def _factory_torch_seq2seq_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10436,6 +11347,9 @@ def _factory_torch_lstnet_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10491,7 +11405,12 @@ def _factory_torch_lstnet_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10520,6 +11439,9 @@ def _factory_torch_linear_attn_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10571,7 +11493,12 @@ def _factory_torch_linear_attn_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -10602,6 +11529,9 @@ def _factory_torch_inception_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -10656,7 +11586,12 @@ def _factory_torch_inception_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -12092,6 +13027,9 @@ def _factory_torch_stid_multivariate(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> MultivariateForecasterFn:
@@ -12141,7 +13079,12 @@ def _factory_torch_stid_multivariate(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -12173,6 +13116,9 @@ def _factory_torch_stgcn_multivariate(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> MultivariateForecasterFn:
@@ -12230,7 +13176,12 @@ def _factory_torch_stgcn_multivariate(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -12265,6 +13216,9 @@ def _factory_torch_graphwavenet_multivariate(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> MultivariateForecasterFn:
@@ -12328,7 +13282,12 @@ def _factory_torch_graphwavenet_multivariate(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -12428,6 +13387,9 @@ def _factory_torch_rnnzoo_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -12499,7 +13461,12 @@ def _factory_torch_rnnzoo_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f
@@ -12537,6 +13504,9 @@ def _factory_torch_rnnpaper_direct(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
     **_params: Any,
 ) -> ForecasterFn:
@@ -12604,7 +13574,12 @@ def _factory_torch_rnnpaper_direct(
             scheduler=scheduler_s,
             scheduler_step_size=scheduler_step_size_int,
             scheduler_gamma=scheduler_gamma_f,
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
+
+            **_coerce_torch_extra_train_params(_params),
         )
 
     return _f

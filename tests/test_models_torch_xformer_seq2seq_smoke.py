@@ -1,4 +1,5 @@
 import importlib.util
+import re
 
 import numpy as np
 import pandas as pd
@@ -373,6 +374,14 @@ RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES = [
     ),
 ]
 
+SHARED_TRAINING_FORWARDING_TORCH_LOCAL_SMOKE_CASES = (
+    STATE_SPACE_TORCH_LOCAL_SMOKE_CASES
+    + CT_RNN_TORCH_LOCAL_SMOKE_CASES
+    + REVIVAL_TORCH_LOCAL_SMOKE_CASES
+    + SSM_TORCH_LOCAL_SMOKE_CASES
+    + RECURRENT_REVIVAL_TORCH_LOCAL_SMOKE_CASES
+)
+
 LATENT_TORCH_LOCAL_SMOKE_CASES = [
     (
         "torch-perceiver-direct",
@@ -745,6 +754,36 @@ def test_torch_xformer_local_smoke():
     assert np.all(np.isfinite(yhat7))
 
 
+@pytest.mark.parametrize(
+    ("param_name", "param_value", "message"),
+    (
+        ("horizon_loss_decay", 0.0, "horizon_loss_decay must be > 0"),
+        ("sam_rho", -0.1, "sam_rho must be >= 0"),
+    ),
+)
+def test_torch_xformer_local_forwards_shared_training_validation(
+    param_name: str, param_value: float, message: str
+):
+    y = np.sin(np.arange(140, dtype=float) / 4.0) + 0.05 * np.arange(140, dtype=float)
+    f = make_forecaster(
+        "torch-xformer-performer-ln-gelu-direct",
+        lags=48,
+        d_model=32,
+        nhead=4,
+        num_layers=1,
+        dim_feedforward=64,
+        epochs=2,
+        batch_size=16,
+        patience=2,
+        device="cpu",
+        seed=0,
+        **{param_name: param_value},
+    )
+
+    with pytest.raises(ValueError, match=re.escape(message)):
+        f(y, 5)
+
+
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
 @pytest.mark.parametrize(("key", "params"), WAVE1A_TORCH_LOCAL_SMOKE_CASES)
 def test_wave1a_torch_local_smoke(key: str, params: dict[str, object]):
@@ -855,6 +894,28 @@ def test_recurrent_revival_torch_local_smoke(key: str, params: dict[str, object]
     yhat = f(y, 5)
     assert yhat.shape == (5,)
     assert np.all(np.isfinite(yhat))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")
+@pytest.mark.parametrize(("key", "params"), SHARED_TRAINING_FORWARDING_TORCH_LOCAL_SMOKE_CASES)
+@pytest.mark.parametrize(
+    ("param_name", "param_value", "message"),
+    (
+        ("horizon_loss_decay", 0.0, "horizon_loss_decay must be > 0"),
+        ("sam_rho", -0.1, "sam_rho must be >= 0"),
+    ),
+)
+def test_extended_torch_local_models_forward_shared_training_validation(
+    key: str,
+    params: dict[str, object],
+    param_name: str,
+    param_value: float,
+    message: str,
+):
+    y = np.sin(np.arange(128, dtype=float) / 10.0) + 0.02 * np.arange(128, dtype=float)
+    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0, **{param_name: param_value})
+    with pytest.raises(ValueError, match=re.escape(message)):
+        f(y, 5)
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="requires torch")

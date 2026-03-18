@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" font-family="'Segoe UI',system-ui,-apple-system,sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" rx="16" fill="url(#bgGrad)"/>
+
+  <!-- Decorative dots -->
+  <circle cx="680" cy="40" r="60" fill="#6366f1" opacity="0.06"/>
+  <circle cx="720" cy="150" r="90" fill="#8b5cf6" opacity="0.05"/>
+  <circle cx="100" cy="160" r="50" fill="#6366f1" opacity="0.06"/>
+
+  <!-- Decorative time series line -->
+  <polyline points="50,140 90,130 130,135 170,115 210,120 250,105 290,110 330,95 370,100 390,88 430,92 470,80 510,85 550,72 590,78 630,65 670,70 710,58 750,62"
+    fill="none" stroke="#6366f1" stroke-width="2" opacity="0.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="50,155 90,148 130,150 170,138 210,142 250,130 290,134 330,122 370,126 390,118 430,120 470,112 510,114 550,106 590,110 630,100 670,104 710,95 750,98"
+    fill="none" stroke="#8b5cf6" stroke-width="1.5" opacity="0.15" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Forecast region -->
+  <rect x="620" y="50" width="130" height="100" rx="4" fill="#6366f1" opacity="0.04"/>
+  <line x1="620" y1="50" x2="620" y2="150" stroke="#6366f1" stroke-width="1" stroke-dasharray="4 3" opacity="0.2"/>
+  <text x="685" y="170" text-anchor="middle" fill="#6366f1" font-size="9" opacity="0.3" letter-spacing="1">FORECAST</text>
+
+  <!-- Logo icon - stylized chart with eye -->
+  <g transform="translate(100, 60)" filter="url(#glow)">
+    <polyline points="0,50 15,42 30,46 45,30 60,34 75,18 90,22 105,8"
+      fill="none" stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="105" cy="8" r="5" fill="#8b5cf6" stroke="#c4b5fd" stroke-width="1.5"/>
+    <circle cx="75" cy="18" r="3" fill="#6366f1" opacity="0.6"/>
+    <circle cx="45" cy="30" r="3" fill="#6366f1" opacity="0.6"/>
+  </g>
+
+  <!-- Title -->
+  <text x="260" y="92" fill="url(#textGrad)" font-size="52" font-weight="800" letter-spacing="-1" filter="url(#glow)">ForeSight</text>
+
+  <!-- Tagline -->
+  <text x="262" y="120" fill="#94a3b8" font-size="15" font-weight="400" letter-spacing="0.5">A lightweight, batteries-included time-series forecasting toolkit</text>
+
+  <!-- Feature pills -->
+  <rect x="262" y="136" width="120" height="24" rx="12" fill="#6366f1" opacity="0.15" stroke="#6366f1" stroke-width="0.5" opacity="0.3"/>
+  <text x="322" y="152" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="500">250+ Models</text>
+
+  <rect x="392" y="136" width="120" height="24" rx="12" fill="#8b5cf6" opacity="0.15" stroke="#8b5cf6" stroke-width="0.5" opacity="0.3"/>
+  <text x="452" y="152" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="500">Walk-forward CV</text>
+
+  <rect x="522" y="136" width="140" height="24" rx="12" fill="#7c3aed" opacity="0.15" stroke="#7c3aed" stroke-width="0.5" opacity="0.3"/>
+  <text x="592" y="152" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="500">Probabilistic Forecasting</text>
+</svg>

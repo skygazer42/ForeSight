@@ -8,11 +8,32 @@ import numpy as np
 
 from .torch_nn import (
     TorchTrainConfig,
+    _apply_torch_gradient_clipping,
+    _apply_torch_sam_perturbation,
+    _apply_torch_train_input_dropout,
+    _apply_torch_train_temporal_dropout,
     _as_1d_float_array,
+    _clone_torch_state_dict_to_cpu,
+    _load_torch_training_state,
     _make_lagged_xy_multi,
+    _make_torch_ema_model,
+    _make_torch_lookahead_model,
+    _make_torch_loss_fn,
+    _make_torch_swa_model,
+    _maybe_save_torch_checkpoints,
+    _maybe_torch_model_state_for_checkpoint,
     _normalize_series,
     _require_torch,
+    _restore_torch_sam_perturbation,
+    _select_torch_deploy_model,
+    _snapshot_torch_training_state,
+    _torch_ema_active_for_epoch,
+    _torch_sam_active,
+    _torch_swa_active_for_epoch,
     _train_loop,
+    _update_torch_ema_model,
+    _update_torch_lookahead_model,
+    _update_torch_swa_model,
 )
 
 _IN_DIM_MIN_MSG = "in_dim must be >= 1"
@@ -185,7 +206,46 @@ def torch_rnnpaper_direct_forecast(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
+    min_epochs: int = 1,
+    amp: bool = False,
+    amp_dtype: str = "auto",
+    warmup_epochs: int = 0,
+    min_lr: float = 0.0,
+    grad_accum_steps: int = 1,
+    monitor: str = "auto",
+    monitor_mode: str = "min",
+    min_delta: float = 0.0,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    persistent_workers: bool = False,
+    scheduler_patience: int = 5,
+    grad_clip_mode: str = "norm",
+    grad_clip_value: float = 0.0,
+    scheduler_plateau_factor: float = 0.1,
+    scheduler_plateau_threshold: float = 1e-4,
+    ema_decay: float = 0.0,
+    ema_warmup_epochs: int = 0,
+    swa_start_epoch: int = -1,
+    lookahead_steps: int = 0,
+    lookahead_alpha: float = 0.5,
+    sam_rho: float = 0.0,
+    sam_adaptive: bool = False,
+    horizon_loss_decay: float = 1.0,
+    input_dropout: float = 0.0,
+    temporal_dropout: float = 0.0,
+    grad_noise_std: float = 0.0,
+    gc_mode: str = "off",
+    agc_clip_factor: float = 0.0,
+    agc_eps: float = 1e-3,
+    checkpoint_dir: str = "",
+    save_best_checkpoint: bool = False,
+    save_last_checkpoint: bool = False,
+    resume_checkpoint_path: str = "",
+    resume_checkpoint_strict: bool = True,
 ) -> np.ndarray:
     """
     Torch RNN Paper Zoo: 100 paper-named recurrent architectures with a unified
@@ -2244,7 +2304,7 @@ def torch_rnnpaper_direct_forecast(
             mu = pred[:, 0:1]
             sigma = F.softplus(pred[:, 1:2]) + 1e-3
             z = (yb - mu) / sigma
-            return (0.5 * math.log(2.0 * math.pi) + torch.log(sigma) + 0.5 * (z**2)).mean()
+            return 0.5 * math.log(2.0 * math.pi) + torch.log(sigma) + 0.5 * (z**2)
 
         model = _DeepAR()
         cfg = TorchTrainConfig(
@@ -2262,7 +2322,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(
             model, x_seq, y_next, cfg=cfg, device=str(device), loss_fn_override=_gaussian_nll
@@ -2307,11 +2375,11 @@ def torch_rnnpaper_direct_forecast(
         def _pinball(pred: Any, yb: Any) -> Any:
             # pred: (B,h,Q), yb: (B,h)
             y = yb.unsqueeze(-1)
-            loss_v = 0.0
+            loss_terms: list[Any] = []
             for qi, q in enumerate(quantiles):
                 e = y - pred[:, :, qi : qi + 1]
-                loss_v = loss_v + torch.maximum(q * e, (q - 1.0) * e).mean()
-            return loss_v / float(len(quantiles))
+                loss_terms.append(torch.maximum(q * e, (q - 1.0) * e))
+            return torch.cat(loss_terms, dim=-1)
 
         model = _MQRNN()
         cfg = TorchTrainConfig(
@@ -2329,7 +2397,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device), loss_fn_override=_pinball)
 
@@ -2384,7 +2460,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
@@ -2457,7 +2541,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
@@ -2556,7 +2648,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 
@@ -2663,7 +2763,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
@@ -2760,16 +2868,6 @@ def torch_rnnpaper_direct_forecast(
 
                 return torch.cat(ys, dim=1)  # (B,h)
 
-        def _make_loss_fn(nn: Any, loss: str) -> Any:
-            name = str(loss).lower().strip()
-            if name in {"mse", ""}:
-                return nn.MSELoss()
-            if name in {"mae", "l1"}:
-                return nn.L1Loss()
-            if name in {"huber", "smoothl1"}:
-                return nn.SmoothL1Loss()
-            raise ValueError("loss must be one of: mse, mae, huber")
-
         def _train_seq2seq(
             model: Any,
             X: np.ndarray,
@@ -2858,8 +2956,9 @@ def torch_rnnpaper_direct_forecast(
                 )
             else:
                 raise ValueError("optimizer must be one of: adam, adamw, sgd")
+            base_lrs = tuple(float(group["lr"]) for group in opt.param_groups)
 
-            loss_fn = _make_loss_fn(nn, cfg.loss)
+            loss_fn = _make_torch_loss_fn(torch, nn, cfg=cfg)
 
             sched_name = str(cfg.scheduler).lower().strip()
             if sched_name in {"none", ""}:
@@ -2875,11 +2974,129 @@ def torch_rnnpaper_direct_forecast(
             else:
                 raise ValueError("scheduler must be one of: none, cosine, step")
 
-            best_loss = float("inf")
-            best_state: dict[str, Any] | None = None
-            bad_epochs = 0
+            resume_state = _load_torch_training_state(
+                torch,
+                model,
+                cfg=cfg,
+                optimizer=opt,
+                scheduler=sched,
+                scaler=None,
+            )
+            start_epoch = max(0, int(resume_state.start_epoch))
+            base_lrs = resume_state.base_lrs or base_lrs
+            best_loss = (
+                float("inf")
+                if resume_state.best_monitor is None
+                else float(resume_state.best_monitor)
+            )
+            best_state: dict[str, Any] | None = (
+                None
+                if resume_state.best_state is None
+                else _clone_torch_state_dict_to_cpu(resume_state.best_state)
+            )
+            ema_model = _make_torch_ema_model(model, cfg=cfg)
+            ema_active = False
+            if ema_model is not None:
+                if resume_state.ema_state is not None:
+                    ema_model.load_state_dict(resume_state.ema_state)
+                    ema_active = True
+                elif int(start_epoch) > int(cfg.ema_warmup_epochs):
+                    ema_model.load_state_dict(model.state_dict())
+                    ema_active = True
+            swa_model = _make_torch_swa_model(model, cfg=cfg)
+            swa_n_averaged = int(resume_state.swa_n_averaged)
+            if swa_model is not None:
+                if resume_state.swa_state is not None:
+                    swa_model.load_state_dict(resume_state.swa_state)
+                    swa_n_averaged = max(1, int(resume_state.swa_n_averaged))
+                elif int(start_epoch) > int(cfg.swa_start_epoch):
+                    swa_model.load_state_dict(model.state_dict())
+                    swa_n_averaged = 1
+            lookahead_model = _make_torch_lookahead_model(model, cfg=cfg)
+            lookahead_step = int(resume_state.lookahead_step)
+            if lookahead_model is not None and resume_state.lookahead_state is not None:
+                lookahead_model.load_state_dict(resume_state.lookahead_state)
+            best_epoch = int(resume_state.best_epoch)
+            bad_epochs = int(resume_state.bad_epochs)
+            last_monitor = resume_state.last_monitor
+            last_epoch = int(start_epoch) if int(start_epoch) > 0 else -1
+            best_extra_payload = (
+                None
+                if best_state is None
+                else _snapshot_torch_training_state(
+                    optimizer=opt,
+                    scheduler=sched,
+                    scaler=None,
+                    best_state=best_state,
+                    best_monitor=float(best_loss),
+                    bad_epochs=int(bad_epochs),
+                    best_epoch=int(best_epoch),
+                    base_lrs=base_lrs,
+                    ema_state=(
+                        None if ema_model is None or not ema_active else ema_model.state_dict()
+                    ),
+                    swa_state=(
+                        None
+                        if swa_model is None or int(swa_n_averaged) <= 0
+                        else swa_model.state_dict()
+                    ),
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_state=(
+                        None if lookahead_model is None else lookahead_model.state_dict()
+                    ),
+                    lookahead_step=int(lookahead_step),
+                    model_state=_maybe_torch_model_state_for_checkpoint(
+                        model=model,
+                        cfg=cfg,
+                        ema_model=ema_model,
+                        ema_active=ema_active,
+                        swa_model=swa_model,
+                        swa_n_averaged=int(swa_n_averaged),
+                        lookahead_model=lookahead_model,
+                        lookahead_step=int(lookahead_step),
+                    ),
+                )
+            )
+            last_extra_payload = (
+                None
+                if last_monitor is None
+                else _snapshot_torch_training_state(
+                    optimizer=opt,
+                    scheduler=sched,
+                    scaler=None,
+                    best_state=best_state,
+                    best_monitor=float(best_loss),
+                    bad_epochs=int(bad_epochs),
+                    best_epoch=int(best_epoch),
+                    base_lrs=base_lrs,
+                    ema_state=(
+                        None if ema_model is None or not ema_active else ema_model.state_dict()
+                    ),
+                    swa_state=(
+                        None
+                        if swa_model is None or int(swa_n_averaged) <= 0
+                        else swa_model.state_dict()
+                    ),
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_state=(
+                        None if lookahead_model is None else lookahead_model.state_dict()
+                    ),
+                    lookahead_step=int(lookahead_step),
+                    model_state=_maybe_torch_model_state_for_checkpoint(
+                        model=model,
+                        cfg=cfg,
+                        ema_model=ema_model,
+                        ema_active=ema_active,
+                        swa_model=swa_model,
+                        swa_n_averaged=int(swa_n_averaged),
+                        lookahead_model=lookahead_model,
+                        lookahead_step=int(lookahead_step),
+                    ),
+                )
+            )
+            sam_active = _torch_sam_active(cfg=cfg)
 
-            for epoch in range(int(cfg.epochs)):
+            for epoch in range(start_epoch, int(cfg.epochs)):
                 if int(cfg.epochs) == 1:
                     tf = tf1
                 else:
@@ -2891,46 +3108,202 @@ def torch_rnnpaper_direct_forecast(
                 count = 0
                 for xb, yb in train_loader:
                     opt.zero_grad(set_to_none=True)
-                    pred = model(xb, yb, teacher_forcing_ratio=float(tf))
+                    xb_train = _apply_torch_train_input_dropout(torch, xb, cfg=cfg)
+                    xb_train = _apply_torch_train_temporal_dropout(torch, xb_train, cfg=cfg)
+                    pred = model(xb_train, yb, teacher_forcing_ratio=float(tf))
                     loss_v = loss_fn(pred, yb)
                     loss_v.backward()
-                    if float(cfg.grad_clip_norm) > 0.0:
-                        torch.nn.utils.clip_grad_norm_(
-                            model.parameters(), max_norm=float(cfg.grad_clip_norm)
+                    if sam_active:
+                        perturbations = _apply_torch_sam_perturbation(
+                            torch,
+                            model=model,
+                            cfg=cfg,
                         )
-                    opt.step()
+                        if perturbations:
+                            opt.zero_grad(set_to_none=True)
+                            pred_sam = model(xb_train, yb, teacher_forcing_ratio=float(tf))
+                            loss_second = loss_fn(pred_sam, yb)
+                            loss_second.backward()
+                            _restore_torch_sam_perturbation(
+                                torch,
+                                perturbations=perturbations,
+                            )
+                        _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                        opt.step()
+                    else:
+                        _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                        opt.step()
+                    if lookahead_model is not None:
+                        lookahead_step = _update_torch_lookahead_model(
+                            torch,
+                            lookahead_model=lookahead_model,
+                            model=model,
+                            cfg=cfg,
+                            lookahead_step=int(lookahead_step),
+                        )
+                    if ema_model is not None and _torch_ema_active_for_epoch(
+                        cfg=cfg,
+                        epoch_idx=int(epoch),
+                    ):
+                        if not ema_active:
+                            ema_model.load_state_dict(model.state_dict())
+                            ema_active = True
+                        else:
+                            _update_torch_ema_model(
+                                torch,
+                                ema_model=ema_model,
+                                model=model,
+                                cfg=cfg,
+                            )
+                    if swa_model is not None and _torch_swa_active_for_epoch(
+                        cfg=cfg,
+                        epoch_idx=int(epoch),
+                    ):
+                        swa_n_averaged = _update_torch_swa_model(
+                            torch,
+                            swa_model=swa_model,
+                            model=model,
+                            n_averaged=int(swa_n_averaged),
+                        )
                     total += float(loss_v.detach().cpu().item()) * int(xb.shape[0])
                     count += int(xb.shape[0])
                 train_loss = total / max(1, count)
 
+                eval_model = _select_torch_deploy_model(
+                    model=model,
+                    cfg=cfg,
+                    ema_model=ema_model,
+                    ema_active=ema_active,
+                    swa_model=swa_model,
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_model=lookahead_model,
+                    lookahead_step=int(lookahead_step),
+                )
                 if val_loader is not None:
-                    model.eval()
+                    eval_model.eval()
                     v_total = 0.0
                     v_count = 0
                     with torch.no_grad():
                         for xb, yb in val_loader:
-                            pred = model(xb, yb, teacher_forcing_ratio=0.0)
+                            pred = eval_model(xb, yb, teacher_forcing_ratio=0.0)
                             v_loss = loss_fn(pred, yb)
                             v_total += float(v_loss.detach().cpu().item()) * int(xb.shape[0])
                             v_count += int(xb.shape[0])
                     monitor = v_total / max(1, v_count)
                 else:
                     monitor = train_loss
+                last_monitor = float(monitor)
+                last_epoch = int(epoch) + 1
 
+                stop_training = False
                 if float(monitor) + 1e-12 < best_loss:
                     best_loss = float(monitor)
                     bad_epochs = 0
-                    if bool(cfg.restore_best):
-                        best_state = {
-                            k: v.detach().cpu().clone() for k, v in model.state_dict().items()
-                        }
+                    best_epoch = int(epoch) + 1
+                    if bool(cfg.restore_best) or bool(cfg.save_best_checkpoint):
+                        best_state = _clone_torch_state_dict_to_cpu(eval_model.state_dict())
                 else:
                     bad_epochs += 1
                     if bad_epochs >= int(cfg.patience):
-                        break
+                        stop_training = True
 
-                if sched is not None:
+                if sched is not None and not stop_training:
                     sched.step()
+                if best_state is not None:
+                    best_extra_payload = _snapshot_torch_training_state(
+                        optimizer=opt,
+                        scheduler=sched,
+                        scaler=None,
+                        best_state=best_state,
+                        best_monitor=float(best_loss),
+                        bad_epochs=int(bad_epochs),
+                        best_epoch=int(best_epoch),
+                        base_lrs=base_lrs,
+                        ema_state=(
+                            None if ema_model is None or not ema_active else ema_model.state_dict()
+                        ),
+                        swa_state=(
+                            None
+                            if swa_model is None or int(swa_n_averaged) <= 0
+                            else swa_model.state_dict()
+                        ),
+                        swa_n_averaged=int(swa_n_averaged),
+                        lookahead_state=(
+                            None if lookahead_model is None else lookahead_model.state_dict()
+                        ),
+                        lookahead_step=int(lookahead_step),
+                        model_state=_maybe_torch_model_state_for_checkpoint(
+                            model=model,
+                            cfg=cfg,
+                            ema_model=ema_model,
+                            ema_active=ema_active,
+                            swa_model=swa_model,
+                            swa_n_averaged=int(swa_n_averaged),
+                            lookahead_model=lookahead_model,
+                            lookahead_step=int(lookahead_step),
+                        ),
+                    )
+                last_extra_payload = _snapshot_torch_training_state(
+                    optimizer=opt,
+                    scheduler=sched,
+                    scaler=None,
+                    best_state=best_state,
+                    best_monitor=float(best_loss),
+                    bad_epochs=int(bad_epochs),
+                    best_epoch=int(best_epoch),
+                    base_lrs=base_lrs,
+                    ema_state=(
+                        None if ema_model is None or not ema_active else ema_model.state_dict()
+                    ),
+                    swa_state=(
+                        None
+                        if swa_model is None or int(swa_n_averaged) <= 0
+                        else swa_model.state_dict()
+                    ),
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_state=(
+                        None if lookahead_model is None else lookahead_model.state_dict()
+                    ),
+                    lookahead_step=int(lookahead_step),
+                    model_state=_maybe_torch_model_state_for_checkpoint(
+                        model=model,
+                        cfg=cfg,
+                        ema_model=ema_model,
+                        ema_active=ema_active,
+                        swa_model=swa_model,
+                        swa_n_averaged=int(swa_n_averaged),
+                        lookahead_model=lookahead_model,
+                        lookahead_step=int(lookahead_step),
+                    ),
+                )
+                if stop_training:
+                    break
+
+            last_state = None
+            if bool(cfg.save_last_checkpoint):
+                deploy_model = _select_torch_deploy_model(
+                    model=model,
+                    cfg=cfg,
+                    ema_model=ema_model,
+                    ema_active=ema_active,
+                    swa_model=swa_model,
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_model=lookahead_model,
+                    lookahead_step=int(lookahead_step),
+                )
+                last_state = _clone_torch_state_dict_to_cpu(deploy_model.state_dict())
+            _maybe_save_torch_checkpoints(
+                torch,
+                cfg=cfg,
+                best_state=best_state,
+                best_monitor=float(best_loss),
+                best_epoch=int(best_epoch),
+                last_state=last_state,
+                last_monitor=last_monitor,
+                last_epoch=int(last_epoch),
+                best_extra_payload=best_extra_payload,
+                last_extra_payload=last_extra_payload,
+            )
 
             if bool(cfg.restore_best) and best_state is not None:
                 model.load_state_dict(best_state)
@@ -2954,7 +3327,46 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            min_epochs=int(min_epochs),
+            amp=bool(amp),
+            amp_dtype=str(amp_dtype),
+            warmup_epochs=int(warmup_epochs),
+            min_lr=float(min_lr),
+            grad_accum_steps=int(grad_accum_steps),
+            monitor=str(monitor),
+            monitor_mode=str(monitor_mode),
+            min_delta=float(min_delta),
+            num_workers=int(num_workers),
+            pin_memory=bool(pin_memory),
+            persistent_workers=bool(persistent_workers),
+            scheduler_patience=int(scheduler_patience),
+            grad_clip_mode=str(grad_clip_mode),
+            grad_clip_value=float(grad_clip_value),
+            scheduler_plateau_factor=float(scheduler_plateau_factor),
+            scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+            ema_decay=float(ema_decay),
+            ema_warmup_epochs=int(ema_warmup_epochs),
+            swa_start_epoch=int(swa_start_epoch),
+            lookahead_steps=int(lookahead_steps),
+            lookahead_alpha=float(lookahead_alpha),
+            sam_rho=float(sam_rho),
+            sam_adaptive=bool(sam_adaptive),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
+            agc_clip_factor=float(agc_clip_factor),
+            agc_eps=float(agc_eps),
+            checkpoint_dir=str(checkpoint_dir),
+            save_best_checkpoint=bool(save_best_checkpoint),
+            save_last_checkpoint=bool(save_last_checkpoint),
+            resume_checkpoint_path=str(resume_checkpoint_path),
+            resume_checkpoint_strict=bool(resume_checkpoint_strict),
         )
         model = _train_seq2seq(
             model,
@@ -3085,7 +3497,15 @@ def torch_rnnpaper_direct_forecast(
             scheduler=str(scheduler),
             scheduler_step_size=int(scheduler_step_size),
             scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
             restore_best=bool(restore_best),
+            horizon_loss_decay=float(horizon_loss_decay),
+            input_dropout=float(input_dropout),
+            temporal_dropout=float(temporal_dropout),
+            grad_noise_std=float(grad_noise_std),
+            gc_mode=str(gc_mode),
         )
         model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
         feat = x_work[-lag_count:].astype(float, copy=False).reshape(1, lag_count, 1)
@@ -3172,7 +3592,46 @@ def torch_rnnpaper_direct_forecast(
         scheduler=str(scheduler),
         scheduler_step_size=int(scheduler_step_size),
         scheduler_gamma=float(scheduler_gamma),
+        scheduler_restart_period=int(scheduler_restart_period),
+        scheduler_restart_mult=int(scheduler_restart_mult),
+        scheduler_pct_start=float(scheduler_pct_start),
         restore_best=bool(restore_best),
+        min_epochs=int(min_epochs),
+        amp=bool(amp),
+        amp_dtype=str(amp_dtype),
+        warmup_epochs=int(warmup_epochs),
+        min_lr=float(min_lr),
+        grad_accum_steps=int(grad_accum_steps),
+        monitor=str(monitor),
+        monitor_mode=str(monitor_mode),
+        min_delta=float(min_delta),
+        num_workers=int(num_workers),
+        pin_memory=bool(pin_memory),
+        persistent_workers=bool(persistent_workers),
+        scheduler_patience=int(scheduler_patience),
+        grad_clip_mode=str(grad_clip_mode),
+        grad_clip_value=float(grad_clip_value),
+        scheduler_plateau_factor=float(scheduler_plateau_factor),
+        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+        ema_decay=float(ema_decay),
+        ema_warmup_epochs=int(ema_warmup_epochs),
+        swa_start_epoch=int(swa_start_epoch),
+        lookahead_steps=int(lookahead_steps),
+        lookahead_alpha=float(lookahead_alpha),
+        sam_rho=float(sam_rho),
+        sam_adaptive=bool(sam_adaptive),
+        horizon_loss_decay=float(horizon_loss_decay),
+        input_dropout=float(input_dropout),
+        temporal_dropout=float(temporal_dropout),
+        grad_noise_std=float(grad_noise_std),
+        gc_mode=str(gc_mode),
+        agc_clip_factor=float(agc_clip_factor),
+        agc_eps=float(agc_eps),
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=bool(save_best_checkpoint),
+        save_last_checkpoint=bool(save_last_checkpoint),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        resume_checkpoint_strict=bool(resume_checkpoint_strict),
     )
     model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 

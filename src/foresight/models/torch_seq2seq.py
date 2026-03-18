@@ -6,39 +6,48 @@ import numpy as np
 
 from .torch_nn import (
     TorchTrainConfig,
+    _apply_torch_gradient_clipping,
+    _apply_torch_sam_perturbation,
+    _apply_torch_train_input_dropout,
+    _apply_torch_train_temporal_dropout,
+    _apply_torch_warmup,
     _as_1d_float_array,
+    _clamp_torch_optimizer_min_lr,
+    _clone_torch_state_dict_to_cpu,
+    _load_torch_training_state,
     _make_lagged_xy_multi,
     _make_manual_gru,
     _make_manual_lstm,
+    _make_torch_amp_state,
+    _make_torch_autocast_context,
+    _make_torch_dataloader,
+    _make_torch_ema_model,
+    _make_torch_lookahead_model,
+    _make_torch_loss_fn,
+    _make_torch_scheduler,
+    _make_torch_swa_model,
+    _maybe_save_torch_checkpoints,
+    _maybe_torch_model_state_for_checkpoint,
     _normalize_series,
     _require_torch,
+    _restore_torch_sam_perturbation,
+    _select_torch_deploy_model,
+    _select_torch_monitor_value,
+    _snapshot_torch_training_state,
+    _torch_ema_active_for_epoch,
+    _torch_monitor_improved,
+    _torch_sam_active,
+    _torch_scheduler_steps_per_batch,
+    _torch_swa_active_for_epoch,
+    _update_torch_ema_model,
+    _update_torch_lookahead_model,
+    _update_torch_swa_model,
+    _validate_torch_train_config,
 )
 
 
-def _make_loss_fn(nn: Any, loss: str) -> Any:
-    name = str(loss).lower().strip()
-    if name in {"mse", ""}:
-        return nn.MSELoss()
-    if name in {"mae", "l1"}:
-        return nn.L1Loss()
-    if name in {"huber", "smoothl1"}:
-        return nn.SmoothL1Loss()
-    raise ValueError("loss must be one of: mse, mae, huber")
-
-
 def _validate_seq2seq_training_config(cfg: TorchTrainConfig) -> None:
-    if cfg.epochs <= 0:
-        raise ValueError("epochs must be >= 1")
-    if cfg.lr <= 0.0:
-        raise ValueError("lr must be > 0")
-    if cfg.batch_size <= 0:
-        raise ValueError("batch_size must be >= 1")
-    if cfg.patience <= 0:
-        raise ValueError("patience must be >= 1")
-    if float(cfg.val_split) < 0.0 or float(cfg.val_split) >= 0.5:
-        raise ValueError("val_split must be in [0, 0.5)")
-    if float(cfg.grad_clip_norm) < 0.0:
-        raise ValueError("grad_clip_norm must be >= 0")
+    _validate_torch_train_config(cfg)
 
 
 def _validate_seq2seq_teacher_forcing(
@@ -60,17 +69,15 @@ def _split_seq2seq_train_validation(
     X: np.ndarray,
     Y: np.ndarray,
     *,
-    device: Any,
-    batch_size: int,
-    val_split: float,
+    cfg: TorchTrainConfig,
 ) -> tuple[Any, Any]:
-    x_tensor = torch.tensor(X, dtype=torch.float32, device=device)
-    y_tensor = torch.tensor(Y, dtype=torch.float32, device=device)
+    x_tensor = torch.tensor(X, dtype=torch.float32)
+    y_tensor = torch.tensor(Y, dtype=torch.float32)
 
     n = int(x_tensor.shape[0])
     val_n = 0
-    if float(val_split) > 0.0 and n >= 5:
-        val_n = max(1, int(round(float(val_split) * n)))
+    if float(cfg.val_split) > 0.0 and n >= 5:
+        val_n = max(1, int(round(float(cfg.val_split) * n)))
         val_n = min(val_n, n - 1)
 
     if val_n > 0:
@@ -81,17 +88,19 @@ def _split_seq2seq_train_validation(
         X_train, Y_train = x_tensor, y_tensor
         x_val, y_val = None, None
 
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = _make_torch_dataloader(
+        torch,
         torch.utils.data.TensorDataset(X_train, Y_train),
-        batch_size=int(batch_size),
+        cfg=cfg,
         shuffle=True,
     )
     val_loader = (
         None
         if x_val is None
-        else torch.utils.data.DataLoader(
+        else _make_torch_dataloader(
+            torch,
             torch.utils.data.TensorDataset(x_val, y_val),
-            batch_size=int(batch_size),
+            cfg=cfg,
             shuffle=False,
         )
     )
@@ -122,19 +131,14 @@ def _make_seq2seq_optimizer(torch: Any, model: Any, *, cfg: TorchTrainConfig) ->
     raise ValueError("optimizer must be one of: adam, adamw, sgd")
 
 
-def _make_seq2seq_scheduler(torch: Any, opt: Any, *, cfg: TorchTrainConfig) -> Any:
-    sched_name = str(cfg.scheduler).lower().strip()
-    if sched_name in {"none", ""}:
-        return None
-    if sched_name == "cosine":
-        return torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=int(cfg.epochs))
-    if sched_name == "step":
-        return torch.optim.lr_scheduler.StepLR(
-            opt,
-            step_size=int(cfg.scheduler_step_size),
-            gamma=float(cfg.scheduler_gamma),
-        )
-    raise ValueError("scheduler must be one of: none, cosine, step")
+def _make_seq2seq_scheduler(
+    torch: Any,
+    opt: Any,
+    *,
+    cfg: TorchTrainConfig,
+    steps_per_epoch: int | None = None,
+) -> tuple[Any, str]:
+    return _make_torch_scheduler(torch, opt, cfg=cfg, steps_per_epoch=steps_per_epoch)
 
 
 def _seq2seq_teacher_forcing_ratio(
@@ -254,7 +258,46 @@ def _build_torch_train_config(
     scheduler: str,
     scheduler_step_size: int,
     scheduler_gamma: float,
+    scheduler_restart_period: int,
+    scheduler_restart_mult: int,
+    scheduler_pct_start: float,
     restore_best: bool,
+    min_epochs: int,
+    amp: bool,
+    amp_dtype: str,
+    warmup_epochs: int,
+    min_lr: float,
+    grad_accum_steps: int,
+    monitor: str,
+    monitor_mode: str,
+    min_delta: float,
+    num_workers: int,
+    pin_memory: bool,
+    persistent_workers: bool,
+    scheduler_patience: int,
+    grad_clip_mode: str,
+    grad_clip_value: float,
+    scheduler_plateau_factor: float,
+    scheduler_plateau_threshold: float,
+    ema_decay: float = 0.0,
+    ema_warmup_epochs: int = 0,
+    swa_start_epoch: int = -1,
+    lookahead_steps: int = 0,
+    lookahead_alpha: float = 0.5,
+    sam_rho: float = 0.0,
+    sam_adaptive: bool = False,
+    horizon_loss_decay: float = 1.0,
+    input_dropout: float = 0.0,
+    temporal_dropout: float = 0.0,
+    grad_noise_std: float = 0.0,
+    gc_mode: str = "off",
+    agc_clip_factor: float = 0.0,
+    agc_eps: float = 1e-3,
+    checkpoint_dir: str,
+    save_best_checkpoint: bool,
+    save_last_checkpoint: bool,
+    resume_checkpoint_path: str,
+    resume_checkpoint_strict: bool,
 ) -> TorchTrainConfig:
     return TorchTrainConfig(
         epochs=int(epochs),
@@ -271,7 +314,46 @@ def _build_torch_train_config(
         scheduler=str(scheduler),
         scheduler_step_size=int(scheduler_step_size),
         scheduler_gamma=float(scheduler_gamma),
+        scheduler_restart_period=int(scheduler_restart_period),
+        scheduler_restart_mult=int(scheduler_restart_mult),
+        scheduler_pct_start=float(scheduler_pct_start),
         restore_best=bool(restore_best),
+        min_epochs=int(min_epochs),
+        amp=bool(amp),
+        amp_dtype=str(amp_dtype),
+        warmup_epochs=int(warmup_epochs),
+        min_lr=float(min_lr),
+        grad_accum_steps=int(grad_accum_steps),
+        monitor=str(monitor),
+        monitor_mode=str(monitor_mode),
+        min_delta=float(min_delta),
+        num_workers=int(num_workers),
+        pin_memory=bool(pin_memory),
+        persistent_workers=bool(persistent_workers),
+        scheduler_patience=int(scheduler_patience),
+        grad_clip_mode=str(grad_clip_mode),
+        grad_clip_value=float(grad_clip_value),
+        scheduler_plateau_factor=float(scheduler_plateau_factor),
+        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+        ema_decay=float(ema_decay),
+        ema_warmup_epochs=int(ema_warmup_epochs),
+        swa_start_epoch=int(swa_start_epoch),
+        lookahead_steps=int(lookahead_steps),
+        lookahead_alpha=float(lookahead_alpha),
+        sam_rho=float(sam_rho),
+        sam_adaptive=bool(sam_adaptive),
+        horizon_loss_decay=float(horizon_loss_decay),
+        input_dropout=float(input_dropout),
+        temporal_dropout=float(temporal_dropout),
+        grad_noise_std=float(grad_noise_std),
+        gc_mode=str(gc_mode),
+        agc_clip_factor=float(agc_clip_factor),
+        agc_eps=float(agc_eps),
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=bool(save_best_checkpoint),
+        save_last_checkpoint=bool(save_last_checkpoint),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        resume_checkpoint_strict=bool(resume_checkpoint_strict),
     )
 
 
@@ -347,78 +429,426 @@ def _train_seq2seq(
     dev = torch.device(str(device))
     if dev.type == "cuda" and not torch.cuda.is_available():
         raise ValueError("device='cuda' requested but CUDA is not available")
+    amp_enabled, amp_dtype, scaler = _make_torch_amp_state(torch, cfg=cfg, dev=dev)
 
     model = model.to(dev)
     train_loader, val_loader = _split_seq2seq_train_validation(
         torch,
         X,
         Y,
-        device=dev,
-        batch_size=int(cfg.batch_size),
-        val_split=float(cfg.val_split),
+        cfg=cfg,
     )
     opt = _make_seq2seq_optimizer(torch, model, cfg=cfg)
+    base_lrs = tuple(float(group["lr"]) for group in opt.param_groups)
 
-    loss_fn = _make_loss_fn(nn, cfg.loss)
-    sched = _make_seq2seq_scheduler(torch, opt, cfg=cfg)
+    loss_fn = _make_torch_loss_fn(torch, nn, cfg=cfg)
+    accum_steps = int(cfg.grad_accum_steps)
+    sched, sched_name = _make_seq2seq_scheduler(
+        torch,
+        opt,
+        cfg=cfg,
+        steps_per_epoch=max(1, (len(train_loader) + accum_steps - 1) // accum_steps),
+    )
+    resume_state = _load_torch_training_state(
+        torch,
+        model,
+        cfg=cfg,
+        optimizer=opt,
+        scheduler=sched,
+        scaler=scaler,
+    )
+    start_epoch = max(0, int(resume_state.start_epoch))
+    base_lrs = resume_state.base_lrs or base_lrs
 
-    best_loss = float("inf")
-    best_state: dict[str, Any] | None = None
-    bad_epochs = 0
+    best_monitor_default = (
+        float("-inf")
+        if str(cfg.monitor_mode).lower().strip() == "max"
+        else float("inf")
+    )
+    best_monitor = (
+        best_monitor_default
+        if resume_state.best_monitor is None
+        else float(resume_state.best_monitor)
+    )
+    best_state: dict[str, Any] | None = (
+        None
+        if resume_state.best_state is None
+        else _clone_torch_state_dict_to_cpu(resume_state.best_state)
+    )
+    ema_model = _make_torch_ema_model(model, cfg=cfg)
+    ema_active = False
+    if ema_model is not None:
+        if resume_state.ema_state is not None:
+            ema_model.load_state_dict(resume_state.ema_state)
+            ema_active = True
+        elif int(start_epoch) > int(cfg.ema_warmup_epochs):
+            ema_model.load_state_dict(model.state_dict())
+            ema_active = True
+    swa_model = _make_torch_swa_model(model, cfg=cfg)
+    swa_n_averaged = int(resume_state.swa_n_averaged)
+    if swa_model is not None:
+        if resume_state.swa_state is not None:
+            swa_model.load_state_dict(resume_state.swa_state)
+            swa_n_averaged = max(1, int(resume_state.swa_n_averaged))
+        elif int(start_epoch) > int(cfg.swa_start_epoch):
+            swa_model.load_state_dict(model.state_dict())
+            swa_n_averaged = 1
+    lookahead_model = _make_torch_lookahead_model(model, cfg=cfg)
+    lookahead_step = int(resume_state.lookahead_step)
+    if lookahead_model is not None and resume_state.lookahead_state is not None:
+        lookahead_model.load_state_dict(resume_state.lookahead_state)
+    best_epoch = int(resume_state.best_epoch)
+    bad_epochs = int(resume_state.bad_epochs)
+    last_monitor = resume_state.last_monitor
+    last_epoch = int(start_epoch) if int(start_epoch) > 0 else -1
+    best_extra_payload = (
+        None
+        if best_state is None
+        else _snapshot_torch_training_state(
+            optimizer=opt,
+            scheduler=sched,
+            scaler=scaler,
+            best_state=best_state,
+            best_monitor=float(best_monitor),
+            bad_epochs=int(bad_epochs),
+            best_epoch=int(best_epoch),
+            base_lrs=base_lrs,
+            ema_state=(
+                None if ema_model is None or not ema_active else ema_model.state_dict()
+            ),
+            swa_state=(
+                None
+                if swa_model is None or int(swa_n_averaged) <= 0
+                else swa_model.state_dict()
+            ),
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_state=(
+                None if lookahead_model is None else lookahead_model.state_dict()
+            ),
+            lookahead_step=int(lookahead_step),
+            model_state=_maybe_torch_model_state_for_checkpoint(
+                model=model,
+                cfg=cfg,
+                ema_model=ema_model,
+                ema_active=ema_active,
+                swa_model=swa_model,
+                swa_n_averaged=int(swa_n_averaged),
+                lookahead_model=lookahead_model,
+                lookahead_step=int(lookahead_step),
+            ),
+        )
+    )
+    last_extra_payload = (
+        None
+        if last_monitor is None
+        else _snapshot_torch_training_state(
+            optimizer=opt,
+            scheduler=sched,
+            scaler=scaler,
+            best_state=best_state,
+            best_monitor=float(best_monitor),
+            bad_epochs=int(bad_epochs),
+            best_epoch=int(best_epoch),
+            base_lrs=base_lrs,
+            ema_state=(
+                None if ema_model is None or not ema_active else ema_model.state_dict()
+            ),
+            swa_state=(
+                None
+                if swa_model is None or int(swa_n_averaged) <= 0
+                else swa_model.state_dict()
+            ),
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_state=(
+                None if lookahead_model is None else lookahead_model.state_dict()
+            ),
+            lookahead_step=int(lookahead_step),
+            model_state=_maybe_torch_model_state_for_checkpoint(
+                model=model,
+                cfg=cfg,
+                ema_model=ema_model,
+                ema_active=ema_active,
+                swa_model=swa_model,
+                swa_n_averaged=int(swa_n_averaged),
+                lookahead_model=lookahead_model,
+                lookahead_step=int(lookahead_step),
+            ),
+        )
+    )
+    non_blocking = bool(cfg.pin_memory) and dev.type == "cuda"
+    sam_active = _torch_sam_active(cfg=cfg)
 
-    for epoch in range(int(cfg.epochs)):
+    for epoch in range(start_epoch, int(cfg.epochs)):
         tf = _seq2seq_teacher_forcing_ratio(
             epoch,
             total_epochs=int(cfg.epochs),
             teacher_forcing_start=tf0,
             teacher_forcing_final=tf1,
         )
+        _apply_torch_warmup(opt, cfg=cfg, epoch_idx=int(epoch), base_lrs=base_lrs)
 
         model.train()
         total = 0.0
         count = 0
-        for xb, yb in train_loader:
-            opt.zero_grad(set_to_none=True)
-            pred = model(xb, yb, teacher_forcing_ratio=float(tf))
-            loss = loss_fn(pred, yb)
-            loss.backward()
-            if float(cfg.grad_clip_norm) > 0.0:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=float(cfg.grad_clip_norm)
+        opt.zero_grad(set_to_none=True)
+        num_batches = len(train_loader)
+        for batch_idx, (xb, yb) in enumerate(train_loader, start=1):
+            xb = xb.to(dev, non_blocking=non_blocking)
+            yb = yb.to(dev, non_blocking=non_blocking)
+            xb_train = _apply_torch_train_input_dropout(torch, xb, cfg=cfg)
+            xb_train = _apply_torch_train_temporal_dropout(torch, xb_train, cfg=cfg)
+            with _make_torch_autocast_context(
+                torch,
+                enabled=bool(amp_enabled),
+                dev=dev,
+                dtype=amp_dtype,
+            ):
+                pred = model(xb_train, yb, teacher_forcing_ratio=float(tf))
+                loss = loss_fn(pred, yb)
+            loss_to_backprop = loss / float(accum_steps)
+            if scaler is not None and bool(scaler.is_enabled()):
+                scaler.scale(loss_to_backprop).backward()
+            else:
+                loss_to_backprop.backward()
+            should_step = batch_idx % accum_steps == 0 or batch_idx == num_batches
+            if should_step:
+                needs_unscale = (
+                    scaler is not None
+                    and bool(scaler.is_enabled())
+                    and (
+                        float(cfg.grad_clip_norm) > 0.0
+                        or (
+                            str(cfg.grad_clip_mode).lower().strip() == "value"
+                            and float(cfg.grad_clip_value) > 0.0
+                        )
+                    )
                 )
-            opt.step()
+                if sam_active:
+                    perturbations = _apply_torch_sam_perturbation(
+                        torch,
+                        model=model,
+                        cfg=cfg,
+                    )
+                    if perturbations:
+                        opt.zero_grad(set_to_none=True)
+                        with _make_torch_autocast_context(
+                            torch,
+                            enabled=bool(amp_enabled),
+                            dev=dev,
+                            dtype=amp_dtype,
+                        ):
+                            pred = model(xb_train, yb, teacher_forcing_ratio=float(tf))
+                            loss_second = loss_fn(pred, yb)
+                        loss_second.backward()
+                        _restore_torch_sam_perturbation(
+                            torch,
+                            perturbations=perturbations,
+                        )
+                    _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                    opt.step()
+                else:
+                    if needs_unscale:
+                        scaler.unscale_(opt)
+                    _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                    if scaler is not None and bool(scaler.is_enabled()):
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        opt.step()
+                if lookahead_model is not None:
+                    lookahead_step = _update_torch_lookahead_model(
+                        torch,
+                        lookahead_model=lookahead_model,
+                        model=model,
+                        cfg=cfg,
+                        lookahead_step=int(lookahead_step),
+                    )
+                if ema_model is not None and _torch_ema_active_for_epoch(
+                    cfg=cfg,
+                    epoch_idx=int(epoch),
+                ):
+                    if not ema_active:
+                        ema_model.load_state_dict(model.state_dict())
+                        ema_active = True
+                    else:
+                        _update_torch_ema_model(
+                            torch,
+                            ema_model=ema_model,
+                            model=model,
+                            cfg=cfg,
+                        )
+                if swa_model is not None and _torch_swa_active_for_epoch(
+                    cfg=cfg,
+                    epoch_idx=int(epoch),
+                ):
+                    swa_n_averaged = _update_torch_swa_model(
+                        torch,
+                        swa_model=swa_model,
+                        model=model,
+                        n_averaged=int(swa_n_averaged),
+                    )
+                if sched is not None and _torch_scheduler_steps_per_batch(sched_name):
+                    sched.step()
+                opt.zero_grad(set_to_none=True)
 
             total += float(loss.detach().cpu().item()) * int(xb.shape[0])
             count += int(xb.shape[0])
 
         train_loss = total / max(1, count)
 
+        val_loss: float | None = None
+        eval_model = _select_torch_deploy_model(
+            model=model,
+            cfg=cfg,
+            ema_model=ema_model,
+            ema_active=ema_active,
+            swa_model=swa_model,
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_model=lookahead_model,
+            lookahead_step=int(lookahead_step),
+        )
         if val_loader is not None:
-            model.eval()
+            eval_model.eval()
             v_total = 0.0
             v_count = 0
             with torch.no_grad():
                 for xb, yb in val_loader:
-                    pred = model(xb, yb, teacher_forcing_ratio=0.0)
-                    v_loss = loss_fn(pred, yb)
+                    xb = xb.to(dev, non_blocking=non_blocking)
+                    yb = yb.to(dev, non_blocking=non_blocking)
+                    with _make_torch_autocast_context(
+                        torch,
+                        enabled=bool(amp_enabled),
+                        dev=dev,
+                        dtype=amp_dtype,
+                    ):
+                        pred = eval_model(xb, yb, teacher_forcing_ratio=0.0)
+                        v_loss = loss_fn(pred, yb)
                     v_total += float(v_loss.detach().cpu().item()) * int(xb.shape[0])
                     v_count += int(xb.shape[0])
-            monitor = v_total / max(1, v_count)
-        else:
-            monitor = train_loss
+            val_loss = v_total / max(1, v_count)
 
-        if float(monitor) + 1e-12 < best_loss:
-            best_loss = float(monitor)
+        monitor = _select_torch_monitor_value(
+            cfg,
+            train_loss=float(train_loss),
+            val_loss=val_loss,
+        )
+        last_monitor = float(monitor)
+        last_epoch = int(epoch) + 1
+
+        stop_training = False
+        if _torch_monitor_improved(value=float(monitor), best=float(best_monitor), cfg=cfg):
+            best_monitor = float(monitor)
             bad_epochs = 0
-            if bool(cfg.restore_best):
-                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            best_epoch = int(epoch) + 1
+            if bool(cfg.restore_best) or bool(cfg.save_best_checkpoint):
+                best_state = _clone_torch_state_dict_to_cpu(eval_model.state_dict())
         else:
             bad_epochs += 1
-            if bad_epochs >= int(cfg.patience):
-                break
+            if bad_epochs >= int(cfg.patience) and int(epoch) + 1 >= int(cfg.min_epochs):
+                stop_training = True
 
-        if sched is not None:
-            sched.step()
+        if not stop_training and sched is not None and not _torch_scheduler_steps_per_batch(sched_name):
+            if int(epoch) + 1 > int(cfg.warmup_epochs):
+                if sched_name == "plateau":
+                    sched.step(float(monitor))
+                else:
+                    sched.step()
+                _clamp_torch_optimizer_min_lr(opt, cfg=cfg)
+        if best_state is not None:
+            best_extra_payload = _snapshot_torch_training_state(
+                optimizer=opt,
+                scheduler=sched,
+                scaler=scaler,
+                best_state=best_state,
+                best_monitor=float(best_monitor),
+                bad_epochs=int(bad_epochs),
+                best_epoch=int(best_epoch),
+                base_lrs=base_lrs,
+                ema_state=(
+                    None if ema_model is None or not ema_active else ema_model.state_dict()
+                ),
+                swa_state=(
+                    None
+                    if swa_model is None or int(swa_n_averaged) <= 0
+                    else swa_model.state_dict()
+                ),
+                swa_n_averaged=int(swa_n_averaged),
+                lookahead_state=(
+                    None if lookahead_model is None else lookahead_model.state_dict()
+                ),
+                lookahead_step=int(lookahead_step),
+                model_state=_maybe_torch_model_state_for_checkpoint(
+                    model=model,
+                    cfg=cfg,
+                    ema_model=ema_model,
+                    ema_active=ema_active,
+                    swa_model=swa_model,
+                    swa_n_averaged=int(swa_n_averaged),
+                    lookahead_model=lookahead_model,
+                    lookahead_step=int(lookahead_step),
+                ),
+            )
+        last_extra_payload = _snapshot_torch_training_state(
+            optimizer=opt,
+            scheduler=sched,
+            scaler=scaler,
+            best_state=best_state,
+            best_monitor=float(best_monitor),
+            bad_epochs=int(bad_epochs),
+            best_epoch=int(best_epoch),
+            base_lrs=base_lrs,
+            ema_state=(
+                None if ema_model is None or not ema_active else ema_model.state_dict()
+            ),
+            swa_state=(
+                None
+                if swa_model is None or int(swa_n_averaged) <= 0
+                else swa_model.state_dict()
+            ),
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_state=(
+                None if lookahead_model is None else lookahead_model.state_dict()
+            ),
+            lookahead_step=int(lookahead_step),
+            model_state=_maybe_torch_model_state_for_checkpoint(
+                model=model,
+                cfg=cfg,
+                ema_model=ema_model,
+                ema_active=ema_active,
+                swa_model=swa_model,
+                swa_n_averaged=int(swa_n_averaged),
+                lookahead_model=lookahead_model,
+                lookahead_step=int(lookahead_step),
+            ),
+        )
+        if stop_training:
+            break
+
+    last_state = None
+    if bool(cfg.save_last_checkpoint):
+        deploy_model = _select_torch_deploy_model(
+            model=model,
+            cfg=cfg,
+            ema_model=ema_model,
+            ema_active=ema_active,
+            swa_model=swa_model,
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_model=lookahead_model,
+            lookahead_step=int(lookahead_step),
+        )
+        last_state = _clone_torch_state_dict_to_cpu(deploy_model.state_dict())
+    _maybe_save_torch_checkpoints(
+        torch,
+        cfg=cfg,
+        best_state=best_state,
+        best_monitor=float(best_monitor),
+        best_epoch=int(best_epoch),
+        last_state=last_state,
+        last_monitor=last_monitor,
+        last_epoch=int(last_epoch),
+        best_extra_payload=best_extra_payload,
+        last_extra_payload=last_extra_payload,
+    )
 
     if bool(cfg.restore_best) and best_state is not None:
         model.load_state_dict(best_state)
@@ -455,7 +885,46 @@ def torch_seq2seq_direct_forecast(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
+    min_epochs: int = 1,
+    amp: bool = False,
+    amp_dtype: str = "auto",
+    warmup_epochs: int = 0,
+    min_lr: float = 0.0,
+    grad_accum_steps: int = 1,
+    monitor: str = "auto",
+    monitor_mode: str = "min",
+    min_delta: float = 0.0,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    persistent_workers: bool = False,
+    scheduler_patience: int = 5,
+    grad_clip_mode: str = "norm",
+    grad_clip_value: float = 0.0,
+    scheduler_plateau_factor: float = 0.1,
+    scheduler_plateau_threshold: float = 1e-4,
+    ema_decay: float = 0.0,
+    ema_warmup_epochs: int = 0,
+    swa_start_epoch: int = -1,
+    lookahead_steps: int = 0,
+    lookahead_alpha: float = 0.5,
+    sam_rho: float = 0.0,
+    sam_adaptive: bool = False,
+    horizon_loss_decay: float = 1.0,
+    input_dropout: float = 0.0,
+    temporal_dropout: float = 0.0,
+    grad_noise_std: float = 0.0,
+    gc_mode: str = "off",
+    agc_clip_factor: float = 0.0,
+    agc_eps: float = 1e-3,
+    checkpoint_dir: str = "",
+    save_best_checkpoint: bool = False,
+    save_last_checkpoint: bool = False,
+    resume_checkpoint_path: str = "",
+    resume_checkpoint_strict: bool = True,
 ) -> np.ndarray:
     """
     Seq2Seq RNN (LSTM/GRU) with optional Bahdanau attention.
@@ -586,7 +1055,46 @@ def torch_seq2seq_direct_forecast(
         scheduler=scheduler,
         scheduler_step_size=scheduler_step_size,
         scheduler_gamma=scheduler_gamma,
+        scheduler_restart_period=scheduler_restart_period,
+        scheduler_restart_mult=scheduler_restart_mult,
+        scheduler_pct_start=scheduler_pct_start,
         restore_best=restore_best,
+        min_epochs=int(min_epochs),
+        amp=bool(amp),
+        amp_dtype=str(amp_dtype),
+        warmup_epochs=int(warmup_epochs),
+        min_lr=float(min_lr),
+        grad_accum_steps=int(grad_accum_steps),
+        monitor=str(monitor),
+        monitor_mode=str(monitor_mode),
+        min_delta=float(min_delta),
+        num_workers=int(num_workers),
+        pin_memory=bool(pin_memory),
+        persistent_workers=bool(persistent_workers),
+        scheduler_patience=int(scheduler_patience),
+        grad_clip_mode=str(grad_clip_mode),
+        grad_clip_value=float(grad_clip_value),
+        scheduler_plateau_factor=float(scheduler_plateau_factor),
+        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+        ema_decay=float(ema_decay),
+        ema_warmup_epochs=int(ema_warmup_epochs),
+        swa_start_epoch=int(swa_start_epoch),
+        lookahead_steps=int(lookahead_steps),
+        lookahead_alpha=float(lookahead_alpha),
+        sam_rho=float(sam_rho),
+        sam_adaptive=bool(sam_adaptive),
+        horizon_loss_decay=float(horizon_loss_decay),
+        input_dropout=float(input_dropout),
+        temporal_dropout=float(temporal_dropout),
+        grad_noise_std=float(grad_noise_std),
+        gc_mode=str(gc_mode),
+        agc_clip_factor=float(agc_clip_factor),
+        agc_eps=float(agc_eps),
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=bool(save_best_checkpoint),
+        save_last_checkpoint=bool(save_last_checkpoint),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        resume_checkpoint_strict=bool(resume_checkpoint_strict),
     )
     model = _train_seq2seq(
         model,
@@ -640,7 +1148,46 @@ def torch_lstnet_direct_forecast(
     scheduler: str = "none",
     scheduler_step_size: int = 10,
     scheduler_gamma: float = 0.1,
+    scheduler_restart_period: int = 10,
+    scheduler_restart_mult: int = 1,
+    scheduler_pct_start: float = 0.3,
     restore_best: bool = True,
+    min_epochs: int = 1,
+    amp: bool = False,
+    amp_dtype: str = "auto",
+    warmup_epochs: int = 0,
+    min_lr: float = 0.0,
+    grad_accum_steps: int = 1,
+    monitor: str = "auto",
+    monitor_mode: str = "min",
+    min_delta: float = 0.0,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    persistent_workers: bool = False,
+    scheduler_patience: int = 5,
+    grad_clip_mode: str = "norm",
+    grad_clip_value: float = 0.0,
+    scheduler_plateau_factor: float = 0.1,
+    scheduler_plateau_threshold: float = 1e-4,
+    ema_decay: float = 0.0,
+    ema_warmup_epochs: int = 0,
+    swa_start_epoch: int = -1,
+    lookahead_steps: int = 0,
+    lookahead_alpha: float = 0.5,
+    sam_rho: float = 0.0,
+    sam_adaptive: bool = False,
+    horizon_loss_decay: float = 1.0,
+    input_dropout: float = 0.0,
+    temporal_dropout: float = 0.0,
+    grad_noise_std: float = 0.0,
+    gc_mode: str = "off",
+    agc_clip_factor: float = 0.0,
+    agc_eps: float = 1e-3,
+    checkpoint_dir: str = "",
+    save_best_checkpoint: bool = False,
+    save_last_checkpoint: bool = False,
+    resume_checkpoint_path: str = "",
+    resume_checkpoint_strict: bool = True,
 ) -> np.ndarray:
     """
     LSTNet-style CNN + (skip) GRU + highway (lite).
@@ -747,7 +1294,46 @@ def torch_lstnet_direct_forecast(
         scheduler=scheduler,
         scheduler_step_size=scheduler_step_size,
         scheduler_gamma=scheduler_gamma,
+        scheduler_restart_period=scheduler_restart_period,
+        scheduler_restart_mult=scheduler_restart_mult,
+        scheduler_pct_start=scheduler_pct_start,
         restore_best=restore_best,
+        min_epochs=int(min_epochs),
+        amp=bool(amp),
+        amp_dtype=str(amp_dtype),
+        warmup_epochs=int(warmup_epochs),
+        min_lr=float(min_lr),
+        grad_accum_steps=int(grad_accum_steps),
+        monitor=str(monitor),
+        monitor_mode=str(monitor_mode),
+        min_delta=float(min_delta),
+        num_workers=int(num_workers),
+        pin_memory=bool(pin_memory),
+        persistent_workers=bool(persistent_workers),
+        scheduler_patience=int(scheduler_patience),
+        grad_clip_mode=str(grad_clip_mode),
+        grad_clip_value=float(grad_clip_value),
+        scheduler_plateau_factor=float(scheduler_plateau_factor),
+        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+        ema_decay=float(ema_decay),
+        ema_warmup_epochs=int(ema_warmup_epochs),
+        swa_start_epoch=int(swa_start_epoch),
+        lookahead_steps=int(lookahead_steps),
+        lookahead_alpha=float(lookahead_alpha),
+        sam_rho=float(sam_rho),
+        sam_adaptive=bool(sam_adaptive),
+        horizon_loss_decay=float(horizon_loss_decay),
+        input_dropout=float(input_dropout),
+        temporal_dropout=float(temporal_dropout),
+        grad_noise_std=float(grad_noise_std),
+        gc_mode=str(gc_mode),
+        agc_clip_factor=float(agc_clip_factor),
+        agc_eps=float(agc_eps),
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=bool(save_best_checkpoint),
+        save_last_checkpoint=bool(save_last_checkpoint),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        resume_checkpoint_strict=bool(resume_checkpoint_strict),
     )
     model = _train_loop(model, x_seq, Y, cfg=cfg, device=str(device))
 

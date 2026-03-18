@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" font-family="'Segoe UI',system-ui,-apple-system,sans-serif">
+  <defs>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ede9fe"/>
+      <stop offset="100%" stop-color="#f5f3ff"/>
+    </linearGradient>
+    <linearGradient id="modelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="100%" stop-color="#eff6ff"/>
+    </linearGradient>
+    <linearGradient id="evalGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d1fae5"/>
+      <stop offset="100%" stop-color="#ecfdf5"/>
+    </linearGradient>
+    <linearGradient id="dataGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="100%" stop-color="#fffbeb"/>
+    </linearGradient>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0001"/>
+    </filter>
+    <filter id="shadowSm" x="-2%" y="-4%" width="104%" height="112%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0001"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="520" rx="12" fill="#fafafa"/>
+
+  <!-- Title bar -->
+  <rect x="20" y="16" width="860" height="44" rx="8" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <text x="450" y="44" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">ForeSight  Architecture Overview</text>
+
+  <!-- ===== USER SURFACE ===== -->
+  <rect x="30" y="76" width="840" height="54" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="98" fill="#64748b" font-size="11" font-weight="600" letter-spacing="1">USER SURFACE</text>
+  <rect x="160" y="84" width="100" height="36" rx="6" fill="#6366f1"/>
+  <text x="210" y="107" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Python API</text>
+  <rect x="274" y="84" width="70" height="36" rx="6" fill="#7c3aed"/>
+  <text x="309" y="107" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">CLI</text>
+  <rect x="358" y="84" width="126" height="36" rx="6" fill="#8b5cf6"/>
+  <text x="421" y="107" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">fit / predict OOP</text>
+
+  <!-- ===== FACADES ===== -->
+  <rect x="30" y="144" width="840" height="42" rx="8" fill="url(#coreGrad)" stroke="#c4b5fd" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="170" fill="#6d28d9" font-size="11" font-weight="600" letter-spacing="1">FACADES</text>
+  <text x="165" y="170" fill="#4c1d95" font-size="12">forecast.py</text>
+  <text x="310" y="170" fill="#4c1d95" font-size="12">eval_forecast.py</text>
+  <text x="490" y="170" fill="#4c1d95" font-size="12">tuning.py</text>
+  <text x="610" y="170" fill="#4c1d95" font-size="12">cv.py</text>
+  <text x="710" y="170" fill="#4c1d95" font-size="12">hierarchical.py</text>
+
+  <!-- Arrow down -->
+  <path d="M450 186 L450 198" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowV)"/>
+  <defs><marker id="arrowV" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#a78bfa"/></marker></defs>
+
+  <!-- ===== SERVICES ===== -->
+  <rect x="30" y="200" width="420" height="100" rx="8" fill="url(#evalGrad)" stroke="#6ee7b7" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="222" fill="#065f46" font-size="11" font-weight="600" letter-spacing="1">SERVICES &amp; EVALUATION</text>
+  <rect x="46" y="234" width="115" height="28" rx="5" fill="#10b981"/>
+  <text x="103" y="253" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Backtesting</text>
+  <rect x="170" y="234" width="115" height="28" rx="5" fill="#059669"/>
+  <text x="227" y="253" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Conformal PI</text>
+  <rect x="294" y="234" width="140" height="28" rx="5" fill="#047857"/>
+  <text x="364" y="253" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Bootstrap Intervals</text>
+  <rect x="46" y="268" width="100" height="24" rx="5" fill="#34d399"/>
+  <text x="96" y="284" text-anchor="middle" fill="#065f46" font-size="10" font-weight="500">Metrics (20+)</text>
+  <rect x="154" y="268" width="80" height="24" rx="5" fill="#34d399"/>
+  <text x="194" y="284" text-anchor="middle" fill="#065f46" font-size="10" font-weight="500">Splits</text>
+  <rect x="242" y="268" width="80" height="24" rx="5" fill="#34d399"/>
+  <text x="282" y="284" text-anchor="middle" fill="#065f46" font-size="10" font-weight="500">Tuning</text>
+  <rect x="330" y="268" width="104" height="24" rx="5" fill="#34d399"/>
+  <text x="382" y="284" text-anchor="middle" fill="#065f46" font-size="10" font-weight="500">Leaderboard</text>
+
+  <!-- ===== MODELS ===== -->
+  <rect x="464" y="200" width="406" height="100" rx="8" fill="url(#modelGrad)" stroke="#93c5fd" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="484" y="222" fill="#1e3a8a" font-size="11" font-weight="600" letter-spacing="1">MODEL ZOO (250+)</text>
+  <rect x="480" y="234" width="80" height="26" rx="5" fill="#3b82f6"/>
+  <text x="520" y="252" text-anchor="middle" fill="#fff" font-size="10" font-weight="500">Statistical</text>
+  <rect x="566" y="234" width="54" height="26" rx="5" fill="#2563eb"/>
+  <text x="593" y="252" text-anchor="middle" fill="#fff" font-size="10" font-weight="500">ML</text>
+  <rect x="626" y="234" width="100" height="26" rx="5" fill="#1d4ed8"/>
+  <text x="676" y="252" text-anchor="middle" fill="#fff" font-size="10" font-weight="500">Deep Learning</text>
+  <rect x="732" y="234" width="70" height="26" rx="5" fill="#1e40af"/>
+  <text x="767" y="252" text-anchor="middle" fill="#fff" font-size="10" font-weight="500">Ensemble</text>
+  <rect x="480" y="266" width="66" height="24" rx="5" fill="#93c5fd"/>
+  <text x="513" y="282" text-anchor="middle" fill="#1e3a8a" font-size="9" font-weight="500">XGBoost</text>
+  <rect x="552" y="266" width="66" height="24" rx="5" fill="#93c5fd"/>
+  <text x="585" y="282" text-anchor="middle" fill="#1e3a8a" font-size="9" font-weight="500">LightGBM</text>
+  <rect x="624" y="266" width="66" height="24" rx="5" fill="#93c5fd"/>
+  <text x="657" y="282" text-anchor="middle" fill="#1e3a8a" font-size="9" font-weight="500">CatBoost</text>
+  <rect x="696" y="266" width="66" height="24" rx="5" fill="#93c5fd"/>
+  <text x="729" y="282" text-anchor="middle" fill="#1e3a8a" font-size="9" font-weight="500">PyTorch</text>
+  <rect x="768" y="266" width="86" height="24" rx="5" fill="#93c5fd"/>
+  <text x="811" y="282" text-anchor="middle" fill="#1e3a8a" font-size="9" font-weight="500">statsmodels</text>
+
+  <!-- ===== CONTRACTS ===== -->
+  <rect x="30" y="316" width="840" height="42" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="342" fill="#92400e" font-size="11" font-weight="600" letter-spacing="1">CONTRACTS</text>
+  <text x="175" y="342" fill="#78350f" font-size="12">Validation</text>
+  <text x="310" y="342" fill="#78350f" font-size="12">Parameter Normalization</text>
+  <text x="530" y="342" fill="#78350f" font-size="12">Capability Checks</text>
+  <text x="710" y="342" fill="#78350f" font-size="12">Interval Parsing</text>
+
+  <!-- ===== DATA LAYER ===== -->
+  <rect x="30" y="374" width="840" height="62" rx="8" fill="url(#dataGrad)" stroke="#fbbf24" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="396" fill="#92400e" font-size="11" font-weight="600" letter-spacing="1">DATA LAYER</text>
+  <rect x="165" y="386" width="130" height="28" rx="5" fill="#f59e0b"/>
+  <text x="230" y="405" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Long Format I/O</text>
+  <rect x="308" y="386" width="130" height="28" rx="5" fill="#d97706"/>
+  <text x="373" y="405" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Feature Eng.</text>
+  <rect x="451" y="386" width="130" height="28" rx="5" fill="#b45309"/>
+  <text x="516" y="405" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Transforms</text>
+  <rect x="594" y="386" width="130" height="28" rx="5" fill="#92400e"/>
+  <text x="659" y="405" text-anchor="middle" fill="#fff" font-size="11" font-weight="500">Datasets (5+)</text>
+  <text x="165" y="430" fill="#78350f" font-size="10">unique_id  ds  y  covariates  Panel-friendly long format, compatible with StatsForecast / Prophet</text>
+
+  <!-- ===== SERIALIZATION ===== -->
+  <rect x="30" y="450" width="410" height="50" rx="8" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="50" y="472" fill="#9d174d" font-size="11" font-weight="600" letter-spacing="1">SERIALIZATION</text>
+  <text x="200" y="480" fill="#831843" font-size="11">save / load artifacts " schema versioning " metadata</text>
+
+  <!-- ===== EXTRAS ===== -->
+  <rect x="460" y="450" width="410" height="50" rx="8" fill="#e0e7ff" stroke="#a5b4fc" stroke-width="1" filter="url(#shadowSm)"/>
+  <text x="480" y="472" fill="#3730a3" font-size="11" font-weight="600" letter-spacing="1">OPT-IN EXTRAS</text>
+  <text x="622" y="480" fill="#312e81" font-size="11">[ml] [xgb] [lgbm] [catboost] [stats] [torch] [all]</text>
+</svg>

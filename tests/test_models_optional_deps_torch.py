@@ -20,22 +20,34 @@ WAVE1A_TORCH_LOCAL_KEYS = (
     "torch-timesnet-direct",
     "torch-tft-direct",
     "torch-timemixer-direct",
+    "torch-timemixer-deep-direct",
+    "torch-timemixer-wide-direct",
     "torch-sparsetsf-direct",
 )
 
 LIGHTWEIGHT_TORCH_LOCAL_KEYS = (
     "torch-lightts-direct",
     "torch-frets-direct",
+    "torch-frets-deep-direct",
+    "torch-frets-wide-direct",
 )
 
 DECOMP_TORCH_LOCAL_KEYS = (
     "torch-film-direct",
+    "torch-film-deep-direct",
+    "torch-film-wide-direct",
     "torch-micn-direct",
+    "torch-micn-deep-direct",
+    "torch-micn-wide-direct",
 )
 
 WAVE1B_TORCH_LOCAL_KEYS = (
     "torch-koopa-direct",
+    "torch-koopa-deep-direct",
+    "torch-koopa-wide-direct",
     "torch-samformer-direct",
+    "torch-samformer-deep-direct",
+    "torch-samformer-wide-direct",
 )
 
 RETENTION_TORCH_LOCAL_KEYS = (
@@ -120,6 +132,302 @@ PATCH_SSM_TORCH_LOCAL_KEYS = (
     "torch-timesmamba-direct",
     "torch-timesmamba-deep-direct",
     "torch-timesmamba-wide-direct",
+)
+
+PATCH_MIXER_TORCH_LOCAL_KEYS = (
+    "torch-tinytimemixer-direct",
+    "torch-tinytimemixer-deep-direct",
+    "torch-tinytimemixer-wide-direct",
+)
+
+FREQUENCY_INTERPOLATION_TORCH_LOCAL_KEYS = (
+    "torch-fits-direct",
+    "torch-fits-deep-direct",
+    "torch-fits-wide-direct",
+)
+
+SEQUENCE_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-fnet-deep-direct",
+    "torch-fnet-wide-direct",
+    "torch-gmlp-deep-direct",
+    "torch-gmlp-wide-direct",
+    "torch-linear-attn-deep-direct",
+    "torch-linear-attn-wide-direct",
+    "torch-inception-deep-direct",
+    "torch-inception-wide-direct",
+    "torch-mamba-deep-direct",
+    "torch-mamba-wide-direct",
+    "torch-rwkv-deep-direct",
+    "torch-rwkv-wide-direct",
+    "torch-hyena-deep-direct",
+    "torch-hyena-wide-direct",
+    "torch-dilated-rnn-deep-direct",
+    "torch-dilated-rnn-wide-direct",
+)
+
+CAPACITY_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-kan-deep-direct",
+    "torch-kan-wide-direct",
+    "torch-scinet-deep-direct",
+    "torch-scinet-wide-direct",
+    "torch-etsformer-deep-direct",
+    "torch-etsformer-wide-direct",
+    "torch-esrnn-deep-direct",
+    "torch-esrnn-wide-direct",
+    "torch-patchtst-deep-direct",
+    "torch-patchtst-wide-direct",
+    "torch-crossformer-deep-direct",
+    "torch-crossformer-wide-direct",
+    "torch-pyraformer-deep-direct",
+    "torch-pyraformer-wide-direct",
+    "torch-tsmixer-deep-direct",
+    "torch-tsmixer-wide-direct",
+    "torch-nhits-deep-direct",
+    "torch-nhits-wide-direct",
+)
+
+FOUNDATION_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-mlp-deep-direct",
+    "torch-mlp-wide-direct",
+    "torch-lstm-deep-direct",
+    "torch-lstm-wide-direct",
+    "torch-gru-deep-direct",
+    "torch-gru-wide-direct",
+    "torch-tcn-deep-direct",
+    "torch-tcn-wide-direct",
+    "torch-nbeats-deep-direct",
+    "torch-nbeats-wide-direct",
+    "torch-transformer-deep-direct",
+    "torch-transformer-wide-direct",
+    "torch-cnn-deep-direct",
+    "torch-cnn-wide-direct",
+    "torch-resnet1d-deep-direct",
+    "torch-resnet1d-wide-direct",
+    "torch-wavenet-deep-direct",
+    "torch-wavenet-wide-direct",
+)
+
+RECURRENT_STATEFUL_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-bilstm-deep-direct",
+    "torch-bilstm-wide-direct",
+    "torch-bigru-deep-direct",
+    "torch-bigru-wide-direct",
+    "torch-attn-gru-deep-direct",
+    "torch-attn-gru-wide-direct",
+    "torch-lmu-deep-direct",
+    "torch-lmu-wide-direct",
+    "torch-ltc-deep-direct",
+    "torch-ltc-wide-direct",
+    "torch-cfc-deep-direct",
+    "torch-cfc-wide-direct",
+    "torch-xlstm-deep-direct",
+    "torch-xlstm-wide-direct",
+    "torch-griffin-deep-direct",
+    "torch-griffin-wide-direct",
+    "torch-hawk-deep-direct",
+    "torch-hawk-wide-direct",
+)
+
+TRANSFORMER_SSM_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-informer-deep-direct",
+    "torch-informer-wide-direct",
+    "torch-autoformer-deep-direct",
+    "torch-autoformer-wide-direct",
+    "torch-nonstationary-transformer-deep-direct",
+    "torch-nonstationary-transformer-wide-direct",
+    "torch-fedformer-deep-direct",
+    "torch-fedformer-wide-direct",
+    "torch-itransformer-deep-direct",
+    "torch-itransformer-wide-direct",
+    "torch-timesnet-deep-direct",
+    "torch-timesnet-wide-direct",
+    "torch-tft-deep-direct",
+    "torch-tft-wide-direct",
+    "torch-timexer-deep-direct",
+    "torch-timexer-wide-direct",
+    "torch-s4d-deep-direct",
+    "torch-s4d-wide-direct",
+    "torch-s4-deep-direct",
+    "torch-s4-wide-direct",
+    "torch-s5-deep-direct",
+    "torch-s5-wide-direct",
+    "torch-mamba2-deep-direct",
+    "torch-mamba2-wide-direct",
+)
+
+REMAINING_BASELINE_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-retnet-deep-direct",
+    "torch-retnet-wide-direct",
+    "torch-lightts-long-direct",
+    "torch-lightts-wide-direct",
+    "torch-sparsetsf-long-direct",
+    "torch-sparsetsf-wide-direct",
+    "torch-tide-long-direct",
+    "torch-tide-wide-direct",
+    "torch-nlinear-long-direct",
+    "torch-dlinear-long-direct",
+)
+
+LOCAL_LSTNET_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-lstnet-long-direct",
+    "torch-lstnet-wide-direct",
+)
+
+STRUCTURED_RNN_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-multidim-rnn-long-direct",
+    "torch-multidim-rnn-wide-direct",
+    "torch-grid-lstm-long-direct",
+    "torch-grid-lstm-wide-direct",
+    "torch-structural-rnn-long-direct",
+    "torch-structural-rnn-wide-direct",
+)
+
+RECURSIVE_RNN_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-deepar-deep-recursive",
+    "torch-deepar-wide-recursive",
+    "torch-qrnn-deep-recursive",
+    "torch-qrnn-wide-recursive",
+)
+
+PROBABILISTIC_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-timegrad-long-direct",
+    "torch-timegrad-wide-direct",
+    "torch-tactis-long-direct",
+    "torch-tactis-wide-direct",
+)
+
+RESERVOIR_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-esn-long-direct",
+    "torch-esn-wide-direct",
+    "torch-deep-esn-long-direct",
+    "torch-deep-esn-wide-direct",
+    "torch-liquid-state-long-direct",
+    "torch-liquid-state-wide-direct",
+)
+
+RETNET_RECURSIVE_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-retnet-deep-recursive",
+    "torch-retnet-wide-recursive",
+)
+
+CANONICAL_RNN_ZOO_PRESET_TORCH_LOCAL_KEYS = (
+    "torch-rnnpaper-lstm-long-direct",
+    "torch-rnnpaper-lstm-wide-direct",
+    "torch-rnnpaper-gru-long-direct",
+    "torch-rnnpaper-gru-wide-direct",
+    "torch-rnnpaper-qrnn-long-direct",
+    "torch-rnnpaper-qrnn-wide-direct",
+    "torch-rnnzoo-lstm-long-direct",
+    "torch-rnnzoo-lstm-wide-direct",
+    "torch-rnnzoo-gru-long-direct",
+    "torch-rnnzoo-gru-wide-direct",
+    "torch-rnnzoo-qrnn-long-direct",
+    "torch-rnnzoo-qrnn-wide-direct",
+)
+
+TRAINING_STRATEGY_TORCH_LOCAL_KEYS = (
+    "torch-patchtst-ema-direct",
+    "torch-timesnet-swa-direct",
+    "torch-timexer-sam-direct",
+    "torch-tsmixer-regularized-direct",
+    "torch-tft-longhorizon-direct",
+    "torch-nbeats-lookahead-direct",
+)
+
+TRAINING_STRATEGY_TORCH_GLOBAL_KEYS = (
+    "torch-patchtst-ema-global",
+    "torch-timesnet-swa-global",
+    "torch-timexer-sam-global",
+    "torch-tsmixer-regularized-global",
+    "torch-tft-longhorizon-global",
+    "torch-seq2seq-attn-gru-lookahead-global",
+)
+
+GLOBAL_PRESET_TORCH_KEYS = (
+    "torch-tft-deep-global",
+    "torch-tft-wide-global",
+    "torch-timexer-deep-global",
+    "torch-timexer-wide-global",
+    "torch-retnet-deep-global",
+    "torch-retnet-wide-global",
+    "torch-informer-deep-global",
+    "torch-informer-wide-global",
+    "torch-autoformer-deep-global",
+    "torch-autoformer-wide-global",
+    "torch-fedformer-deep-global",
+    "torch-fedformer-wide-global",
+    "torch-nonstationary-transformer-deep-global",
+    "torch-nonstationary-transformer-wide-global",
+    "torch-patchtst-deep-global",
+    "torch-patchtst-wide-global",
+    "torch-crossformer-deep-global",
+    "torch-crossformer-wide-global",
+    "torch-pyraformer-deep-global",
+    "torch-pyraformer-wide-global",
+    "torch-itransformer-deep-global",
+    "torch-itransformer-wide-global",
+    "torch-timesnet-deep-global",
+    "torch-timesnet-wide-global",
+    "torch-tsmixer-deep-global",
+    "torch-tsmixer-wide-global",
+    "torch-nbeats-deep-global",
+    "torch-nbeats-wide-global",
+    "torch-nhits-deep-global",
+    "torch-nhits-wide-global",
+    "torch-tcn-deep-global",
+    "torch-tcn-wide-global",
+    "torch-wavenet-deep-global",
+    "torch-wavenet-wide-global",
+    "torch-resnet1d-deep-global",
+    "torch-resnet1d-wide-global",
+    "torch-inception-deep-global",
+    "torch-inception-wide-global",
+    "torch-kan-deep-global",
+    "torch-kan-wide-global",
+    "torch-scinet-deep-global",
+    "torch-scinet-wide-global",
+    "torch-etsformer-deep-global",
+    "torch-etsformer-wide-global",
+    "torch-esrnn-deep-global",
+    "torch-esrnn-wide-global",
+    "torch-fnet-deep-global",
+    "torch-fnet-wide-global",
+    "torch-gmlp-deep-global",
+    "torch-gmlp-wide-global",
+    "torch-ssm-deep-global",
+    "torch-ssm-wide-global",
+    "torch-mamba-deep-global",
+    "torch-mamba-wide-global",
+    "torch-rwkv-deep-global",
+    "torch-rwkv-wide-global",
+    "torch-hyena-deep-global",
+    "torch-hyena-wide-global",
+    "torch-dilated-rnn-deep-global",
+    "torch-dilated-rnn-wide-global",
+    "torch-transformer-encdec-deep-global",
+    "torch-transformer-encdec-wide-global",
+    "torch-seq2seq-lstm-deep-global",
+    "torch-seq2seq-lstm-wide-global",
+    "torch-seq2seq-gru-deep-global",
+    "torch-seq2seq-gru-wide-global",
+    "torch-seq2seq-attn-lstm-deep-global",
+    "torch-seq2seq-attn-lstm-wide-global",
+    "torch-seq2seq-attn-gru-deep-global",
+    "torch-seq2seq-attn-gru-wide-global",
+    "torch-deepar-deep-global",
+    "torch-deepar-wide-global",
+    "torch-tide-long-global",
+    "torch-tide-wide-global",
+    "torch-nlinear-long-global",
+    "torch-dlinear-long-global",
+    "torch-rnn-lstm-deep-global",
+    "torch-rnn-lstm-wide-global",
+    "torch-rnn-gru-deep-global",
+    "torch-rnn-gru-wide-global",
+    "torch-rnn-encoder-deep-global",
+    "torch-rnn-encoder-wide-global",
+    "torch-lstnet-long-global",
+    "torch-lstnet-wide-global",
 )
 
 TORCH_MULTIVARIATE_KEYS = (
@@ -271,6 +579,114 @@ def test_patch_ssm_torch_local_models_are_covered_by_optional_dep_paths():
         assert key in keys
 
 
+def test_patch_mixer_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in PATCH_MIXER_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_frequency_interpolation_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in FREQUENCY_INTERPOLATION_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_sequence_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in SEQUENCE_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_capacity_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in CAPACITY_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_foundation_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in FOUNDATION_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_recurrent_stateful_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RECURRENT_STATEFUL_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_transformer_ssm_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in TRANSFORMER_SSM_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_remaining_baseline_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in REMAINING_BASELINE_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_local_lstnet_preset_torch_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in LOCAL_LSTNET_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_structured_rnn_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in STRUCTURED_RNN_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_recursive_rnn_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RECURSIVE_RNN_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_probabilistic_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in PROBABILISTIC_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_reservoir_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RESERVOIR_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_retnet_recursive_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in RETNET_RECURSIVE_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_canonical_rnn_zoo_preset_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in CANONICAL_RNN_ZOO_PRESET_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_training_strategy_torch_local_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_local_model_keys())
+    for key in TRAINING_STRATEGY_TORCH_LOCAL_KEYS:
+        assert key in keys
+
+
+def test_training_strategy_torch_global_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_global_model_keys())
+    for key in TRAINING_STRATEGY_TORCH_GLOBAL_KEYS:
+        assert key in keys
+
+
+def test_global_preset_torch_models_are_covered_by_optional_dep_paths():
+    keys = set(_torch_global_model_keys())
+    for key in GLOBAL_PRESET_TORCH_KEYS:
+        assert key in keys
+
+
 def test_torch_multivariate_models_are_covered_by_optional_dep_paths():
     keys = set(_torch_multivariate_model_keys())
     for key in TORCH_MULTIVARIATE_KEYS:
@@ -375,6 +791,19 @@ def test_torch_models_smoke_when_installed():
             },
         ),
         (
+            "torch-tinytimemixer-direct",
+            {
+                "lags": 48,
+                "patch_len": 6,
+                "d_model": 16,
+                "num_blocks": 2,
+                "token_mixing_hidden": 32,
+                "channel_mixing_hidden": 32,
+                "epochs": 6,
+                "batch_size": 16,
+            },
+        ),
+        (
             "torch-cnn-direct",
             {
                 "lags": 32,
@@ -395,6 +824,18 @@ def test_torch_models_smoke_when_installed():
                 "d_model": 16,
                 "num_layers": 1,
                 "dim_feedforward": 32,
+                "epochs": 4,
+                "batch_size": 16,
+            },
+        ),
+        (
+            "torch-fits-direct",
+            {
+                "lags": 48,
+                "low_freq_bins": 8,
+                "hidden_size": 32,
+                "num_layers": 2,
+                "dropout": 0.1,
                 "epochs": 4,
                 "batch_size": 16,
             },

@@ -261,6 +261,7 @@ def _make_wave1_graph_attention_specs(context: Any) -> dict[str, ModelSpec]:
                 scheduler_step_size=scheduler_step_size_int,
                 scheduler_gamma=scheduler_gamma_f,
                 restore_best=restore_best_bool,
+                **_params,
             )
 
         return _f
@@ -443,6 +444,7 @@ def _make_wave1_graph_structure_specs(context: Any) -> dict[str, ModelSpec]:
                 scheduler_step_size=scheduler_step_size_int,
                 scheduler_gamma=scheduler_gamma_f,
                 restore_best=restore_best_bool,
+                **_params,
             )
 
         return _f
@@ -585,6 +587,7 @@ def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
                 scheduler_step_size=scheduler_step_size_int,
                 scheduler_gamma=scheduler_gamma_f,
                 restore_best=restore_best_bool,
+                **_params,
             )
 
         return _f
@@ -602,6 +605,121 @@ def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
 
     return extra
 
+
+def _make_wave50_training_strategy_presets(
+    context: Any, catalog: dict[str, Any]
+) -> dict[str, Any]:
+    model_spec = context.ModelSpec
+    extra: dict[str, Any] = {}
+
+    preset_specs = {
+        "torch-stid-ema-multivariate": (
+            "torch-stid-multivariate",
+            "Torch STID multivariate forecaster with an EMA-stabilized cosine-warmup training recipe. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "weight_decay": 1e-4,
+                "ema_decay": 0.995,
+                "ema_warmup_epochs": 1,
+                "epochs": 40,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-stgcn-swa-multivariate": (
+            "torch-stgcn-multivariate",
+            "Torch STGCN multivariate forecaster with cosine-restarts plus SWA training recipe for flatter minima. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine_restarts",
+                "scheduler_restart_period": 8,
+                "scheduler_restart_mult": 2,
+                "weight_decay": 1e-4,
+                "grad_clip_norm": 1.0,
+                "swa_start_epoch": 18,
+                "epochs": 32,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-graphwavenet-sam-multivariate": (
+            "torch-graphwavenet-multivariate",
+            "Torch Graph WaveNet multivariate forecaster with SAM plus cosine-warmup training recipe. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "grad_clip_norm": 1.0,
+                "sam_rho": 0.05,
+                "sam_adaptive": True,
+                "epochs": 36,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-astgcn-regularized-multivariate": (
+            "torch-astgcn-multivariate",
+            "Torch ASTGCN multivariate forecaster with dropout-heavy regularized training defaults. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 3,
+                "min_lr": 1e-5,
+                "weight_decay": 5e-4,
+                "input_dropout": 0.1,
+                "temporal_dropout": 0.05,
+                "epochs": 40,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-agcrn-longhorizon-multivariate": (
+            "torch-agcrn-multivariate",
+            "Torch AGCRN multivariate forecaster with long-horizon-weighted Huber training defaults. Requires PyTorch.",
+            {
+                "loss": "huber",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "horizon_loss_decay": 1.05,
+                "ema_decay": 0.99,
+                "ema_warmup_epochs": 1,
+                "epochs": 40,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-stemgnn-lookahead-multivariate": (
+            "torch-stemgnn-multivariate",
+            "Torch StemGNN multivariate forecaster with Lookahead-optimized cosine training defaults. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "grad_clip_norm": 1.0,
+                "lookahead_steps": 5,
+                "lookahead_alpha": 0.5,
+                "epochs": 40,
+                "val_split": 0.1,
+            },
+        ),
+    }
+
+    for key, (base_key, description, overrides) in preset_specs.items():
+        base_spec = catalog[base_key]
+        extra[key] = model_spec(
+            key=key,
+            description=description,
+            factory=base_spec.factory,
+            default_params={**base_spec.default_params, **overrides},
+            param_help=dict(base_spec.param_help),
+            requires=tuple(base_spec.requires),
+            interface=str(base_spec.interface),
+            capability_overrides=dict(base_spec.capability_overrides),
+        )
+
+    return extra
+
 _build_multivariate_catalog_base = build_multivariate_catalog
 
 
@@ -610,4 +728,5 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
     catalog.update(_make_wave1_graph_attention_specs(context))
     catalog.update(_make_wave1_graph_structure_specs(context))
     catalog.update(_make_wave1_graph_spectral_specs(context))
+    catalog.update(_make_wave50_training_strategy_presets(context, catalog))
     return catalog
