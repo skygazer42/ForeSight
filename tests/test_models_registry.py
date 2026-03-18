@@ -1772,6 +1772,18 @@ def test_model_spec_capabilities_reflect_model_family_support():
     dlinear_global = get_model_spec("torch-dlinear-global")
     assert dlinear_global.capabilities["supports_static_cols"] is True
 
+    wavenet_global = get_model_spec("torch-wavenet-global")
+    assert wavenet_global.capabilities["supports_static_cols"] is True
+
+    resnet1d_global = get_model_spec("torch-resnet1d-global")
+    assert resnet1d_global.capabilities["supports_static_cols"] is True
+
+    inception_global = get_model_spec("torch-inception-global")
+    assert inception_global.capabilities["supports_static_cols"] is True
+
+    lstnet_global = get_model_spec("torch-lstnet-global")
+    assert lstnet_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]
