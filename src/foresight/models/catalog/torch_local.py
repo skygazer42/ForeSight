@@ -63,6 +63,9 @@ _PATHFORMER_TOP_K_HELP = "Top-k experts selected by the router per block"
 _PATCH_MIXER_BLOCKS_HELP = "Number of stacked patch mixer blocks"
 _TIMESMAMBA_STATE_SIZE_HELP = "Latent state size in the recurrent state-space mixer"
 _TIMESMAMBA_BLOCKS_HELP = "Number of stacked state-space mixer blocks"
+_OPTIONAL_STATIC_COLS_HELP = (
+    "Optional static (per-series) covariate columns from long_df (comma-separated)"
+)
 
 
 def build_torch_local_catalog(context: Any) -> dict[str, Any]:
@@ -5524,6 +5527,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     xformer_global_help = {
         "context_length": "Context window length (encoder length)",
         "x_cols": "Optional covariate columns from long_df (comma-separated)",
+        "static_cols": _OPTIONAL_STATIC_COLS_HELP,
         "add_time_features": "Add built-in time features from ds (true/false)",
         "normalize": "Z-score normalize per-series inside each cutoff window (true/false)",
         "max_train_size": "Optional per-series rolling training window length (None for expanding)",
@@ -5555,6 +5559,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     xformer_global_base_defaults = {
         "context_length": 96,
         "x_cols": (),
+        "static_cols": (),
         "add_time_features": True,
         "normalize": True,
         "max_train_size": None,
@@ -5604,6 +5609,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     rnn_global_help = {
         "context_length": "Context window length (encoder length)",
         "x_cols": "Optional covariate columns from long_df (comma-separated)",
+        "static_cols": _OPTIONAL_STATIC_COLS_HELP,
         "add_time_features": "Add built-in time features from ds (true/false)",
         "normalize": "Z-score normalize per-series inside each cutoff window (true/false)",
         "max_train_size": "Optional per-series rolling training window length (None for expanding)",
@@ -5619,6 +5625,7 @@ def _make_torch_dl_variant_specs(context: Any) -> dict[str, ModelSpec]:
     rnn_global_base_defaults = {
         "context_length": 96,
         "x_cols": (),
+        "static_cols": (),
         "add_time_features": True,
         "normalize": True,
         "max_train_size": None,

@@ -1745,6 +1745,33 @@ def test_model_spec_capabilities_reflect_model_family_support():
     pyraformer_global = get_model_spec("torch-pyraformer-global")
     assert pyraformer_global.capabilities["supports_static_cols"] is True
 
+    nonstationary_transformer_global = get_model_spec("torch-nonstationary-transformer-global")
+    assert nonstationary_transformer_global.capabilities["supports_static_cols"] is True
+
+    xformer_global = get_model_spec("torch-xformer-probsparse-global")
+    assert xformer_global.capabilities["supports_static_cols"] is True
+
+    rnn_lstm_global = get_model_spec("torch-rnn-lstm-global")
+    assert rnn_lstm_global.capabilities["supports_static_cols"] is True
+
+    transformer_encdec_global = get_model_spec("torch-transformer-encdec-global")
+    assert transformer_encdec_global.capabilities["supports_static_cols"] is True
+
+    nbeats_global = get_model_spec("torch-nbeats-global")
+    assert nbeats_global.capabilities["supports_static_cols"] is True
+
+    nhits_global = get_model_spec("torch-nhits-global")
+    assert nhits_global.capabilities["supports_static_cols"] is True
+
+    tide_global = get_model_spec("torch-tide-global")
+    assert tide_global.capabilities["supports_static_cols"] is True
+
+    nlinear_global = get_model_spec("torch-nlinear-global")
+    assert nlinear_global.capabilities["supports_static_cols"] is True
+
+    dlinear_global = get_model_spec("torch-dlinear-global")
+    assert dlinear_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]

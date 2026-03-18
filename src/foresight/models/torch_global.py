@@ -2825,6 +2825,7 @@ def _predict_torch_nonstationary_transformer_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -2908,6 +2909,7 @@ def _predict_torch_nonstationary_transformer_global(
     F = torch.nn.functional
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -2928,6 +2930,7 @@ def _predict_torch_nonstationary_transformer_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -3149,6 +3152,7 @@ def torch_nonstationary_transformer_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -3229,6 +3233,7 @@ def torch_nonstationary_transformer_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -3318,6 +3323,7 @@ def _predict_torch_xformer_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -3407,6 +3413,7 @@ def _predict_torch_xformer_global(
     F = torch.nn.functional
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -3427,6 +3434,7 @@ def _predict_torch_xformer_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -4079,6 +4087,7 @@ def torch_xformer_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -4174,6 +4183,7 @@ def torch_xformer_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -4267,6 +4277,7 @@ def _predict_torch_rnn_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -4339,6 +4350,7 @@ def _predict_torch_rnn_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -4359,6 +4371,7 @@ def _predict_torch_rnn_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -4527,6 +4540,7 @@ def torch_rnn_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -4606,6 +4620,7 @@ def torch_rnn_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -8416,6 +8431,7 @@ def _predict_torch_nbeats_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -8494,6 +8510,7 @@ def _predict_torch_nbeats_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -8514,6 +8531,7 @@ def _predict_torch_nbeats_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -8671,6 +8689,7 @@ def torch_nbeats_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -8750,6 +8769,7 @@ def torch_nbeats_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -8827,6 +8847,7 @@ def _predict_torch_nhits_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -8907,6 +8928,7 @@ def _predict_torch_nhits_global(
     F = torch.nn.functional
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -8927,6 +8949,7 @@ def _predict_torch_nhits_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -9118,6 +9141,7 @@ def torch_nhits_global_forecaster(
     *,
     context_length: int = 192,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -9198,6 +9222,7 @@ def torch_nhits_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -9276,6 +9301,7 @@ def _predict_torch_tide_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -9353,6 +9379,7 @@ def _predict_torch_tide_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -9373,6 +9400,7 @@ def _predict_torch_tide_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -9517,6 +9545,7 @@ def torch_tide_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -9595,6 +9624,7 @@ def torch_tide_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -16214,6 +16244,7 @@ def _predict_torch_transformer_encdec_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -16293,6 +16324,7 @@ def _predict_torch_transformer_encdec_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -16313,6 +16345,7 @@ def _predict_torch_transformer_encdec_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -16522,6 +16555,7 @@ def torch_transformer_encdec_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -16602,6 +16636,7 @@ def torch_transformer_encdec_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -16680,6 +16715,7 @@ def _predict_torch_nlinear_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -16755,6 +16791,7 @@ def _predict_torch_nlinear_global(
     nn = torch.nn
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -16775,6 +16812,7 @@ def _predict_torch_nlinear_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -16900,6 +16938,7 @@ def torch_nlinear_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -16976,6 +17015,7 @@ def torch_nlinear_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
@@ -17050,6 +17090,7 @@ def _predict_torch_dlinear_global(
     *,
     context_length: int,
     x_cols: Any,
+    static_cols: Any,
     add_time_features: bool,
     normalize: bool,
     max_train_size: int | None,
@@ -17124,6 +17165,7 @@ def _predict_torch_dlinear_global(
     F = torch.nn.functional
 
     x_cols_tup = _normalize_x_cols(x_cols)
+    static_cols_tup = _normalize_static_cols(static_cols)
     qs = _normalize_quantiles(quantiles)
     out_dim = int(len(qs)) if qs else 1
 
@@ -17144,6 +17186,7 @@ def _predict_torch_dlinear_global(
         horizon=int(horizon),
         context_length=int(context_length),
         x_cols=x_cols_tup,
+        static_cols=static_cols_tup,
         normalize=bool(normalize),
         max_train_size=max_train_size,
         sample_step=int(sample_step),
@@ -17276,6 +17319,7 @@ def torch_dlinear_global_forecaster(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -17353,6 +17397,7 @@ def torch_dlinear_global_forecaster(
             int(horizon),
             context_length=int(context_length),
             x_cols=x_cols,
+            static_cols=static_cols,
             add_time_features=bool(add_time_features),
             normalize=bool(normalize),
             max_train_size=max_train_size,
