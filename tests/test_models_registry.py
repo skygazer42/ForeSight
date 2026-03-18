@@ -1796,6 +1796,27 @@ def test_model_spec_capabilities_reflect_model_family_support():
     mamba_global = get_model_spec("torch-mamba-global")
     assert mamba_global.capabilities["supports_static_cols"] is True
 
+    rwkv_global = get_model_spec("torch-rwkv-global")
+    assert rwkv_global.capabilities["supports_static_cols"] is True
+
+    hyena_global = get_model_spec("torch-hyena-global")
+    assert hyena_global.capabilities["supports_static_cols"] is True
+
+    dilated_rnn_global = get_model_spec("torch-dilated-rnn-global")
+    assert dilated_rnn_global.capabilities["supports_static_cols"] is True
+
+    kan_global = get_model_spec("torch-kan-global")
+    assert kan_global.capabilities["supports_static_cols"] is True
+
+    scinet_global = get_model_spec("torch-scinet-global")
+    assert scinet_global.capabilities["supports_static_cols"] is True
+
+    etsformer_global = get_model_spec("torch-etsformer-global")
+    assert etsformer_global.capabilities["supports_static_cols"] is True
+
+    esrnn_global = get_model_spec("torch-esrnn-global")
+    assert esrnn_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]
