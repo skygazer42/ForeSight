@@ -1733,6 +1733,18 @@ def test_model_spec_capabilities_reflect_model_family_support():
     seq2seq_global = get_model_spec("torch-seq2seq-lstm-global")
     assert seq2seq_global.capabilities["supports_static_cols"] is True
 
+    fedformer_global = get_model_spec("torch-fedformer-global")
+    assert fedformer_global.capabilities["supports_static_cols"] is True
+
+    itransformer_global = get_model_spec("torch-itransformer-global")
+    assert itransformer_global.capabilities["supports_static_cols"] is True
+
+    crossformer_global = get_model_spec("torch-crossformer-global")
+    assert crossformer_global.capabilities["supports_static_cols"] is True
+
+    pyraformer_global = get_model_spec("torch-pyraformer-global")
+    assert pyraformer_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]
