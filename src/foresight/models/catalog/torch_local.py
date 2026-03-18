@@ -8250,6 +8250,126 @@ def _make_wave104_transformer_local_strategy_presets(
     return extra
 
 
+def _make_wave105_modern_mix_local_strategy_presets(
+    context: Any, catalog: dict[str, Any]
+) -> dict[str, ModelSpec]:
+    model_spec = context.ModelSpec
+    extra: dict[str, ModelSpec] = {}
+
+    preset_specs = {
+        "torch-tft-ema-direct": (
+            "torch-tft-direct",
+            "Torch TFT direct forecaster with an EMA-stabilized cosine-warmup training recipe. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "weight_decay": 1e-4,
+                "ema_decay": 0.995,
+                "ema_warmup_epochs": 1,
+                "epochs": 40,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-tsmixer-swa-direct": (
+            "torch-tsmixer-direct",
+            "Torch TSMixer direct forecaster with cosine-restarts plus SWA training recipe for flatter minima. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine_restarts",
+                "scheduler_restart_period": 8,
+                "scheduler_restart_mult": 2,
+                "weight_decay": 1e-4,
+                "grad_clip_norm": 1.0,
+                "swa_start_epoch": 18,
+                "epochs": 32,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-timesnet-sam-direct": (
+            "torch-timesnet-direct",
+            "Torch TimesNet direct forecaster with SAM plus cosine-warmup training recipe. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "grad_clip_norm": 1.0,
+                "sam_rho": 0.05,
+                "sam_adaptive": True,
+                "epochs": 36,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-patchtst-regularized-direct": (
+            "torch-patchtst-direct",
+            "Torch PatchTST direct forecaster with dropout-heavy regularized training defaults. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 3,
+                "min_lr": 1e-5,
+                "weight_decay": 5e-4,
+                "dropout": 0.2,
+                "epochs": 40,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-retnet-lookahead-direct": (
+            "torch-retnet-direct",
+            "Torch RetNet direct forecaster with Lookahead-optimized cosine training defaults. Requires PyTorch.",
+            {
+                "optimizer": "adamw",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "grad_clip_norm": 1.0,
+                "lookahead_steps": 5,
+                "lookahead_alpha": 0.5,
+                "epochs": 40,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+        "torch-timexer-longhorizon-direct": (
+            "torch-timexer-direct",
+            "Torch TimeXer direct forecaster with long-horizon-weighted Huber training defaults. Requires PyTorch.",
+            {
+                "loss": "huber",
+                "scheduler": "cosine",
+                "warmup_epochs": 2,
+                "min_lr": 1e-5,
+                "horizon_loss_decay": 1.05,
+                "ema_decay": 0.99,
+                "ema_warmup_epochs": 1,
+                "epochs": 40,
+                "batch_size": 64,
+                "val_split": 0.1,
+            },
+        ),
+    }
+
+    for key, (base_key, description, overrides) in preset_specs.items():
+        base_spec = catalog[base_key]
+        extra[key] = model_spec(
+            key=key,
+            description=description,
+            factory=base_spec.factory,
+            default_params={**base_spec.default_params, **overrides},
+            param_help=dict(base_spec.param_help),
+            requires=tuple(base_spec.requires),
+            interface=str(base_spec.interface),
+            capability_overrides=dict(base_spec.capability_overrides),
+        )
+
+    return extra
+
+
 _build_torch_local_catalog_base = build_torch_local_catalog
 
 
@@ -8275,4 +8395,5 @@ def build_torch_local_catalog(context: Any) -> dict[str, Any]:
     catalog.update(_make_wave102_mainstream_local_strategy_presets(context, catalog))
     catalog.update(_make_wave103_baseline_local_strategy_presets(context, catalog))
     catalog.update(_make_wave104_transformer_local_strategy_presets(context, catalog))
+    catalog.update(_make_wave105_modern_mix_local_strategy_presets(context, catalog))
     return catalog
