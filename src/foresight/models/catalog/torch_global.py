@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 
@@ -9248,13 +9249,14 @@ def build_torch_global_catalog(context: Any) -> dict[str, Any]:
     catalog.update(_make_wave93_global_seq2seq_attn_lstm_strategy_presets(context, catalog))
     catalog.update(_make_wave94_global_seq2seq_lstm_strategy_presets(context, catalog))
     catalog.update(_make_wave95_global_seq2seq_gru_strategy_presets(context, catalog))
-    static_covariate_factories = {
-        torch_tft_global_forecaster,
-        torch_informer_global_forecaster,
-        torch_autoformer_global_forecaster,
-    }
     for key, spec in list(catalog.items()):
-        if spec.factory not in static_covariate_factories:
+        if str(spec.interface).lower().strip() != "global":
+            continue
+        try:
+            parameters = inspect.signature(spec.factory).parameters
+        except (TypeError, ValueError):
+            continue
+        if "static_cols" not in parameters:
             continue
         default_params = dict(spec.default_params)
         param_help = dict(spec.param_help)

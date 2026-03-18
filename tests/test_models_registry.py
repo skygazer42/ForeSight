@@ -1700,7 +1700,7 @@ def test_model_spec_capabilities_reflect_model_family_support():
 
     timexer_global = get_model_spec("torch-timexer-global")
     assert timexer_global.capabilities["supports_x_cols"] is True
-    assert timexer_global.capabilities["supports_static_cols"] is False
+    assert timexer_global.capabilities["supports_static_cols"] is True
     assert timexer_global.capabilities["requires_future_covariates"] is True
 
     tft_global = get_model_spec("torch-tft-global")
@@ -1711,6 +1711,15 @@ def test_model_spec_capabilities_reflect_model_family_support():
 
     autoformer_global = get_model_spec("torch-autoformer-global")
     assert autoformer_global.capabilities["supports_static_cols"] is True
+
+    tsmixer_global = get_model_spec("torch-tsmixer-global")
+    assert tsmixer_global.capabilities["supports_static_cols"] is True
+
+    tcn_global = get_model_spec("torch-tcn-global")
+    assert tcn_global.capabilities["supports_static_cols"] is True
+
+    deepar_global = get_model_spec("torch-deepar-global")
+    assert deepar_global.capabilities["supports_static_cols"] is True
 
 
 def test_readme_documents_all_model_capability_flags() -> None:

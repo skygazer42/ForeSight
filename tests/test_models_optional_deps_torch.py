@@ -1016,6 +1016,53 @@ def test_torch_global_models_smoke_when_installed():
                 "ma_window": 7,
             },
         ),
+        (
+            "torch-timexer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "nhead": 4,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-tsmixer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "num_blocks": 2,
+                "token_mixing_hidden": 32,
+                "channel_mixing_hidden": 32,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-tcn-global",
+            {
+                "context_length": 32,
+                "channels": (16, 16),
+                "kernel_size": 3,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-deepar-global",
+            {
+                "context_length": 32,
+                "hidden_size": 32,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
     ]
 
     for key, params in cases:
@@ -1083,6 +1130,53 @@ def test_torch_global_models_support_static_covariates_when_installed():
                 "batch_size": 32,
                 "x_cols": ("promo",),
                 "ma_window": 7,
+            },
+        ),
+        (
+            "torch-timexer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "nhead": 4,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-tsmixer-global",
+            {
+                "context_length": 32,
+                "d_model": 32,
+                "num_blocks": 2,
+                "token_mixing_hidden": 32,
+                "channel_mixing_hidden": 32,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-tcn-global",
+            {
+                "context_length": 32,
+                "channels": (16, 16),
+                "kernel_size": 3,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
+            },
+        ),
+        (
+            "torch-deepar-global",
+            {
+                "context_length": 32,
+                "hidden_size": 32,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 32,
+                "x_cols": ("promo",),
             },
         ),
     ]

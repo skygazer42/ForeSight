@@ -8111,6 +8111,7 @@ def _factory_torch_timexer_global(
     *,
     context_length: int = 96,
     x_cols: Any = (),
+    static_cols: Any = (),
     add_time_features: bool = True,
     normalize: bool = True,
     max_train_size: int | None = None,
@@ -8144,6 +8145,7 @@ def _factory_torch_timexer_global(
     return torch_timexer_global_forecaster(
         context_length=int(context_length),
         x_cols=x_cols,
+        static_cols=static_cols,
         add_time_features=bool(add_time_features),
         normalize=bool(normalize),
         max_train_size=max_train_size,
