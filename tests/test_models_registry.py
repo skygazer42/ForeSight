@@ -1784,6 +1784,18 @@ def test_model_spec_capabilities_reflect_model_family_support():
     lstnet_global = get_model_spec("torch-lstnet-global")
     assert lstnet_global.capabilities["supports_static_cols"] is True
 
+    fnet_global = get_model_spec("torch-fnet-global")
+    assert fnet_global.capabilities["supports_static_cols"] is True
+
+    gmlp_global = get_model_spec("torch-gmlp-global")
+    assert gmlp_global.capabilities["supports_static_cols"] is True
+
+    ssm_global = get_model_spec("torch-ssm-global")
+    assert ssm_global.capabilities["supports_static_cols"] is True
+
+    mamba_global = get_model_spec("torch-mamba-global")
+    assert mamba_global.capabilities["supports_static_cols"] is True
+
 
 def test_readme_documents_all_model_capability_flags() -> None:
     repo_root = Path(__file__).resolve().parents[1]
