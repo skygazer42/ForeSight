@@ -15,6 +15,7 @@ import pandas as pd
 from . import cli_catalog as _cli_catalog
 from . import cli_data as _cli_data
 from . import cli_leaderboard as _cli_leaderboard
+from . import cli_runtime as _cli_runtime
 from . import cli_shared as _cli_shared
 
 _MODEL_KEY_HELP = "Model key (see: `foresight models list`)"
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="csv",
         help="Output format for predictions (default: csv)",
     )
+    _cli_runtime.register_runtime_logging_args(cv_run)
     cv_run.set_defaults(_handler=_cmd_cv_run)
 
     forecast_p = sub.add_parser("forecast", help="Forecast utilities")
@@ -193,6 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional path to save a fitted forecasting artifact for reuse",
     )
+    _cli_runtime.register_runtime_logging_args(forecast_csv)
     forecast_csv.set_defaults(_handler=_cmd_forecast_csv)
 
     forecast_artifact = forecast_sub.add_parser(
@@ -244,7 +247,83 @@ def build_parser() -> argparse.ArgumentParser:
         default="csv",
         help="Output format for forecasts (default: csv)",
     )
+    _cli_runtime.register_runtime_logging_args(forecast_artifact)
     forecast_artifact.set_defaults(_handler=_cmd_forecast_artifact)
+
+    artifact_p = sub.add_parser("artifact", help="Artifact utilities")
+    artifact_sub = artifact_p.add_subparsers(dest="artifact_command", required=True)
+
+    artifact_info = artifact_sub.add_parser("info", help="Show metadata about a saved artifact")
+    artifact_info.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    artifact_info.add_argument(
+        "--format",
+        choices=["json", "md", "markdown"],
+        default="json",
+        help="Output format (default: json; use md/markdown for a grouped Markdown report)",
+    )
+    artifact_info.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    _cli_runtime.register_runtime_logging_args(artifact_info)
+    artifact_info.set_defaults(_handler=_cmd_artifact_info)
+
+    artifact_validate = artifact_sub.add_parser(
+        "validate",
+        help="Validate a saved artifact against the supported artifact contract",
+    )
+    artifact_validate.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    artifact_validate.add_argument(
+        "--format",
+        choices=["json"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    artifact_validate.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    _cli_runtime.register_runtime_logging_args(artifact_validate)
+    artifact_validate.set_defaults(_handler=_cmd_artifact_validate)
+
+    artifact_diff = artifact_sub.add_parser(
+        "diff",
+        help="Compare two saved artifacts by metadata and extra payload",
+    )
+    artifact_diff.add_argument(
+        "--left-artifact",
+        required=True,
+        help="Path to the left artifact",
+    )
+    artifact_diff.add_argument(
+        "--right-artifact",
+        required=True,
+        help="Path to the right artifact",
+    )
+    artifact_diff.add_argument(
+        "--path-prefix",
+        type=str,
+        default="",
+        help="Optional dot-path prefix filter, e.g. metadata.train_schema.runtime",
+    )
+    artifact_diff.add_argument(
+        "--format",
+        choices=["json", "csv", "md", "markdown"],
+        default="json",
+        help="Output format (default: json; use md/markdown for a grouped Markdown diff report)",
+    )
+    artifact_diff.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    _cli_runtime.register_runtime_logging_args(artifact_diff)
+    artifact_diff.set_defaults(_handler=_cmd_artifact_diff)
 
     tuning = sub.add_parser("tuning", help="Hyperparameter tuning utilities")
     tuning_sub = tuning.add_subparsers(dest="tuning_command", required=True)
@@ -316,6 +395,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help="Output format for the tuning summary (default: json)",
     )
+    _cli_runtime.register_runtime_logging_args(tuning_run)
     tuning_run.set_defaults(_handler=_cmd_tuning_run)
 
     _cli_data.register_data_subparsers(sub)
@@ -354,6 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help=_OUTPUT_JSON_FORMAT_HELP,
     )
+    _cli_runtime.register_runtime_logging_args(eval_naive_last)
     eval_naive_last.set_defaults(_handler=_cmd_eval_naive_last)
 
     eval_seasonal_naive = eval_sub.add_parser(
@@ -397,6 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help=_OUTPUT_JSON_FORMAT_HELP,
     )
+    _cli_runtime.register_runtime_logging_args(eval_seasonal_naive)
     eval_seasonal_naive.set_defaults(_handler=_cmd_eval_seasonal_naive)
 
     eval_run = eval_sub.add_parser("run", help="Evaluate any registered model")
@@ -457,6 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help=_OUTPUT_JSON_FORMAT_HELP,
     )
+    _cli_runtime.register_runtime_logging_args(eval_run)
     eval_run.set_defaults(_handler=_cmd_eval_run)
 
     eval_csv = eval_sub.add_parser("csv", help="Evaluate a model on an arbitrary CSV file")
@@ -524,6 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help=_OUTPUT_JSON_FORMAT_HELP,
     )
+    _cli_runtime.register_runtime_logging_args(eval_csv)
     eval_csv.set_defaults(_handler=_cmd_eval_csv)
 
     _cli_leaderboard.register_leaderboard_subparsers(sub)
@@ -639,211 +723,429 @@ def _root_shortcut_handler(args: argparse.Namespace) -> Any:
     return None
 
 
+def _log_payload(**kwargs: Any) -> dict[str, Any]:
+    return _cli_runtime.compact_log_payload(**kwargs)
+
+
+def _run_logged_command(
+    args: argparse.Namespace,
+    *,
+    command: str,
+    payload: dict[str, Any],
+    action: Any,
+) -> int:
+    with _cli_runtime.command_scope(args, command=command, payload=payload):
+        return int(action())
+
+
 def _cmd_cv_run(args: argparse.Namespace) -> int:
     from .cv import cross_validation_predictions
 
-    model_params = _cli_shared._parse_model_params(list(args.model_param))
-    y_col = str(args.y_col).strip() or None
-    df = cross_validation_predictions(
-        model=str(args.model),
-        dataset=str(args.dataset),
-        y_col=y_col,
-        horizon=int(args.horizon),
-        step_size=int(args.step_size),
-        min_train_size=int(args.min_train_size),
-        max_train_size=args.max_train_size,
-        n_windows=args.n_windows,
-        model_params=model_params,
-        data_dir=str(args.data_dir),
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        y_col = str(args.y_col).strip() or None
+        df = cross_validation_predictions(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            y_col=y_col,
+            horizon=int(args.horizon),
+            step_size=int(args.step_size),
+            min_train_size=int(args.min_train_size),
+            max_train_size=args.max_train_size,
+            n_windows=args.n_windows,
+            model_params=model_params,
+            data_dir=str(args.data_dir),
+        )
+        _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="cv run",
+        payload=_log_payload(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            horizon=int(args.horizon),
+            step_size=int(args.step_size),
+            min_train_size=int(args.min_train_size),
+            n_windows=args.n_windows,
+        ),
+        action=_run,
     )
-    _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
-    return 0
 
 
 def _cmd_forecast_csv(args: argparse.Namespace) -> int:
     from .io import parse_id_cols
     from .services.cli_workflows import forecast_csv_workflow
 
-    model_params = _cli_shared._parse_model_params(list(args.model_param))
-    id_cols = parse_id_cols(str(args.id_cols))
-    pred = forecast_csv_workflow(
-        model=str(args.model),
-        path=str(args.path),
-        time_col=str(args.time_col),
-        y_col=str(args.y_col),
-        id_cols=id_cols,
-        parse_dates=bool(args.parse_dates),
-        horizon=int(args.horizon),
-        model_params=model_params,
-        future_path=str(getattr(args, "future_path", "")).strip() or None,
-        interval_levels=str(getattr(args, "interval_levels", "")).strip(),
-        interval_min_train_size=getattr(args, "interval_min_train_size", None),
-        interval_samples=int(getattr(args, "interval_samples", 1000)),
-        interval_seed=getattr(args, "interval_seed", None),
-        save_artifact_path=str(getattr(args, "save_artifact", "")).strip() or None,
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        id_cols = parse_id_cols(str(args.id_cols))
+        pred = forecast_csv_workflow(
+            model=str(args.model),
+            path=str(args.path),
+            time_col=str(args.time_col),
+            y_col=str(args.y_col),
+            id_cols=id_cols,
+            parse_dates=bool(args.parse_dates),
+            horizon=int(args.horizon),
+            model_params=model_params,
+            future_path=str(getattr(args, "future_path", "")).strip() or None,
+            interval_levels=str(getattr(args, "interval_levels", "")).strip(),
+            interval_min_train_size=getattr(args, "interval_min_train_size", None),
+            interval_samples=int(getattr(args, "interval_samples", 1000)),
+            interval_seed=getattr(args, "interval_seed", None),
+            save_artifact_path=str(getattr(args, "save_artifact", "")).strip() or None,
+        )
+        _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="forecast csv",
+        payload=_log_payload(
+            model=str(args.model),
+            path=str(args.path),
+            horizon=int(args.horizon),
+            future_path=str(getattr(args, "future_path", "")).strip() or None,
+            save_artifact=str(getattr(args, "save_artifact", "")).strip() or None,
+        ),
+        action=_run,
     )
-    _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
-    return 0
 
 
 def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
     from .services.cli_workflows import forecast_artifact_workflow
 
-    pred = forecast_artifact_workflow(
-        artifact=str(args.artifact),
-        horizon=int(args.horizon),
-        interval_levels=str(getattr(args, "interval_levels", "")).strip(),
-        interval_min_train_size=getattr(args, "interval_min_train_size", None),
-        interval_samples=int(getattr(args, "interval_samples", 1000)),
-        interval_seed=getattr(args, "interval_seed", None),
-        cutoff=getattr(args, "cutoff", None),
+    def _run() -> int:
+        pred = forecast_artifact_workflow(
+            artifact=str(args.artifact),
+            horizon=int(args.horizon),
+            interval_levels=str(getattr(args, "interval_levels", "")).strip(),
+            interval_min_train_size=getattr(args, "interval_min_train_size", None),
+            interval_samples=int(getattr(args, "interval_samples", 1000)),
+            interval_seed=getattr(args, "interval_seed", None),
+            cutoff=getattr(args, "cutoff", None),
+        )
+        _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="forecast artifact",
+        payload=_log_payload(
+            artifact=str(args.artifact),
+            horizon=int(args.horizon),
+            cutoff=getattr(args, "cutoff", None),
+        ),
+        action=_run,
     )
-    _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
-    return 0
+
+
+def _cmd_artifact_info(args: argparse.Namespace) -> int:
+    from .services.cli_workflows import artifact_info_markdown_workflow, artifact_info_workflow
+
+    def _run() -> int:
+        fmt = str(args.format)
+        if fmt in {"md", "markdown"}:
+            text = artifact_info_markdown_workflow(artifact=str(args.artifact))
+            _cli_shared._emit_text(text, output=str(args.output))
+            return 0
+        payload = artifact_info_workflow(artifact=str(args.artifact))
+        _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="artifact info",
+        payload=_log_payload(artifact=str(args.artifact)),
+        action=_run,
+    )
+
+
+def _cmd_artifact_validate(args: argparse.Namespace) -> int:
+    from .services.cli_workflows import artifact_validate_workflow
+
+    def _run() -> int:
+        payload = artifact_validate_workflow(artifact=str(args.artifact))
+        _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="artifact validate",
+        payload=_log_payload(artifact=str(args.artifact)),
+        action=_run,
+    )
+
+
+def _cmd_artifact_diff(args: argparse.Namespace) -> int:
+    from .services.cli_workflows import (
+        artifact_diff_markdown_workflow,
+        artifact_diff_rows_workflow,
+        artifact_diff_workflow,
+    )
+
+    def _run() -> int:
+        left_artifact = str(args.left_artifact)
+        right_artifact = str(args.right_artifact)
+        fmt = "md" if str(args.format) == "markdown" else str(args.format)
+        if fmt == "json":
+            payload = artifact_diff_workflow(
+                left_artifact=left_artifact,
+                right_artifact=right_artifact,
+                path_prefix=str(getattr(args, "path_prefix", "")).strip() or None,
+            )
+            _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
+            return 0
+        if fmt == "md":
+            text = artifact_diff_markdown_workflow(
+                left_artifact=left_artifact,
+                right_artifact=right_artifact,
+                path_prefix=str(getattr(args, "path_prefix", "")).strip() or None,
+            )
+            _cli_shared._emit_text(text, output=str(args.output))
+            return 0
+
+        rows = artifact_diff_rows_workflow(
+            left_artifact=left_artifact,
+            right_artifact=right_artifact,
+            path_prefix=str(getattr(args, "path_prefix", "")).strip() or None,
+        )
+        _cli_shared._emit_table(
+            rows,
+            columns=["path", "left", "right"],
+            output=str(args.output),
+            fmt=fmt,
+        )
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="artifact diff",
+        payload=_log_payload(
+            left_artifact=str(args.left_artifact),
+            right_artifact=str(args.right_artifact),
+            path_prefix=str(getattr(args, "path_prefix", "")).strip() or None,
+        ),
+        action=_run,
+    )
 
 
 def _cmd_tuning_run(args: argparse.Namespace) -> int:
     from .tuning import tune_model
 
-    model_params = _cli_shared._parse_model_params(list(args.model_param))
-    grid_params = _cli_shared._parse_grid_params(list(args.grid_param))
-    y_col = str(args.y_col).strip() or None
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        grid_params = _cli_shared._parse_grid_params(list(args.grid_param))
+        y_col = str(args.y_col).strip() or None
 
-    payload = tune_model(
-        model=str(args.model),
-        dataset=str(args.dataset),
-        y_col=y_col,
-        horizon=int(args.horizon),
-        step=int(args.step),
-        min_train_size=int(args.min_train_size),
-        search_space=grid_params,
-        metric=str(args.metric),
-        mode=str(args.mode),
-        model_params=model_params,
-        data_dir=str(args.data_dir),
-        max_windows=args.max_windows,
-        max_train_size=args.max_train_size,
-    )
-
-    fmt = str(args.format)
-    if fmt == "json":
-        _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
-    else:
-        row = {
-            "model": payload["model"],
-            "dataset": payload["dataset"],
-            "metric": payload["metric"],
-            "mode": payload["mode"],
-            "horizon": payload["horizon"],
-            "step": payload["step"],
-            "min_train_size": payload["min_train_size"],
-            "max_windows": payload["max_windows"],
-            "max_train_size": payload["max_train_size"],
-            "n_trials": payload["n_trials"],
-            "best_score": payload["best_score"],
-            "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
-        }
-        _cli_shared._emit_table(
-            [row],
-            columns=[
-                "model",
-                "dataset",
-                "metric",
-                "mode",
-                "horizon",
-                "step",
-                "min_train_size",
-                "max_windows",
-                "max_train_size",
-                "n_trials",
-                "best_score",
-                "best_params",
-            ],
-            output=str(args.output),
-            fmt=fmt,
+        payload = tune_model(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            y_col=y_col,
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            search_space=grid_params,
+            metric=str(args.metric),
+            mode=str(args.mode),
+            model_params=model_params,
+            data_dir=str(args.data_dir),
+            max_windows=args.max_windows,
+            max_train_size=args.max_train_size,
         )
-    return 0
+
+        fmt = str(args.format)
+        if fmt == "json":
+            _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
+        else:
+            row = {
+                "model": payload["model"],
+                "dataset": payload["dataset"],
+                "metric": payload["metric"],
+                "mode": payload["mode"],
+                "horizon": payload["horizon"],
+                "step": payload["step"],
+                "min_train_size": payload["min_train_size"],
+                "max_windows": payload["max_windows"],
+                "max_train_size": payload["max_train_size"],
+                "n_trials": payload["n_trials"],
+                "best_score": payload["best_score"],
+                "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
+            }
+            _cli_shared._emit_table(
+                [row],
+                columns=[
+                    "model",
+                    "dataset",
+                    "metric",
+                    "mode",
+                    "horizon",
+                    "step",
+                    "min_train_size",
+                    "max_windows",
+                    "max_train_size",
+                    "n_trials",
+                    "best_score",
+                    "best_params",
+                ],
+                output=str(args.output),
+                fmt=fmt,
+            )
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="tuning run",
+        payload=_log_payload(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            metric=str(args.metric),
+            mode=str(args.mode),
+            horizon=int(args.horizon),
+            step=int(args.step),
+        ),
+        action=_run,
+    )
 
 
 def _cmd_eval_naive_last(args: argparse.Namespace) -> int:
     from .eval import eval_naive_last
 
-    payload = eval_naive_last(
-        dataset=str(args.dataset),
-        y_col=str(args.y_col),
-        horizon=int(args.horizon),
-        step=int(args.step),
-        min_train_size=int(args.min_train_size),
-        max_windows=args.max_windows,
-        data_dir=str(args.data_dir),
-    )
-    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
+    def _run() -> int:
+        payload = eval_naive_last(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            max_windows=args.max_windows,
+            data_dir=str(args.data_dir),
+        )
+        _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
+        return 0
 
-    return 0
+    return _run_logged_command(
+        args,
+        command="eval naive-last",
+        payload=_log_payload(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+        ),
+        action=_run,
+    )
 
 
 def _cmd_eval_seasonal_naive(args: argparse.Namespace) -> int:
     from .eval import eval_seasonal_naive
 
-    payload = eval_seasonal_naive(
-        dataset=str(args.dataset),
-        y_col=str(args.y_col),
-        horizon=int(args.horizon),
-        step=int(args.step),
-        min_train_size=int(args.min_train_size),
-        season_length=int(args.season_length),
-        max_windows=args.max_windows,
-        data_dir=str(args.data_dir),
+    def _run() -> int:
+        payload = eval_seasonal_naive(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            season_length=int(args.season_length),
+            max_windows=args.max_windows,
+            data_dir=str(args.data_dir),
+        )
+        _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="eval seasonal-naive",
+        payload=_log_payload(
+            dataset=str(args.dataset),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            season_length=int(args.season_length),
+        ),
+        action=_run,
     )
-    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
-    return 0
 
 
 def _cmd_eval_run(args: argparse.Namespace) -> int:
     from .eval_forecast import eval_model
 
-    model_params = _cli_shared._parse_model_params(list(args.model_param))
-    y_col = str(args.y_col).strip() or None
-    payload = eval_model(
-        model=str(args.model),
-        dataset=str(args.dataset),
-        y_col=y_col,
-        horizon=int(args.horizon),
-        step=int(args.step),
-        min_train_size=int(args.min_train_size),
-        max_windows=args.max_windows,
-        max_train_size=args.max_train_size,
-        conformal_levels=str(args.conformal_levels).strip() or None,
-        conformal_per_step=(not bool(args.conformal_pooled)),
-        model_params=model_params,
-        data_dir=str(args.data_dir),
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        y_col = str(args.y_col).strip() or None
+        payload = eval_model(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            y_col=y_col,
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            max_windows=args.max_windows,
+            max_train_size=args.max_train_size,
+            conformal_levels=str(args.conformal_levels).strip() or None,
+            conformal_per_step=(not bool(args.conformal_pooled)),
+            model_params=model_params,
+            data_dir=str(args.data_dir),
+        )
+        _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="eval run",
+        payload=_log_payload(
+            model=str(args.model),
+            dataset=str(args.dataset),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            max_windows=args.max_windows,
+        ),
+        action=_run,
     )
-    _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
-    return 0
 
 
 def _cmd_eval_csv(args: argparse.Namespace) -> int:
     from .io import parse_id_cols
     from .services.cli_workflows import eval_csv_workflow
 
-    model_params = _cli_shared._parse_model_params(list(args.model_param))
-    id_cols = parse_id_cols(str(args.id_cols))
-    payload = eval_csv_workflow(
-        model=str(args.model),
-        path=str(args.path),
-        time_col=str(args.time_col),
-        y_col=str(args.y_col),
-        id_cols=id_cols,
-        parse_dates=bool(args.parse_dates),
-        horizon=int(args.horizon),
-        step=int(args.step),
-        min_train_size=int(args.min_train_size),
-        model_params=model_params,
-        max_windows=args.max_windows,
-        max_train_size=args.max_train_size,
-        conformal_levels=str(args.conformal_levels).strip() or None,
-        conformal_per_step=(not bool(args.conformal_pooled)),
-    )
-    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
-    return 0
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        id_cols = parse_id_cols(str(args.id_cols))
+        payload = eval_csv_workflow(
+            model=str(args.model),
+            path=str(args.path),
+            time_col=str(args.time_col),
+            y_col=str(args.y_col),
+            id_cols=id_cols,
+            parse_dates=bool(args.parse_dates),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            model_params=model_params,
+            max_windows=args.max_windows,
+            max_train_size=args.max_train_size,
+            conformal_levels=str(args.conformal_levels).strip() or None,
+            conformal_per_step=(not bool(args.conformal_pooled)),
+        )
+        _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+        return 0
 
+    return _run_logged_command(
+        args,
+        command="eval csv",
+        payload=_log_payload(
+            model=str(args.model),
+            path=str(args.path),
+            horizon=int(args.horizon),
+            step=int(args.step),
+            min_train_size=int(args.min_train_size),
+            max_windows=args.max_windows,
+        ),
+        action=_run,
+    )

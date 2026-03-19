@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from ..base import BaseForecaster, BaseGlobalForecaster
+from ..cli_runtime import compact_log_payload, emit_cli_event
 from ..contracts.params import normalize_x_cols as _contracts_normalize_x_cols
 from ..data.format import resolve_covariate_roles, to_long
 from ..io import ensure_datetime, load_csv
@@ -13,6 +15,8 @@ from ..serialization import load_forecaster_artifact, save_forecaster
 from . import evaluation as _evaluation
 from . import forecasting as _forecasting
 from . import model_execution as _model_execution
+
+_ARTIFACT_DIFF_MISSING = "<missing>"
 
 
 def _load_csv_frame(
@@ -25,6 +29,343 @@ def _load_csv_frame(
     if parse_dates:
         ensure_datetime(df, str(time_col))
     return df
+
+
+def _normalize_artifact_info_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _normalize_artifact_info_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, tuple | list):
+        return [_normalize_artifact_info_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return [_normalize_artifact_info_value(item) for item in value.tolist()]
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, pd.Index):
+        return [_normalize_artifact_info_value(item) for item in value.tolist()]
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    return value
+
+
+def _artifact_forecaster_type(forecaster: Any) -> str:
+    if isinstance(forecaster, BaseForecaster):
+        return "local"
+    if isinstance(forecaster, BaseGlobalForecaster):
+        return "global"
+    return type(forecaster).__name__
+
+
+def _extract_artifact_tracking_summary(metadata: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    normalized = _normalize_artifact_info_value(dict(metadata))
+    tracking: dict[str, Any] = {}
+    train_schema = normalized.get("train_schema")
+    if not isinstance(train_schema, dict):
+        return normalized, tracking
+    runtime = train_schema.get("runtime")
+    if not isinstance(runtime, dict):
+        return normalized, tracking
+    tracking_value = runtime.pop("tracking", None)
+    if isinstance(tracking_value, dict):
+        tracking = dict(tracking_value)
+    return normalized, tracking
+
+
+def _artifact_tracking_backends(tracking: dict[str, Any]) -> list[str]:
+    return sorted(
+        str(name)
+        for name, payload in tracking.items()
+        if isinstance(payload, dict) and payload
+    )
+
+
+def _artifact_tracking_summary(tracking: dict[str, Any]) -> dict[str, str]:
+    summary: dict[str, str] = {}
+    for backend in _artifact_tracking_backends(tracking):
+        payload = tracking.get(backend, {})
+        if not isinstance(payload, dict):
+            continue
+        if backend == "tensorboard":
+            run_name = str(payload.get("run_name", "")).strip()
+            log_dir = str(payload.get("log_dir", "")).strip()
+            parts = []
+            if run_name:
+                parts.append(run_name)
+            if log_dir:
+                parts.append(f"@ {log_dir}" if run_name else log_dir)
+            if parts:
+                summary[backend] = " ".join(parts)
+            continue
+        if backend == "mlflow":
+            experiment_name = str(payload.get("experiment_name", "")).strip()
+            run_name = str(payload.get("run_name", "")).strip()
+            items = [item for item in (experiment_name, run_name) if item]
+            if items:
+                summary[backend] = " / ".join(items)
+            continue
+        if backend == "wandb":
+            project = str(payload.get("project", "")).strip()
+            run_name = str(payload.get("run_name", "")).strip()
+            mode = str(payload.get("mode", "")).strip()
+            items = [item for item in (project, run_name) if item]
+            if items:
+                text = " / ".join(items)
+                if mode:
+                    text = f"{text} [{mode}]"
+                summary[backend] = text
+            continue
+        text = ", ".join(
+            f"{key}={value}"
+            for key, value in payload.items()
+            if value not in ("", None, [], {}, ())
+        )
+        if text:
+            summary[backend] = text
+    return summary
+
+
+def _artifact_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    forecaster = payload["forecaster"]
+    metadata, tracking = _extract_artifact_tracking_summary(dict(payload["metadata"]))
+    summary = {
+        "artifact_schema_version": int(payload["artifact_schema_version"]),
+        "forecaster_type": _artifact_forecaster_type(forecaster),
+        "metadata": metadata,
+        "extra": _normalize_artifact_info_value(dict(payload.get("extra", {}))),
+    }
+    if tracking:
+        summary["tracking"] = tracking
+        summary["tracking_backends"] = _artifact_tracking_backends(tracking)
+        summary["tracking_summary"] = _artifact_tracking_summary(tracking)
+    return summary
+
+
+def _collect_artifact_differences(
+    *,
+    left: Any,
+    right: Any,
+    path: str,
+    out: dict[str, dict[str, Any]],
+) -> None:
+    if isinstance(left, dict) and isinstance(right, dict):
+        for key in sorted(set(left).union(right)):
+            next_path = str(key) if not path else f"{path}.{key}"
+            if key not in left:
+                out[next_path] = {"left": _ARTIFACT_DIFF_MISSING, "right": right[key]}
+                continue
+            if key not in right:
+                out[next_path] = {"left": left[key], "right": _ARTIFACT_DIFF_MISSING}
+                continue
+            _collect_artifact_differences(
+                left=left[key],
+                right=right[key],
+                path=next_path,
+                out=out,
+            )
+        return
+
+    if left != right:
+        out[path] = {"left": left, "right": right}
+
+
+def _flatten_artifact_summary_rows(
+    payload: dict[str, Any],
+    *,
+    path: str = "",
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for key in sorted(payload):
+        value = payload[key]
+        next_path = str(key) if not path else f"{path}.{key}"
+        if isinstance(value, dict):
+            rows.extend(_flatten_artifact_summary_rows(value, path=next_path))
+            continue
+        rows.append(
+            {
+                "field": str(next_path),
+                "value": _stringify_artifact_diff_value(value),
+            }
+        )
+    return rows
+
+
+def _stringify_artifact_diff_value(value: Any) -> str:
+    if value == _ARTIFACT_DIFF_MISSING:
+        return str(value)
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _artifact_info_summary_rows(payload: dict[str, Any]) -> list[dict[str, str]]:
+    rows = [
+        {
+            "field": "artifact_schema_version",
+            "value": _stringify_artifact_diff_value(payload["artifact_schema_version"]),
+        },
+        {
+            "field": "forecaster_type",
+            "value": _stringify_artifact_diff_value(payload["forecaster_type"]),
+        },
+        {
+            "field": "is_fitted",
+            "value": _stringify_artifact_diff_value(payload["is_fitted"]),
+        },
+    ]
+    metadata = payload.get("metadata", {})
+    if isinstance(metadata, dict):
+        model_key = str(metadata.get("model_key", "")).strip()
+        if model_key:
+            rows.append({"field": "model_key", "value": model_key})
+        train_schema = metadata.get("train_schema", {})
+        if isinstance(train_schema, dict):
+            train_kind = str(train_schema.get("kind", "")).strip()
+            if train_kind:
+                rows.append({"field": "train_kind", "value": train_kind})
+    return rows
+
+
+def _artifact_info_tracking_rows(payload: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    backends = payload.get("tracking_backends", [])
+    if isinstance(backends, list) and backends:
+        rows.append({"backend": "backends", "summary": ", ".join(str(item) for item in backends)})
+    tracking_summary = payload.get("tracking_summary", {})
+    if isinstance(tracking_summary, dict):
+        for backend in sorted(tracking_summary):
+            rows.append(
+                {
+                    "backend": str(backend),
+                    "summary": str(tracking_summary[backend]),
+                }
+            )
+    return rows
+
+
+def _render_markdown_section(
+    *,
+    title: str,
+    rows: list[dict[str, str]],
+    columns: list[str],
+) -> str:
+    from .. import cli_shared as _cli_shared
+
+    if not rows:
+        return ""
+    return f"## {title}\n\n{_cli_shared._format_table(rows, columns=columns, fmt='md')}"
+
+
+def _trim_diff_path(path: str, *, prefix: str) -> str:
+    text = str(path)
+    if text == prefix:
+        return text
+    return text[len(prefix) + 1 :] if text.startswith(f"{prefix}.") else text
+
+
+def _artifact_diff_summary_rows(
+    payload: dict[str, Any],
+    *,
+    path_prefix: str | None,
+) -> list[dict[str, str]]:
+    rows = [
+        {
+            "field": "equal",
+            "value": _stringify_artifact_diff_value(payload["equal"]),
+        },
+        {
+            "field": "difference_count",
+            "value": _stringify_artifact_diff_value(payload["difference_count"]),
+        },
+    ]
+    prefix = str(path_prefix or "").strip()
+    if prefix:
+        rows.append({"field": "path_prefix", "value": prefix})
+    return rows
+
+
+def _artifact_diff_tracking_summary_rows(
+    differences: dict[str, dict[str, Any]],
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    if "tracking_backends" in differences:
+        item = differences["tracking_backends"]
+        rows.append(
+            {
+                "backend": "backends",
+                "left": _stringify_artifact_diff_value(item["left"]),
+                "right": _stringify_artifact_diff_value(item["right"]),
+            }
+        )
+    for path in sorted(differences):
+        if not path.startswith("tracking_summary."):
+            continue
+        item = differences[path]
+        rows.append(
+            {
+                "backend": _trim_diff_path(path, prefix="tracking_summary"),
+                "left": _stringify_artifact_diff_value(item["left"]),
+                "right": _stringify_artifact_diff_value(item["right"]),
+            }
+        )
+    return rows
+
+
+def _artifact_diff_prefixed_rows(
+    differences: dict[str, dict[str, Any]],
+    *,
+    prefix: str,
+    field_name: str = "field",
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for path in sorted(differences):
+        if path != prefix and not path.startswith(f"{prefix}."):
+            continue
+        item = differences[path]
+        rows.append(
+            {
+                field_name: _trim_diff_path(path, prefix=prefix),
+                "left": _stringify_artifact_diff_value(item["left"]),
+                "right": _stringify_artifact_diff_value(item["right"]),
+            }
+        )
+    return rows
+
+
+def _artifact_diff_other_rows(
+    differences: dict[str, dict[str, Any]],
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    excluded_prefixes = ("tracking.", "tracking_summary.", "metadata.", "extra.")
+    excluded_exact = {"tracking_backends"}
+    for path in sorted(differences):
+        if path in excluded_exact or any(path.startswith(prefix) for prefix in excluded_prefixes):
+            continue
+        item = differences[path]
+        rows.append(
+            {
+                "field": str(path),
+                "left": _stringify_artifact_diff_value(item["left"]),
+                "right": _stringify_artifact_diff_value(item["right"]),
+            }
+        )
+    return rows
+
+
+def _filter_artifact_differences(
+    differences: dict[str, dict[str, Any]],
+    *,
+    path_prefix: str | None,
+) -> dict[str, dict[str, Any]]:
+    prefix = str(path_prefix or "").strip()
+    if not prefix:
+        return dict(differences)
+    return {
+        path: value
+        for path, value in differences.items()
+        if path == prefix or path.startswith(f"{prefix}.")
+    }
 
 
 def _resolve_forecast_covariates(
@@ -359,6 +700,16 @@ def forecast_csv_workflow(
         y_col=y_col_s,
         id_cols=id_cols,
     )
+    emit_cli_event(
+        "LOAD csv",
+        event="forecast_csv_loaded",
+        payload=compact_log_payload(
+            model=model_key,
+            rows=int(len(long_df)),
+            n_series=int(long_df["unique_id"].nunique()),
+            future_rows=(None if future_df is None else int(len(future_df))),
+        ),
+    )
 
     pred = _forecasting.forecast_model_long_df(
         model=model_key,
@@ -370,6 +721,15 @@ def forecast_csv_workflow(
         interval_min_train_size=interval_min_train_size,
         interval_samples=int(interval_samples),
         interval_seed=interval_seed,
+    )
+    emit_cli_event(
+        "FORECAST ready",
+        event="forecast_completed",
+        payload=compact_log_payload(
+            model=model_key,
+            rows=int(len(pred)),
+            n_series=int(pred["unique_id"].nunique()) if not pred.empty else 0,
+        ),
     )
 
     artifact_path = str(save_artifact_path or "").strip()
@@ -391,6 +751,15 @@ def forecast_csv_workflow(
                 future_x_cols=future_x_cols,
                 horizon=int(horizon),
             )
+        emit_cli_event(
+            "ARTIFACT saved",
+            event="artifact_saved",
+            payload=compact_log_payload(
+                model=model_key,
+                artifact=artifact_path,
+                interface=str(model_spec.interface),
+            ),
+        )
 
     return pred
 
@@ -405,6 +774,11 @@ def forecast_artifact_workflow(
     interval_seed: int | None = None,
     cutoff: Any = None,
 ) -> pd.DataFrame:
+    emit_cli_event(
+        "ARTIFACT load",
+        event="artifact_loaded",
+        payload=compact_log_payload(artifact=str(artifact), horizon=int(horizon)),
+    )
     payload = load_forecaster_artifact(str(artifact))
     forecaster = payload["forecaster"]
     extra = dict(payload.get("extra", {}))
@@ -431,6 +805,205 @@ def forecast_artifact_workflow(
         )
 
     raise TypeError(f"Unsupported artifact forecaster type: {type(forecaster).__name__}")
+
+
+def artifact_info_workflow(
+    *,
+    artifact: str,
+) -> dict[str, Any]:
+    payload = load_forecaster_artifact(str(artifact))
+    forecaster = payload["forecaster"]
+    return {
+        **_artifact_summary_payload(payload),
+        "is_fitted": bool(getattr(forecaster, "is_fitted", False)),
+    }
+
+
+def artifact_validate_workflow(
+    *,
+    artifact: str,
+) -> dict[str, Any]:
+    payload = load_forecaster_artifact(str(artifact))
+    forecaster = payload["forecaster"]
+    metadata = dict(payload["metadata"])
+    return {
+        "valid": True,
+        "artifact_schema_version": int(payload["artifact_schema_version"]),
+        "forecaster_type": _artifact_forecaster_type(forecaster),
+        "model_key": str(metadata["model_key"]),
+        "train_kind": str(dict(metadata["train_schema"]).get("kind", "")),
+    }
+
+
+def artifact_diff_workflow(
+    *,
+    left_artifact: str,
+    right_artifact: str,
+    path_prefix: str | None = None,
+) -> dict[str, Any]:
+    left_payload = _artifact_summary_payload(load_forecaster_artifact(str(left_artifact)))
+    right_payload = _artifact_summary_payload(load_forecaster_artifact(str(right_artifact)))
+    differences: dict[str, dict[str, Any]] = {}
+    _collect_artifact_differences(
+        left=left_payload,
+        right=right_payload,
+        path="",
+        out=differences,
+    )
+    filtered = _filter_artifact_differences(differences, path_prefix=path_prefix)
+    return {
+        "equal": not filtered,
+        "difference_count": int(len(filtered)),
+        "differences": filtered,
+    }
+
+
+def artifact_diff_rows_workflow(
+    *,
+    left_artifact: str,
+    right_artifact: str,
+    path_prefix: str | None = None,
+) -> list[dict[str, str]]:
+    payload = artifact_diff_workflow(
+        left_artifact=left_artifact,
+        right_artifact=right_artifact,
+        path_prefix=path_prefix,
+    )
+    rows: list[dict[str, str]] = []
+    for path in sorted(payload["differences"]):
+        item = payload["differences"][path]
+        rows.append(
+            {
+                "path": str(path),
+                "left": _stringify_artifact_diff_value(item["left"]),
+                "right": _stringify_artifact_diff_value(item["right"]),
+            }
+    )
+    return rows
+
+
+def artifact_diff_markdown_workflow(
+    *,
+    left_artifact: str,
+    right_artifact: str,
+    path_prefix: str | None = None,
+) -> str:
+    payload = artifact_diff_workflow(
+        left_artifact=left_artifact,
+        right_artifact=right_artifact,
+        path_prefix=path_prefix,
+    )
+    if bool(payload["equal"]):
+        prefix = str(path_prefix or "").strip()
+        suffix = f" under `{prefix}`" if prefix else ""
+        return f"## Summary\n\nNo differences found{suffix}."
+    differences = dict(payload["differences"])
+    sections = [
+        _render_markdown_section(
+            title="Summary",
+            rows=_artifact_diff_summary_rows(payload, path_prefix=path_prefix),
+            columns=["field", "value"],
+        )
+    ]
+
+    sections.append(
+        _render_markdown_section(
+            title="Tracking Summary",
+            rows=_artifact_diff_tracking_summary_rows(differences),
+            columns=["backend", "left", "right"],
+        )
+    )
+    sections.append(
+        _render_markdown_section(
+            title="Tracking Details",
+            rows=_artifact_diff_prefixed_rows(differences, prefix="tracking"),
+            columns=["field", "left", "right"],
+        )
+    )
+    sections.append(
+        _render_markdown_section(
+            title="Metadata",
+            rows=_artifact_diff_prefixed_rows(differences, prefix="metadata"),
+            columns=["field", "left", "right"],
+        )
+    )
+    sections.append(
+        _render_markdown_section(
+            title="Extra",
+            rows=_artifact_diff_prefixed_rows(differences, prefix="extra"),
+            columns=["field", "left", "right"],
+        )
+    )
+    sections.append(
+        _render_markdown_section(
+            title="Other",
+            rows=_artifact_diff_other_rows(differences),
+            columns=["field", "left", "right"],
+        )
+    )
+
+    return "\n\n".join(section for section in sections if section)
+
+
+def artifact_info_rows_workflow(
+    *,
+    artifact: str,
+) -> list[dict[str, str]]:
+    payload = artifact_info_workflow(artifact=artifact)
+    return _flatten_artifact_summary_rows(payload)
+
+
+def artifact_info_markdown_workflow(
+    *,
+    artifact: str,
+) -> str:
+    payload = artifact_info_workflow(artifact=artifact)
+    sections = [
+        _render_markdown_section(
+            title="Summary",
+            rows=_artifact_info_summary_rows(payload),
+            columns=["field", "value"],
+        )
+    ]
+
+    tracking = payload.get("tracking", {})
+    if isinstance(tracking, dict) and tracking:
+        sections.append(
+            _render_markdown_section(
+                title="Tracking",
+                rows=_artifact_info_tracking_rows(payload),
+                columns=["backend", "summary"],
+            )
+        )
+        sections.append(
+            _render_markdown_section(
+                title="Tracking Details",
+                rows=_flatten_artifact_summary_rows(tracking),
+                columns=["field", "value"],
+            )
+        )
+
+    metadata = payload.get("metadata", {})
+    if isinstance(metadata, dict) and metadata:
+        sections.append(
+            _render_markdown_section(
+                title="Metadata",
+                rows=_flatten_artifact_summary_rows(metadata),
+                columns=["field", "value"],
+            )
+        )
+
+    extra = payload.get("extra", {})
+    if isinstance(extra, dict) and extra:
+        sections.append(
+            _render_markdown_section(
+                title="Extra",
+                rows=_flatten_artifact_summary_rows(extra),
+                columns=["field", "value"],
+            )
+        )
+
+    return "\n\n".join(section for section in sections if section)
 
 
 def eval_csv_workflow(
@@ -464,6 +1037,16 @@ def eval_csv_workflow(
         x_cols=x_cols,
         dropna=True,
     )
+    emit_cli_event(
+        "LOAD csv",
+        event="eval_csv_loaded",
+        payload=compact_log_payload(
+            model=str(model),
+            rows=int(len(long_df)),
+            n_series=int(long_df["unique_id"].nunique()),
+            x_cols=list(x_cols),
+        ),
+    )
 
     payload = _evaluation.eval_model_long_df(
         model=str(model),
@@ -485,10 +1068,26 @@ def eval_csv_workflow(
             "id_cols": list(id_cols),
         }
     )
+    emit_cli_event(
+        "EVAL done",
+        event="eval_completed",
+        payload=compact_log_payload(
+            model=str(model),
+            n_points=payload.get("n_points"),
+            n_series=payload.get("n_series"),
+        ),
+    )
     return payload
 
 
 __all__ = [
+    "artifact_diff_markdown_workflow",
+    "artifact_info_markdown_workflow",
+    "artifact_info_rows_workflow",
+    "artifact_diff_workflow",
+    "artifact_diff_rows_workflow",
+    "artifact_info_workflow",
+    "artifact_validate_workflow",
     "eval_csv_workflow",
     "forecast_artifact_workflow",
     "forecast_csv_workflow",

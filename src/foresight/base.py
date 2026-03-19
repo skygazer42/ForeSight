@@ -25,6 +25,15 @@ def _unavailable_global_factory() -> Callable[[pd.DataFrame, Any, int], pd.DataF
     raise RuntimeError("serialized global forecaster runtime factory was not rebuilt")
 
 
+def _runtime_summary_for_model(*, model_key: str, model_params: dict[str, Any]) -> dict[str, Any] | None:
+    from .models.neural_runtime import summarize_model_runtime
+
+    return summarize_model_runtime(
+        model_key=str(model_key),
+        model_params=dict(model_params),
+    )
+
+
 class BaseForecaster(ABC):
     def __init__(self, *, model_key: str, model_params: dict[str, Any]) -> None:
         self.model_key = str(model_key)
@@ -105,10 +114,17 @@ class RegistryForecaster(BaseForecaster):
         return np.asarray(self._forecaster(self._train_y, int(horizon)), dtype=float)
 
     def train_schema_summary(self) -> dict[str, Any]:
-        return {
+        summary = {
             "kind": "local",
             "n_obs": 0 if self._train_y is None else int(self._train_y.size),
         }
+        runtime = _runtime_summary_for_model(
+            model_key=self.model_key,
+            model_params=self.model_params,
+        )
+        if runtime is not None:
+            summary["runtime"] = runtime
+        return summary
 
     def __getstate__(self) -> dict[str, Any]:
         return {
@@ -174,12 +190,19 @@ class RegistryGlobalForecaster(BaseGlobalForecaster):
         n_rows = 0 if self._train_df is None else int(len(self._train_df))
         n_series = 0 if self._train_df is None else int(self._train_df["unique_id"].nunique())
         cols = [] if self._train_df is None else [str(c) for c in self._train_df.columns.tolist()]
-        return {
+        summary = {
             "kind": "global",
             "n_rows": n_rows,
             "n_series": n_series,
             "columns": cols,
         }
+        runtime = _runtime_summary_for_model(
+            model_key=self.model_key,
+            model_params=self.model_params,
+        )
+        if runtime is not None:
+            summary["runtime"] = runtime
+        return summary
 
     def __getstate__(self) -> dict[str, Any]:
         return {

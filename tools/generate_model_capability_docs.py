@@ -23,6 +23,7 @@ _CAPABILITY_DESCRIPTIONS: dict[str, str] = {
     "supports_interval_forecast": "Model supports forecast intervals in at least one supported execution path.",
     "supports_interval_forecast_with_x_cols": "Model supports forecast intervals when `x_cols` exogenous features are supplied.",
     "supports_quantiles": "Model can emit quantile forecast columns directly.",
+    "supports_static_cols": "Model accepts static per-series covariates / attributes through `static_cols`.",
     "supports_x_cols": "Model accepts future covariates / exogenous regressors through `x_cols`.",
 }
 
@@ -392,17 +393,18 @@ def _render_models_doc() -> str:
     lines.append("## Full registry matrix")
     lines.append("")
     lines.append(
-        "| key | interface | requires | `supports_x_cols` | `supports_quantiles` | "
+        "| key | interface | requires | `supports_x_cols` | `supports_static_cols` | `supports_quantiles` | "
         "`supports_interval_forecast` | `supports_interval_forecast_with_x_cols` | "
         "`supports_artifact_save` | `requires_future_covariates` |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for spec in specs:
         capabilities = dict(spec.capabilities)
         requires = ",".join(spec.requires) or "core"
         lines.append(
             f"| `{spec.key}` | `{spec.interface}` | `{requires}` | "
             f"{_bool_cell(capabilities.get('supports_x_cols'))} | "
+            f"{_bool_cell(capabilities.get('supports_static_cols'))} | "
             f"{_bool_cell(capabilities.get('supports_quantiles'))} | "
             f"{_bool_cell(capabilities.get('supports_interval_forecast'))} | "
             f"{_bool_cell(capabilities.get('supports_interval_forecast_with_x_cols'))} | "
@@ -449,6 +451,23 @@ def _render_api_doc() -> str:
     lines.append("    save_forecaster,")
     lines.append(")")
     lines.append("```")
+    lines.append("")
+    lines.append("## CLI vs Python API contracts")
+    lines.append("")
+    lines.append("The Python API and CLI have different output contracts:")
+    lines.append("")
+    lines.append(
+        "- Python functions such as `forecast_model(...)` and `eval_model(...)` return dataframes, dict payloads, or fitted objects directly."
+    )
+    lines.append(
+        "- The Python API does not emit the CLI runtime progress stream described in [`CLI runtime logging`](cli-logging.md)."
+    )
+    lines.append(
+        "- CLI commands keep structured `json` / `csv` results on `stdout`, while runtime logs go to `stderr`."
+    )
+    lines.append(
+        "- If you need machine-readable run events, prefer the CLI with `--log-file`; if you call the Python API directly, add logging in your own application layer."
+    )
     lines.append("")
 
     for group in _API_GROUP_ORDER:

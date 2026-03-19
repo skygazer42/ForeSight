@@ -977,3 +977,228 @@ def test_forecast_artifact_rejects_intervals_for_global_artifact(tmp_path: Path)
         "Forecast intervals are not yet supported for artifact model 'ridge-step-lag-global'"
         in (reuse_proc.stderr)
     )
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_forecast_csv_torch_training_logs_to_stderr_without_polluting_stdout(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "torch_train.csv"
+    csv_path.write_text(
+        "ds,y\n"
+        "2020-01-01,1\n"
+        "2020-01-02,2\n"
+        "2020-01-03,3\n"
+        "2020-01-04,4\n"
+        "2020-01-05,5\n"
+        "2020-01-06,6\n"
+        "2020-01-07,7\n"
+        "2020-01-08,8\n"
+        "2020-01-09,9\n"
+        "2020-01-10,10\n",
+        encoding="utf-8",
+    )
+
+    proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "torch-mlp-direct",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--format",
+        "json",
+        "--model-param",
+        "lags=4",
+        "--model-param",
+        "epochs=2",
+        "--model-param",
+        "hidden_sizes=8",
+        "--model-param",
+        "batch_size=4",
+        "--model-param",
+        "patience=1",
+        "--model-param",
+        "min_epochs=1",
+    )
+
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert len(rows) == 2
+    assert "RUN start" in proc.stderr
+    assert "TRAIN start" in proc.stderr
+    assert "EPOCH 1/" in proc.stderr
+    assert "TRAIN done" in proc.stderr
+    assert "RUN done" in proc.stderr
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_forecast_csv_no_progress_suppresses_epoch_logs(tmp_path: Path) -> None:
+    csv_path = tmp_path / "torch_train.csv"
+    csv_path.write_text(
+        "ds,y\n"
+        "2020-01-01,1\n"
+        "2020-01-02,2\n"
+        "2020-01-03,3\n"
+        "2020-01-04,4\n"
+        "2020-01-05,5\n"
+        "2020-01-06,6\n"
+        "2020-01-07,7\n"
+        "2020-01-08,8\n"
+        "2020-01-09,9\n"
+        "2020-01-10,10\n",
+        encoding="utf-8",
+    )
+
+    proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "torch-mlp-direct",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--format",
+        "json",
+        "--no-progress",
+        "--model-param",
+        "lags=4",
+        "--model-param",
+        "epochs=2",
+        "--model-param",
+        "hidden_sizes=8",
+        "--model-param",
+        "batch_size=4",
+        "--model-param",
+        "patience=1",
+        "--model-param",
+        "min_epochs=1",
+    )
+
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert len(rows) == 2
+    assert "RUN start" in proc.stderr
+    assert "TRAIN start" in proc.stderr
+    assert "EPOCH " not in proc.stderr
+    assert "RUN done" in proc.stderr
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
+def test_forecast_csv_log_file_captures_structured_torch_training_metrics(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "torch_train.csv"
+    log_path = tmp_path / "torch-train.jsonl"
+    csv_path.write_text(
+        "ds,y\n"
+        "2020-01-01,1\n"
+        "2020-01-02,2\n"
+        "2020-01-03,3\n"
+        "2020-01-04,4\n"
+        "2020-01-05,5\n"
+        "2020-01-06,6\n"
+        "2020-01-07,7\n"
+        "2020-01-08,8\n"
+        "2020-01-09,9\n"
+        "2020-01-10,10\n",
+        encoding="utf-8",
+    )
+
+    proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "torch-mlp-direct",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--format",
+        "json",
+        "--log-style",
+        "quiet",
+        "--log-file",
+        str(log_path),
+        "--model-param",
+        "lags=4",
+        "--model-param",
+        "epochs=2",
+        "--model-param",
+        "hidden_sizes=8",
+        "--model-param",
+        "batch_size=4",
+        "--model-param",
+        "patience=2",
+        "--model-param",
+        "min_epochs=1",
+    )
+
+    assert proc.returncode == 0
+    assert "RUN start" not in proc.stderr
+    assert "TRAIN start" not in proc.stderr
+    assert "EPOCH " not in proc.stderr
+    assert "TRAIN done" not in proc.stderr
+    rows = json.loads(proc.stdout)
+    assert len(rows) == 2
+
+    records = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    run_ids = {record.get("run_id") for record in records}
+    assert len(run_ids) == 1
+    assert next(iter(run_ids))
+    events = {record["event"]: record for record in records}
+    assert "run_started" in events
+    assert "train_started" in events
+    assert "train_completed" in events
+    assert "run_completed" in events
+
+    epoch_records = [record for record in records if record["event"] == "train_epoch_completed"]
+    assert len(epoch_records) == 2
+
+    train_started = events["train_started"]["payload"]
+    assert train_started["effective_batch_size"] == 4
+    assert train_started["train_samples"] > 0
+    assert train_started["trainable_parameters"] > 0
+    assert train_started["total_parameters"] >= train_started["trainable_parameters"]
+    assert train_started["optimizer"] == "adam"
+    assert train_started["scheduler"] == "none"
+    assert train_started["amp"] is False
+    assert train_started["device_type"] == "cpu"
+    assert isinstance(train_started["cuda_available"], bool)
+
+    first_epoch = epoch_records[0]["payload"]
+    assert first_epoch["epoch"] == 1
+    assert first_epoch["total_epochs"] == 2
+    assert first_epoch["lr"] > 0.0
+    assert first_epoch["avg_grad_norm"] > 0.0
+    assert first_epoch["epoch_seconds"] >= 0.0
+    assert first_epoch["samples_per_second"] > 0.0
+    assert first_epoch["batches_per_second"] > 0.0
+    assert "best_improved" in first_epoch
+
+    train_completed = events["train_completed"]["payload"]
+    assert train_completed["stop_reason"] == "completed"
+    assert train_completed["total_seconds"] >= 0.0
+    assert train_completed["final_lr"] > 0.0

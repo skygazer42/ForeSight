@@ -581,3 +581,28 @@ def test_torch_rnnpaper_seq2seq_covers_horizon_loss_decay_training_path() -> Non
 
     assert out.shape == (2,)
     assert np.all(np.isfinite(out))
+
+
+def test_torch_rnnpaper_seq2seq_covers_plateau_scheduler_path() -> None:
+    out = torch_rnnpaper_direct_forecast(
+        _series(56),
+        2,
+        paper="seq2seq",
+        lags=8,
+        hidden_size=8,
+        attn_hidden=4,
+        epochs=2,
+        batch_size=8,
+        patience=2,
+        val_split=0.2,
+        seed=0,
+        device="cpu",
+        scheduler="plateau",
+        monitor="val_loss",
+        scheduler_patience=1,
+        scheduler_plateau_factor=0.5,
+        scheduler_plateau_threshold=0.0,
+    )
+
+    assert out.shape == (2,)
+    assert np.all(np.isfinite(out))

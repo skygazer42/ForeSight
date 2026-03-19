@@ -19,6 +19,28 @@ _REQUIRED_METADATA_KEYS = (
     "model_params",
     "train_schema",
 )
+_RUNTIME_DICT_SECTION_KEYS = (
+    "training",
+    "optimizer",
+    "scheduler",
+    "monitor",
+    "dataloader",
+    "strategies",
+    "checkpoints",
+    "tracking",
+    "prediction",
+)
+_RUNTIME_NESTED_DICT_SECTION_KEYS = {
+    "optimizer": ("grad_clip",),
+    "strategies": (
+        "ema",
+        "swa",
+        "lookahead",
+        "sam",
+        "regularization",
+    ),
+    "tracking": ("tensorboard", "mlflow", "wandb"),
+}
 
 
 def _ensure_supported_forecaster(
@@ -61,6 +83,49 @@ def save_forecaster(
     with out_path.open("wb") as f:
         pickle.dump(payload, f)
     return metadata
+
+
+def _validate_optional_runtime_summary(train_schema: dict[str, Any]) -> None:
+    runtime = train_schema.get("runtime")
+    if runtime is None:
+        return
+    if not isinstance(runtime, dict):
+        raise TypeError(
+            "Serialized forecaster artifact metadata field 'train_schema.runtime' must be a dict"
+        )
+
+    for key in _RUNTIME_DICT_SECTION_KEYS:
+        if key not in runtime:
+            continue
+        section = runtime[key]
+        if not isinstance(section, dict):
+            raise TypeError(
+                "Serialized forecaster artifact metadata field "
+                f"'train_schema.runtime.{key}' must be a dict"
+            )
+
+    for parent_key, child_keys in _RUNTIME_NESTED_DICT_SECTION_KEYS.items():
+        parent = runtime.get(parent_key)
+        if not isinstance(parent, dict):
+            continue
+        for child_key in child_keys:
+            if child_key not in parent:
+                continue
+            child = parent[child_key]
+            if not isinstance(child, dict):
+                raise TypeError(
+                    "Serialized forecaster artifact metadata field "
+                    f"'train_schema.runtime.{parent_key}.{child_key}' must be a dict"
+                )
+
+
+def _validate_optional_extra_payload(validated: dict[str, Any]) -> None:
+    if "extra" not in validated:
+        return
+    if not isinstance(validated["extra"], dict):
+        raise TypeError(
+            "Serialized forecaster artifact field 'extra' must be a dict"
+        )
 
 
 def _validate_payload(payload: Any) -> dict[str, Any]:
@@ -114,6 +179,8 @@ def _validate_payload(payload: Any) -> dict[str, Any]:
         raise TypeError(
             "Serialized forecaster artifact metadata field 'train_schema' must be a dict"
         )
+    _validate_optional_runtime_summary(metadata["train_schema"])
+    _validate_optional_extra_payload(validated)
     return validated
 
 

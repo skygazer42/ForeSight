@@ -12,6 +12,15 @@ from foresight import (
 )
 ```
 
+## CLI vs Python API contracts
+
+The Python API and CLI have different output contracts:
+
+- Python functions such as `forecast_model(...)` and `eval_model(...)` return dataframes, dict payloads, or fitted objects directly.
+- The Python API does not emit the CLI runtime progress stream described in [`CLI runtime logging`](cli-logging.md).
+- CLI commands keep structured `json` / `csv` results on `stdout`, while runtime logs go to `stderr`.
+- If you need machine-readable run events, prefer the CLI with `--log-file`; if you call the Python API directly, add logging in your own application layer.
+
 ## Core classes
 
 | symbol | source | purpose |

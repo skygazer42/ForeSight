@@ -208,13 +208,19 @@ foresight forecast csv --model naive-last --path ./data.csv \
     --time-col ds --y-col y --parse-dates --horizon 7
 ```
 
+Long-running CLI commands emit enhanced runtime logs to `stderr` by default, so
+`stdout` stays clean for JSON / CSV piping and file redirects.
+
 <details>
 <summary><b>More Python API examples (intervals, tuning, global models, hierarchical)</b></summary>
 
 ```python
 import pandas as pd
 from foresight import (
+    bootstrap_intervals,
+    eval_hierarchical_forecast_df,
     forecast_model, tune_model, save_forecaster, load_forecaster,
+    make_forecaster_object,
     make_global_forecaster, make_multivariate_forecaster,
     build_hierarchy_spec, reconcile_hierarchical_forecasts,
 )
@@ -252,6 +258,11 @@ reconciled = reconcile_hierarchical_forecasts(
     forecast_df=pred_df, hierarchy=hierarchy,
     method="top_down", history_df=history_long,
 )
+hier_payload = eval_hierarchical_forecast_df(
+    forecast_df=reconciled,
+    hierarchy=hierarchy,
+    y_col="y",
+)
 ```
 
 </details>
@@ -265,11 +276,33 @@ foresight forecast csv --model naive-last --path ./my.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \
     --interval-levels 80,90 --interval-min-train-size 12
 
+# Enhanced runtime logs go to stderr; stdout remains pipe-safe
+foresight forecast csv --model torch-mlp-direct --path ./train.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 \
+    --model-param lags=24 --model-param epochs=10 \
+    --format json > /tmp/forecast.json
+
+# Reduce per-epoch chatter or persist structured event logs
+foresight eval run --model theta --dataset catfish --y-col Total \
+    --horizon 3 --step 3 --min-train-size 12 \
+    --no-progress --log-style plain --log-file /tmp/eval-log.jsonl
+
 # Save and reuse model artifacts
 foresight forecast csv --model naive-last --path ./my.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \
     --save-artifact /tmp/naive-last.pkl
 foresight forecast artifact --artifact /tmp/naive-last.pkl --horizon 3
+foresight artifact info --artifact /tmp/naive-last.pkl
+foresight artifact info --artifact /tmp/naive-last.pkl --format markdown
+foresight artifact validate --artifact /tmp/naive-last.pkl
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix metadata.train_schema.runtime --format csv
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix tracking_summary --format csv
 
 # SARIMAX with exogenous features
 foresight forecast csv --model sarimax --path ./my_exog.csv \

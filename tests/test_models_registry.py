@@ -779,6 +779,14 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         assert spec.default_params.get("save_last_checkpoint") is False
         assert spec.default_params.get("resume_checkpoint_path") == ""
         assert spec.default_params.get("resume_checkpoint_strict") is True
+        assert spec.default_params.get("mlflow_tracking_uri") == ""
+        assert spec.default_params.get("mlflow_experiment_name") == ""
+        assert spec.default_params.get("mlflow_run_name") == ""
+        assert spec.default_params.get("wandb_project") == ""
+        assert spec.default_params.get("wandb_entity") == ""
+        assert spec.default_params.get("wandb_run_name") == ""
+        assert spec.default_params.get("wandb_dir") == ""
+        assert spec.default_params.get("wandb_mode") == "online"
         assert spec.param_help.get("min_epochs") == "Minimum epochs before early stopping can trigger"
         assert spec.param_help.get("amp") == "Enable CUDA automatic mixed precision (true/false)"
         assert spec.param_help.get("amp_dtype") == "AMP compute dtype: auto, float16, bfloat16"
@@ -874,6 +882,30 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         )
         assert spec.param_help.get("resume_checkpoint_strict") == (
             "Use strict state_dict loading when resume_checkpoint_path is set"
+        )
+        assert spec.param_help.get("mlflow_tracking_uri") == (
+            "Optional MLflow tracking URI; uses the MLflow default backend when unset"
+        )
+        assert spec.param_help.get("mlflow_experiment_name") == (
+            "Optional MLflow experiment name; enables MLflow tracking when set"
+        )
+        assert spec.param_help.get("mlflow_run_name") == (
+            "Optional MLflow run name (default: timestamped run-* name)"
+        )
+        assert spec.param_help.get("wandb_project") == (
+            "Optional Weights & Biases project; enables W&B tracking when set"
+        )
+        assert spec.param_help.get("wandb_entity") == (
+            "Optional Weights & Biases entity / team for wandb_project"
+        )
+        assert spec.param_help.get("wandb_run_name") == (
+            "Optional Weights & Biases run name"
+        )
+        assert spec.param_help.get("wandb_dir") == (
+            "Optional Weights & Biases local run directory"
+        )
+        assert spec.param_help.get("wandb_mode") == (
+            "Weights & Biases mode: online, offline, disabled"
         )
 
 

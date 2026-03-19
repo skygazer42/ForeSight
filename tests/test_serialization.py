@@ -102,6 +102,88 @@ def test_load_forecaster_artifact_rejects_invalid_metadata_value_types(tmp_path)
         load_forecaster_artifact(path)
 
 
+def test_load_forecaster_artifact_rejects_non_dict_runtime_summary(tmp_path) -> None:
+    f = make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5])
+    path = tmp_path / "invalid-runtime.pkl"
+    with path.open("wb") as handle:
+        pickle.dump(
+            {
+                "artifact_schema_version": 1,
+                "metadata": {
+                    "package_version": __version__,
+                    "model_key": "naive-last",
+                    "model_params": {},
+                    "train_schema": {
+                        "kind": "local",
+                        "n_obs": 5,
+                        "runtime": [],
+                    },
+                },
+                "forecaster": f,
+            },
+            handle,
+        )
+
+    with pytest.raises(TypeError, match="train_schema.runtime"):
+        load_forecaster_artifact(path)
+
+
+def test_load_forecaster_artifact_rejects_non_dict_runtime_section(tmp_path) -> None:
+    f = make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5])
+    path = tmp_path / "invalid-runtime-section.pkl"
+    with path.open("wb") as handle:
+        pickle.dump(
+            {
+                "artifact_schema_version": 1,
+                "metadata": {
+                    "package_version": __version__,
+                    "model_key": "naive-last",
+                    "model_params": {},
+                    "train_schema": {
+                        "kind": "local",
+                        "n_obs": 5,
+                        "runtime": {
+                            "family": "torch",
+                            "training": [],
+                            "prediction": {"mode": "point"},
+                        },
+                    },
+                },
+                "forecaster": f,
+            },
+            handle,
+        )
+
+    with pytest.raises(TypeError, match="train_schema.runtime.training"):
+        load_forecaster_artifact(path)
+
+
+def test_load_forecaster_artifact_rejects_non_dict_extra_payload(tmp_path) -> None:
+    f = make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5])
+    path = tmp_path / "invalid-extra.pkl"
+    with path.open("wb") as handle:
+        pickle.dump(
+            {
+                "artifact_schema_version": 1,
+                "metadata": {
+                    "package_version": __version__,
+                    "model_key": "naive-last",
+                    "model_params": {},
+                    "train_schema": {
+                        "kind": "local",
+                        "n_obs": 5,
+                    },
+                },
+                "extra": [],
+                "forecaster": f,
+            },
+            handle,
+        )
+
+    with pytest.raises(TypeError, match="extra"):
+        load_forecaster_artifact(path)
+
+
 def test_save_forecaster_rejects_unfitted_forecaster(tmp_path) -> None:
     path = tmp_path / "unfitted.pkl"
 

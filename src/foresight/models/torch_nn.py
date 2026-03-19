@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import contextvars
 import copy
+import json
 import math
-from collections.abc import Callable
-from contextlib import nullcontext
+import time
+from collections.abc import Callable, Mapping
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from ..cli_runtime import compact_log_payload, emit_cli_event
 
 _HIDDEN_SIZE_MIN_MSG = "hidden_size must be >= 1"
 _NUM_LAYERS_MIN_MSG = "num_layers must be >= 1"
@@ -75,9 +80,12 @@ _SCHEDULER_PLATEAU_THRESHOLD_MIN_MSG = "scheduler_plateau_threshold must be >= 0
 _VAL_MONITOR_REQUIRES_VAL_SPLIT_MSG = "monitor='val_loss' requires val_split > 0"
 _CHECKPOINT_DIR_REQUIRED_MSG = "checkpoint_dir is required when checkpoint saving is enabled"
 _RESUME_CHECKPOINT_PATH_MISSING_MSG = "resume_checkpoint_path does not exist"
+_TENSORBOARD_FLUSH_SECS_MIN_MSG = "tensorboard_flush_secs must be >= 1"
+_WANDB_MODE_OPTIONS_MSG = "wandb_mode must be one of: online, offline, disabled"
 _SCHEDULER_OPTIONS_MSG = (
     "scheduler must be one of: none, cosine, step, plateau, onecycle, cosine_restarts"
 )
+_MLFLOW_DEFAULT_EXPERIMENT_NAME = "ForeSight"
 
 
 def _as_1d_float_array(train: Any) -> np.ndarray:
@@ -99,6 +107,26 @@ def _require_torch() -> Any:
             'Torch models require PyTorch. Install with: pip install -e ".[torch]"'
         ) from e
     return torch
+
+
+def _require_mlflow() -> Any:
+    try:
+        import mlflow  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            "MLflow tracking requires `mlflow`; install `mlflow` to enable tracking"
+        ) from e
+    return mlflow
+
+
+def _require_wandb() -> Any:
+    try:
+        import wandb  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ImportError(
+            "Weights & Biases tracking requires `wandb`; install `wandb` to enable tracking"
+        ) from e
+    return wandb
 
 
 def _make_manual_gru_cell(*, input_size: int, hidden_size: int) -> Any:
@@ -599,6 +627,17 @@ class TorchTrainConfig:
     save_last_checkpoint: bool = False
     resume_checkpoint_path: str = ""
     resume_checkpoint_strict: bool = True
+    tensorboard_log_dir: str = ""
+    tensorboard_run_name: str = ""
+    tensorboard_flush_secs: int = 10
+    mlflow_tracking_uri: str = ""
+    mlflow_experiment_name: str = ""
+    mlflow_run_name: str = ""
+    wandb_project: str = ""
+    wandb_entity: str = ""
+    wandb_run_name: str = ""
+    wandb_dir: str = ""
+    wandb_mode: str = "online"
 
 
 @dataclass(frozen=True)
@@ -615,6 +654,47 @@ class TorchCheckpointResumeState:
     swa_n_averaged: int = 0
     lookahead_state: dict[str, Any] | None = None
     lookahead_step: int = 0
+
+
+@dataclass
+class TorchTrackingSession:
+    backend: str
+    handle: Any
+    run_dir: str = ""
+    run_name: str = ""
+    metadata: dict[str, Any] | None = None
+
+
+TorchBatchPredictFn = Callable[..., Any]
+TorchOptimizerFactory = Callable[..., Any]
+TorchSchedulerFactory = Callable[..., tuple[Any, str]]
+_TORCH_RUNTIME_OVERRIDE_VAR: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
+    "foresight_torch_runtime_override",
+    default={},
+)
+
+
+@contextmanager
+def torch_train_config_override(overrides: Mapping[str, Any] | None) -> Any:
+    payload = {
+        str(key): value
+        for key, value in dict(overrides or {}).items()
+        if value is not None and value != ""
+    }
+    token = _TORCH_RUNTIME_OVERRIDE_VAR.set(payload)
+    try:
+        yield
+    finally:
+        _TORCH_RUNTIME_OVERRIDE_VAR.reset(token)
+
+
+def _merge_torch_runtime_override(cfg: TorchTrainConfig) -> TorchTrainConfig:
+    overrides = _TORCH_RUNTIME_OVERRIDE_VAR.get()
+    if not overrides:
+        return cfg
+    merged = dict(vars(cfg))
+    merged.update(dict(overrides))
+    return TorchTrainConfig(**merged)
 
 
 def _validate_torch_train_config(cfg: TorchTrainConfig) -> None:
@@ -720,6 +800,11 @@ def _validate_torch_train_config(cfg: TorchTrainConfig) -> None:
     resume_checkpoint_path = str(cfg.resume_checkpoint_path).strip()
     if resume_checkpoint_path and not Path(resume_checkpoint_path).is_file():
         raise ValueError(_RESUME_CHECKPOINT_PATH_MISSING_MSG)
+    if int(cfg.tensorboard_flush_secs) <= 0:
+        raise ValueError(_TENSORBOARD_FLUSH_SECS_MIN_MSG)
+    wandb_mode = str(cfg.wandb_mode).lower().strip()
+    if wandb_mode and wandb_mode not in {"online", "offline", "disabled"}:
+        raise ValueError(_WANDB_MODE_OPTIONS_MSG)
 
 
 def _make_torch_dataloader(
@@ -1330,9 +1415,10 @@ def _save_torch_checkpoint(
     monitor: float,
     epoch: int,
     extra_payload: dict[str, Any] | None = None,
-) -> None:
+) -> str:
     checkpoint_path = Path(str(checkpoint_dir).strip())
     checkpoint_path.mkdir(parents=True, exist_ok=True)
+    target_path = checkpoint_path / str(filename)
     payload = {
         "state_dict": state_dict,
         "monitor": float(monitor),
@@ -1342,8 +1428,18 @@ def _save_torch_checkpoint(
         payload.update(extra_payload)
     torch.save(
         payload,
-        checkpoint_path / str(filename),
+        target_path,
     )
+    emit_cli_event(
+        "CHECKPOINT saved",
+        event="train_checkpoint_saved",
+        payload=compact_log_payload(
+            path=target_path.as_posix(),
+            epoch=int(epoch),
+            monitor=float(monitor),
+        ),
+    )
+    return target_path.as_posix()
 
 
 def _snapshot_torch_training_state(
@@ -1401,9 +1497,10 @@ def _maybe_save_torch_checkpoints(
     last_epoch: int,
     best_extra_payload: dict[str, Any] | None = None,
     last_extra_payload: dict[str, Any] | None = None,
-) -> None:
+) -> dict[str, str]:
+    saved_paths: dict[str, str] = {}
     if bool(cfg.save_best_checkpoint) and best_state is not None:
-        _save_torch_checkpoint(
+        saved_paths["best_checkpoint_path"] = _save_torch_checkpoint(
             torch,
             checkpoint_dir=str(cfg.checkpoint_dir),
             filename="best.pt",
@@ -1413,7 +1510,7 @@ def _maybe_save_torch_checkpoints(
             extra_payload=best_extra_payload,
         )
     if bool(cfg.save_last_checkpoint) and last_state is not None and last_monitor is not None:
-        _save_torch_checkpoint(
+        saved_paths["last_checkpoint_path"] = _save_torch_checkpoint(
             torch,
             checkpoint_dir=str(cfg.checkpoint_dir),
             filename="last.pt",
@@ -1422,6 +1519,7 @@ def _maybe_save_torch_checkpoints(
             epoch=int(last_epoch),
             extra_payload=last_extra_payload,
         )
+    return saved_paths
 
 
 def _extract_torch_checkpoint_state_dict(payload: Any) -> dict[str, Any]:
@@ -1482,6 +1580,11 @@ def _load_torch_training_state(
         payload = torch.load(resume_checkpoint_path, weights_only=True, **load_kwargs)
     except TypeError:
         payload = torch.load(resume_checkpoint_path, **load_kwargs)
+    emit_cli_event(
+        "CHECKPOINT resume",
+        event="train_checkpoint_resumed",
+        payload=compact_log_payload(path=resume_checkpoint_path),
+    )
 
     state_dict = _extract_torch_checkpoint_state_dict(payload)
     resume_model_state = state_dict
@@ -1570,18 +1673,972 @@ def _moving_average_1d(xb: Any, *, window: int) -> Any:
     return F.conv1d(xpad, weight).squeeze(1)
 
 
-def _train_loop(
+def _make_torch_optimizer(torch: Any, model: Any, *, cfg: TorchTrainConfig) -> Any:
+    opt_name = str(cfg.optimizer).lower().strip()
+    if opt_name in {"adam", ""}:
+        return torch.optim.Adam(
+            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
+        )
+    if opt_name == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
+        )
+    if opt_name == "sgd":
+        return torch.optim.SGD(
+            model.parameters(),
+            lr=float(cfg.lr),
+            momentum=float(cfg.momentum),
+            weight_decay=float(cfg.weight_decay),
+        )
+    raise ValueError("optimizer must be one of: adam, adamw, sgd")
+
+
+def _split_torch_batch(batch: Any) -> tuple[tuple[Any, ...], Any]:
+    if not isinstance(batch, tuple | list):
+        raise TypeError("torch training batches must be tuples/lists of tensors")
+    items = tuple(batch)
+    if len(items) < 2:
+        raise ValueError("torch training batches must include model inputs and target")
+    return items[:-1], items[-1]
+
+
+def _move_torch_batch_to_device(
+    batch: Any,
+    *,
+    dev: Any,
+    non_blocking: bool,
+) -> tuple[tuple[Any, ...], Any]:
+    model_inputs, target = _split_torch_batch(batch)
+    moved_inputs = tuple(item.to(dev, non_blocking=non_blocking) for item in model_inputs)
+    moved_target = target.to(dev, non_blocking=non_blocking)
+    return moved_inputs, moved_target
+
+
+def _torch_loader_sample_count(loader: Any | None) -> int | None:
+    if loader is None:
+        return None
+    dataset = getattr(loader, "dataset", None)
+    if dataset is None:
+        return None
+    try:
+        return int(len(dataset))
+    except TypeError:
+        return None
+
+
+def _torch_parameter_counts(model: Any) -> tuple[int, int]:
+    trainable = 0
+    total = 0
+    for parameter in model.parameters():
+        count = int(parameter.numel())
+        total += count
+        if bool(parameter.requires_grad):
+            trainable += count
+    return trainable, total
+
+
+def _torch_primary_lr(optimizer: Any) -> float | None:
+    param_groups = getattr(optimizer, "param_groups", None)
+    if not isinstance(param_groups, list | tuple) or not param_groups:
+        return None
+    first_group = param_groups[0]
+    if not isinstance(first_group, dict) or "lr" not in first_group:
+        return None
+    return float(first_group["lr"])
+
+
+def _torch_global_gradient_norm_value(torch: Any, *, model: Any) -> float | None:
+    norms: list[Any] = []
+    for param in model.parameters():
+        grad = getattr(param, "grad", None)
+        if grad is None:
+            continue
+        norms.append(grad.detach().norm(p=2))
+    if not norms:
+        return None
+    grad_norm = torch.norm(torch.stack(norms), p=2)
+    return float(grad_norm.detach().cpu().item())
+
+
+def _torch_device_log_payload(torch: Any, *, dev: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "device_type": str(dev.type),
+        "cuda_available": bool(torch.cuda.is_available()),
+    }
+    if str(dev.type) == "cuda" and bool(torch.cuda.is_available()):
+        device_index = dev.index
+        if device_index is None:
+            device_index = int(torch.cuda.current_device())
+        payload["cuda_device_index"] = int(device_index)
+        payload["cuda_device_name"] = str(torch.cuda.get_device_name(device_index))
+    return payload
+
+
+def _torch_cuda_memory_payload(torch: Any, *, dev: Any) -> dict[str, Any]:
+    if str(dev.type) != "cuda" or not bool(torch.cuda.is_available()):
+        return {}
+    device_index = dev.index
+    if device_index is None:
+        device_index = int(torch.cuda.current_device())
+    mib = float(1024**2)
+    return {
+        "memory_allocated_mb": float(torch.cuda.memory_allocated(device_index)) / mib,
+        "memory_reserved_mb": float(torch.cuda.memory_reserved(device_index)) / mib,
+        "peak_memory_allocated_mb": float(torch.cuda.max_memory_allocated(device_index)) / mib,
+        "peak_memory_reserved_mb": float(torch.cuda.max_memory_reserved(device_index)) / mib,
+    }
+
+
+def _resolve_torch_tensorboard_run_dir(*, cfg: TorchTrainConfig) -> str:
+    root_dir = str(cfg.tensorboard_log_dir).strip()
+    if not root_dir:
+        return ""
+    run_name = str(cfg.tensorboard_run_name).strip() or time.strftime("run-%Y%m%d-%H%M%S")
+    return (Path(root_dir).expanduser().resolve(strict=False) / run_name).as_posix()
+
+
+def _open_torch_tensorboard_writer(*, cfg: TorchTrainConfig) -> tuple[Any | None, str]:
+    run_dir = _resolve_torch_tensorboard_run_dir(cfg=cfg)
+    if not run_dir:
+        return None, ""
+    try:
+        from torch.utils.tensorboard import SummaryWriter
+    except Exception as exc:  # noqa: BLE001
+        raise ImportError(
+            "tensorboard_log_dir requires torch.utils.tensorboard.SummaryWriter; install `tensorboard` to enable tracking"
+        ) from exc
+    return SummaryWriter(log_dir=run_dir, flush_secs=int(cfg.tensorboard_flush_secs)), run_dir
+
+
+@contextmanager
+def _torch_tensorboard_tracking_session(*, cfg: TorchTrainConfig) -> Any:
+    writer, run_dir = _open_torch_tensorboard_writer(cfg=cfg)
+    try:
+        yield writer, run_dir
+    finally:
+        if writer is None:
+            return
+        flush = getattr(writer, "flush", None)
+        if callable(flush):
+            flush()
+        close = getattr(writer, "close", None)
+        if callable(close):
+            close()
+
+
+def _torch_tracking_add_text(
+    writer: Any | None,
+    *,
+    tag: str,
+    payload: Mapping[str, Any] | str,
+    global_step: int | None = None,
+) -> None:
+    if writer is None:
+        return
+    add_text = getattr(writer, "add_text", None)
+    if not callable(add_text):
+        return
+    text = (
+        str(payload)
+        if isinstance(payload, str)
+        else json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+    )
+    if global_step is None:
+        add_text(str(tag), text)
+        return
+    add_text(str(tag), text, int(global_step))
+
+
+def _torch_tracking_add_scalar(
+    writer: Any | None,
+    *,
+    tag: str,
+    value: Any,
+    global_step: int,
+) -> None:
+    if writer is None or value is None:
+        return
+    add_scalar = getattr(writer, "add_scalar", None)
+    if not callable(add_scalar):
+        return
+    add_scalar(str(tag), float(value), int(global_step))
+
+
+def _normalize_torch_tracking_payload_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _normalize_torch_tracking_payload_value(item) for key, item in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_normalize_torch_tracking_payload_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return [_normalize_torch_tracking_payload_value(item) for item in value.tolist()]
+    if isinstance(value, np.generic):
+        return _normalize_torch_tracking_payload_value(value.item())
+    if isinstance(value, Path):
+        return value.as_posix()
+    return value
+
+
+def _coerce_torch_tracking_hparam_value(value: Any) -> bool | int | float | str:
+    normalized = _normalize_torch_tracking_payload_value(value)
+    if isinstance(normalized, bool):
+        return normalized
+    if isinstance(normalized, int):
+        return int(normalized)
+    if isinstance(normalized, float):
+        return float(normalized) if math.isfinite(normalized) else str(normalized)
+    if isinstance(normalized, str):
+        return normalized
+    return json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+
+
+def _torch_tracking_numeric_metrics(
+    payload: Mapping[str, Any] | None,
+) -> dict[str, float | int]:
+    metrics: dict[str, float | int] = {}
+    for key, value in compact_log_payload(payload or {}).items():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            metrics[str(key)] = int(value)
+            continue
+        if isinstance(value, float) and math.isfinite(value):
+            metrics[str(key)] = float(value)
+    return metrics
+
+
+def _build_torch_tracking_hparams_payload(*, cfg: TorchTrainConfig) -> dict[str, bool | int | float | str]:
+    return {
+        str(key): _coerce_torch_tracking_hparam_value(value)
+        for key, value in compact_log_payload(vars(cfg)).items()
+    }
+
+
+def _build_torch_tracking_artifact_payload(
+    *,
+    cfg: TorchTrainConfig,
+    tracking_session: TorchTrackingSession | None = None,
+    checkpoint_paths: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    checkpoint_dir = str(cfg.checkpoint_dir).strip()
+    saved_paths = {str(key): str(value) for key, value in dict(checkpoint_paths or {}).items()}
+    payload = compact_log_payload(
+        checkpoint_dir=checkpoint_dir,
+        resume_checkpoint_path=str(cfg.resume_checkpoint_path).strip(),
+        best_checkpoint_path=saved_paths.get("best_checkpoint_path"),
+        last_checkpoint_path=saved_paths.get("last_checkpoint_path"),
+    )
+    if tracking_session is None:
+        return payload
+    session_payload = dict(tracking_session.metadata or {})
+    backend = str(tracking_session.backend)
+    if backend == "tensorboard":
+        payload["tensorboard_run_dir"] = str(tracking_session.run_dir)
+    elif backend == "mlflow":
+        payload.update(
+            compact_log_payload(
+                mlflow_tracking_uri=session_payload.get("tracking_uri"),
+                mlflow_experiment_name=session_payload.get("experiment_name"),
+                mlflow_run_name=session_payload.get("run_name"),
+                mlflow_run_id=session_payload.get("run_id"),
+            )
+        )
+    elif backend == "wandb":
+        payload.update(
+            compact_log_payload(
+                wandb_project=session_payload.get("project"),
+                wandb_entity=session_payload.get("entity"),
+                wandb_run_name=session_payload.get("run_name"),
+                wandb_run_id=session_payload.get("run_id"),
+                wandb_run_path=session_payload.get("run_path"),
+                wandb_dir=session_payload.get("directory"),
+                wandb_mode=session_payload.get("mode"),
+            )
+        )
+    return payload
+
+
+def _torch_tracking_add_hparams(
+    writer: Any | None,
+    *,
+    hparam_payload: Mapping[str, Any],
+    metric_payload: Mapping[str, Any],
+    run_name: str,
+) -> None:
+    if writer is None:
+        return
+    add_hparams = getattr(writer, "add_hparams", None)
+    if not callable(add_hparams):
+        return
+    try:
+        add_hparams(dict(hparam_payload), dict(metric_payload), run_name=str(run_name))
+    except TypeError:
+        add_hparams(dict(hparam_payload), dict(metric_payload))
+
+
+def _build_torch_tracking_metric_payload(
+    *,
+    train_completed_payload: Mapping[str, Any],
+    epoch_payload: Mapping[str, Any] | None,
+) -> dict[str, float | int]:
+    return _torch_tracking_numeric_metrics(
+        compact_log_payload(
+            {
+                "train/epochs_ran": train_completed_payload.get("epochs_ran"),
+                "monitor/final_best": train_completed_payload.get("best"),
+                "train/final_lr": train_completed_payload.get("final_lr"),
+                "time/total_seconds": train_completed_payload.get("total_seconds"),
+                "train/final_loss": (None if epoch_payload is None else epoch_payload.get("train_loss")),
+                "validation/final_loss": (None if epoch_payload is None else epoch_payload.get("val_loss")),
+                "monitor/final_value": (None if epoch_payload is None else epoch_payload.get("monitor")),
+            }
+        )
+    )
+
+
+def _torch_tracking_artifact_file(*, tag: str, suffix: str) -> str:
+    parts = [part.strip().replace(" ", "_") for part in str(tag).split("/") if part.strip()]
+    if not parts:
+        parts = ["payload"]
+    return f"tracking/{'/'.join(parts)}.{suffix}"
+
+
+def _torch_tracking_session_payload(session: TorchTrackingSession) -> dict[str, Any]:
+    return compact_log_payload(dict(session.metadata or {}), backend=str(session.backend))
+
+
+def _torch_tracking_summary_assign(summary: Any, *, key: str, value: Any) -> None:
+    if summary is None:
+        return
+    try:
+        summary[str(key)] = value
+    except Exception:  # noqa: BLE001
+        update = getattr(summary, "update", None)
+        if callable(update):
+            update({str(key): value})
+
+
+@contextmanager
+def _torch_mlflow_tracking_session(*, cfg: TorchTrainConfig) -> Any:
+    tracking_uri = str(cfg.mlflow_tracking_uri).strip()
+    experiment_name = str(cfg.mlflow_experiment_name).strip()
+    run_name = str(cfg.mlflow_run_name).strip() or time.strftime("run-%Y%m%d-%H%M%S")
+    if not tracking_uri and not experiment_name and not str(cfg.mlflow_run_name).strip():
+        yield None
+        return
+    mlflow = _require_mlflow()
+    if tracking_uri:
+        set_tracking_uri = getattr(mlflow, "set_tracking_uri", None)
+        if callable(set_tracking_uri):
+            set_tracking_uri(str(tracking_uri))
+    resolved_tracking_uri = tracking_uri
+    get_tracking_uri = getattr(mlflow, "get_tracking_uri", None)
+    if callable(get_tracking_uri):
+        resolved_tracking_uri = str(get_tracking_uri())
+    resolved_experiment_name = experiment_name or _MLFLOW_DEFAULT_EXPERIMENT_NAME
+    set_experiment = getattr(mlflow, "set_experiment", None)
+    if callable(set_experiment):
+        set_experiment(str(resolved_experiment_name))
+    start_run = getattr(mlflow, "start_run", None)
+    if not callable(start_run):
+        raise AttributeError("mlflow.start_run is required for MLflow tracking")
+    active_run = start_run(run_name=str(run_name))
+    run_info = getattr(active_run, "info", None)
+    session = TorchTrackingSession(
+        backend="mlflow",
+        handle=mlflow,
+        run_name=str(run_name),
+        metadata=compact_log_payload(
+            tracking_uri=resolved_tracking_uri,
+            experiment_name=resolved_experiment_name,
+            run_name=str(run_name),
+            run_id=(None if run_info is None else getattr(run_info, "run_id", None)),
+        ),
+    )
+    try:
+        yield session
+    finally:
+        end_run = getattr(mlflow, "end_run", None)
+        if callable(end_run):
+            end_run()
+
+
+@contextmanager
+def _torch_wandb_tracking_session(*, cfg: TorchTrainConfig) -> Any:
+    project = str(cfg.wandb_project).strip()
+    if not project:
+        yield None
+        return
+    wandb = _require_wandb()
+    run_name = str(cfg.wandb_run_name).strip() or None
+    entity = str(cfg.wandb_entity).strip() or None
+    directory = str(cfg.wandb_dir).strip() or None
+    mode = str(cfg.wandb_mode).strip() or None
+    init = getattr(wandb, "init", None)
+    if not callable(init):
+        raise AttributeError("wandb.init is required for Weights & Biases tracking")
+    run = init(
+        project=str(project),
+        entity=entity,
+        name=run_name,
+        dir=directory,
+        mode=mode,
+        config=_build_torch_tracking_hparams_payload(cfg=cfg),
+    )
+    resolved_run_name = run_name or getattr(run, "name", None) or ""
+    session = TorchTrackingSession(
+        backend="wandb",
+        handle=run,
+        run_name=str(resolved_run_name),
+        metadata=compact_log_payload(
+            project=str(project),
+            entity=entity,
+            run_name=resolved_run_name,
+            run_id=getattr(run, "id", None),
+            run_path=getattr(run, "path", None),
+            directory=directory,
+            mode=mode,
+        ),
+    )
+    try:
+        yield session
+    finally:
+        finish = getattr(run, "finish", None)
+        if callable(finish):
+            finish()
+
+
+@contextmanager
+def _torch_tracking_sessions(*, cfg: TorchTrainConfig) -> Any:
+    with ExitStack() as stack:
+        sessions: list[TorchTrackingSession] = []
+        writer, run_dir = stack.enter_context(_torch_tensorboard_tracking_session(cfg=cfg))
+        if writer is not None:
+            sessions.append(
+                TorchTrackingSession(
+                    backend="tensorboard",
+                    handle=writer,
+                    run_dir=str(run_dir),
+                    run_name=(str(cfg.tensorboard_run_name).strip() or Path(str(run_dir)).name),
+                    metadata=compact_log_payload(log_dir=str(run_dir)),
+                )
+            )
+        mlflow_session = stack.enter_context(_torch_mlflow_tracking_session(cfg=cfg))
+        if mlflow_session is not None:
+            sessions.append(mlflow_session)
+        wandb_session = stack.enter_context(_torch_wandb_tracking_session(cfg=cfg))
+        if wandb_session is not None:
+            sessions.append(wandb_session)
+        yield tuple(sessions)
+
+
+def _torch_tracking_run_name(
+    session: TorchTrackingSession,
+    *,
+    cfg: TorchTrainConfig,
+) -> str:
+    if session.run_name:
+        return str(session.run_name)
+    if session.backend == "tensorboard" and session.run_dir:
+        return Path(str(session.run_dir)).name
+    return str(cfg.mlflow_run_name or cfg.wandb_run_name or cfg.tensorboard_run_name).strip() or str(
+        session.backend
+    )
+
+
+def _torch_tracking_session_add_text(
+    session: TorchTrackingSession,
+    *,
+    tag: str,
+    payload: Mapping[str, Any] | str,
+    global_step: int | None = None,
+) -> None:
+    if session.backend == "tensorboard":
+        _torch_tracking_add_text(
+            session.handle,
+            tag=tag,
+            payload=payload,
+            global_step=global_step,
+        )
+        return
+    if session.backend == "mlflow":
+        log_dict = getattr(session.handle, "log_dict", None)
+        if not callable(log_dict):
+            return
+        normalized = (
+            {"text": str(payload)}
+            if isinstance(payload, str)
+            else _normalize_torch_tracking_payload_value(dict(payload))
+        )
+        if global_step is not None and isinstance(normalized, dict):
+            normalized["global_step"] = int(global_step)
+        log_dict(normalized, _torch_tracking_artifact_file(tag=tag, suffix="json"))
+        return
+    if session.backend == "wandb":
+        summary_payload = (
+            str(payload)
+            if isinstance(payload, str)
+            else _normalize_torch_tracking_payload_value(dict(payload))
+        )
+        if global_step is not None:
+            summary_payload = compact_log_payload(value=summary_payload, global_step=int(global_step))
+        _torch_tracking_summary_assign(getattr(session.handle, "summary", None), key=tag, value=summary_payload)
+
+
+def _torch_tracking_session_add_scalar(
+    session: TorchTrackingSession,
+    *,
+    tag: str,
+    value: Any,
+    global_step: int,
+) -> None:
+    if value is None:
+        return
+    if session.backend == "tensorboard":
+        _torch_tracking_add_scalar(
+            session.handle,
+            tag=tag,
+            value=value,
+            global_step=global_step,
+        )
+        return
+    if session.backend == "mlflow":
+        log_metric = getattr(session.handle, "log_metric", None)
+        if callable(log_metric):
+            log_metric(str(tag), float(value), step=int(global_step))
+        return
+    if session.backend == "wandb":
+        log = getattr(session.handle, "log", None)
+        if callable(log):
+            log({str(tag): float(value)}, step=int(global_step))
+
+
+def _torch_tracking_session_add_hparams(
+    session: TorchTrackingSession,
+    *,
+    hparam_payload: Mapping[str, Any],
+    metric_payload: Mapping[str, Any],
+    run_name: str,
+) -> None:
+    if session.backend == "tensorboard":
+        _torch_tracking_add_hparams(
+            session.handle,
+            hparam_payload=hparam_payload,
+            metric_payload=metric_payload,
+            run_name=run_name,
+        )
+        return
+    if session.backend == "mlflow":
+        log_params = getattr(session.handle, "log_params", None)
+        if callable(log_params):
+            log_params(dict(hparam_payload))
+        log_metrics = getattr(session.handle, "log_metrics", None)
+        if callable(log_metrics) and metric_payload:
+            log_metrics(dict(metric_payload))
+        return
+    if session.backend == "wandb":
+        config = getattr(session.handle, "config", None)
+        if config is not None:
+            update = getattr(config, "update", None)
+            if callable(update):
+                try:
+                    update(dict(hparam_payload), allow_val_change=True)
+                except TypeError:
+                    update(dict(hparam_payload))
+            elif isinstance(config, dict):
+                config.update(dict(hparam_payload))
+        log = getattr(session.handle, "log", None)
+        if callable(log) and metric_payload:
+            log(dict(metric_payload))
+        _torch_tracking_summary_assign(
+            getattr(session.handle, "summary", None),
+            key="foresight/hparams",
+            value=_normalize_torch_tracking_payload_value(dict(hparam_payload)),
+        )
+
+
+def _log_torch_tensorboard_run_metadata(
+    writer: Any | None,
+    *,
+    cfg: TorchTrainConfig,
+    run_dir: str,
+    device_payload: Mapping[str, Any],
+) -> None:
+    if writer is None:
+        return
+    _torch_tracking_add_text(
+        writer,
+        tag="foresight/config",
+        payload=compact_log_payload(
+            vars(cfg),
+            tensorboard_run_dir=str(run_dir),
+        ),
+    )
+    _torch_tracking_add_text(
+        writer,
+        tag="foresight/device",
+        payload=dict(device_payload),
+    )
+    _torch_tracking_add_text(
+        writer,
+        tag="foresight/hparams",
+        payload=_build_torch_tracking_hparams_payload(cfg=cfg),
+    )
+
+
+def _log_torch_tensorboard_run_artifacts(
+    writer: Any | None,
+    *,
+    cfg: TorchTrainConfig,
+    run_dir: str,
+    checkpoint_paths: Mapping[str, str] | None = None,
+) -> None:
+    _torch_tracking_add_text(
+        writer,
+        tag="foresight/artifacts",
+        payload=_build_torch_tracking_artifact_payload(
+            cfg=cfg,
+            tracking_session=TorchTrackingSession(
+                backend="tensorboard",
+                handle=writer,
+                run_dir=str(run_dir),
+            ),
+            checkpoint_paths=checkpoint_paths,
+        ),
+    )
+
+
+def _log_torch_tensorboard_run_summary(
+    writer: Any | None,
+    *,
+    cfg: TorchTrainConfig,
+    run_dir: str,
+    train_completed_payload: Mapping[str, Any],
+    epoch_payload: Mapping[str, Any] | None,
+    checkpoint_paths: Mapping[str, str] | None = None,
+) -> None:
+    if writer is None:
+        return
+    metric_payload = _build_torch_tracking_metric_payload(
+        train_completed_payload=train_completed_payload,
+        epoch_payload=epoch_payload,
+    )
+    _torch_tracking_add_hparams(
+        writer,
+        hparam_payload=_build_torch_tracking_hparams_payload(cfg=cfg),
+        metric_payload=metric_payload,
+        run_name=(str(cfg.tensorboard_run_name).strip() or Path(str(run_dir)).name),
+    )
+    _log_torch_tensorboard_run_artifacts(
+        writer,
+        cfg=cfg,
+        run_dir=run_dir,
+        checkpoint_paths=checkpoint_paths,
+    )
+
+
+def _log_torch_tracking_run_metadata(
+    sessions: tuple[TorchTrackingSession, ...],
+    *,
+    cfg: TorchTrainConfig,
+    device_payload: Mapping[str, Any],
+) -> None:
+    for session in sessions:
+        if session.backend == "tensorboard":
+            _log_torch_tensorboard_run_metadata(
+                session.handle,
+                cfg=cfg,
+                run_dir=str(session.run_dir),
+                device_payload=device_payload,
+            )
+            continue
+        _torch_tracking_session_add_text(
+            session,
+            tag="foresight/config",
+            payload=compact_log_payload(vars(cfg)),
+        )
+        _torch_tracking_session_add_text(
+            session,
+            tag="foresight/device",
+            payload=dict(device_payload),
+        )
+        if session.backend == "wandb":
+            _torch_tracking_summary_assign(
+                getattr(session.handle, "summary", None),
+                key="foresight/device",
+                value=_normalize_torch_tracking_payload_value(dict(device_payload)),
+            )
+
+
+def _log_torch_tracking_epoch_metrics(
+    sessions: tuple[TorchTrackingSession, ...],
+    *,
+    epoch_payload: Mapping[str, Any],
+) -> None:
+    if not sessions:
+        return
+    scalar_map = {
+        "train/loss": epoch_payload.get("train_loss"),
+        "validation/loss": epoch_payload.get("val_loss"),
+        "monitor/value": epoch_payload.get("monitor"),
+        "monitor/best": epoch_payload.get("best"),
+        "train/lr": epoch_payload.get("lr"),
+        "system/avg_grad_norm": epoch_payload.get("avg_grad_norm"),
+        "time/epoch_seconds": epoch_payload.get("epoch_seconds"),
+        "time/step_seconds": epoch_payload.get("step_seconds"),
+        "throughput/samples_per_second": epoch_payload.get("samples_per_second"),
+        "throughput/batches_per_second": epoch_payload.get("batches_per_second"),
+        "train/optimizer_steps": epoch_payload.get("optimizer_steps"),
+        "cuda/memory_allocated_mb": epoch_payload.get("memory_allocated_mb"),
+        "cuda/memory_reserved_mb": epoch_payload.get("memory_reserved_mb"),
+        "cuda/peak_memory_allocated_mb": epoch_payload.get("peak_memory_allocated_mb"),
+        "cuda/peak_memory_reserved_mb": epoch_payload.get("peak_memory_reserved_mb"),
+    }
+    epoch = int(epoch_payload.get("epoch", 0))
+    for session in sessions:
+        if session.backend == "wandb":
+            payload = {
+                str(tag): float(value)
+                for tag, value in scalar_map.items()
+                if value is not None
+            }
+            log = getattr(session.handle, "log", None)
+            if callable(log) and payload:
+                log(payload, step=epoch)
+            continue
+        for tag, value in scalar_map.items():
+            _torch_tracking_session_add_scalar(
+                session,
+                tag=tag,
+                value=value,
+                global_step=epoch,
+            )
+
+
+def _log_torch_tracking_checkpoint_artifacts(
+    session: TorchTrackingSession,
+    *,
+    checkpoint_paths: Mapping[str, str],
+) -> None:
+    if not checkpoint_paths:
+        return
+    if session.backend == "mlflow":
+        log_artifact = getattr(session.handle, "log_artifact", None)
+        if not callable(log_artifact):
+            return
+        for path in dict(checkpoint_paths).values():
+            log_artifact(str(path), artifact_path="checkpoints")
+        return
+    if session.backend == "wandb":
+        run = session.handle
+        artifact_cls = getattr(_require_wandb(), "Artifact", None)
+        if artifact_cls is None:
+            return
+        artifact_name = f"{str(session.run_name or session.backend)}-checkpoints"
+        artifact = artifact_cls(str(artifact_name), type="model")
+        add_file = getattr(artifact, "add_file", None)
+        if not callable(add_file):
+            return
+        for path in dict(checkpoint_paths).values():
+            add_file(str(path), name=Path(str(path)).name)
+        log_artifact = getattr(run, "log_artifact", None)
+        if callable(log_artifact):
+            log_artifact(artifact)
+
+
+def _log_torch_tracking_run_summary(
+    sessions: tuple[TorchTrackingSession, ...],
+    *,
+    cfg: TorchTrainConfig,
+    train_completed_payload: Mapping[str, Any],
+    epoch_payload: Mapping[str, Any] | None,
+    checkpoint_paths: Mapping[str, str] | None = None,
+) -> None:
+    hparam_payload = _build_torch_tracking_hparams_payload(cfg=cfg)
+    metric_payload = _build_torch_tracking_metric_payload(
+        train_completed_payload=train_completed_payload,
+        epoch_payload=epoch_payload,
+    )
+    saved_paths = dict(checkpoint_paths or {})
+    for session in sessions:
+        if session.backend == "tensorboard":
+            _log_torch_tensorboard_run_summary(
+                session.handle,
+                cfg=cfg,
+                run_dir=str(session.run_dir),
+                train_completed_payload=train_completed_payload,
+                epoch_payload=epoch_payload,
+                checkpoint_paths=saved_paths,
+            )
+        else:
+            _torch_tracking_session_add_hparams(
+                session,
+                hparam_payload=hparam_payload,
+                metric_payload=metric_payload,
+                run_name=_torch_tracking_run_name(session, cfg=cfg),
+            )
+            _torch_tracking_session_add_text(
+                session,
+                tag="foresight/artifacts",
+                payload=_build_torch_tracking_artifact_payload(
+                    cfg=cfg,
+                    tracking_session=session,
+                    checkpoint_paths=saved_paths,
+                ),
+            )
+            if session.backend == "wandb":
+                summary = getattr(session.handle, "summary", None)
+                for key, value in metric_payload.items():
+                    _torch_tracking_summary_assign(summary, key=str(key), value=value)
+            _log_torch_tracking_checkpoint_artifacts(
+                session,
+                checkpoint_paths=saved_paths,
+            )
+
+
+def _log_torch_tensorboard_epoch_metrics(
+    writer: Any | None,
+    *,
+    epoch_payload: Mapping[str, Any],
+) -> None:
+    if writer is None:
+        return
+    epoch = int(epoch_payload.get("epoch", 0))
+    scalar_map = {
+        "train/loss": epoch_payload.get("train_loss"),
+        "validation/loss": epoch_payload.get("val_loss"),
+        "monitor/value": epoch_payload.get("monitor"),
+        "monitor/best": epoch_payload.get("best"),
+        "train/lr": epoch_payload.get("lr"),
+        "system/avg_grad_norm": epoch_payload.get("avg_grad_norm"),
+        "time/epoch_seconds": epoch_payload.get("epoch_seconds"),
+        "time/step_seconds": epoch_payload.get("step_seconds"),
+        "throughput/samples_per_second": epoch_payload.get("samples_per_second"),
+        "throughput/batches_per_second": epoch_payload.get("batches_per_second"),
+        "train/optimizer_steps": epoch_payload.get("optimizer_steps"),
+        "cuda/memory_allocated_mb": epoch_payload.get("memory_allocated_mb"),
+        "cuda/memory_reserved_mb": epoch_payload.get("memory_reserved_mb"),
+        "cuda/peak_memory_allocated_mb": epoch_payload.get("peak_memory_allocated_mb"),
+        "cuda/peak_memory_reserved_mb": epoch_payload.get("peak_memory_reserved_mb"),
+    }
+    for tag, value in scalar_map.items():
+        _torch_tracking_add_scalar(
+            writer,
+            tag=tag,
+            value=value,
+            global_step=epoch,
+        )
+
+
+def _apply_torch_train_input_transforms(
+    torch: Any,
+    model_inputs: tuple[Any, ...],
+    *,
+    cfg: TorchTrainConfig,
+) -> tuple[Any, ...]:
+    if not model_inputs:
+        return model_inputs
+    first = _apply_torch_train_input_dropout(torch, model_inputs[0], cfg=cfg)
+    first = _apply_torch_train_temporal_dropout(torch, first, cfg=cfg)
+    return (first,) + tuple(model_inputs[1:])
+
+
+def _reset_torch_module_parameters(model: Any) -> None:
+    for module in model.modules():
+        reset = getattr(module, "reset_parameters", None)
+        if not callable(reset):
+            continue
+        has_uninitialized_params = getattr(module, "has_uninitialized_params", None)
+        if callable(has_uninitialized_params) and bool(has_uninitialized_params()):
+            continue
+        reset()
+
+
+def _predict_torch_batch(
     model: Any,
-    X: np.ndarray,
-    Y: np.ndarray,
+    model_inputs: tuple[Any, ...],
+    target: Any,
+    *,
+    epoch_idx: int,
+    training: bool,
+    batch_predict_fn: TorchBatchPredictFn | None,
+) -> Any:
+    if batch_predict_fn is None:
+        return model(*model_inputs)
+    return batch_predict_fn(
+        model,
+        model_inputs,
+        target,
+        epoch_idx=int(epoch_idx),
+        training=bool(training),
+    )
+
+
+def _snapshot_torch_runtime_payload(
+    *,
+    optimizer: Any,
+    scheduler: Any,
+    scaler: Any,
+    best_state: dict[str, Any] | None,
+    best_monitor: float,
+    bad_epochs: int,
+    best_epoch: int,
+    base_lrs: tuple[float, ...],
+    model: Any,
+    cfg: TorchTrainConfig,
+    ema_model: Any | None,
+    ema_active: bool,
+    swa_model: Any | None,
+    swa_n_averaged: int,
+    lookahead_model: Any | None,
+    lookahead_step: int,
+) -> dict[str, Any]:
+    return _snapshot_torch_training_state(
+        optimizer=optimizer,
+        scheduler=scheduler,
+        scaler=scaler,
+        best_state=best_state,
+        best_monitor=float(best_monitor),
+        bad_epochs=int(bad_epochs),
+        best_epoch=int(best_epoch),
+        base_lrs=base_lrs,
+        ema_state=(None if ema_model is None or not ema_active else ema_model.state_dict()),
+        swa_state=(
+            None if swa_model is None or int(swa_n_averaged) <= 0 else swa_model.state_dict()
+        ),
+        swa_n_averaged=int(swa_n_averaged),
+        lookahead_state=(None if lookahead_model is None else lookahead_model.state_dict()),
+        lookahead_step=int(lookahead_step),
+        model_state=_maybe_torch_model_state_for_checkpoint(
+            model=model,
+            cfg=cfg,
+            ema_model=ema_model,
+            ema_active=ema_active,
+            swa_model=swa_model,
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_model=lookahead_model,
+            lookahead_step=int(lookahead_step),
+        ),
+    )
+
+
+def _train_torch_model_with_loaders(
+    model: Any,
+    train_loader: Any,
+    val_loader: Any | None,
     *,
     cfg: TorchTrainConfig,
     device: str,
     loss_fn_override: Any | None = None,
+    batch_predict_fn: TorchBatchPredictFn | None = None,
+    optimizer_factory: TorchOptimizerFactory | None = None,
+    scheduler_factory: TorchSchedulerFactory | None = None,
 ) -> Any:
     torch = _require_torch()
     nn = torch.nn
 
+    cfg = _merge_torch_runtime_override(cfg)
     _validate_torch_train_config(cfg)
 
     torch.manual_seed(int(cfg.seed))
@@ -1592,59 +2649,16 @@ def _train_loop(
     amp_enabled, amp_dtype, scaler = _make_torch_amp_state(torch, cfg=cfg, dev=dev)
 
     model = model.to(dev)
+    _reset_torch_module_parameters(model)
 
-    x_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(Y, dtype=torch.float32)
-
-    n = int(x_tensor.shape[0])
-    val_n = 0
-    if float(cfg.val_split) > 0.0 and n >= 5:
-        val_n = max(1, int(round(float(cfg.val_split) * n)))
-        val_n = min(val_n, n - 1)
-
-    if val_n > 0:
-        train_end = n - val_n
-        X_train, Y_train = x_tensor[:train_end], y_tensor[:train_end]
-        x_val, y_val = x_tensor[train_end:], y_tensor[train_end:]
-    else:
-        X_train, Y_train = x_tensor, y_tensor
-        x_val, y_val = None, None
-
-    train_loader = _make_torch_dataloader(
-        torch,
-        torch.utils.data.TensorDataset(X_train, Y_train),
-        cfg=cfg,
-        shuffle=True,
+    optimizer_factory_resolved = (
+        _make_torch_optimizer if optimizer_factory is None else optimizer_factory
     )
-    val_loader = (
-        None
-        if x_val is None
-        else _make_torch_dataloader(
-            torch,
-            torch.utils.data.TensorDataset(x_val, y_val),
-            cfg=cfg,
-            shuffle=False,
-        )
+    scheduler_factory_resolved = (
+        _make_torch_scheduler if scheduler_factory is None else scheduler_factory
     )
 
-    opt_name = str(cfg.optimizer).lower().strip()
-    if opt_name in {"adam", ""}:
-        opt = torch.optim.Adam(
-            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
-        )
-    elif opt_name == "adamw":
-        opt = torch.optim.AdamW(
-            model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay)
-        )
-    elif opt_name == "sgd":
-        opt = torch.optim.SGD(
-            model.parameters(),
-            lr=float(cfg.lr),
-            momentum=float(cfg.momentum),
-            weight_decay=float(cfg.weight_decay),
-        )
-    else:
-        raise ValueError("optimizer must be one of: adam, adamw, sgd")
+    opt = optimizer_factory_resolved(torch, model, cfg=cfg)
     base_lrs = tuple(float(group["lr"]) for group in opt.param_groups)
 
     loss_fn = _make_torch_loss_fn(
@@ -1655,7 +2669,7 @@ def _train_loop(
     )
 
     accum_steps = int(cfg.grad_accum_steps)
-    sched, sched_name = _make_torch_scheduler(
+    sched, sched_name = scheduler_factory_resolved(
         torch,
         opt,
         cfg=cfg,
@@ -1716,7 +2730,7 @@ def _train_loop(
     best_extra_payload = (
         None
         if best_state is None
-        else _snapshot_torch_training_state(
+        else _snapshot_torch_runtime_payload(
             optimizer=opt,
             scheduler=sched,
             scaler=scaler,
@@ -1725,173 +2739,6 @@ def _train_loop(
             bad_epochs=int(bad_epochs),
             best_epoch=int(best_epoch),
             base_lrs=base_lrs,
-            ema_state=(
-                None if ema_model is None or not ema_active else ema_model.state_dict()
-            ),
-            swa_state=(
-                None
-                if swa_model is None or int(swa_n_averaged) <= 0
-                else swa_model.state_dict()
-            ),
-            swa_n_averaged=int(swa_n_averaged),
-            lookahead_state=(
-                None if lookahead_model is None else lookahead_model.state_dict()
-            ),
-            lookahead_step=int(lookahead_step),
-            model_state=_maybe_torch_model_state_for_checkpoint(
-                model=model,
-                cfg=cfg,
-                ema_model=ema_model,
-                ema_active=ema_active,
-                swa_model=swa_model,
-                swa_n_averaged=int(swa_n_averaged),
-                lookahead_model=lookahead_model,
-                lookahead_step=int(lookahead_step),
-            ),
-        )
-    )
-    last_extra_payload = (
-        None
-        if last_monitor is None
-        else _snapshot_torch_training_state(
-            optimizer=opt,
-            scheduler=sched,
-            scaler=scaler,
-            best_state=best_state,
-            best_monitor=float(best_monitor),
-            bad_epochs=int(bad_epochs),
-            best_epoch=int(best_epoch),
-            base_lrs=base_lrs,
-            ema_state=(
-                None if ema_model is None or not ema_active else ema_model.state_dict()
-            ),
-            swa_state=(
-                None
-                if swa_model is None or int(swa_n_averaged) <= 0
-                else swa_model.state_dict()
-            ),
-            swa_n_averaged=int(swa_n_averaged),
-            lookahead_state=(
-                None if lookahead_model is None else lookahead_model.state_dict()
-            ),
-            lookahead_step=int(lookahead_step),
-            model_state=_maybe_torch_model_state_for_checkpoint(
-                model=model,
-                cfg=cfg,
-                ema_model=ema_model,
-                ema_active=ema_active,
-                swa_model=swa_model,
-                swa_n_averaged=int(swa_n_averaged),
-                lookahead_model=lookahead_model,
-                lookahead_step=int(lookahead_step),
-            ),
-        )
-    )
-    non_blocking = bool(cfg.pin_memory) and dev.type == "cuda"
-    sam_active = _torch_sam_active(cfg=cfg)
-
-    for epoch_idx in range(start_epoch, int(cfg.epochs)):
-        _apply_torch_warmup(opt, cfg=cfg, epoch_idx=int(epoch_idx), base_lrs=base_lrs)
-        model.train()
-        total = 0.0
-        count = 0
-        opt.zero_grad(set_to_none=True)
-        num_batches = len(train_loader)
-        for batch_idx, (xb, yb) in enumerate(train_loader, start=1):
-            xb = xb.to(dev, non_blocking=non_blocking)
-            yb = yb.to(dev, non_blocking=non_blocking)
-            xb_train = _apply_torch_train_input_dropout(torch, xb, cfg=cfg)
-            xb_train = _apply_torch_train_temporal_dropout(torch, xb_train, cfg=cfg)
-            with _make_torch_autocast_context(
-                torch,
-                enabled=bool(amp_enabled),
-                dev=dev,
-                dtype=amp_dtype,
-            ):
-                pred = model(xb_train)
-                loss = loss_fn(pred, yb)
-            loss_to_backprop = loss / float(accum_steps)
-            if scaler is not None and bool(scaler.is_enabled()):
-                scaler.scale(loss_to_backprop).backward()
-            else:
-                loss_to_backprop.backward()
-            should_step = batch_idx % accum_steps == 0 or batch_idx == num_batches
-            if should_step:
-                needs_unscale = (
-                    scaler is not None
-                    and bool(scaler.is_enabled())
-                    and (
-                        float(cfg.grad_clip_norm) > 0.0
-                        or (
-                            str(cfg.grad_clip_mode).lower().strip() == "value"
-                            and float(cfg.grad_clip_value) > 0.0
-                        )
-                    )
-                )
-                if sam_active:
-                    perturbations = _apply_torch_sam_perturbation(
-                        torch,
-                        model=model,
-                        cfg=cfg,
-                    )
-                    if perturbations:
-                        opt.zero_grad(set_to_none=True)
-                        with _make_torch_autocast_context(
-                            torch,
-                            enabled=bool(amp_enabled),
-                            dev=dev,
-                            dtype=amp_dtype,
-                        ):
-                            pred = model(xb_train)
-                            loss_second = loss_fn(pred, yb)
-                        loss_second.backward()
-                        _restore_torch_sam_perturbation(
-                            torch,
-                            perturbations=perturbations,
-                        )
-                    _apply_torch_gradient_clipping(torch, model, cfg=cfg)
-                    opt.step()
-                else:
-                    if needs_unscale:
-                        scaler.unscale_(opt)
-                    _apply_torch_gradient_clipping(torch, model, cfg=cfg)
-                    if scaler is not None and bool(scaler.is_enabled()):
-                        scaler.step(opt)
-                        scaler.update()
-                    else:
-                        opt.step()
-                if lookahead_model is not None:
-                    lookahead_step = _update_torch_lookahead_model(
-                        torch,
-                        lookahead_model=lookahead_model,
-                        model=model,
-                        cfg=cfg,
-                        lookahead_step=int(lookahead_step),
-                    )
-                if ema_model is not None and _torch_ema_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
-                    if not ema_active:
-                        ema_model.load_state_dict(model.state_dict())
-                        ema_active = True
-                    else:
-                        _update_torch_ema_model(torch, ema_model=ema_model, model=model, cfg=cfg)
-                if swa_model is not None and _torch_swa_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
-                    swa_n_averaged = _update_torch_swa_model(
-                        torch,
-                        swa_model=swa_model,
-                        model=model,
-                        n_averaged=int(swa_n_averaged),
-                    )
-                if sched is not None and _torch_scheduler_steps_per_batch(sched_name):
-                    sched.step()
-                opt.zero_grad(set_to_none=True)
-
-            total += float(loss.detach().cpu().item()) * int(xb.shape[0])
-            count += int(xb.shape[0])
-
-        train_loss = total / max(1, count)
-
-        val_loss: float | None = None
-        eval_model = _select_torch_deploy_model(
             model=model,
             cfg=cfg,
             ema_model=ema_model,
@@ -1901,73 +2748,343 @@ def _train_loop(
             lookahead_model=lookahead_model,
             lookahead_step=int(lookahead_step),
         )
-        if val_loader is not None:
-            eval_model.eval()
-            v_total = 0.0
-            v_count = 0
-            with torch.no_grad():
-                for xb, yb in val_loader:
-                    xb = xb.to(dev, non_blocking=non_blocking)
-                    yb = yb.to(dev, non_blocking=non_blocking)
-                    with _make_torch_autocast_context(
-                        torch,
-                        enabled=bool(amp_enabled),
-                        dev=dev,
-                        dtype=amp_dtype,
-                    ):
-                        pred = eval_model(xb)
-                        v_loss = loss_fn(pred, yb)
-                    v_total += float(v_loss.detach().cpu().item()) * int(xb.shape[0])
-                    v_count += int(xb.shape[0])
-            val_loss = v_total / max(1, v_count)
+    )
+    last_extra_payload = (
+        None
+        if last_monitor is None
+        else _snapshot_torch_runtime_payload(
+            optimizer=opt,
+            scheduler=sched,
+            scaler=scaler,
+            best_state=best_state,
+            best_monitor=float(best_monitor),
+            bad_epochs=int(bad_epochs),
+            best_epoch=int(best_epoch),
+            base_lrs=base_lrs,
+            model=model,
+            cfg=cfg,
+            ema_model=ema_model,
+            ema_active=ema_active,
+            swa_model=swa_model,
+            swa_n_averaged=int(swa_n_averaged),
+            lookahead_model=lookahead_model,
+            lookahead_step=int(lookahead_step),
+        )
+    )
+    non_blocking = bool(cfg.pin_memory) and dev.type == "cuda"
+    sam_active = _torch_sam_active(cfg=cfg)
+    device_payload = compact_log_payload(
+        device=str(device),
+        **_torch_device_log_payload(torch, dev=dev),
+    )
+    train_samples = _torch_loader_sample_count(train_loader)
+    val_samples = _torch_loader_sample_count(val_loader)
+    trainable_parameters, total_parameters = _torch_parameter_counts(model)
+    training_started_at = time.perf_counter()
+    stop_reason = "completed"
+    last_epoch_payload: dict[str, Any] | None = None
 
-        monitor = _select_torch_monitor_value(cfg, train_loss=float(train_loss), val_loss=val_loss)
-        last_monitor = float(monitor)
-        last_epoch = int(epoch_idx) + 1
+    with _torch_tracking_sessions(cfg=cfg) as tracking_sessions:
+        tensorboard_session = next(
+            (session for session in tracking_sessions if session.backend == "tensorboard"),
+            None,
+        )
+        mlflow_session = next(
+            (session for session in tracking_sessions if session.backend == "mlflow"),
+            None,
+        )
+        wandb_session = next(
+            (session for session in tracking_sessions if session.backend == "wandb"),
+            None,
+        )
+        for session in tracking_sessions:
+            emit_cli_event(
+                f"TRACKING {str(session.backend)}",
+                event="train_tracking_enabled",
+                payload=_torch_tracking_session_payload(session),
+            )
+        _log_torch_tracking_run_metadata(
+            tracking_sessions,
+            cfg=cfg,
+            device_payload=device_payload,
+        )
 
-        stop_training = False
-        if _torch_monitor_improved(value=float(monitor), best=float(best_monitor), cfg=cfg):
-            best_monitor = float(monitor)
-            bad_epochs = 0
-            best_epoch = int(epoch_idx) + 1
-            if bool(cfg.restore_best) or bool(cfg.save_best_checkpoint):
-                best_state = _clone_torch_state_dict_to_cpu(eval_model.state_dict())
-        else:
-            bad_epochs += 1
-            if bad_epochs >= int(cfg.patience) and int(epoch_idx) + 1 >= int(cfg.min_epochs):
-                stop_training = True
+        emit_cli_event(
+            "TRAIN start",
+            event="train_started",
+            payload=compact_log_payload(
+                epochs=int(cfg.epochs),
+                start_epoch=int(start_epoch) + 1,
+                train_batches=int(len(train_loader)),
+                val_batches=(0 if val_loader is None else int(len(val_loader))),
+                patience=int(cfg.patience),
+                monitor=str(cfg.monitor),
+                monitor_mode=str(cfg.monitor_mode),
+                optimizer=str(cfg.optimizer),
+                scheduler=str(cfg.scheduler),
+                grad_accum_steps=int(cfg.grad_accum_steps),
+                effective_batch_size=int(cfg.batch_size) * int(cfg.grad_accum_steps),
+                train_samples=train_samples,
+                val_samples=val_samples,
+                trainable_parameters=int(trainable_parameters),
+                total_parameters=int(total_parameters),
+                amp=bool(amp_enabled),
+                amp_dtype=(None if not amp_enabled else str(cfg.amp_dtype)),
+                resumed=bool(int(start_epoch) > 0),
+                pin_memory=bool(cfg.pin_memory),
+                non_blocking=bool(non_blocking),
+                tracking_backends=[str(session.backend) for session in tracking_sessions],
+                tensorboard_log_dir=(
+                    None if tensorboard_session is None else str(tensorboard_session.run_dir)
+                ),
+                mlflow_run_id=(
+                    None if mlflow_session is None else (mlflow_session.metadata or {}).get("run_id")
+                ),
+                wandb_run_path=(
+                    None if wandb_session is None else (wandb_session.metadata or {}).get("run_path")
+                ),
+                **device_payload,
+            ),
+        )
 
-        if not stop_training and sched is not None and not _torch_scheduler_steps_per_batch(sched_name):
-            if int(epoch_idx) + 1 > int(cfg.warmup_epochs):
-                if sched_name == "plateau":
-                    sched.step(float(monitor))
+        for epoch_idx in range(start_epoch, int(cfg.epochs)):
+            epoch_started_at = time.perf_counter()
+            if str(dev.type) == "cuda" and bool(torch.cuda.is_available()):
+                torch.cuda.reset_peak_memory_stats(dev)
+            _apply_torch_warmup(opt, cfg=cfg, epoch_idx=int(epoch_idx), base_lrs=base_lrs)
+            model.train()
+            total = 0.0
+            count = 0
+            optimizer_steps = 0
+            grad_norm_total = 0.0
+            grad_norm_count = 0
+            opt.zero_grad(set_to_none=True)
+            num_batches = len(train_loader)
+            for batch_idx, batch in enumerate(train_loader, start=1):
+                model_inputs, yb = _move_torch_batch_to_device(
+                    batch,
+                    dev=dev,
+                    non_blocking=non_blocking,
+                )
+                train_inputs = _apply_torch_train_input_transforms(torch, model_inputs, cfg=cfg)
+                with _make_torch_autocast_context(
+                    torch,
+                    enabled=bool(amp_enabled),
+                    dev=dev,
+                    dtype=amp_dtype,
+                ):
+                    pred = _predict_torch_batch(
+                        model,
+                        train_inputs,
+                        yb,
+                        epoch_idx=int(epoch_idx),
+                        training=True,
+                        batch_predict_fn=batch_predict_fn,
+                    )
+                    loss = loss_fn(pred, yb)
+                loss_to_backprop = loss / float(accum_steps)
+                if scaler is not None and bool(scaler.is_enabled()):
+                    scaler.scale(loss_to_backprop).backward()
                 else:
-                    sched.step()
-                _clamp_torch_optimizer_min_lr(opt, cfg=cfg)
-        if best_state is not None:
-            best_extra_payload = _snapshot_torch_training_state(
-                optimizer=opt,
-                scheduler=sched,
-                scaler=scaler,
-                best_state=best_state,
-                best_monitor=float(best_monitor),
-                bad_epochs=int(bad_epochs),
-                best_epoch=int(best_epoch),
-                base_lrs=base_lrs,
-                ema_state=(
-                    None if ema_model is None or not ema_active else ema_model.state_dict()
-                ),
-                swa_state=(
-                    None
-                    if swa_model is None or int(swa_n_averaged) <= 0
-                    else swa_model.state_dict()
-                ),
+                    loss_to_backprop.backward()
+                should_step = batch_idx % accum_steps == 0 or batch_idx == num_batches
+                if should_step:
+                    scaler_enabled = scaler is not None and bool(scaler.is_enabled())
+                    if sam_active:
+                        perturbations = _apply_torch_sam_perturbation(
+                            torch,
+                            model=model,
+                            cfg=cfg,
+                        )
+                        if perturbations:
+                            opt.zero_grad(set_to_none=True)
+                            with _make_torch_autocast_context(
+                                torch,
+                                enabled=bool(amp_enabled),
+                                dev=dev,
+                                dtype=amp_dtype,
+                            ):
+                                pred = _predict_torch_batch(
+                                    model,
+                                    train_inputs,
+                                    yb,
+                                    epoch_idx=int(epoch_idx),
+                                    training=True,
+                                    batch_predict_fn=batch_predict_fn,
+                                )
+                                loss_second = loss_fn(pred, yb)
+                            loss_second.backward()
+                            _restore_torch_sam_perturbation(
+                                torch,
+                                perturbations=perturbations,
+                            )
+                        _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                        opt.step()
+                    else:
+                        if scaler_enabled:
+                            scaler.unscale_(opt)
+                        grad_norm_value = _torch_global_gradient_norm_value(torch, model=model)
+                        if grad_norm_value is not None:
+                            grad_norm_total += float(grad_norm_value)
+                            grad_norm_count += 1
+                        _apply_torch_gradient_clipping(torch, model, cfg=cfg)
+                        if scaler_enabled:
+                            scaler.step(opt)
+                            scaler.update()
+                        else:
+                            opt.step()
+                    if lookahead_model is not None:
+                        lookahead_step = _update_torch_lookahead_model(
+                            torch,
+                            lookahead_model=lookahead_model,
+                            model=model,
+                            cfg=cfg,
+                            lookahead_step=int(lookahead_step),
+                        )
+                    if ema_model is not None and _torch_ema_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
+                        if not ema_active:
+                            ema_model.load_state_dict(model.state_dict())
+                            ema_active = True
+                        else:
+                            _update_torch_ema_model(torch, ema_model=ema_model, model=model, cfg=cfg)
+                    if swa_model is not None and _torch_swa_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
+                        swa_n_averaged = _update_torch_swa_model(
+                            torch,
+                            swa_model=swa_model,
+                            model=model,
+                            n_averaged=int(swa_n_averaged),
+                        )
+                    if sched is not None and _torch_scheduler_steps_per_batch(sched_name):
+                        sched.step()
+                    opt.zero_grad(set_to_none=True)
+                    optimizer_steps += 1
+
+                total += float(loss.detach().cpu().item()) * int(yb.shape[0])
+                count += int(yb.shape[0])
+
+            train_loss = total / max(1, count)
+
+            val_loss: float | None = None
+            eval_model = _select_torch_deploy_model(
+                model=model,
+                cfg=cfg,
+                ema_model=ema_model,
+                ema_active=ema_active,
+                swa_model=swa_model,
                 swa_n_averaged=int(swa_n_averaged),
-                lookahead_state=(
-                    None if lookahead_model is None else lookahead_model.state_dict()
-                ),
+                lookahead_model=lookahead_model,
                 lookahead_step=int(lookahead_step),
-                model_state=_maybe_torch_model_state_for_checkpoint(
+            )
+            if val_loader is not None:
+                eval_model.eval()
+                v_total = 0.0
+                v_count = 0
+                with torch.no_grad():
+                    for batch in val_loader:
+                        model_inputs, yb = _move_torch_batch_to_device(
+                            batch,
+                            dev=dev,
+                            non_blocking=non_blocking,
+                        )
+                        with _make_torch_autocast_context(
+                            torch,
+                            enabled=bool(amp_enabled),
+                            dev=dev,
+                            dtype=amp_dtype,
+                        ):
+                            pred = _predict_torch_batch(
+                                eval_model,
+                                model_inputs,
+                                yb,
+                                epoch_idx=int(epoch_idx),
+                                training=False,
+                                batch_predict_fn=batch_predict_fn,
+                            )
+                            v_loss = loss_fn(pred, yb)
+                        v_total += float(v_loss.detach().cpu().item()) * int(yb.shape[0])
+                        v_count += int(yb.shape[0])
+                val_loss = v_total / max(1, v_count)
+
+            monitor = _select_torch_monitor_value(cfg, train_loss=float(train_loss), val_loss=val_loss)
+            last_monitor = float(monitor)
+            last_epoch = int(epoch_idx) + 1
+
+            stop_training = False
+            best_improved = False
+            if _torch_monitor_improved(value=float(monitor), best=float(best_monitor), cfg=cfg):
+                best_monitor = float(monitor)
+                bad_epochs = 0
+                best_epoch = int(epoch_idx) + 1
+                best_improved = True
+                if bool(cfg.restore_best) or bool(cfg.save_best_checkpoint):
+                    best_state = _clone_torch_state_dict_to_cpu(eval_model.state_dict())
+            else:
+                bad_epochs += 1
+                if bad_epochs >= int(cfg.patience) and int(epoch_idx) + 1 >= int(cfg.min_epochs):
+                    stop_training = True
+            epoch_seconds = time.perf_counter() - epoch_started_at
+            current_lr = _torch_primary_lr(opt)
+            epoch_payload = compact_log_payload(
+                epoch=int(epoch_idx) + 1,
+                total_epochs=int(cfg.epochs),
+                train_loss=float(train_loss),
+                val_loss=val_loss,
+                monitor=float(monitor),
+                best=float(best_monitor),
+                best_epoch=int(best_epoch),
+                best_improved=bool(best_improved),
+                bad_epochs=int(bad_epochs),
+                lr=current_lr,
+                avg_grad_norm=(
+                    None
+                    if int(grad_norm_count) <= 0
+                    else float(grad_norm_total) / float(grad_norm_count)
+                ),
+                optimizer_steps=int(optimizer_steps),
+                epoch_seconds=float(epoch_seconds),
+                step_seconds=(
+                    None if int(optimizer_steps) <= 0 or float(epoch_seconds) <= 0.0
+                    else float(epoch_seconds) / float(optimizer_steps)
+                ),
+                samples_per_second=(
+                    None if int(count) <= 0 or float(epoch_seconds) <= 0.0
+                    else float(count) / float(epoch_seconds)
+                ),
+                batches_per_second=(
+                    None if int(num_batches) <= 0 or float(epoch_seconds) <= 0.0
+                    else float(num_batches) / float(epoch_seconds)
+                ),
+                **_torch_cuda_memory_payload(torch, dev=dev),
+            )
+            emit_cli_event(
+                f"EPOCH {int(epoch_idx) + 1}/{int(cfg.epochs)}",
+                event="train_epoch_completed",
+                payload=epoch_payload,
+                progress=True,
+            )
+            last_epoch_payload = dict(epoch_payload)
+            _log_torch_tracking_epoch_metrics(
+                tracking_sessions,
+                epoch_payload=epoch_payload,
+            )
+
+            if not stop_training and sched is not None and not _torch_scheduler_steps_per_batch(sched_name):
+                if int(epoch_idx) + 1 > int(cfg.warmup_epochs):
+                    if sched_name == "plateau":
+                        sched.step(float(monitor))
+                    else:
+                        sched.step()
+                    _clamp_torch_optimizer_min_lr(opt, cfg=cfg)
+            if best_state is not None:
+                best_extra_payload = _snapshot_torch_runtime_payload(
+                    optimizer=opt,
+                    scheduler=sched,
+                    scaler=scaler,
+                    best_state=best_state,
+                    best_monitor=float(best_monitor),
+                    bad_epochs=int(bad_epochs),
+                    best_epoch=int(best_epoch),
+                    base_lrs=base_lrs,
                     model=model,
                     cfg=cfg,
                     ema_model=ema_model,
@@ -1976,31 +3093,16 @@ def _train_loop(
                     swa_n_averaged=int(swa_n_averaged),
                     lookahead_model=lookahead_model,
                     lookahead_step=int(lookahead_step),
-                ),
-            )
-        last_extra_payload = _snapshot_torch_training_state(
-            optimizer=opt,
-            scheduler=sched,
-            scaler=scaler,
-            best_state=best_state,
-            best_monitor=float(best_monitor),
-            bad_epochs=int(bad_epochs),
-            best_epoch=int(best_epoch),
-            base_lrs=base_lrs,
-            ema_state=(
-                None if ema_model is None or not ema_active else ema_model.state_dict()
-            ),
-            swa_state=(
-                None
-                if swa_model is None or int(swa_n_averaged) <= 0
-                else swa_model.state_dict()
-            ),
-            swa_n_averaged=int(swa_n_averaged),
-            lookahead_state=(
-                None if lookahead_model is None else lookahead_model.state_dict()
-            ),
-            lookahead_step=int(lookahead_step),
-            model_state=_maybe_torch_model_state_for_checkpoint(
+                )
+            last_extra_payload = _snapshot_torch_runtime_payload(
+                optimizer=opt,
+                scheduler=sched,
+                scaler=scaler,
+                best_state=best_state,
+                best_monitor=float(best_monitor),
+                bad_epochs=int(bad_epochs),
+                best_epoch=int(best_epoch),
+                base_lrs=base_lrs,
                 model=model,
                 cfg=cfg,
                 ema_model=ema_model,
@@ -2009,42 +3111,152 @@ def _train_loop(
                 swa_n_averaged=int(swa_n_averaged),
                 lookahead_model=lookahead_model,
                 lookahead_step=int(lookahead_step),
-            ),
-        )
-        if stop_training:
-            break
+            )
+            if stop_training:
+                stop_reason = "early_stop"
+                emit_cli_event(
+                    "EARLY stop",
+                    event="train_early_stopped",
+                    payload=compact_log_payload(
+                        epoch=int(epoch_idx) + 1,
+                        best_epoch=int(best_epoch),
+                        best=float(best_monitor),
+                        bad_epochs=int(bad_epochs),
+                    ),
+                )
+                break
 
-    last_state = None
-    if bool(cfg.save_last_checkpoint):
-        deploy_model = _select_torch_deploy_model(
-            model=model,
+        last_state = None
+        if bool(cfg.save_last_checkpoint):
+            deploy_model = _select_torch_deploy_model(
+                model=model,
+                cfg=cfg,
+                ema_model=ema_model,
+                ema_active=ema_active,
+                swa_model=swa_model,
+                swa_n_averaged=int(swa_n_averaged),
+                lookahead_model=lookahead_model,
+                lookahead_step=int(lookahead_step),
+            )
+            last_state = _clone_torch_state_dict_to_cpu(deploy_model.state_dict())
+        saved_checkpoint_paths = _maybe_save_torch_checkpoints(
+            torch,
             cfg=cfg,
-            ema_model=ema_model,
-            ema_active=ema_active,
-            swa_model=swa_model,
-            swa_n_averaged=int(swa_n_averaged),
-            lookahead_model=lookahead_model,
-            lookahead_step=int(lookahead_step),
+            best_state=best_state,
+            best_monitor=float(best_monitor),
+            best_epoch=int(best_epoch),
+            last_state=last_state,
+            last_monitor=last_monitor,
+            last_epoch=int(last_epoch),
+            best_extra_payload=best_extra_payload,
+            last_extra_payload=last_extra_payload,
         )
-        last_state = _clone_torch_state_dict_to_cpu(deploy_model.state_dict())
-    _maybe_save_torch_checkpoints(
+
+        if bool(cfg.restore_best) and best_state is not None:
+            model.load_state_dict(best_state)
+
+        model.eval()
+        total_seconds = time.perf_counter() - training_started_at
+        train_completed_payload = compact_log_payload(
+            epochs_ran=int(last_epoch),
+            best_epoch=int(best_epoch),
+            best=float(best_monitor),
+            restored_best=bool(cfg.restore_best) and best_state is not None,
+            stop_reason=str(stop_reason),
+            total_seconds=float(total_seconds),
+            final_lr=_torch_primary_lr(opt),
+        )
+        emit_cli_event(
+            "TRAIN done",
+            event="train_completed",
+            payload=train_completed_payload,
+        )
+        _log_torch_tracking_run_summary(
+            tracking_sessions,
+            cfg=cfg,
+            train_completed_payload=train_completed_payload,
+            epoch_payload=last_epoch_payload,
+            checkpoint_paths=saved_checkpoint_paths,
+        )
+        for session in tracking_sessions:
+            if session.backend != "tensorboard":
+                continue
+            _torch_tracking_session_add_scalar(
+                session,
+                tag="train/epochs_ran",
+                value=int(last_epoch),
+                global_step=max(1, int(last_epoch)),
+            )
+            _torch_tracking_session_add_scalar(
+                session,
+                tag="monitor/final_best",
+                value=float(best_monitor),
+                global_step=max(1, int(last_epoch)),
+            )
+            _torch_tracking_session_add_scalar(
+                session,
+                tag="train/final_lr",
+                value=train_completed_payload.get("final_lr"),
+                global_step=max(1, int(last_epoch)),
+            )
+        return model
+
+
+def _train_loop(
+    model: Any,
+    X: np.ndarray,
+    Y: np.ndarray,
+    *,
+    cfg: TorchTrainConfig,
+    device: str,
+    loss_fn_override: Any | None = None,
+    batch_predict_fn: TorchBatchPredictFn | None = None,
+) -> Any:
+    torch = _require_torch()
+    _validate_torch_train_config(cfg)
+
+    x_tensor = torch.tensor(X, dtype=torch.float32)
+    y_tensor = torch.tensor(Y, dtype=torch.float32)
+
+    n = int(x_tensor.shape[0])
+    val_n = 0
+    if float(cfg.val_split) > 0.0 and n >= 5:
+        val_n = max(1, int(round(float(cfg.val_split) * n)))
+        val_n = min(val_n, n - 1)
+
+    if val_n > 0:
+        train_end = n - val_n
+        x_train, y_train = x_tensor[:train_end], y_tensor[:train_end]
+        x_val, y_val = x_tensor[train_end:], y_tensor[train_end:]
+    else:
+        x_train, y_train = x_tensor, y_tensor
+        x_val, y_val = None, None
+
+    train_loader = _make_torch_dataloader(
         torch,
+        torch.utils.data.TensorDataset(x_train, y_train),
         cfg=cfg,
-        best_state=best_state,
-        best_monitor=float(best_monitor),
-        best_epoch=int(best_epoch),
-        last_state=last_state,
-        last_monitor=last_monitor,
-        last_epoch=int(last_epoch),
-        best_extra_payload=best_extra_payload,
-        last_extra_payload=last_extra_payload,
+        shuffle=True,
     )
-
-    if bool(cfg.restore_best) and best_state is not None:
-        model.load_state_dict(best_state)
-
-    model.eval()
-    return model
+    val_loader = (
+        None
+        if x_val is None
+        else _make_torch_dataloader(
+            torch,
+            torch.utils.data.TensorDataset(x_val, y_val),
+            cfg=cfg,
+            shuffle=False,
+        )
+    )
+    return _train_torch_model_with_loaders(
+        model,
+        train_loader,
+        val_loader,
+        cfg=cfg,
+        device=device,
+        loss_fn_override=loss_fn_override,
+        batch_predict_fn=batch_predict_fn,
+    )
 
 
 def _fit_encoder_direct_model(

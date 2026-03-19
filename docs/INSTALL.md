@@ -48,6 +48,10 @@ python -m foresight eval run --model naive-last --dataset catfish --y-col Total 
 python -m foresight tuning run --model moving-average --dataset catfish --y-col Total --horizon 1 --step 1 --min-train-size 24 --max-windows 4 --grid-param window=1,3
 ```
 
+Runtime logs for long-running commands are written to `stderr` by default. Use
+`--no-progress`, `--log-style plain`, or `--log-file /tmp/run-log.jsonl` to
+control the CLI logging behavior without affecting `stdout`.
+
 ## High-level Python helpers
 
 After install, the package root exposes the common forecasting workflow helpers directly:

@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 
+from .torch_nn import torch_train_config_override
 from .torch_rnn_paper_zoo import torch_rnnpaper_direct_forecast
 
 _VARIANT_TO_PAPER = {
@@ -11,6 +12,21 @@ _VARIANT_TO_PAPER = {
     "grid-lstm": "grid-lstm",
     "structural-rnn": "structural-rnn",
 }
+_DEFERRED_TORCH_TRAIN_KEYS = frozenset(
+    {
+        "tensorboard_log_dir",
+        "tensorboard_run_name",
+        "tensorboard_flush_secs",
+        "mlflow_tracking_uri",
+        "mlflow_experiment_name",
+        "mlflow_run_name",
+        "wandb_project",
+        "wandb_entity",
+        "wandb_run_name",
+        "wandb_dir",
+        "wandb_mode",
+    }
+)
 
 
 def torch_structured_rnn_direct_forecast(
@@ -68,48 +84,59 @@ def torch_structured_rnn_direct_forecast(
             f"Expected one of: {sorted(_VARIANT_TO_PAPER)}"
         ) from e
 
-    return torch_rnnpaper_direct_forecast(
-        train,
-        int(horizon),
-        paper=paper_id,
-        lags=int(lags),
-        hidden_size=int(hidden_size),
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        normalize=bool(normalize),
-        device=str(device),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        scheduler_restart_period=int(scheduler_restart_period),
-        scheduler_restart_mult=int(scheduler_restart_mult),
-        scheduler_pct_start=float(scheduler_pct_start),
-        restore_best=bool(restore_best),
-        min_epochs=int(min_epochs),
-        amp=bool(amp),
-        amp_dtype=str(amp_dtype),
-        warmup_epochs=int(warmup_epochs),
-        min_lr=float(min_lr),
-        grad_accum_steps=int(grad_accum_steps),
-        monitor=str(monitor),
-        monitor_mode=str(monitor_mode),
-        min_delta=float(min_delta),
-        num_workers=int(num_workers),
-        pin_memory=bool(pin_memory),
-        persistent_workers=bool(persistent_workers),
-        scheduler_patience=int(scheduler_patience),
-        grad_clip_mode=str(grad_clip_mode),
-        grad_clip_value=float(grad_clip_value),
-        scheduler_plateau_factor=float(scheduler_plateau_factor),
-        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
-        **params,
-    )
+    deferred = {
+        str(key): value
+        for key, value in dict(params).items()
+        if str(key) in _DEFERRED_TORCH_TRAIN_KEYS
+    }
+    direct_params = {
+        str(key): value
+        for key, value in dict(params).items()
+        if str(key) not in _DEFERRED_TORCH_TRAIN_KEYS
+    }
+    with torch_train_config_override(deferred):
+        return torch_rnnpaper_direct_forecast(
+            train,
+            int(horizon),
+            paper=paper_id,
+            lags=int(lags),
+            hidden_size=int(hidden_size),
+            epochs=int(epochs),
+            lr=float(lr),
+            weight_decay=float(weight_decay),
+            batch_size=int(batch_size),
+            seed=int(seed),
+            normalize=bool(normalize),
+            device=str(device),
+            patience=int(patience),
+            loss=str(loss),
+            val_split=float(val_split),
+            grad_clip_norm=float(grad_clip_norm),
+            optimizer=str(optimizer),
+            momentum=float(momentum),
+            scheduler=str(scheduler),
+            scheduler_step_size=int(scheduler_step_size),
+            scheduler_gamma=float(scheduler_gamma),
+            scheduler_restart_period=int(scheduler_restart_period),
+            scheduler_restart_mult=int(scheduler_restart_mult),
+            scheduler_pct_start=float(scheduler_pct_start),
+            restore_best=bool(restore_best),
+            min_epochs=int(min_epochs),
+            amp=bool(amp),
+            amp_dtype=str(amp_dtype),
+            warmup_epochs=int(warmup_epochs),
+            min_lr=float(min_lr),
+            grad_accum_steps=int(grad_accum_steps),
+            monitor=str(monitor),
+            monitor_mode=str(monitor_mode),
+            min_delta=float(min_delta),
+            num_workers=int(num_workers),
+            pin_memory=bool(pin_memory),
+            persistent_workers=bool(persistent_workers),
+            scheduler_patience=int(scheduler_patience),
+            grad_clip_mode=str(grad_clip_mode),
+            grad_clip_value=float(grad_clip_value),
+            scheduler_plateau_factor=float(scheduler_plateau_factor),
+            scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+            **direct_params,
+        )

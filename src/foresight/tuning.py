@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .cli_runtime import compact_log_payload, emit_cli_event
 from .eval_forecast import eval_model, eval_model_long_df
 
 
@@ -50,8 +51,21 @@ def _grid_trials(
         raise ValueError("mode must be one of: min, max")
 
     keys = sorted(search_space.keys())
+    total_trials = 1
+    for key in keys:
+        total_trials *= int(len(search_space[key]))
+    emit_cli_event(
+        "TUNE start",
+        event="tuning_started",
+        payload=compact_log_payload(
+            model=str(model),
+            metric=str(metric),
+            mode=str(mode),
+            n_trials=int(total_trials),
+        ),
+    )
     trials: list[dict[str, Any]] = []
-    for values in itertools.product(*(search_space[k] for k in keys)):
+    for trial_idx, values in enumerate(itertools.product(*(search_space[k] for k in keys)), start=1):
         params = dict(base_params)
         params.update(dict(zip(keys, values, strict=True)))
         payload = evaluator(params)
@@ -63,6 +77,16 @@ def _grid_trials(
                 "params": {k: params[k] for k in keys},
                 "score": float(score),
             }
+        )
+        emit_cli_event(
+            f"TRIAL {trial_idx}/{total_trials}",
+            event="tuning_trial_completed",
+            payload=compact_log_payload(
+                model=str(model),
+                score=float(score),
+                params={k: params[k] for k in keys},
+            ),
+            progress=True,
         )
 
     reverse = mode == "max"

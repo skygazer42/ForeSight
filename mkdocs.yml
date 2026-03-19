@@ -10,6 +10,7 @@ nav:
   - Models: models.md
   - API: api.md
   - Install: INSTALL.md
+  - CLI Logging: cli-logging.md
   - Source Entrypoints: SOURCE_ENTRYPOINTS.md
   - Development: DEVELOPMENT.md
   - Release: RELEASE.md

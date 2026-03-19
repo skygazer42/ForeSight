@@ -1,7 +1,10 @@
 # ruff: noqa: F401
 from __future__ import annotations
 
+import functools
+import inspect
 import sys
+from contextlib import nullcontext
 from typing import Any
 
 import numpy as np
@@ -323,6 +326,7 @@ from .torch_nn import (
     torch_timesnet_direct_forecast,
     torch_timexer_direct_forecast,
     torch_transformer_direct_forecast,
+    torch_train_config_override,
     torch_tsmixer_direct_forecast,
     torch_witran_direct_forecast,
     torch_wavenet_direct_forecast,
@@ -334,6 +338,21 @@ _MEMBERS_NON_EMPTY_ERROR = "members must be non-empty"
 _ORDER_TUPLE_ERROR = "order must be a 3-tuple like (p, d, q)"
 _SEASONAL_ORDER_TUPLE_ERROR = "seasonal_order must be a 4-tuple like (P, D, Q, s)"
 _LOCAL_LEVEL_LITERAL = "local level"
+_DEFERRED_TORCH_RUNTIME_PARAM_KEYS = frozenset(
+    {
+        "tensorboard_log_dir",
+        "tensorboard_run_name",
+        "tensorboard_flush_secs",
+        "mlflow_tracking_uri",
+        "mlflow_experiment_name",
+        "mlflow_run_name",
+        "wandb_project",
+        "wandb_entity",
+        "wandb_run_name",
+        "wandb_dir",
+        "wandb_mode",
+    }
+)
 
 
 def _registry_statsmodels_symbol(name: str, fallback: Any) -> Any:
@@ -368,6 +387,49 @@ fourier_autoreg_forecast = _registry_statsmodels_symbol(
     "fourier_autoreg_forecast",
     _fourier_autoreg_forecast_impl,
 )
+
+
+def _wrap_runtime_torch_callable(func: Any) -> Any:
+    if not callable(func):
+        return func
+
+    @functools.wraps(func)
+    def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        deferred = {
+            str(key): value
+            for key, value in dict(kwargs).items()
+            if str(key) in _DEFERRED_TORCH_RUNTIME_PARAM_KEYS
+        }
+        direct_kwargs = {
+            str(key): value
+            for key, value in dict(kwargs).items()
+            if str(key) not in _DEFERRED_TORCH_RUNTIME_PARAM_KEYS
+        }
+        ctx = (
+            torch_train_config_override(deferred)
+            if deferred
+            else nullcontext()
+        )
+        with ctx:
+            return func(*args, **direct_kwargs)
+
+    return _wrapped
+
+
+def _wrap_runtime_torch_callables() -> None:
+    for name, value in list(globals().items()):
+        if not str(name).startswith("torch_"):
+            continue
+        if "forecast" not in str(name) and "forecaster" not in str(name):
+            continue
+        if inspect.isclass(value):
+            continue
+        if not callable(value):
+            continue
+        globals()[str(name)] = _wrap_runtime_torch_callable(value)
+
+
+_wrap_runtime_torch_callables()
 fourier_ets_forecast = _registry_statsmodels_symbol(
     "fourier_ets_forecast",
     _fourier_ets_forecast_impl,
@@ -462,6 +524,7 @@ from .torch_ssm import (
 )
 from .torch_xformer import torch_xformer_direct_forecast
 from .trend import poly_trend_forecast
+from .neural_runtime import coerce_torch_train_config_params as _coerce_torch_train_config_params
 
 # Compatibility re-exports for downstream imports that historically used this module.
 RegistryForecaster = _base.RegistryForecaster
@@ -481,86 +544,7 @@ def _normalize_bool_like(value: Any) -> bool:
 
 
 def _coerce_torch_extra_train_params(params: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    if "min_epochs" in params:
-        out["min_epochs"] = int(params["min_epochs"])
-    if "amp" in params:
-        out["amp"] = _normalize_bool_like(params["amp"])
-    if "amp_dtype" in params:
-        out["amp_dtype"] = str(params["amp_dtype"])
-    if "warmup_epochs" in params:
-        out["warmup_epochs"] = int(params["warmup_epochs"])
-    if "min_lr" in params:
-        out["min_lr"] = float(params["min_lr"])
-    if "scheduler_restart_period" in params:
-        out["scheduler_restart_period"] = int(params["scheduler_restart_period"])
-    if "scheduler_restart_mult" in params:
-        out["scheduler_restart_mult"] = int(params["scheduler_restart_mult"])
-    if "scheduler_pct_start" in params:
-        out["scheduler_pct_start"] = float(params["scheduler_pct_start"])
-    if "grad_accum_steps" in params:
-        out["grad_accum_steps"] = int(params["grad_accum_steps"])
-    if "monitor" in params:
-        out["monitor"] = str(params["monitor"])
-    if "monitor_mode" in params:
-        out["monitor_mode"] = str(params["monitor_mode"])
-    if "min_delta" in params:
-        out["min_delta"] = float(params["min_delta"])
-    if "num_workers" in params:
-        out["num_workers"] = int(params["num_workers"])
-    if "pin_memory" in params:
-        out["pin_memory"] = _normalize_bool_like(params["pin_memory"])
-    if "persistent_workers" in params:
-        out["persistent_workers"] = _normalize_bool_like(params["persistent_workers"])
-    if "scheduler_patience" in params:
-        out["scheduler_patience"] = int(params["scheduler_patience"])
-    if "grad_clip_mode" in params:
-        out["grad_clip_mode"] = str(params["grad_clip_mode"])
-    if "grad_clip_value" in params:
-        out["grad_clip_value"] = float(params["grad_clip_value"])
-    if "scheduler_plateau_factor" in params:
-        out["scheduler_plateau_factor"] = float(params["scheduler_plateau_factor"])
-    if "scheduler_plateau_threshold" in params:
-        out["scheduler_plateau_threshold"] = float(params["scheduler_plateau_threshold"])
-    if "ema_decay" in params:
-        out["ema_decay"] = float(params["ema_decay"])
-    if "ema_warmup_epochs" in params:
-        out["ema_warmup_epochs"] = int(params["ema_warmup_epochs"])
-    if "swa_start_epoch" in params:
-        out["swa_start_epoch"] = int(params["swa_start_epoch"])
-    if "lookahead_steps" in params:
-        out["lookahead_steps"] = int(params["lookahead_steps"])
-    if "lookahead_alpha" in params:
-        out["lookahead_alpha"] = float(params["lookahead_alpha"])
-    if "sam_rho" in params:
-        out["sam_rho"] = float(params["sam_rho"])
-    if "sam_adaptive" in params:
-        out["sam_adaptive"] = _normalize_bool_like(params["sam_adaptive"])
-    if "horizon_loss_decay" in params:
-        out["horizon_loss_decay"] = float(params["horizon_loss_decay"])
-    if "input_dropout" in params:
-        out["input_dropout"] = float(params["input_dropout"])
-    if "temporal_dropout" in params:
-        out["temporal_dropout"] = float(params["temporal_dropout"])
-    if "grad_noise_std" in params:
-        out["grad_noise_std"] = float(params["grad_noise_std"])
-    if "gc_mode" in params:
-        out["gc_mode"] = str(params["gc_mode"])
-    if "agc_clip_factor" in params:
-        out["agc_clip_factor"] = float(params["agc_clip_factor"])
-    if "agc_eps" in params:
-        out["agc_eps"] = float(params["agc_eps"])
-    if "checkpoint_dir" in params:
-        out["checkpoint_dir"] = str(params["checkpoint_dir"])
-    if "save_best_checkpoint" in params:
-        out["save_best_checkpoint"] = _normalize_bool_like(params["save_best_checkpoint"])
-    if "save_last_checkpoint" in params:
-        out["save_last_checkpoint"] = _normalize_bool_like(params["save_last_checkpoint"])
-    if "resume_checkpoint_path" in params:
-        out["resume_checkpoint_path"] = str(params["resume_checkpoint_path"])
-    if "resume_checkpoint_strict" in params:
-        out["resume_checkpoint_strict"] = _normalize_bool_like(params["resume_checkpoint_strict"])
-    return out
+    return _coerce_torch_train_config_params(params)
 
 
 _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
@@ -620,6 +604,17 @@ _TORCH_COMMON_DEFAULTS: dict[str, Any] = {
     "save_last_checkpoint": False,
     "resume_checkpoint_path": "",
     "resume_checkpoint_strict": True,
+    "tensorboard_log_dir": "",
+    "tensorboard_run_name": "",
+    "tensorboard_flush_secs": 10,
+    "mlflow_tracking_uri": "",
+    "mlflow_experiment_name": "",
+    "mlflow_run_name": "",
+    "wandb_project": "",
+    "wandb_entity": "",
+    "wandb_run_name": "",
+    "wandb_dir": "",
+    "wandb_mode": "online",
 }
 
 _TORCH_COMMON_PARAM_HELP: dict[str, str] = {
@@ -679,6 +674,17 @@ _TORCH_COMMON_PARAM_HELP: dict[str, str] = {
     "save_last_checkpoint": "Persist the last training checkpoint to checkpoint_dir/last.pt",
     "resume_checkpoint_path": "Load initial model weights from this checkpoint path before training",
     "resume_checkpoint_strict": "Use strict state_dict loading when resume_checkpoint_path is set",
+    "tensorboard_log_dir": "Optional TensorBoard log root directory; enables SummaryWriter export when set",
+    "tensorboard_run_name": "Optional TensorBoard run subdirectory name (default: timestamped run-* name)",
+    "tensorboard_flush_secs": "TensorBoard flush interval in seconds (>=1)",
+    "mlflow_tracking_uri": "Optional MLflow tracking URI; uses the MLflow default backend when unset",
+    "mlflow_experiment_name": "Optional MLflow experiment name; enables MLflow tracking when set",
+    "mlflow_run_name": "Optional MLflow run name (default: timestamped run-* name)",
+    "wandb_project": "Optional Weights & Biases project; enables W&B tracking when set",
+    "wandb_entity": "Optional Weights & Biases entity / team for wandb_project",
+    "wandb_run_name": "Optional Weights & Biases run name",
+    "wandb_dir": "Optional Weights & Biases local run directory",
+    "wandb_mode": "Weights & Biases mode: online, offline, disabled",
 }
 
 _LAG_DERIVED_DEFAULTS: dict[str, Any] = {"roll_windows": (), "roll_stats": (), "diff_lags": ()}

@@ -1109,6 +1109,30 @@ def test_torch_global_seq2seq_runtime_accepts_sam_strategy() -> None:
 
 
 @pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
+def test_torch_global_seq2seq_runtime_accepts_plateau_scheduler() -> None:
+    long_df, cutoff, horizon = _make_long_df()
+    forecaster = make_global_forecaster(
+        "torch-seq2seq-lstm-deep-global",
+        context_length=32,
+        x_cols=("promo",),
+        epochs=2,
+        val_split=0.1,
+        batch_size=32,
+        seed=0,
+        patience=3,
+        device="cpu",
+        scheduler="plateau",
+        monitor="val_loss",
+        scheduler_patience=1,
+        scheduler_plateau_factor=0.5,
+        scheduler_plateau_threshold=0.0,
+    )
+    pred = forecaster(long_df, cutoff, horizon)
+    assert list(pred.columns[:3]) == ["unique_id", "ds", "yhat"]
+    assert len(pred) == 3 * horizon
+
+
+@pytest.mark.skipif(not HAS_TORCH, reason="requires torch")
 def test_torch_global_runtime_accepts_agc_strategy() -> None:
     long_df, cutoff, horizon = _make_long_df()
     params = dict(BASE_PARAMS["torch-timexer-global"])

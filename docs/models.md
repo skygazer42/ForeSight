@@ -2,7 +2,7 @@
 
 This page is generated from the central model registry. Do not edit it by hand; run `python tools/generate_model_capability_docs.py`.
 
-ForeSight currently registers **651** models: **528** local, **113** global, and **10** multivariate.
+ForeSight currently registers **1265** models: **800** local, **449** global, and **16** multivariate.
 
 ## Capability keys
 
@@ -13,6 +13,7 @@ ForeSight currently registers **651** models: **528** local, **113** global, and
 | `supports_interval_forecast` | Model supports forecast intervals in at least one supported execution path. |
 | `supports_interval_forecast_with_x_cols` | Model supports forecast intervals when `x_cols` exogenous features are supplied. |
 | `supports_quantiles` | Model can emit quantile forecast columns directly. |
+| `supports_static_cols` | Model accepts static per-series covariates / attributes through `static_cols`. |
 | `supports_x_cols` | Model accepts future covariates / exogenous regressors through `x_cols`. |
 
 ## Query the same metadata from code
@@ -34,7 +35,7 @@ print(len(list_models()))
 
 | requires extra | model_count |
 | --- | ---: |
-| `torch` | 451 |
+| `torch` | 1065 |
 | `core` | 54 |
 | `ml` | 51 |
 | `xgb` | 43 |
@@ -45,656 +46,1270 @@ print(len(list_models()))
 
 ## Full registry matrix
 
-| key | interface | requires | `supports_x_cols` | `supports_quantiles` | `supports_interval_forecast` | `supports_interval_forecast_with_x_cols` | `supports_artifact_save` | `requires_future_covariates` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `adaboost-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `adaboost-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `adida` | `local` | `core` | no | no | yes | no | yes | no |
-| `analog-knn` | `local` | `core` | no | no | yes | no | yes | no |
-| `ar-ols` | `local` | `core` | no | no | yes | no | yes | no |
-| `ar-ols-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `ar-ols-lags` | `local` | `core` | no | no | yes | no | yes | no |
-| `ard-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `ard-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `arima` | `local` | `stats` | no | no | yes | yes | yes | no |
-| `auto-arima` | `local` | `stats` | yes | no | yes | yes | no | no |
-| `autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
-| `bagging-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `bagging-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `bayesian-ridge-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `bayesian-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `catboost-custom-dirrec-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-custom-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-custom-lag-recursive` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-custom-step-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-dirrec-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-lag-recursive` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-step-lag` | `local` | `catboost` | no | no | yes | no | yes | no |
-| `catboost-step-lag-global` | `global` | `catboost` | yes | yes | yes | yes | yes | no |
-| `chronos` | `local` | `core` | no | no | yes | no | yes | no |
-| `chronos-bolt` | `local` | `core` | no | no | yes | no | yes | no |
-| `croston` | `local` | `core` | no | no | yes | no | yes | no |
-| `croston-opt` | `local` | `core` | no | no | yes | no | yes | no |
-| `croston-sba` | `local` | `core` | no | no | yes | no | yes | no |
-| `croston-sbj` | `local` | `core` | no | no | yes | no | yes | no |
-| `decision-tree-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `decision-tree-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `drift` | `local` | `core` | no | no | yes | no | yes | no |
-| `elasticnet-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `elasticnet-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `ensemble-mean` | `local` | `core` | no | no | yes | no | yes | no |
-| `ensemble-median` | `local` | `core` | no | no | yes | no | yes | no |
-| `ets` | `local` | `stats` | no | no | yes | yes | yes | no |
-| `extra-trees-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `extra-trees-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `fft` | `local` | `core` | no | no | yes | no | yes | no |
-| `fourier` | `local` | `core` | no | no | yes | no | yes | no |
-| `fourier-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `fourier-auto-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `fourier-autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
-| `fourier-ets` | `local` | `stats` | no | no | yes | no | yes | no |
-| `fourier-multi` | `local` | `core` | no | no | yes | no | yes | no |
-| `fourier-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
-| `fourier-uc` | `local` | `stats` | no | no | yes | no | yes | no |
-| `gamma-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `gamma-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `gbrt-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `gbrt-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `hf-timeseries-transformer-direct` | `local` | `transformers,torch` | no | no | yes | no | yes | no |
-| `hgb-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `hgb-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `holt` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-damped` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-winters-add` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-winters-add-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-winters-mul` | `local` | `core` | no | no | yes | no | yes | no |
-| `holt-winters-mul-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `huber-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `huber-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `kalman-level` | `local` | `core` | no | no | yes | no | yes | no |
-| `kalman-trend` | `local` | `core` | no | no | yes | no | yes | no |
-| `kernel-ridge-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `kernel-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `knn-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `knn-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `lag-llama` | `local` | `core` | no | no | yes | no | yes | no |
-| `lasso-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `lasso-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `les` | `local` | `core` | no | no | yes | no | yes | no |
-| `lgbm-custom-dirrec-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-custom-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-custom-lag-recursive` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-custom-step-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-dirrec-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-lag-recursive` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-step-lag` | `local` | `lgbm` | no | no | yes | no | yes | no |
-| `lgbm-step-lag-global` | `global` | `lgbm` | yes | yes | yes | yes | yes | no |
-| `linear-svr-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `linear-svr-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `lr-lag` | `local` | `core` | no | no | yes | no | yes | no |
-| `lr-lag-direct` | `local` | `core` | no | no | yes | no | yes | no |
-| `mean` | `local` | `core` | no | no | yes | no | yes | no |
-| `median` | `local` | `core` | no | no | yes | no | yes | no |
-| `mlp-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `mlp-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `moirai` | `local` | `core` | no | no | yes | no | yes | no |
-| `moment` | `local` | `core` | no | no | yes | no | yes | no |
-| `moving-average` | `local` | `core` | no | no | yes | no | yes | no |
-| `moving-median` | `local` | `core` | no | no | yes | no | yes | no |
-| `mstl-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `mstl-auto-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `mstl-autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
-| `mstl-ets` | `local` | `stats` | no | no | yes | no | yes | no |
-| `mstl-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
-| `mstl-uc` | `local` | `stats` | no | no | yes | no | yes | no |
-| `naive-last` | `local` | `core` | no | no | yes | no | yes | no |
-| `omp-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `omp-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `passive-aggressive-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `passive-aggressive-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `pipeline` | `local` | `core` | no | no | yes | no | yes | no |
-| `poisson-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `poisson-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `poly-trend` | `local` | `core` | no | no | yes | no | yes | no |
-| `quantile-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `quantile-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `rf-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `rf-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `ridge-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `ridge-lag-direct` | `local` | `ml` | no | no | yes | no | yes | no |
-| `ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `sar-ols` | `local` | `core` | no | no | yes | no | yes | no |
-| `sarimax` | `local` | `stats` | yes | no | yes | yes | no | no |
-| `seasonal-drift` | `local` | `core` | no | no | yes | no | yes | no |
-| `seasonal-mean` | `local` | `core` | no | no | yes | no | yes | no |
-| `seasonal-naive` | `local` | `core` | no | no | yes | no | yes | no |
-| `seasonal-naive-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `ses` | `local` | `core` | no | no | yes | no | yes | no |
-| `ses-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `sgd-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `sgd-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `ssa` | `local` | `core` | no | no | yes | no | yes | no |
-| `stl-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `stl-auto-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `stl-autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
-| `stl-ets` | `local` | `stats` | no | no | yes | no | yes | no |
-| `stl-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
-| `stl-uc` | `local` | `stats` | no | no | yes | no | yes | no |
-| `svr-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `svr-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `tbats-lite` | `local` | `stats` | no | no | yes | no | yes | no |
-| `tbats-lite-auto-arima` | `local` | `stats` | no | no | yes | no | yes | no |
-| `tbats-lite-autoreg` | `local` | `stats` | no | no | yes | no | yes | no |
-| `tbats-lite-ets` | `local` | `stats` | no | no | yes | no | yes | no |
-| `tbats-lite-sarimax` | `local` | `stats` | no | no | yes | no | yes | no |
-| `tbats-lite-uc` | `local` | `stats` | no | no | yes | no | yes | no |
-| `theta` | `local` | `core` | no | no | yes | no | yes | no |
-| `theta-auto` | `local` | `core` | no | no | yes | no | yes | no |
-| `time-moe` | `local` | `core` | no | no | yes | no | yes | no |
-| `timer-s1` | `local` | `core` | no | no | yes | no | yes | no |
-| `timesfm` | `local` | `core` | no | no | yes | no | yes | no |
-| `torch-agcrn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-astgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-attn-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-autoformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-autoformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-basisformer-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-basisformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-basisformer-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-bigru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-bilstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-cfc-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-cnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-crossformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-crossformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-crossgnn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-crossgnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-crossgnn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-deep-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-deepar-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-deepar-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-dilated-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-dilated-rnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-dlinear-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-dlinear-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-esrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-esrnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-etsformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-etsformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-fedformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-fedformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-film-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-fnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-fnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-fouriergnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-frets-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-gman-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-gmlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-gmlp-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-graphwavenet-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-grid-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-griffin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-hawk-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-hyena-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-hyena-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-inception-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-inception-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-informer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-informer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-itransformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-itransformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-kan-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-kan-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-koopa-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-lightts-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-linear-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-liquid-state-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-lmu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-lstnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-lstnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-ltc-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-mamba-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-mamba-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-mamba2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-micn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-mlp-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-moderntcn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-moderntcn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-moderntcn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-mtgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-multidim-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-nbeats-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-nbeats-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-nhits-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-nhits-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-nlinear-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-nlinear-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-nonstationary-transformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-nonstationary-transformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-patchtst-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-patchtst-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-pathformer-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-pathformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-pathformer-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-perceiver-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-perceiver-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-perceiver-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-pyraformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-pyraformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-qrnn-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-resnet1d-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-resnet1d-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-retnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-retnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-retnet-recursive` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnn-encoder-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-rnn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-rnn-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-rnnpaper-antisymmetric-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-atr-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-bahdanau-attention-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-bidirectional-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-brc-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-cfn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-chrono-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-cifg-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-clockwork-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-conceptor-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-convgru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-convlstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-copynet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-cornn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-dcrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-deep-ar-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-deep-esn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-deepstate-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-dg-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-differentiable-neural-computer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-dilated-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-dynamic-memory-networks-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-echo-state-network-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-elman-srn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-end-to-end-memory-networks-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-esrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-eunn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-fast-grnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-fast-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-forget-gate-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-fru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-gated-feedback-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-goru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-grid-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-gru-variant-1-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-gru-variant-2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-gru-variant-3-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-hierarchical-multiscale-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-indrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-jordan-srn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lattice-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lattice-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lem-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-ligru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-liquid-state-machine-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lstm-projection-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-lstnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-luong-attention-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-memory-networks-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mgu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mgu1-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mgu2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mgu3-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-minimalrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mqrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-multi-dimensional-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-multiplicative-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mut1-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mut2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-mut3-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-nbrc-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-nested-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-neural-cde-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-neural-queue-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-neural-ram-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-neural-stack-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-neural-turing-machine-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-ode-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-on-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-orthogonal-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-peephole-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-phased-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-pointer-network-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-pointer-sentinel-mixture-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-predrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-predrnn-plus-plus-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-qrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-ran-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-recurrent-attention-model-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-residual-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-rhn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-rnn-encoder-decoder-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-rnn-transducer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-rwa-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-scrn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-seq2seq-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-skip-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-sliced-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-sru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-star-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-strongly-typed-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-structural-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-tau-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-trajgru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-tree-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-unicornn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-unitary-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnpaper-wmc-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-cifg-lstm-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-cifg-lstm-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-cifg-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-cifg-lstm-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-cifg-lstm-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-clockwork-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-clockwork-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-clockwork-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-clockwork-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-clockwork-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-elman-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-elman-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-elman-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-elman-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-elman-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastgrnn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastgrnn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastgrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastgrnn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastgrnn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastrnn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastrnn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastrnn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-fastrnn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-gru-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-gru-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-gru-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-gru-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-indrnn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-indrnn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-indrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-indrnn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-indrnn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-janet-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-janet-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-janet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-janet-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-janet-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-lstm-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-lstm-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-lstm-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-lstm-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mgu-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mgu-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mgu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mgu-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mgu-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-minimalrnn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-minimalrnn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-minimalrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-minimalrnn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-minimalrnn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut1-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut1-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut1-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut1-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut1-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut2-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut2-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut2-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut2-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut2-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut3-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut3-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut3-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut3-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-mut3-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-peephole-lstm-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-peephole-lstm-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-peephole-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-peephole-lstm-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-peephole-lstm-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-phased-lstm-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-phased-lstm-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-phased-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-phased-lstm-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-phased-lstm-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-qrnn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-qrnn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-qrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-qrnn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-qrnn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-ran-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-ran-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-ran-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-ran-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-ran-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-rhn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-rhn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-rhn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-rhn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-rhn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-scrn-attn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-scrn-bidir-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-scrn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-scrn-ln-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rnnzoo-scrn-proj-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rwkv-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-rwkv-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-s4-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-s4d-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-s5-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-samformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-scinet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-scinet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-segrnn-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-segrnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-segrnn-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-attn-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-attn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-seq2seq-attn-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-attn-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-seq2seq-gru-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-gru-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-seq2seq-gru-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-lstm-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-lstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-seq2seq-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-seq2seq-lstm-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-sparsetsf-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-ssm-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-stemgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-stgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-stid-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no |
-| `torch-structural-rnn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tactis-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tcn-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tcn-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-tft-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tft-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-tide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tide-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-timegrad-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timemixer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timesmamba-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timesmamba-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timesmamba-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timesnet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-timesnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-timexer-direct` | `local` | `torch` | yes | no | yes | no | no | yes |
-| `torch-timexer-global` | `global` | `torch` | yes | no | no | no | yes | yes |
-| `torch-transformer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-transformer-encdec-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-tsmixer-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-tsmixer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-wavenet-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-wavenet-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-witran-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-witran-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-witran-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-autocorr-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-autocorr-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-autocorr-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-autocorr-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-autocorr-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-autocorr-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-bigbird-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-bigbird-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-bigbird-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-bigbird-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-bigbird-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-bigbird-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-revin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-rope-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-rope-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-sincos-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-sincos-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-time2vec-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-full-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-full-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-linformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-linformer-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-revin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-linformer-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-rope-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-sincos-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-linformer-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-linformer-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-local-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-local-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-local-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-local-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-local-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-local-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-logsparse-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-logsparse-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-logsparse-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-logsparse-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-logsparse-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-logsparse-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-longformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-longformer-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-longformer-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-longformer-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-longformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-longformer-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-nystrom-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-revin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-nystrom-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-rope-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-sincos-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-nystrom-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-nystrom-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-deep-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-performer-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-revin-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-performer-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-rope-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-performer-rope-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-sincos-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-performer-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-performer-wide-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-probsparse-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-probsparse-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-probsparse-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-probsparse-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-probsparse-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-probsparse-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-reformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-reformer-ln-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-reformer-ln-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-reformer-rms-gelu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xformer-reformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | no |
-| `torch-xformer-reformer-rms-swiglu-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `torch-xlstm-direct` | `local` | `torch` | no | no | yes | no | yes | no |
-| `tsb` | `local` | `core` | no | no | yes | no | yes | no |
-| `tweedie-lag` | `local` | `ml` | no | no | yes | no | yes | no |
-| `tweedie-step-lag-global` | `global` | `ml` | yes | no | no | no | yes | no |
-| `uc-local-level` | `local` | `stats` | no | no | yes | no | yes | no |
-| `uc-local-linear-trend` | `local` | `stats` | no | no | yes | no | yes | no |
-| `uc-seasonal` | `local` | `stats` | no | no | yes | no | yes | no |
-| `var` | `multivariate` | `stats` | no | no | no | no | no | no |
-| `weighted-moving-average` | `local` | `core` | no | no | yes | no | yes | no |
-| `xgb-custom-dirrec-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-custom-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-custom-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-custom-mimo-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-custom-step-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-dart-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-dart-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-dart-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-dirrec-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-gamma-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-gamma-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-gamma-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-huber-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-huber-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-huber-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-linear-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-linear-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-linear-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-logistic-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-logistic-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-logistic-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-mae-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-mae-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-mae-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-mimo-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-msle-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-msle-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-msle-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-poisson-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-poisson-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-poisson-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgb-quantile-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-quantile-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-step-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-step-lag-global` | `global` | `xgb` | yes | yes | yes | yes | yes | no |
-| `xgb-tweedie-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-tweedie-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgb-tweedie-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
-| `xgbrf-lag` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgbrf-lag-recursive` | `local` | `xgb` | no | no | yes | no | yes | no |
-| `xgbrf-step-lag-global` | `global` | `xgb` | yes | no | no | no | yes | no |
+| key | interface | requires | `supports_x_cols` | `supports_static_cols` | `supports_quantiles` | `supports_interval_forecast` | `supports_interval_forecast_with_x_cols` | `supports_artifact_save` | `requires_future_covariates` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `adaboost-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `adaboost-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `adida` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `analog-knn` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ar-ols` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ar-ols-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ar-ols-lags` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ard-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `ard-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `arima` | `local` | `stats` | no | no | no | yes | yes | yes | no |
+| `auto-arima` | `local` | `stats` | yes | no | no | yes | yes | no | no |
+| `autoreg` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `bagging-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `bagging-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `bayesian-ridge-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `bayesian-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `catboost-custom-dirrec-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-custom-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-custom-lag-recursive` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-custom-step-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-dirrec-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-lag-recursive` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-step-lag` | `local` | `catboost` | no | no | no | yes | no | yes | no |
+| `catboost-step-lag-global` | `global` | `catboost` | yes | no | yes | yes | yes | yes | no |
+| `chronos` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `chronos-bolt` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `croston` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `croston-opt` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `croston-sba` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `croston-sbj` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `decision-tree-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `decision-tree-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `drift` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `elasticnet-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `elasticnet-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `ensemble-mean` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ensemble-median` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ets` | `local` | `stats` | no | no | no | yes | yes | yes | no |
+| `extra-trees-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `extra-trees-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `fft` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `fourier` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `fourier-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `fourier-auto-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `fourier-autoreg` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `fourier-ets` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `fourier-multi` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `fourier-sarimax` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `fourier-uc` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `gamma-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `gamma-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `gbrt-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `gbrt-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `hf-timeseries-transformer-direct` | `local` | `transformers,torch` | no | no | no | yes | no | yes | no |
+| `hgb-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `hgb-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `holt` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-damped` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-winters-add` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-winters-add-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-winters-mul` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `holt-winters-mul-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `huber-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `huber-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `kalman-level` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `kalman-trend` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `kernel-ridge-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `kernel-ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `knn-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `knn-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `lag-llama` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `lasso-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `lasso-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `les` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `lgbm-custom-dirrec-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-custom-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-custom-lag-recursive` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-custom-step-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-dirrec-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-lag-recursive` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-step-lag` | `local` | `lgbm` | no | no | no | yes | no | yes | no |
+| `lgbm-step-lag-global` | `global` | `lgbm` | yes | no | yes | yes | yes | yes | no |
+| `linear-svr-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `linear-svr-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `lr-lag` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `lr-lag-direct` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `mean` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `median` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `mlp-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `mlp-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `moirai` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `moment` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `moving-average` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `moving-median` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `mstl-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `mstl-auto-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `mstl-autoreg` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `mstl-ets` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `mstl-sarimax` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `mstl-uc` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `naive-last` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `omp-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `omp-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `passive-aggressive-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `passive-aggressive-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `pipeline` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `poisson-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `poisson-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `poly-trend` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `quantile-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `quantile-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `rf-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `rf-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `ridge-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `ridge-lag-direct` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `ridge-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `sar-ols` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `sarimax` | `local` | `stats` | yes | no | no | yes | yes | no | no |
+| `seasonal-drift` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `seasonal-mean` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `seasonal-naive` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `seasonal-naive-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ses` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `ses-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `sgd-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `sgd-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `ssa` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `stl-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `stl-auto-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `stl-autoreg` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `stl-ets` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `stl-sarimax` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `stl-uc` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `svr-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `svr-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `tbats-lite` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `tbats-lite-auto-arima` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `tbats-lite-autoreg` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `tbats-lite-ets` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `tbats-lite-sarimax` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `tbats-lite-uc` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `theta` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `theta-auto` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `time-moe` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `timer-s1` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `timesfm` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `torch-agcrn-longhorizon-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-agcrn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-astgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-astgcn-regularized-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-attn-gru-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-attn-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-attn-gru-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-attn-gru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-autoformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-autoformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-basisformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-basisformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-basisformer-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-basisformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bigru-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bigru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bigru-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bigru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bilstm-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bilstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bilstm-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-bilstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cfc-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cfc-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cfc-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cfc-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cnn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cnn-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-cnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-crossgnn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossgnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossgnn-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-crossgnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deep-esn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deep-esn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deep-esn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deepar-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-deep-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deepar-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-deepar-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-deepar-wide-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dilated-rnn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dilated-rnn-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dilated-rnn-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dilated-rnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dilated-rnn-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dlinear-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dlinear-long-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-dlinear-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-dlinear-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esrnn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esrnn-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esrnn-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-esrnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-esrnn-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-etsformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-etsformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-etsformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-etsformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fedformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fedformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-film-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-film-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-film-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-film-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fits-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fits-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fits-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fits-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fnet-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fnet-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fnet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fnet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-fnet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-fouriergnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-frets-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-frets-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-frets-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gman-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-gmlp-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gmlp-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gmlp-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-gmlp-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gmlp-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-graphwavenet-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-graphwavenet-sam-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-grid-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-grid-lstm-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-grid-lstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-griffin-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-griffin-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-griffin-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-griffin-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gru-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gru-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-gru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hawk-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hawk-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hawk-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hawk-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hyena-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hyena-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hyena-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-hyena-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-hyena-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-inception-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-inception-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-inception-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-inception-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-informer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-informer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-itransformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-itransformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-kan-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-kan-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-kan-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-kan-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-koopa-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-koopa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-koopa-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-koopa-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lightts-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lightts-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lightts-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lightts-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-linear-attn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-linear-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-linear-attn-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-linear-attn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-liquid-state-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-liquid-state-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-liquid-state-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lmu-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lmu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lmu-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lmu-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstm-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstm-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstnet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstnet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstnet-long-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-lstnet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-lstnet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ltc-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-ltc-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-ltc-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-ltc-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-mamba2-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba2-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba2-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba2-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mamba2-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-micn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-micn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-micn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mlp-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mlp-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mlp-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mlp-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-moderntcn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-moderntcn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-moderntcn-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-moderntcn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-mtgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-multidim-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-multidim-rnn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-multidim-rnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nbeats-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nbeats-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nhits-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nhits-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nhits-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nhits-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nhits-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nlinear-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nlinear-long-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nlinear-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nlinear-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nonstationary-transformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nonstationary-transformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-nonstationary-transformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-nonstationary-transformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-patchtst-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-patchtst-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pathformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pathformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pathformer-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pathformer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pathformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-perceiver-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-perceiver-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-perceiver-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-perceiver-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pyraformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pyraformer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pyraformer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pyraformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-pyraformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-pyraformer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-qrnn-deep-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-qrnn-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-qrnn-wide-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-resnet1d-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-resnet1d-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-resnet1d-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-resnet1d-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-resnet1d-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-deep-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-retnet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-retnet-wide-recursive` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnn-encoder-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-encoder-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-encoder-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-encoder-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-encoder-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-gru-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-gru-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-gru-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-gru-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-lstm-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-lstm-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-lstm-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnn-lstm-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rnnpaper-antisymmetric-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-atr-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-bahdanau-attention-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-bidirectional-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-brc-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-cfn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-chrono-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-cifg-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-clockwork-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-conceptor-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-convgru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-convlstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-copynet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-cornn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-dcrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-deep-ar-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-deep-esn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-deepstate-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-dg-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-differentiable-neural-computer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-dilated-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-dynamic-memory-networks-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-echo-state-network-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-elman-srn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-end-to-end-memory-networks-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-esrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-eunn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-fast-grnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-fast-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-forget-gate-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-fru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gated-feedback-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-goru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-grid-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-variant-1-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-variant-2-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-variant-3-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-gru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-hierarchical-multiscale-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-indrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-jordan-srn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lattice-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lattice-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lem-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-ligru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-liquid-state-machine-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstm-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstm-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstm-projection-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-lstnet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-luong-attention-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-memory-networks-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mgu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mgu1-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mgu2-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mgu3-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-minimalrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mqrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-multi-dimensional-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-multiplicative-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mut1-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mut2-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-mut3-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-nbrc-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-nested-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-neural-cde-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-neural-queue-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-neural-ram-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-neural-stack-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-neural-turing-machine-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-ode-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-on-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-orthogonal-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-peephole-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-phased-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-pointer-network-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-pointer-sentinel-mixture-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-predrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-predrnn-plus-plus-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-qrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-qrnn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-qrnn-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-qrnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-ran-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-recurrent-attention-model-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-residual-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-rhn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-rnn-encoder-decoder-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-rnn-transducer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-rwa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-scrn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-seq2seq-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-skip-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-sliced-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-sru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-star-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-strongly-typed-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-structural-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-tau-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-trajgru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-tree-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-unicornn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-unitary-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnpaper-wmc-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-cifg-lstm-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-cifg-lstm-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-cifg-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-cifg-lstm-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-cifg-lstm-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-clockwork-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-clockwork-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-clockwork-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-clockwork-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-clockwork-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-elman-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-elman-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-elman-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-elman-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-elman-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastgrnn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastgrnn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastgrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastgrnn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastgrnn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastrnn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastrnn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastrnn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-fastrnn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-gru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-indrnn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-indrnn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-indrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-indrnn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-indrnn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-janet-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-janet-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-janet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-janet-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-janet-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-lstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mgu-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mgu-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mgu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mgu-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mgu-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-minimalrnn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-minimalrnn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-minimalrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-minimalrnn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-minimalrnn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut1-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut1-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut1-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut1-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut1-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut2-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut2-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut2-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut2-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut2-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut3-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut3-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut3-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut3-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-mut3-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-peephole-lstm-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-peephole-lstm-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-peephole-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-peephole-lstm-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-peephole-lstm-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-phased-lstm-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-phased-lstm-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-phased-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-phased-lstm-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-phased-lstm-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-qrnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-ran-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-ran-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-ran-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-ran-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-ran-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-rhn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-rhn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-rhn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-rhn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-rhn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-scrn-attn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-scrn-bidir-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-scrn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-scrn-ln-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rnnzoo-scrn-proj-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rwkv-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rwkv-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rwkv-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-rwkv-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-rwkv-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-s4-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4d-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4d-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4d-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4d-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s4d-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s5-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s5-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s5-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s5-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-s5-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-samformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-samformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-samformer-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-samformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-scinet-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-scinet-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-scinet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-scinet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-scinet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-segrnn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-segrnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-segrnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-gru-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-gru-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-lstm-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-lstm-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-lstm-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-lstm-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-attn-lstm-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-attn-lstm-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-gru-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-gru-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-seq2seq-lstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-seq2seq-lstm-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-sparsetsf-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-sparsetsf-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-sparsetsf-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-ssm-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-ssm-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-stemgnn-lookahead-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-stemgnn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-stgcn-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-stgcn-swa-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-stid-ema-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-stid-multivariate` | `multivariate` | `torch` | no | no | no | no | no | no | no |
+| `torch-structural-rnn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-structural-rnn-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-structural-rnn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tactis-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tactis-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tactis-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tcn-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tcn-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tcn-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tcn-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tcn-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tcn-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tft-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tft-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tide-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tide-long-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tide-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tide-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tide-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timegrad-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timegrad-long-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timegrad-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timemixer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timemixer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timemixer-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timemixer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timemixer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesmamba-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesmamba-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesmamba-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesmamba-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesmamba-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timesnet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-timesnet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-timexer-deep-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-deep-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-ema-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-ema-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-longhorizon-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-longhorizon-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-lookahead-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-lookahead-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-regularized-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-sam-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-sam-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-swa-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-swa-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-timexer-wide-direct` | `local` | `torch` | yes | no | no | yes | no | no | yes |
+| `torch-timexer-wide-global` | `global` | `torch` | yes | yes | no | no | no | yes | yes |
+| `torch-tinytimemixer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tinytimemixer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tinytimemixer-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tinytimemixer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-transformer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-transformer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-transformer-encdec-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-encdec-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-transformer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-tsmixer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-tsmixer-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-wavenet-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-wavenet-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-wavenet-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-wavenet-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-witran-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-witran-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-witran-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-witran-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-autocorr-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-autocorr-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-autocorr-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-autocorr-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-autocorr-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-autocorr-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-bigbird-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-bigbird-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-bigbird-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-bigbird-longhorizon-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-bigbird-longhorizon-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-bigbird-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-bigbird-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-bigbird-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-deep-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-ema-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-ema-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-revin-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-rope-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-rope-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-sincos-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-sincos-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-time2vec-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-full-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-full-wide-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-linformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-linformer-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-revin-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-linformer-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-rope-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-sam-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-sam-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-linformer-sincos-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-linformer-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-linformer-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-local-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-local-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-local-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-local-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-local-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-local-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-logsparse-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-logsparse-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-logsparse-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-logsparse-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-logsparse-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-logsparse-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-longformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-longformer-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-longformer-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-longformer-lookahead-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-longformer-lookahead-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-longformer-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-longformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-longformer-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-nystrom-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-regularized-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-regularized-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-nystrom-revin-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-nystrom-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-rope-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-sincos-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-nystrom-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-nystrom-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-performer-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-revin-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-performer-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-rope-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-performer-rope-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-sincos-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-swa-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-performer-swiglu-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-performer-time2vec-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-performer-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-probsparse-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-probsparse-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-probsparse-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-probsparse-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-probsparse-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-probsparse-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-reformer-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-reformer-ln-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-reformer-ln-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-reformer-rms-gelu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xformer-reformer-rms-global` | `global` | `torch` | yes | yes | yes | yes | yes | yes | no |
+| `torch-xformer-reformer-rms-swiglu-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xlstm-deep-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xlstm-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xlstm-swa-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `torch-xlstm-wide-direct` | `local` | `torch` | no | no | no | yes | no | yes | no |
+| `tsb` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `tweedie-lag` | `local` | `ml` | no | no | no | yes | no | yes | no |
+| `tweedie-step-lag-global` | `global` | `ml` | yes | no | no | no | no | yes | no |
+| `uc-local-level` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `uc-local-linear-trend` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `uc-seasonal` | `local` | `stats` | no | no | no | yes | no | yes | no |
+| `var` | `multivariate` | `stats` | no | no | no | no | no | no | no |
+| `weighted-moving-average` | `local` | `core` | no | no | no | yes | no | yes | no |
+| `xgb-custom-dirrec-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-custom-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-custom-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-custom-mimo-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-custom-step-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-dart-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-dart-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-dart-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-dirrec-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-gamma-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-gamma-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-gamma-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-huber-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-huber-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-huber-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-linear-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-linear-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-linear-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-logistic-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-logistic-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-logistic-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-mae-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-mae-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-mae-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-mimo-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-msle-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-msle-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-msle-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-poisson-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-poisson-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-poisson-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgb-quantile-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-quantile-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-step-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-step-lag-global` | `global` | `xgb` | yes | no | yes | yes | yes | yes | no |
+| `xgb-tweedie-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-tweedie-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgb-tweedie-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |
+| `xgbrf-lag` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgbrf-lag-recursive` | `local` | `xgb` | no | no | no | yes | no | yes | no |
+| `xgbrf-step-lag-global` | `global` | `xgb` | yes | no | no | no | no | yes | no |

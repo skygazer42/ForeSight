@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from ..backtesting import walk_forward
+from ..cli_runtime import compact_log_payload, emit_cli_event
 from ..conformal import summarize_conformal_predictions
 from ..contracts.capabilities import require_x_cols_if_needed as _contracts_require_x_cols_if_needed
 from ..contracts.frames import require_long_df as _contracts_require_long_df
@@ -361,6 +362,16 @@ def _eval_global_model_long_df(
         conformal_levels=conformal_levels,
         conformal_per_step=conformal_per_step,
     )
+    emit_cli_event(
+        "EVAL global",
+        event="eval_global_completed",
+        payload=compact_log_payload(
+            model=str(model),
+            n_points=out["n_points"],
+            n_series=out["n_series"],
+            n_series_skipped=out["n_series_skipped"],
+        ),
+    )
 
     return out
 
@@ -570,13 +581,19 @@ def _eval_local_xreg_model_long_df(
     local_xreg_params = dict(params)
     local_xreg_params.pop("x_cols", None)
 
-    for _uid, g in df.groupby("unique_id", sort=False):
+    for uid, g in df.groupby("unique_id", sort=False):
         results["n_series"] += 1
         y, x = _local_xreg_eval_arrays(g, x_cols=x_cols)
 
         min_required = int(min_train_size) + int(horizon)
         if y.size < min_required:
             results["n_series_skipped"] += 1
+            emit_cli_event(
+                "EVAL skip",
+                event="eval_series_skipped",
+                payload=compact_log_payload(unique_id=str(uid)),
+                progress=True,
+            )
             continue
 
         windows_run = 0
@@ -601,6 +618,12 @@ def _eval_local_xreg_model_long_df(
             windows_run += 1
             if max_windows is not None and windows_run >= int(max_windows):
                 break
+        emit_cli_event(
+            "EVAL series",
+            event="eval_series_completed",
+            payload=compact_log_payload(unique_id=str(uid), windows=int(windows_run)),
+            progress=True,
+        )
 
     return results
 
@@ -626,12 +649,18 @@ def _eval_local_univariate_model_long_df(
     }
     forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
 
-    for _uid, g in df.groupby("unique_id", sort=False):
+    for uid, g in df.groupby("unique_id", sort=False):
         results["n_series"] += 1
         y = g["y"].to_numpy(dtype=float, copy=False)
         min_required = int(min_train_size) + int(horizon)
         if y.size < min_required:
             results["n_series_skipped"] += 1
+            emit_cli_event(
+                "EVAL skip",
+                event="eval_series_skipped",
+                payload=compact_log_payload(unique_id=str(uid)),
+                progress=True,
+            )
             continue
         res = walk_forward(
             y,
@@ -644,6 +673,15 @@ def _eval_local_univariate_model_long_df(
         )
 
         _append_eval_window_results(results, y_true=res.y_true, y_pred=res.y_pred)
+        emit_cli_event(
+            "EVAL series",
+            event="eval_series_completed",
+            payload=compact_log_payload(
+                unique_id=str(uid),
+                windows=int(res.y_true.shape[0]),
+            ),
+            progress=True,
+        )
 
     return results
 
@@ -730,6 +768,16 @@ def _summarize_eval_model_long_df_results(
             )
         )
 
+    emit_cli_event(
+        "EVAL done",
+        event="eval_local_completed",
+        payload=compact_log_payload(
+            model=str(model),
+            n_points=int(out["n_points"]),
+            n_series=int(out["n_series"]),
+            n_series_skipped=int(out["n_series_skipped"]),
+        ),
+    )
     return out
 
 

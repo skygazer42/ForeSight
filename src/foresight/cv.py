@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .cli_runtime import compact_log_payload, emit_cli_event
 from .data.format import to_long
 from .datasets.loaders import load_dataset
 from .datasets.registry import get_dataset_spec
@@ -24,7 +25,7 @@ def _normalize_cv_x_cols(model_spec: Any, model_params: dict[str, Any] | None) -
         return ()
     if isinstance(raw, str):
         return tuple(part.strip() for part in raw.split(",") if part.strip())
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, list | tuple):
         return tuple(str(part).strip() for part in raw if str(part).strip())
 
     value = str(raw).strip()
@@ -106,8 +107,15 @@ def _local_cv_prediction_rows(
             )
         except ValueError:
             n_series_skipped += 1
+            emit_cli_event(
+                "CV skip",
+                event="cv_series_skipped",
+                payload=compact_log_payload(unique_id=str(uid)),
+                progress=True,
+            )
             continue
 
+        series_windows = 0
         for split in _trim_cv_splits(splits, n_windows=n_windows):
             rows.extend(
                 _local_cv_split_rows(
@@ -120,6 +128,16 @@ def _local_cv_prediction_rows(
                     model=model,
                 )
             )
+            series_windows += 1
+        emit_cli_event(
+            "CV series",
+            event="cv_series_completed",
+            payload=compact_log_payload(
+                unique_id=str(uid),
+                windows=int(series_windows),
+            ),
+            progress=True,
+        )
 
     return rows, n_series, n_series_skipped
 
@@ -224,7 +242,7 @@ def _global_cv_prediction_frames(
     frames: list[pd.DataFrame] = []
     series_skipped_any = 0
 
-    for cutoff in cutoffs:
+    for cutoff_idx, cutoff in enumerate(cutoffs, start=1):
         pred = _validated_global_cv_prediction_table(global_forecaster(df, cutoff, int(horizon)))
         frame, skipped_here = _prepared_global_cv_frame(
             pred,
@@ -239,6 +257,16 @@ def _global_cv_prediction_frames(
         if skipped_here > 0:
             series_skipped_any += int(skipped_here)
         frames.append(frame)
+        emit_cli_event(
+            f"CV cutoff {cutoff_idx}/{len(cutoffs)}",
+            event="cv_cutoff_completed",
+            payload=compact_log_payload(
+                cutoff=cutoff,
+                rows=int(len(frame)),
+                series_skipped=int(skipped_here),
+            ),
+            progress=True,
+        )
 
     return frames, series_skipped_any, ref_uid
 
@@ -325,6 +353,18 @@ def cross_validation_predictions_long_df(
     interface = str(model_spec.interface).lower().strip()
 
     df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+    emit_cli_event(
+        "CV start",
+        event="cv_started",
+        payload=compact_log_payload(
+            model=str(model),
+            interface=interface,
+            horizon=int(horizon),
+            step_size=int(step_size),
+            min_train_size=int(min_train_size),
+            n_series=int(df["unique_id"].nunique()),
+        ),
+    )
 
     if interface == "local":
         forecaster = _model_execution.make_local_forecaster_runner(str(model), model_params)
@@ -345,6 +385,16 @@ def cross_validation_predictions_long_df(
         out = pd.DataFrame(rows)
         out.attrs["n_series"] = int(n_series)
         out.attrs["n_series_skipped"] = int(n_series_skipped)
+        emit_cli_event(
+            "CV done",
+            event="cv_completed",
+            payload=compact_log_payload(
+                model=str(model),
+                rows=int(len(out)),
+                n_series=int(n_series),
+                n_series_skipped=int(n_series_skipped),
+            ),
+        )
         return out
 
     if interface == "global":
@@ -366,6 +416,16 @@ def cross_validation_predictions_long_df(
         out.attrs["n_series"] = int(df["unique_id"].nunique())
         out.attrs["n_series_skipped"] = int(series_skipped_any)
         out.attrs["reference_unique_id"] = str(ref_uid)
+        emit_cli_event(
+            "CV done",
+            event="cv_completed",
+            payload=compact_log_payload(
+                model=str(model),
+                rows=int(len(out)),
+                n_series=int(out.attrs["n_series"]),
+                n_series_skipped=int(series_skipped_any),
+            ),
+        )
         return out
 
     raise ValueError(f"Unknown model interface: {model_spec.interface!r}")
