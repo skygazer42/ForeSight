@@ -1,4 +1,5 @@
 import importlib.util
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -295,14 +296,23 @@ def test_ard_step_lag_global_smoke() -> None:
 
 
 def test_omp_step_lag_global_smoke() -> None:
-    _assert_global_point_smoke(
-        "omp-step-lag-global",
-        model_params={
-            "lags": 5,
-            "n_nonzero_coefs": 3,
-            "diff_lags": (1, 2),
-            "x_cols": ("promo",),
-        },
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _assert_global_point_smoke(
+            "omp-step-lag-global",
+            model_params={
+                "lags": 5,
+                "n_nonzero_coefs": 3,
+                "diff_lags": (1, 2),
+                "x_cols": ("promo",),
+            },
+        )
+
+    messages = [str(item.message) for item in caught]
+    assert not any(
+        "Orthogonal matching pursuit ended prematurely due to linear dependence"
+        in message
+        for message in messages
     )
 
 

@@ -15,6 +15,8 @@ from .torch_nn import (
     _make_manual_lstm,
     _make_manual_lstm_cell,
     _make_torch_dataloader,
+    _make_transformer_encoder,
+    _require_torch,
     _train_torch_model_with_loaders,
     _validate_torch_train_config,
 )
@@ -34,18 +36,6 @@ _CHANNELS_MIN_MSG = "channels must be >= 1"
 _EINSUM_QK_PROJ = "bhld,hdm->bhlm"
 _EINSUM_QK_SCORES = "bhld,bhmd->bhlm"
 _EINSUM_ATTN_OUT = "bhlm,bhmd->bhld"
-
-
-def _require_torch() -> Any:
-    try:
-        import torch  # type: ignore
-    except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'Torch global models require PyTorch. Install with: pip install -e ".[torch]"'
-        ) from e
-    return torch
-
-
 def _as_float_2d(a: Any, *, n: int) -> np.ndarray:
     arr = np.asarray(a, dtype=float)
     if arr.ndim == 1:
@@ -697,7 +687,11 @@ def _predict_torch_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.out = nn.Linear(d, out_dim)
 
         def forward(self, x: Any, ids: Any) -> Any:
@@ -723,7 +717,11 @@ def _predict_torch_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.seasonal_out = nn.Linear(d, out_dim)
             self.trend_proj = nn.Linear(ctx, h)
 
@@ -1354,7 +1352,11 @@ def _predict_torch_timexer_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(enc_layer, num_layers=layers)
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=enc_layer,
+                num_layers=layers,
+            )
             self.blocks = nn.ModuleList([_CrossBlock() for _ in range(layers)])
             self.out = nn.Linear(d, 1)
 
@@ -4717,7 +4719,11 @@ def _predict_torch_patchtst_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, int(h * out_dim))
 
@@ -5206,7 +5212,11 @@ def _predict_torch_crossformer_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, int(h * out_dim))
 
@@ -5679,7 +5689,11 @@ def _predict_torch_pyraformer_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, int(h * out_dim))
 
@@ -6567,7 +6581,11 @@ def _predict_torch_itransformer_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.out = nn.Linear(d, int(h * out_dim))
 
         def forward(self, xb: Any, ids: Any) -> Any:
@@ -14941,7 +14959,11 @@ def _predict_torch_etsformer_global(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.out = nn.Linear(d, int(out_dim))
 
         def forward(self, xb: Any, ids: Any) -> Any:  # xb: (B, seq_len, input_dim)

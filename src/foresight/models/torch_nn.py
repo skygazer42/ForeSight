@@ -5,6 +5,7 @@ import copy
 import json
 import math
 import time
+import warnings
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
@@ -101,12 +102,34 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
 
 def _require_torch() -> Any:
     try:
-        import torch  # type: ignore
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The pynvml package is deprecated.*",
+                category=FutureWarning,
+            )
+            import torch  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ImportError(
             'Torch models require PyTorch. Install with: pip install -e ".[torch]"'
         ) from e
     return torch
+
+
+def _make_transformer_encoder(
+    *,
+    nn: Any,
+    layer: Any,
+    num_layers: int,
+) -> Any:
+    try:
+        return nn.TransformerEncoder(
+            layer,
+            num_layers=int(num_layers),
+            enable_nested_tensor=False,
+        )
+    except TypeError:
+        return nn.TransformerEncoder(layer, num_layers=int(num_layers))
 
 
 def _require_mlflow() -> Any:
@@ -4801,7 +4824,11 @@ def torch_transformer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.head = nn.Linear(d, h)
 
         def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
@@ -5045,7 +5072,11 @@ def torch_informer_direct_forecast(
                     batch_first=True,
                     norm_first=True,
                 )
-                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.enc = _make_transformer_encoder(
+                    nn=nn,
+                    layer=layer,
+                    num_layers=layers,
+                )
                 self.head = nn.Linear(d, h)
 
             def forward(self, xb: Any) -> Any:
@@ -5235,7 +5266,11 @@ def torch_autoformer_direct_forecast(
                     batch_first=True,
                     norm_first=True,
                 )
-                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.enc = _make_transformer_encoder(
+                    nn=nn,
+                    layer=layer,
+                    num_layers=layers,
+                )
                 self.seasonal_head = nn.Linear(d, h)
                 self.trend_proj = nn.Linear(lag_count, h)
 
@@ -5894,7 +5929,11 @@ def torch_itransformer_direct_forecast(
                     batch_first=True,
                     norm_first=True,
                 )
-                self.enc = nn.TransformerEncoder(layer, num_layers=layers)
+                self.enc = _make_transformer_encoder(
+                    nn=nn,
+                    layer=layer,
+                    num_layers=layers,
+                )
                 self.out = nn.Linear(d, h)
 
             def forward(self, xb: Any) -> Any:
@@ -9065,7 +9104,11 @@ def torch_timexer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(enc_layer, num_layers=layers)
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=enc_layer,
+                num_layers=layers,
+            )
             self.blocks = nn.ModuleList([_CrossBlock() for _ in range(layers)])
             self.out = nn.Linear(d, 1)
 
@@ -9290,7 +9333,11 @@ def torch_patchtst_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.head = nn.Linear(d, h)
 
         def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)
@@ -9537,7 +9584,11 @@ def torch_crossformer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, h)
 
@@ -9794,7 +9845,11 @@ def torch_pyraformer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, h)
 
@@ -10039,7 +10094,11 @@ def torch_perceiver_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.norm = nn.LayerNorm(d)
             self.head = nn.Linear(d, h)
 
@@ -12162,7 +12221,11 @@ def torch_basisformer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.encoder = nn.TransformerEncoder(enc_layer, num_layers=layers)
+            self.encoder = _make_transformer_encoder(
+                nn=nn,
+                layer=enc_layer,
+                num_layers=layers,
+            )
             self.horizon_queries = nn.Embedding(h, d)
             self.decoder_attn = nn.MultiheadAttention(
                 embed_dim=d,
@@ -16610,7 +16673,11 @@ def torch_etsformer_direct_forecast(
                 batch_first=True,
                 norm_first=True,
             )
-            self.enc = nn.TransformerEncoder(layer, num_layers=int(num_layers))
+            self.enc = _make_transformer_encoder(
+                nn=nn,
+                layer=layer,
+                num_layers=int(num_layers),
+            )
             self.head = nn.Linear(d, h)
 
         def forward(self, xb: Any) -> Any:  # xb: (B, T, 1)

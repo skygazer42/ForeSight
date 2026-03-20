@@ -1978,8 +1978,18 @@ def omp_step_lag_global_forecaster(
         raise ValueError("tol must be >= 0 or None")
 
     def _fit_model(X_train: np.ndarray, y_train: np.ndarray) -> Any:
+        import warnings
+
         model = OrthogonalMatchingPursuit(n_nonzero_coefs=nnz_int, tol=tol_f)
-        model.fit(X_train, y_train)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=(
+                    "Orthogonal matching pursuit ended prematurely due to linear dependence.*"
+                ),
+                category=RuntimeWarning,
+            )
+            model.fit(X_train, y_train)
         return model
 
     def _f(long_df: Any, cutoff: Any, horizon: int) -> pd.DataFrame:

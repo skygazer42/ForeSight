@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import warnings
 
 import numpy as np
 
@@ -19,6 +20,37 @@ FOURIER_PERIODS_MUST_BE_VALID = "periods must contain integers >= 2"
 FOURIER_ORDERS_MUST_BE_NON_NEGATIVE = "orders must contain integers >= 0"
 UNEXPECTED_MSTL_SEASONAL_SHAPE = "Unexpected MSTL seasonal shape"
 UNEXPECTED_MSTL_COMPONENT_COUNT = "MSTL returned unexpected number of seasonal components"
+
+
+def _call_with_filtered_statsmodels_warnings(func: Any, /, *args: Any, **kwargs: Any) -> Any:
+    try:
+        from statsmodels.tools.sm_exceptions import ConvergenceWarning  # type: ignore
+    except Exception:  # noqa: BLE001
+        ConvergenceWarning = Warning
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ConvergenceWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message="Maximum Likelihood optimization failed to converge.*",
+            category=Warning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="Non-stationary starting autoregressive parameters found.*",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="Non-invertible starting seasonal moving average.*",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="Non-stationary starting seasonal autoregressive.*",
+            category=UserWarning,
+        )
+        return func(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -191,7 +223,7 @@ def _fit_sarimax_result(
         enforce_stationarity=bool(enforce_stationarity),
         enforce_invertibility=bool(enforce_invertibility),
     )
-    return model.fit(disp=False), exog_future
+    return _call_with_filtered_statsmodels_warnings(model.fit, disp=False), exog_future
 
 
 def _validate_auto_arima_grid_bounds(
@@ -355,7 +387,7 @@ def _fit_auto_arima_candidate_result(
     enforce_invertibility: bool,
 ) -> Any | None:
     try:
-        return arima_cls(
+        model = arima_cls(
             x,
             exog=exog_train,
             order=order,
@@ -363,7 +395,8 @@ def _fit_auto_arima_candidate_result(
             trend=trend_final,
             enforce_stationarity=bool(enforce_stationarity),
             enforce_invertibility=bool(enforce_invertibility),
-        ).fit()
+        )
+        return _call_with_filtered_statsmodels_warnings(model.fit)
     except Exception:  # noqa: BLE001
         return None
 
@@ -492,7 +525,7 @@ def arima_forecast(
         enforce_stationarity=bool(enforce_stationarity),
         enforce_invertibility=bool(enforce_invertibility),
     )
-    res = model.fit()
+    res = _call_with_filtered_statsmodels_warnings(model.fit)
     if exog_future is None:
         fc = res.forecast(steps=int(horizon))
     else:
@@ -608,7 +641,7 @@ def autoreg_forecast(
         period=(None if period is None else int(period)),
         old_names=False,
     )
-    res = model.fit()
+    res = _call_with_filtered_statsmodels_warnings(model.fit)
     if exog_future is None:
         fc = res.forecast(steps=int(horizon))
     else:
@@ -651,7 +684,7 @@ def unobserved_components_forecast(
         model_kwargs["seasonal"] = seasonal_int
 
     model = UnobservedComponents(x, **model_kwargs)
-    res = model.fit(disp=False)
+    res = _call_with_filtered_statsmodels_warnings(model.fit, disp=False)
     fc = res.forecast(steps=int(horizon))
     return np.asarray(fc, dtype=float)
 
@@ -690,7 +723,7 @@ def stl_arima_forecast(
         seasonal=int(seasonal),
         robust=bool(robust),
     )
-    res = stlf.fit()
+    res = _call_with_filtered_statsmodels_warnings(stlf.fit)
     fc = res.forecast(steps=int(horizon))
     return np.asarray(fc, dtype=float)
 
@@ -735,7 +768,7 @@ def stl_ets_forecast(
         period=int(period),
         robust=bool(robust),
     )
-    res = stlf.fit()
+    res = _call_with_filtered_statsmodels_warnings(stlf.fit)
     fc = res.forecast(steps=int(horizon))
     return np.asarray(fc, dtype=float)
 
@@ -780,7 +813,7 @@ def stl_autoreg_forecast(
         seasonal=int(seasonal),
         robust=bool(robust),
     )
-    res = stlf.fit()
+    res = _call_with_filtered_statsmodels_warnings(stlf.fit)
     fc = res.forecast(steps=int(horizon))
     return np.asarray(fc, dtype=float)
 
@@ -1337,7 +1370,7 @@ def fourier_ets_forecast(
         damped_trend=bool(damped_trend),
         seasonal=None,
     )
-    resid_res = resid_model.fit()
+    resid_res = _call_with_filtered_statsmodels_warnings(resid_model.fit)
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
     x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
@@ -1515,7 +1548,7 @@ def mstl_arima_forecast(
     y_adj = x - seasonal_sum
 
     model = ARIMA(y_adj, order=tuple(int(v) for v in order))
-    res = model.fit()
+    res = _call_with_filtered_statsmodels_warnings(model.fit)
     fc_adj = np.asarray(res.forecast(steps=int(horizon)), dtype=float)
 
     seasonal_fc = np.zeros((int(horizon),), dtype=float)
@@ -1651,7 +1684,7 @@ def mstl_ets_forecast(
         damped_trend=bool(damped_trend),
         seasonal=None,
     )
-    res = model.fit()
+    res = _call_with_filtered_statsmodels_warnings(model.fit)
     fc_adj = np.asarray(res.forecast(steps=int(horizon)), dtype=float)
 
     seasonal_fc = np.zeros((int(horizon),), dtype=float)
@@ -1941,7 +1974,7 @@ def tbats_lite_forecast(
     resid = x_work - fitted
 
     resid_model = ARIMA(resid, order=tuple(int(v) for v in arima_order))
-    resid_res = resid_model.fit()
+    resid_res = _call_with_filtered_statsmodels_warnings(resid_model.fit)
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
     tf = np.arange(n, n + int(horizon), dtype=float)
@@ -2029,7 +2062,7 @@ def tbats_lite_autoreg_forecast(
         seasonal=False,
         old_names=False,
     )
-    resid_res = resid_model.fit()
+    resid_res = _call_with_filtered_statsmodels_warnings(resid_model.fit)
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
     x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
@@ -2120,7 +2153,7 @@ def tbats_lite_ets_forecast(
         damped_trend=bool(damped_trend),
         seasonal=None,
     )
-    resid_res = resid_model.fit()
+    resid_res = _call_with_filtered_statsmodels_warnings(resid_model.fit)
     resid_fc = np.asarray(resid_res.forecast(steps=int(horizon)), dtype=float)
 
     x_future_cols: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
@@ -2444,6 +2477,6 @@ def ets_forecast(
         seasonal=seasonal_final,
         seasonal_periods=seasonal_periods_final,
     )
-    res = model.fit(optimized=True)
+    res = _call_with_filtered_statsmodels_warnings(model.fit, optimized=True)
     fc = res.forecast(steps=int(horizon))
     return np.asarray(fc, dtype=float)

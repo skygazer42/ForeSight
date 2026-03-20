@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import warnings
 
 import numpy as np
 
@@ -606,7 +607,15 @@ def _direct_multioutput_sklearn_forecast(
         series=x,
     )
     model = multi_output_regressor_cls(estimator)
-    model.fit(X, Y)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "Orthogonal matching pursuit ended prematurely due to linear dependence.*"
+            ),
+            category=RuntimeWarning,
+        )
+        model.fit(X, Y)
 
     feat_base = _make_target_feat_row(x, lags=target_lags)
     feat = _augment_lag_feat_row(

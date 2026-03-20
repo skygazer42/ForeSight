@@ -1,4 +1,5 @@
 import importlib.util
+import warnings
 
 import numpy as np
 import pytest
@@ -269,7 +270,21 @@ def test_auto_arima_can_search_seasonal_orders_only_when_installed():
         trend="c",
         information_criterion="aic",
     )
-    yhat = f(y, 6)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        yhat = f(y, 6)
+
+    messages = [str(item.message) for item in caught]
+    assert not any(
+        "Non-invertible starting seasonal moving average Using zeros as starting parameters"
+        in message
+        for message in messages
+    )
+    assert not any(
+        "Non-stationary starting seasonal autoregressive Using zeros as starting parameters"
+        in message
+        for message in messages
+    )
 
     assert yhat.shape == (6,)
     assert np.all(np.isfinite(yhat))

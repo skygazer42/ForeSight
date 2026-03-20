@@ -1,4 +1,5 @@
 import importlib.util
+import warnings
 
 import numpy as np
 import pytest
@@ -22,7 +23,15 @@ def test_fourier_arima_tracks_future_fourier_signal() -> None:
         order=(0, 0, 0),
         trend="c",
     )
-    yhat = f(y, 8)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        yhat = f(y, 8)
+
+    messages = [str(item.message) for item in caught]
+    assert not any(
+        "Maximum Likelihood optimization failed to converge" in message
+        for message in messages
+    )
 
     tf = np.arange(120, 128, dtype=float)
     expected = (

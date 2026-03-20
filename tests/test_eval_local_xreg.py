@@ -1,4 +1,5 @@
 import importlib.util
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -221,25 +222,31 @@ def test_eval_model_long_df_supports_local_timexer_with_x_cols() -> None:
         }
     )
 
-    payload = eval_model_long_df(
-        model="torch-timexer-direct",
-        long_df=long_df,
-        horizon=3,
-        step=3,
-        min_train_size=24,
-        model_params={
-            "x_cols": ("promo",),
-            "lags": 16,
-            "d_model": 16,
-            "nhead": 4,
-            "num_layers": 1,
-            "epochs": 2,
-            "batch_size": 16,
-            "device": "cpu",
-            "seed": 0,
-            "patience": 2,
-        },
-    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        payload = eval_model_long_df(
+            model="torch-timexer-direct",
+            long_df=long_df,
+            horizon=3,
+            step=3,
+            min_train_size=24,
+            model_params={
+                "x_cols": ("promo",),
+                "lags": 16,
+                "d_model": 16,
+                "nhead": 4,
+                "num_layers": 1,
+                "epochs": 2,
+                "batch_size": 16,
+                "device": "cpu",
+                "seed": 0,
+                "patience": 2,
+            },
+        )
+
+    messages = [str(item.message) for item in caught]
+    assert not any("pynvml package is deprecated" in message for message in messages)
+    assert not any("enable_nested_tensor is True" in message for message in messages)
 
     assert payload["model"] == "torch-timexer-direct"
     assert payload["n_series"] == 1
