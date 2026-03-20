@@ -59,6 +59,8 @@ def test_root_import_exports_stable_public_api() -> None:
             "build_hierarchy_spec",
             "check_hierarchical_consistency",
             "clip_long_df_outliers",
+            "detect_anomalies",
+            "detect_anomalies_long_df",
             "eval_hierarchical_forecast_df",
             "eval_model",
             "eval_model_long_df",

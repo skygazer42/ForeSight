@@ -67,6 +67,135 @@ def test_cli_artifact_validate_reports_valid_local_artifact(tmp_path: Path) -> N
     assert payload["model_key"] == "naive-last"
 
 
+def test_cli_artifact_validate_rejects_forecast_local_xreg_artifact_missing_future_context(
+    tmp_path: Path,
+) -> None:
+    artifact_path = tmp_path / "naive-last-xreg.pkl"
+    forecaster = make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5])
+    save_forecaster(
+        forecaster,
+        artifact_path,
+        extra={
+            "artifact_type": "forecast-local",
+            "unique_id": "series=0",
+            "ds": ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"],
+            "x_cols": ["promo"],
+            "train_exog": [[0.0], [1.0], [0.0], [1.0], [0.0]],
+            "future_exog": [[1.0], [0.0]],
+            "max_horizon": 2,
+        },
+    )
+
+    proc = _run_cli("artifact", "validate", "--artifact", str(artifact_path))
+
+    assert proc.returncode == 2
+    assert "Local forecast artifact is missing required future ds context" in proc.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_cli_artifact_validate_rejects_forecast_global_artifact_missing_cutoff_context(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "panel_future.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s0,2020-01-19,,1",
+                "s0,2020-01-20,,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "s1,2020-01-19,,1",
+                "s1,2020-01-20,,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    with artifact_path.open("rb") as handle:
+        payload = pickle.load(handle)
+    payload["extra"] = dict(payload.get("extra", {}))
+    payload["extra"].pop("cutoff", None)
+    with artifact_path.open("wb") as handle:
+        pickle.dump(payload, handle)
+
+    proc = _run_cli("artifact", "validate", "--artifact", str(artifact_path))
+
+    assert proc.returncode == 2
+    assert "Global artifact prediction requires a cutoff" in proc.stderr
+
+
 def test_cli_artifact_validate_rejects_unsupported_schema_version(tmp_path: Path) -> None:
     artifact_path = tmp_path / "naive-last.pkl"
     forecaster = make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5])
@@ -176,6 +305,128 @@ def test_cli_artifact_info_can_emit_grouped_markdown_summary(tmp_path: Path) -> 
     assert "| tensorboard.run_name | demo-tb |" in proc.stdout
     assert "## Metadata" in proc.stdout
     assert "| train_schema.runtime.family | torch |" in proc.stdout
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_cli_artifact_info_reports_future_override_schema_for_global_forecast_artifact(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "panel_future.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s0,2020-01-19,,1",
+                "s0,2020-01-20,,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "s1,2020-01-19,,1",
+                "s1,2020-01-20,,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    proc = _run_cli("artifact", "info", "--artifact", str(artifact_path))
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert payload["future_override_schema"] == {
+        "supported": True,
+        "artifact_interface": "global",
+        "default_context_source": "saved_future_context",
+        "requires_time_col": True,
+        "required_covariate_columns": ["promo"],
+        "saved_id_cols": ["store"],
+        "allow_unique_id_column": True,
+        "allow_saved_raw_id_columns": True,
+        "allow_omitting_id_columns": False,
+        "max_horizon": 2,
+    }
+
+    md_proc = _run_cli(
+        "artifact",
+        "info",
+        "--artifact",
+        str(artifact_path),
+        "--format",
+        "markdown",
+    )
+    assert md_proc.returncode == 0
+    assert "## Future Override" in md_proc.stdout
+    assert '| required_covariate_columns | ["promo"] |' in md_proc.stdout
+    assert '| saved_id_cols | ["store"] |' in md_proc.stdout
 
 
 def test_cli_artifact_diff_reports_no_differences_for_identical_artifacts(tmp_path: Path) -> None:
@@ -379,6 +630,167 @@ def test_cli_artifact_diff_can_emit_grouped_markdown_report(tmp_path: Path) -> N
     assert "| unique_id | series=0 | series=1 |" in proc.stdout
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_cli_artifact_diff_surfaces_future_override_contract_changes(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "panel_future.csv"
+    left_path = tmp_path / "left.pkl"
+    right_path = tmp_path / "right.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s0,2020-01-19,,1",
+                "s0,2020-01-20,,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "s1,2020-01-19,,1",
+                "s1,2020-01-20,,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(left_path),
+    )
+    assert fit_proc.returncode == 0
+
+    with left_path.open("rb") as handle:
+        payload = pickle.load(handle)
+    payload["extra"] = dict(payload.get("extra", {}))
+    payload["extra"]["id_cols"] = []
+    with right_path.open("wb") as handle:
+        pickle.dump(payload, handle)
+
+    proc = _run_cli(
+        "artifact",
+        "diff",
+        "--left-artifact",
+        str(left_path),
+        "--right-artifact",
+        str(right_path),
+    )
+    assert proc.returncode == 0
+    diff_payload = json.loads(proc.stdout)
+    assert diff_payload["differences"]["future_override_schema.saved_id_cols"] == {
+        "left": ["store"],
+        "right": [],
+    }
+    assert diff_payload["differences"]["future_override_schema.allow_saved_raw_id_columns"] == {
+        "left": True,
+        "right": False,
+    }
+
+    md_proc = _run_cli(
+        "artifact",
+        "diff",
+        "--left-artifact",
+        str(left_path),
+        "--right-artifact",
+        str(right_path),
+        "--format",
+        "markdown",
+    )
+    assert md_proc.returncode == 0
+    assert "## Future Override" in md_proc.stdout
+    assert '| saved_id_cols | ["store"] | [] |' in md_proc.stdout
+    assert "| allow_saved_raw_id_columns | true | false |" in md_proc.stdout
+    assert "## Other" not in md_proc.stdout or "future_override_schema" not in md_proc.stdout
+
+    prefix_md_proc = _run_cli(
+        "artifact",
+        "diff",
+        "--left-artifact",
+        str(left_path),
+        "--right-artifact",
+        str(right_path),
+        "--path-prefix",
+        "future_override_schema",
+        "--format",
+        "markdown",
+    )
+    assert prefix_md_proc.returncode == 0
+    assert "## Summary" in prefix_md_proc.stdout
+    assert "| equal | false |" in prefix_md_proc.stdout
+    assert "| difference_count | 2 |" in prefix_md_proc.stdout
+    assert "| path_prefix | future_override_schema |" in prefix_md_proc.stdout
+    assert "## Future Override" in prefix_md_proc.stdout
+    assert '| saved_id_cols | ["store"] | [] |' in prefix_md_proc.stdout
+    assert "| allow_saved_raw_id_columns | true | false |" in prefix_md_proc.stdout
+    assert "## Tracking Summary" not in prefix_md_proc.stdout
+    assert "## Tracking Details" not in prefix_md_proc.stdout
+    assert "## Metadata" not in prefix_md_proc.stdout
+    assert "## Extra" not in prefix_md_proc.stdout
+    assert "## Other" not in prefix_md_proc.stdout
+
+
 def test_cli_artifact_diff_accepts_markdown_alias_and_emits_compact_no_diff_summary(
     tmp_path: Path,
 ) -> None:
@@ -405,6 +817,37 @@ def test_cli_artifact_diff_accepts_markdown_alias_and_emits_compact_no_diff_summ
     assert "No differences found." in proc.stdout
     assert "| field | value |" not in proc.stdout
     assert "## Tracking Summary" not in proc.stdout
+    assert "## Metadata" not in proc.stdout
+
+
+def test_cli_artifact_diff_emits_compact_no_diff_summary_for_future_override_path_prefix(
+    tmp_path: Path,
+) -> None:
+    artifact_path = tmp_path / "naive-last.pkl"
+    save_forecaster(
+        make_forecaster_object("naive-last").fit([1, 2, 3, 4, 5]),
+        artifact_path,
+        extra={"artifact_type": "forecast-local", "unique_id": "series=0"},
+    )
+
+    proc = _run_cli(
+        "artifact",
+        "diff",
+        "--left-artifact",
+        str(artifact_path),
+        "--right-artifact",
+        str(artifact_path),
+        "--path-prefix",
+        "future_override_schema",
+        "--format",
+        "markdown",
+    )
+
+    assert proc.returncode == 0
+    assert "## Summary" in proc.stdout
+    assert "No differences found under `future_override_schema`." in proc.stdout
+    assert "| field | value |" not in proc.stdout
+    assert "## Future Override" not in proc.stdout
     assert "## Metadata" not in proc.stdout
 
 
@@ -474,6 +917,7 @@ def test_readme_documents_artifact_inspection_commands() -> None:
     assert "foresight artifact validate --artifact /tmp/naive-last.pkl" in readme
     assert "--path-prefix metadata.train_schema.runtime" in readme
     assert "--path-prefix tracking_summary" in readme
+    assert "--path-prefix future_override_schema" in readme
     assert "tracking_summary" in readme
 
 
@@ -486,6 +930,7 @@ def test_docs_index_documents_artifact_inspection_commands() -> None:
     assert "foresight artifact validate --artifact /tmp/naive-last.pkl" in docs_index
     assert "foresight artifact diff" in docs_index
     assert "--path-prefix tracking_summary" in docs_index
+    assert "--path-prefix future_override_schema" in docs_index
 
 
 def test_docs_artifacts_page_documents_artifact_workflow() -> None:
@@ -499,6 +944,7 @@ def test_docs_artifacts_page_documents_artifact_workflow() -> None:
     assert "foresight artifact validate --artifact /tmp/naive-last.pkl" in artifacts_doc
     assert "--path-prefix metadata.train_schema.runtime" in artifacts_doc
     assert "--path-prefix tracking_summary" in artifacts_doc
+    assert "--path-prefix future_override_schema" in artifacts_doc
     assert "tracking_summary" in artifacts_doc
     assert "load_forecaster_artifact" in artifacts_doc
 

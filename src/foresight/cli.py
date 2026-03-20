@@ -26,6 +26,7 @@ _MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
 _MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
 _OUTPUT_PATH_HELP = "Optional path to write output"
 _OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
+_OUTPUT_ROWS_FORMAT_HELP = "Output format (default: csv)"
 _TARGET_COLUMN_HELP = "Target column name"
 _DEFAULT_TARGET_COLUMN_HELP = "Optional target column name (default: use dataset spec default_y)."
 _EXPANDING_WINDOW_HELP = "Optional rolling train window size (default: expanding window)."
@@ -119,6 +120,58 @@ def build_parser() -> argparse.ArgumentParser:
     _cli_runtime.register_runtime_logging_args(cv_run)
     cv_run.set_defaults(_handler=_cmd_cv_run)
 
+    cv_csv = cv_sub.add_parser("csv", help="Run rolling-origin CV on an arbitrary CSV file")
+    cv_csv.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
+    cv_csv.add_argument("--path", required=True, help="Path to a CSV file")
+    cv_csv.add_argument("--time-col", required=True, help="Time column name")
+    cv_csv.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
+    cv_csv.add_argument(
+        "--id-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated ID columns for panel data (e.g. store,dept)",
+    )
+    cv_csv.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse the time column as datetime.",
+    )
+    cv_csv.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
+    cv_csv.add_argument("--step-size", type=int, default=1, help="CV step size (default: 1)")
+    cv_csv.add_argument("--min-train-size", type=int, required=True, help="Minimum train size")
+    cv_csv.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help=_EXPANDING_WINDOW_HELP,
+    )
+    cv_csv.add_argument(
+        "--n-windows",
+        type=int,
+        default=None,
+        help="Optional limit to the last N CV windows.",
+    )
+    cv_csv.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help=_MODEL_PARAM_EXAMPLE_HELP,
+    )
+    cv_csv.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    cv_csv.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help="Output format for predictions (default: csv)",
+    )
+    _cli_runtime.register_runtime_logging_args(cv_csv)
+    cv_csv.set_defaults(_handler=_cmd_cv_csv)
+
     forecast_p = sub.add_parser("forecast", help="Forecast utilities")
     forecast_sub = forecast_p.add_subparsers(dest="forecast_command", required=True)
 
@@ -209,7 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--interval-levels",
         type=str,
         default="",
-        help="Optional central interval levels for local artifacts, e.g. 80,90 or 0.8,0.9",
+        help=(
+            "Optional central interval levels for local artifacts or "
+            "interval-capable global artifacts, e.g. 80,90 or 0.8,0.9"
+        ),
     )
     forecast_artifact.add_argument(
         "--interval-min-train-size",
@@ -234,6 +290,28 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="",
         help="Optional cutoff override for global artifacts",
+    )
+    forecast_artifact.add_argument(
+        "--future-path",
+        type=str,
+        default="",
+        help=(
+            "Optional CSV containing future timestamps/covariates for artifact reuse; "
+            "local overrides replace saved future context, "
+            "global overrides may include unique_id, the saved raw id columns, "
+            "or omit ids for single-series artifacts"
+        ),
+    )
+    forecast_artifact.add_argument(
+        "--time-col",
+        type=str,
+        default="",
+        help="Time column name used with --future-path (required when overriding future context)",
+    )
+    forecast_artifact.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse the artifact future-path time column as datetime.",
     )
     forecast_artifact.add_argument(
         "--output",
@@ -399,6 +477,206 @@ def build_parser() -> argparse.ArgumentParser:
     tuning_run.set_defaults(_handler=_cmd_tuning_run)
 
     _cli_data.register_data_subparsers(sub)
+
+    detect_p = sub.add_parser("detect", help="Anomaly detection utilities")
+    detect_sub = detect_p.add_subparsers(dest="detect_command", required=True)
+
+    detect_run = detect_sub.add_parser("run", help="Detect anomalies on a registered dataset")
+    detect_run.add_argument("--dataset", required=True, help=_DATASET_KEY_HELP)
+    detect_run.add_argument(
+        "--y-col",
+        type=str,
+        default="",
+        help=_DEFAULT_TARGET_COLUMN_HELP,
+    )
+    detect_run.add_argument(
+        "--model",
+        type=str,
+        default="",
+        help="Optional model key used for forecast-residual scoring",
+    )
+    detect_run.add_argument(
+        "--score-method",
+        choices=["forecast-residual", "rolling-mad", "rolling-zscore"],
+        default="",
+        help="Anomaly score method (default: forecast-residual if model is set, else rolling-zscore)",
+    )
+    detect_run.add_argument(
+        "--threshold-method",
+        choices=["mad", "quantile", "zscore"],
+        default="",
+        help="Threshold method (default: mad for forecast-residual, else zscore)",
+    )
+    detect_run.add_argument(
+        "--threshold-k",
+        type=float,
+        default=3.0,
+        help="Threshold multiplier for mad/zscore methods (default: 3.0)",
+    )
+    detect_run.add_argument(
+        "--threshold-quantile",
+        type=float,
+        default=0.99,
+        help="Quantile threshold in (0,1) when --threshold-method=quantile (default: 0.99)",
+    )
+    detect_run.add_argument(
+        "--window",
+        type=int,
+        default=12,
+        help="Rolling history window for rolling score methods (default: 12)",
+    )
+    detect_run.add_argument(
+        "--min-history",
+        type=int,
+        default=3,
+        help="Minimum rolling history before scoring starts (default: 3)",
+    )
+    detect_run.add_argument(
+        "--min-train-size",
+        type=int,
+        default=None,
+        help="Minimum training size for forecast-residual scoring",
+    )
+    detect_run.add_argument(
+        "--step-size",
+        type=int,
+        default=1,
+        help="Walk-forward step size for forecast-residual scoring (default: 1)",
+    )
+    detect_run.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help=_EXPANDING_WINDOW_HELP,
+    )
+    detect_run.add_argument(
+        "--n-windows",
+        type=int,
+        default=None,
+        help=_MAX_WINDOWS_LIMIT_HELP,
+    )
+    detect_run.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help=_MODEL_PARAM_EXAMPLE_HELP,
+    )
+    detect_run.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    detect_run.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_ROWS_FORMAT_HELP,
+    )
+    _cli_runtime.register_runtime_logging_args(detect_run)
+    detect_run.set_defaults(_handler=_cmd_detect_run)
+
+    detect_csv = detect_sub.add_parser("csv", help="Detect anomalies on an arbitrary CSV file")
+    detect_csv.add_argument("--path", required=True, help="Path to a CSV file")
+    detect_csv.add_argument("--time-col", required=True, help="Time column name")
+    detect_csv.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
+    detect_csv.add_argument(
+        "--model",
+        type=str,
+        default="",
+        help="Optional model key used for forecast-residual scoring",
+    )
+    detect_csv.add_argument(
+        "--id-cols",
+        type=str,
+        default="",
+        help="Optional comma-separated ID columns for panel data (e.g. store,dept)",
+    )
+    detect_csv.add_argument(
+        "--parse-dates",
+        action="store_true",
+        help="Parse the time column as datetime.",
+    )
+    detect_csv.add_argument(
+        "--score-method",
+        choices=["forecast-residual", "rolling-mad", "rolling-zscore"],
+        default="",
+        help="Anomaly score method (default: forecast-residual if model is set, else rolling-zscore)",
+    )
+    detect_csv.add_argument(
+        "--threshold-method",
+        choices=["mad", "quantile", "zscore"],
+        default="",
+        help="Threshold method (default: mad for forecast-residual, else zscore)",
+    )
+    detect_csv.add_argument(
+        "--threshold-k",
+        type=float,
+        default=3.0,
+        help="Threshold multiplier for mad/zscore methods (default: 3.0)",
+    )
+    detect_csv.add_argument(
+        "--threshold-quantile",
+        type=float,
+        default=0.99,
+        help="Quantile threshold in (0,1) when --threshold-method=quantile (default: 0.99)",
+    )
+    detect_csv.add_argument(
+        "--window",
+        type=int,
+        default=12,
+        help="Rolling history window for rolling score methods (default: 12)",
+    )
+    detect_csv.add_argument(
+        "--min-history",
+        type=int,
+        default=3,
+        help="Minimum rolling history before scoring starts (default: 3)",
+    )
+    detect_csv.add_argument(
+        "--min-train-size",
+        type=int,
+        default=None,
+        help="Minimum training size for forecast-residual scoring",
+    )
+    detect_csv.add_argument(
+        "--step-size",
+        type=int,
+        default=1,
+        help="Walk-forward step size for forecast-residual scoring (default: 1)",
+    )
+    detect_csv.add_argument(
+        "--max-train-size",
+        type=int,
+        default=None,
+        help=_EXPANDING_WINDOW_HELP,
+    )
+    detect_csv.add_argument(
+        "--n-windows",
+        type=int,
+        default=None,
+        help=_MAX_WINDOWS_LIMIT_HELP,
+    )
+    detect_csv.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help=_MODEL_PARAM_EXAMPLE_HELP,
+    )
+    detect_csv.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    detect_csv.add_argument(
+        "--format",
+        choices=["csv", "json"],
+        default="csv",
+        help=_OUTPUT_ROWS_FORMAT_HELP,
+    )
+    _cli_runtime.register_runtime_logging_args(detect_csv)
+    detect_csv.set_defaults(_handler=_cmd_detect_csv)
 
     eval_p = sub.add_parser("eval", help="Evaluation utilities")
     eval_sub = eval_p.add_subparsers(dest="eval_command", required=True)
@@ -774,6 +1052,45 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_cv_csv(args: argparse.Namespace) -> int:
+    from .io import parse_id_cols
+    from .services.cli_workflows import cv_csv_workflow
+
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        id_cols = parse_id_cols(str(args.id_cols))
+        df = cv_csv_workflow(
+            model=str(args.model),
+            path=str(args.path),
+            time_col=str(args.time_col),
+            y_col=str(args.y_col),
+            horizon=int(args.horizon),
+            step_size=int(args.step_size),
+            min_train_size=int(args.min_train_size),
+            id_cols=id_cols,
+            parse_dates=bool(args.parse_dates),
+            model_params=model_params,
+            max_train_size=args.max_train_size,
+            n_windows=args.n_windows,
+        )
+        _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="cv csv",
+        payload=_log_payload(
+            model=str(args.model),
+            path=str(args.path),
+            horizon=int(args.horizon),
+            step_size=int(args.step_size),
+            min_train_size=int(args.min_train_size),
+            n_windows=args.n_windows,
+        ),
+        action=_run,
+    )
+
+
 def _cmd_forecast_csv(args: argparse.Namespace) -> int:
     from .io import parse_id_cols
     from .services.cli_workflows import forecast_csv_workflow
@@ -826,6 +1143,9 @@ def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
             interval_samples=int(getattr(args, "interval_samples", 1000)),
             interval_seed=getattr(args, "interval_seed", None),
             cutoff=getattr(args, "cutoff", None),
+            future_path=str(getattr(args, "future_path", "")).strip() or None,
+            time_col=str(getattr(args, "time_col", "")).strip() or None,
+            parse_dates=bool(getattr(args, "parse_dates", False)),
         )
         _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
         return 0
@@ -837,6 +1157,7 @@ def _cmd_forecast_artifact(args: argparse.Namespace) -> int:
             artifact=str(args.artifact),
             horizon=int(args.horizon),
             cutoff=getattr(args, "cutoff", None),
+            future_path=str(getattr(args, "future_path", "")).strip() or None,
         ),
         action=_run,
     )
@@ -1005,6 +1326,87 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
             mode=str(args.mode),
             horizon=int(args.horizon),
             step=int(args.step),
+        ),
+        action=_run,
+    )
+
+
+def _cmd_detect_run(args: argparse.Namespace) -> int:
+    from .detect import detect_anomalies
+
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        y_col = str(args.y_col).strip() or None
+        pred = detect_anomalies(
+            dataset=str(args.dataset),
+            y_col=y_col,
+            model=str(args.model).strip() or None,
+            model_params=model_params,
+            data_dir=str(args.data_dir),
+            score_method=str(args.score_method).strip() or None,
+            threshold_method=str(args.threshold_method).strip() or None,
+            threshold_k=float(args.threshold_k),
+            threshold_quantile=float(args.threshold_quantile),
+            window=int(args.window),
+            min_history=int(args.min_history),
+            min_train_size=args.min_train_size,
+            step_size=int(args.step_size),
+            max_train_size=args.max_train_size,
+            n_windows=args.n_windows,
+        )
+        _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="detect run",
+        payload=_log_payload(
+            dataset=str(args.dataset),
+            model=str(args.model).strip() or None,
+            score_method=str(args.score_method).strip() or None,
+            threshold_method=str(args.threshold_method).strip() or None,
+        ),
+        action=_run,
+    )
+
+
+def _cmd_detect_csv(args: argparse.Namespace) -> int:
+    from .io import parse_id_cols
+    from .services.cli_workflows import detect_csv_workflow
+
+    def _run() -> int:
+        model_params = _cli_shared._parse_model_params(list(args.model_param))
+        id_cols = parse_id_cols(str(args.id_cols))
+        pred = detect_csv_workflow(
+            path=str(args.path),
+            time_col=str(args.time_col),
+            y_col=str(args.y_col),
+            model=str(args.model).strip() or None,
+            id_cols=id_cols,
+            parse_dates=bool(args.parse_dates),
+            model_params=model_params,
+            score_method=str(args.score_method).strip() or None,
+            threshold_method=str(args.threshold_method).strip() or None,
+            threshold_k=float(args.threshold_k),
+            threshold_quantile=float(args.threshold_quantile),
+            window=int(args.window),
+            min_history=int(args.min_history),
+            min_train_size=args.min_train_size,
+            step_size=int(args.step_size),
+            max_train_size=args.max_train_size,
+            n_windows=args.n_windows,
+        )
+        _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    return _run_logged_command(
+        args,
+        command="detect csv",
+        payload=_log_payload(
+            path=str(args.path),
+            model=str(args.model).strip() or None,
+            score_method=str(args.score_method).strip() or None,
+            threshold_method=str(args.threshold_method).strip() or None,
         ),
         action=_run,
     )

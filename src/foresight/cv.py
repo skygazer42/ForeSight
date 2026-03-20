@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .cli_runtime import compact_log_payload, emit_cli_event
+from .contracts.capabilities import require_x_cols_if_needed as _contracts_require_x_cols_if_needed
 from .contracts.params import normalize_covariate_roles as _normalize_covariate_roles
 from .contracts.params import normalize_static_cols as _normalize_static_cols
 from .dataset_long_df_cache import get_or_build_dataset_long_df
@@ -14,6 +15,7 @@ from .long_df_cache import (
     cached_ds_array,
     cached_series_slices,
     cached_split_sequence,
+    cached_x_matrix,
     cached_y_array,
     cached_y_lookup,
     long_df_cache,
@@ -28,7 +30,8 @@ def _normalize_cv_x_cols(
     model_spec: Any,
     model_params: dict[str, Any] | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    if model_spec.interface != "global":
+    interface = str(getattr(model_spec, "interface", "")).strip().lower()
+    if interface == "multivariate":
         return (), (), ()
     return (
         *_normalize_covariate_roles(model_params),
@@ -41,6 +44,21 @@ def _normalize_cv_covariate_roles(
     model_params: dict[str, Any] | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     return _normalize_cv_x_cols(model_spec, model_params)
+
+
+def _require_x_cols_if_needed(
+    *,
+    model: str,
+    capabilities: dict[str, Any],
+    x_cols: tuple[str, ...],
+    context: str,
+) -> None:
+    _contracts_require_x_cols_if_needed(
+        model=str(model),
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context=str(context),
+    )
 
 
 def _trim_cv_splits(
@@ -83,6 +101,60 @@ def _local_cv_split_rows(
     yhat = np.asarray(forecaster(train, int(horizon)), dtype=float)
     if yhat.shape != (int(horizon),):
         raise ValueError(f"forecaster must return shape ({int(horizon)},), got {yhat.shape}")
+
+    y_true = y_arr[split.test_start : split.test_end]
+    ds_true = ds_arr[split.test_start : split.test_end]
+    if y_true.shape != (int(horizon),) or ds_true.shape != (int(horizon),):
+        raise RuntimeError("Internal error: unexpected slice length for horizon.")
+
+    cutoff = ds_arr[split.train_end - 1]
+    return [
+        {
+            "unique_id": uid,
+            "ds": ds_true[idx],
+            "cutoff": cutoff,
+            "step": int(idx + 1),
+            "y": float(y_true[idx]),
+            "yhat": float(yhat[idx]),
+            "model": str(model),
+        }
+        for idx in range(int(horizon))
+    ]
+
+
+def _local_cv_xreg_arrays(
+    df: pd.DataFrame,
+    *,
+    x_cols: tuple[str, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    y_all = cached_y_array(df)
+    x_all = cached_x_matrix(df, x_cols=x_cols)
+    if np.isnan(y_all).any():
+        raise ValueError("cross_validation_predictions_long_df does not support missing y values")
+    if np.isnan(x_all).any():
+        raise ValueError("cross_validation_predictions_long_df does not support missing x_cols values")
+    return y_all, x_all
+
+
+def _local_cv_xreg_split_rows(
+    *,
+    uid: str,
+    ds_arr: np.ndarray,
+    y_arr: np.ndarray,
+    x_arr: np.ndarray,
+    split: Any,
+    horizon: int,
+    model: str,
+    model_params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    yhat = _model_execution.call_local_xreg_forecaster(
+        model=str(model),
+        train_y=y_arr[split.train_start : split.train_end],
+        horizon=int(horizon),
+        train_exog=x_arr[split.train_start : split.train_end, :],
+        future_exog=x_arr[split.test_start : split.test_end, :],
+        model_params=model_params,
+    )
 
     y_true = y_arr[split.test_start : split.test_end]
     ds_true = ds_arr[split.test_start : split.test_end]
@@ -159,6 +231,82 @@ def _local_cv_prediction_rows(
                     forecaster=forecaster,
                     horizon=horizon,
                     model=model,
+                )
+            )
+            series_windows += 1
+        emit_cli_event(
+            "CV series",
+            event="cv_series_completed",
+            payload=compact_log_payload(
+                unique_id=str(uid),
+                windows=int(series_windows),
+            ),
+            progress=True,
+        )
+
+    return rows, n_series, n_series_skipped
+
+
+def _local_cv_xreg_prediction_rows(
+    df: pd.DataFrame,
+    *,
+    model: str,
+    model_params: dict[str, Any],
+    x_cols: tuple[str, ...],
+    horizon: int,
+    step_size: int,
+    min_train_size: int,
+    max_train_size: int | None,
+    n_windows: int | None,
+) -> tuple[list[dict[str, Any]], int, int]:
+    rows: list[dict[str, Any]] = []
+    n_series = 0
+    n_series_skipped = 0
+    local_xreg_params = dict(model_params)
+    local_xreg_params.pop("x_cols", None)
+    series_slices = cached_series_slices(df)
+    ds_all = cached_ds_array(df)
+    y_all, x_all = _local_cv_xreg_arrays(df, x_cols=x_cols)
+
+    for uid, start, stop in series_slices:
+        n_series += 1
+        ds_arr = ds_all[start:stop]
+        y_arr = y_all[start:stop]
+        x_arr = x_all[start:stop, :]
+
+        splits = _trim_cv_splits(
+            df,
+            namespace="cv_local_xreg",
+            n_obs=int(y_arr.size),
+            horizon=int(horizon),
+            step_size=int(step_size),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+            n_windows=n_windows,
+            keep="last",
+        )
+        if not splits:
+            n_series_skipped += 1
+            emit_cli_event(
+                "CV skip",
+                event="cv_series_skipped",
+                payload=compact_log_payload(unique_id=str(uid)),
+                progress=True,
+            )
+            continue
+
+        series_windows = 0
+        for split in splits:
+            rows.extend(
+                _local_cv_xreg_split_rows(
+                    uid=str(uid),
+                    ds_arr=ds_arr,
+                    y_arr=y_arr,
+                    x_arr=x_arr,
+                    split=split,
+                    horizon=horizon,
+                    model=model,
+                    model_params=local_xreg_params,
                 )
             )
             series_windows += 1
@@ -446,6 +594,40 @@ def cross_validation_predictions_long_df(
 
     model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
+    params = dict(model_params or {})
+    capabilities = dict(getattr(model_spec, "capabilities", {}))
+    historic_x_cols, x_cols, static_cols = _normalize_cv_covariate_roles(model_spec, params)
+
+    _require_x_cols_if_needed(
+        model=str(model),
+        capabilities=capabilities,
+        x_cols=x_cols,
+        context="cross_validation_predictions_long_df",
+    )
+    if interface == "local":
+        if historic_x_cols:
+            raise ValueError(
+                "historic_x_cols are not yet supported in cross_validation_predictions_long_df"
+            )
+        if static_cols:
+            if not bool(capabilities.get("supports_static_cols", False)):
+                raise ValueError(
+                    f"Model {model!r} does not support static_cols in cross_validation_predictions_long_df"
+                )
+            raise ValueError(
+                "static_cols are not yet supported for local models in "
+                "cross_validation_predictions_long_df"
+            )
+    elif interface == "global":
+        if static_cols and not bool(capabilities.get("supports_static_cols", False)):
+            raise ValueError(
+                f"Model {model!r} does not support static_cols in cross_validation_predictions_long_df"
+            )
+    elif interface == "multivariate":
+        raise ValueError(
+            f"Model {model!r} is multivariate and cannot be used with "
+            "`cross_validation_predictions_long_df()`."
+        )
 
     df = sorted_long_df(long_df, reset_index=False)
     emit_cli_event(
@@ -462,17 +644,34 @@ def cross_validation_predictions_long_df(
     )
 
     if interface == "local":
-        forecaster = _model_execution.make_local_forecaster_runner(str(model), model_params)
-        rows, n_series, n_series_skipped = _local_cv_prediction_rows(
-            df,
-            forecaster=forecaster,
-            horizon=int(horizon),
-            step_size=int(step_size),
-            min_train_size=int(min_train_size),
-            max_train_size=max_train_size,
-            n_windows=n_windows,
-            model=str(model),
-        )
+        if x_cols:
+            if not bool(capabilities.get("supports_x_cols", False)):
+                raise ValueError(
+                    f"Model {model!r} does not support x_cols in cross_validation_predictions_long_df"
+                )
+            rows, n_series, n_series_skipped = _local_cv_xreg_prediction_rows(
+                df,
+                model=str(model),
+                model_params=params,
+                x_cols=x_cols,
+                horizon=int(horizon),
+                step_size=int(step_size),
+                min_train_size=int(min_train_size),
+                max_train_size=max_train_size,
+                n_windows=n_windows,
+            )
+        else:
+            forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
+            rows, n_series, n_series_skipped = _local_cv_prediction_rows(
+                df,
+                forecaster=forecaster,
+                horizon=int(horizon),
+                step_size=int(step_size),
+                min_train_size=int(min_train_size),
+                max_train_size=max_train_size,
+                n_windows=n_windows,
+                model=str(model),
+            )
 
         if not rows:
             raise ValueError("No series had enough data for the requested CV parameters.")
@@ -496,7 +695,7 @@ def cross_validation_predictions_long_df(
         frames, series_skipped_any, ref_uid = _global_cv_prediction_frames(
             df,
             model=str(model),
-            model_params=model_params,
+            model_params=params,
             horizon=int(horizon),
             step_size=int(step_size),
             min_train_size=int(min_train_size),

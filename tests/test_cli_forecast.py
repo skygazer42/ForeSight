@@ -22,6 +22,27 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_forecast_artifact_help_mentions_local_and_global_interval_support() -> None:
+    proc = _run_cli("forecast", "artifact", "--help")
+
+    assert proc.returncode == 0
+    assert "Optional central interval levels for local artifacts" in proc.stdout
+    assert "interval-capable global artifacts" in proc.stdout
+
+
+def test_forecast_artifact_help_mentions_future_override_requirements() -> None:
+    proc = _run_cli("forecast", "artifact", "--help")
+
+    assert proc.returncode == 0
+    assert "local overrides replace saved" in proc.stdout
+    assert "future context, global overrides may include" in proc.stdout
+    assert "global overrides may include" in proc.stdout
+    assert "or omit ids for" in proc.stdout
+    assert "single-series artifacts" in proc.stdout
+    assert "used with --future-path (required" in proc.stdout
+    assert "when overriding future context)" in proc.stdout
+
+
 def test_forecast_csv_outputs_future_predictions(tmp_path: Path) -> None:
     csv_path = tmp_path / "toy.csv"
     csv_path.write_text(
@@ -371,8 +392,11 @@ def test_forecast_csv_supports_local_sarimax_with_future_covariates_and_interval
 @pytest.mark.skipif(
     importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
 )
-def test_forecast_csv_rejects_local_artifact_save_with_future_covariates(tmp_path: Path) -> None:
+def test_forecast_cli_can_save_and_reuse_local_artifact_with_future_covariates(
+    tmp_path: Path,
+) -> None:
     csv_path = tmp_path / "sarimax_exog.csv"
+    artifact_path = tmp_path / "sarimax.pkl"
     rows = ["ds,y,promo"]
     promo = ([0, 1, 0, 1, 0] * 6)[:30]
     for i, p in enumerate(promo, start=1):
@@ -387,7 +411,7 @@ def test_forecast_csv_rejects_local_artifact_save_with_future_covariates(tmp_pat
     )
     csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
-    proc = _run_cli(
+    fit_proc = _run_cli(
         "forecast",
         "csv",
         "--model",
@@ -410,14 +434,175 @@ def test_forecast_csv_rejects_local_artifact_save_with_future_covariates(tmp_pat
         "--model-param",
         "x_cols=promo",
         "--save-artifact",
-        str(tmp_path / "sarimax.pkl"),
+        str(artifact_path),
         "--format",
         "json",
     )
-    assert proc.returncode == 2
-    assert (
-        "Saving local forecast artifacts is not yet supported when x_cols are used" in proc.stderr
+    assert fit_proc.returncode == 0
+    assert artifact_path.exists()
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--format",
+        "json",
     )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(fit_proc.stdout)[:2]
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_artifact_rejects_horizon_beyond_saved_local_xreg_context(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "sarimax_exog.csv"
+    artifact_path = tmp_path / "sarimax.pkl"
+    rows = ["ds,y,promo"]
+    promo = ([0, 1, 0, 1, 0] * 6)[:30]
+    for i, p in enumerate(promo, start=1):
+        y = 10.0 + 5.0 * float(p) + 0.1 * float(i - 1)
+        rows.append(f"2020-01-{i:02d},{y},{p}")
+    rows.extend(
+        [
+            "2020-01-31,,1",
+            "2020-02-01,,0",
+            "2020-02-02,,1",
+        ]
+    )
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "sarimax",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "3",
+        "--model-param",
+        "order=0,0,0",
+        "--model-param",
+        "seasonal_order=0,0,0,0",
+        "--model-param",
+        "trend=c",
+        "--model-param",
+        "x_cols=promo",
+        "--save-artifact",
+        str(artifact_path),
+        "--format",
+        "json",
+    )
+    assert fit_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "4",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 2
+    assert "Requested horizon=4 exceeds artifact max_horizon=3" in reuse_proc.stderr
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
+def test_forecast_artifact_local_xreg_can_override_saved_future_context(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "sarimax_exog.csv"
+    artifact_path = tmp_path / "sarimax.pkl"
+    override_future_path = tmp_path / "sarimax_future_override.csv"
+    rows = ["ds,y,promo"]
+    promo = ([0, 1, 0, 1, 0] * 6)[:30]
+    for i, p in enumerate(promo, start=1):
+        y = 10.0 + 5.0 * float(p) + 0.1 * float(i - 1)
+        rows.append(f"2020-01-{i:02d},{y},{p}")
+    rows.extend(
+        [
+            "2020-01-31,,1",
+            "2020-02-01,,0",
+            "2020-02-02,,1",
+        ]
+    )
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    override_future_path.write_text(
+        "ds,promo\n2020-01-31,0\n2020-02-01,1\n2020-02-02,0\n2020-02-03,1\n",
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "sarimax",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "3",
+        "--model-param",
+        "order=0,0,0",
+        "--model-param",
+        "seasonal_order=0,0,0,0",
+        "--model-param",
+        "trend=c",
+        "--model-param",
+        "x_cols=promo",
+        "--save-artifact",
+        str(artifact_path),
+        "--format",
+        "json",
+    )
+    assert fit_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--future-path",
+        str(override_future_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--horizon",
+        "4",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+
+    payload = json.loads(reuse_proc.stdout)
+    assert [row["ds"][:10] for row in payload] == [
+        "2020-01-31",
+        "2020-02-01",
+        "2020-02-02",
+        "2020-02-03",
+    ]
+    yhat = [float(row["yhat"]) for row in payload]
+    assert yhat[1] > yhat[0] + 4.0
+    assert yhat[3] > yhat[2] + 4.0
 
 
 def test_forecast_cli_can_save_and_reuse_local_artifact(tmp_path: Path) -> None:
@@ -873,6 +1058,714 @@ def test_forecast_csv_saved_global_artifact_reuses_observed_cutoff_with_future_c
 @pytest.mark.skipif(
     importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
 )
+def test_forecast_csv_can_save_global_artifact_from_separate_future_csv(
+    tmp_path: Path,
+) -> None:
+    history_path = tmp_path / "panel_history.csv"
+    future_path = tmp_path / "panel_future.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    history_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    future_path.write_text(
+        "\n".join(
+            [
+                "store,ds,promo",
+                "s0,2020-01-19,1",
+                "s0,2020-01-20,0",
+                "s1,2020-01-19,1",
+                "s1,2020-01-20,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+    assert artifact_path.exists()
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(fit_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_global_xreg_can_override_saved_future_context(
+    tmp_path: Path,
+) -> None:
+    full_path = tmp_path / "panel_full.csv"
+    history_path = tmp_path / "panel_history.csv"
+    csv_future_path = tmp_path / "panel_future_override.csv"
+    artifact_future_path = tmp_path / "panel_future_override_artifact.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    full_rows = ["store,ds,y,promo"]
+    history_rows = ["store,ds,y,promo"]
+    csv_future_rows = ["store,ds,promo"]
+    artifact_future_rows = ["unique_id,ds,promo"]
+
+    for store_offset, store in enumerate(("s0", "s1")):
+        for day in range(1, 19):
+            promo = int(day % 2 == 0)
+            y = float(store_offset) + 2.0 * float(day - 1) + 20.0 * float(promo)
+            row = f"{store},2020-01-{day:02d},{y:.1f},{promo}"
+            full_rows.append(row)
+            history_rows.append(row)
+        for day in (19, 20):
+            full_rows.append(f"{store},2020-01-{day:02d},,0")
+            csv_future_rows.append(f"{store},2020-01-{day:02d},1")
+            artifact_future_rows.append(f"store={store},2020-01-{day:02d},1")
+
+    full_path.write_text("\n".join([*full_rows, ""]) + "\n", encoding="utf-8")
+    history_path.write_text("\n".join([*history_rows, ""]) + "\n", encoding="utf-8")
+    csv_future_path.write_text("\n".join([*csv_future_rows, ""]) + "\n", encoding="utf-8")
+    artifact_future_path.write_text(
+        "\n".join([*artifact_future_rows, ""]) + "\n",
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(full_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+    assert artifact_path.exists()
+
+    expected_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(csv_future_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+    )
+    assert expected_proc.returncode == 0
+
+    expected_rows = json.loads(expected_proc.stdout)
+    baseline_rows = json.loads(fit_proc.stdout)
+    assert expected_rows != baseline_rows
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--future-path",
+        str(artifact_future_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == expected_rows
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_global_xreg_accepts_saved_raw_id_columns_in_future_override(
+    tmp_path: Path,
+) -> None:
+    full_path = tmp_path / "panel_full.csv"
+    history_path = tmp_path / "panel_history.csv"
+    future_path = tmp_path / "panel_future_override.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    full_rows = ["store,ds,y,promo"]
+    history_rows = ["store,ds,y,promo"]
+    future_rows = ["store,ds,promo"]
+
+    for store_offset, store in enumerate(("s0", "s1")):
+        for day in range(1, 19):
+            promo = int(day % 2 == 0)
+            y = float(store_offset) + 2.0 * float(day - 1) + 20.0 * float(promo)
+            row = f"{store},2020-01-{day:02d},{y:.1f},{promo}"
+            full_rows.append(row)
+            history_rows.append(row)
+        for day in (19, 20):
+            full_rows.append(f"{store},2020-01-{day:02d},,0")
+            future_rows.append(f"{store},2020-01-{day:02d},1")
+
+    full_path.write_text("\n".join([*full_rows, ""]) + "\n", encoding="utf-8")
+    history_path.write_text("\n".join([*history_rows, ""]) + "\n", encoding="utf-8")
+    future_path.write_text("\n".join([*future_rows, ""]) + "\n", encoding="utf-8")
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(full_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    expected_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--model-param",
+        "id_feature=ordinal",
+        "--format",
+        "json",
+    )
+    assert expected_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(expected_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_single_series_global_xreg_accepts_future_override_without_ids(
+    tmp_path: Path,
+) -> None:
+    full_path = tmp_path / "single_full.csv"
+    history_path = tmp_path / "single_history.csv"
+    future_path = tmp_path / "single_future_override.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    full_rows = ["ds,y,promo"]
+    history_rows = ["ds,y,promo"]
+    future_rows = ["ds,promo"]
+
+    for day in range(1, 19):
+        promo = int(day % 2 == 0)
+        y = 2.0 * float(day - 1) + 20.0 * float(promo)
+        row = f"2020-01-{day:02d},{y:.1f},{promo}"
+        full_rows.append(row)
+        history_rows.append(row)
+    for day in (19, 20):
+        full_rows.append(f"2020-01-{day:02d},,0")
+        future_rows.append(f"2020-01-{day:02d},1")
+
+    full_path.write_text("\n".join([*full_rows, ""]) + "\n", encoding="utf-8")
+    history_path.write_text("\n".join([*history_rows, ""]) + "\n", encoding="utf-8")
+    future_path.write_text("\n".join([*future_rows, ""]) + "\n", encoding="utf-8")
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(full_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    expected_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+    )
+    assert expected_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--future-path",
+        str(future_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(expected_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_single_series_legacy_global_xreg_accepts_future_override_without_ids(
+    tmp_path: Path,
+) -> None:
+    full_path = tmp_path / "single_panel_full.csv"
+    history_path = tmp_path / "single_panel_history.csv"
+    future_with_id_path = tmp_path / "single_panel_future_with_id.csv"
+    future_without_id_path = tmp_path / "single_panel_future_without_id.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    full_rows = ["store,ds,y,promo"]
+    history_rows = ["store,ds,y,promo"]
+    future_with_id_rows = ["store,ds,promo"]
+    future_without_id_rows = ["ds,promo"]
+
+    for day in range(1, 19):
+        promo = int(day % 2 == 0)
+        y = 2.0 * float(day - 1) + 20.0 * float(promo)
+        row = f"s0,2020-01-{day:02d},{y:.1f},{promo}"
+        full_rows.append(row)
+        history_rows.append(row)
+    for day in (19, 20):
+        full_rows.append(f"s0,2020-01-{day:02d},,0")
+        future_with_id_rows.append(f"s0,2020-01-{day:02d},1")
+        future_without_id_rows.append(f"2020-01-{day:02d},1")
+
+    full_path.write_text("\n".join([*full_rows, ""]) + "\n", encoding="utf-8")
+    history_path.write_text("\n".join([*history_rows, ""]) + "\n", encoding="utf-8")
+    future_with_id_path.write_text("\n".join([*future_with_id_rows, ""]) + "\n", encoding="utf-8")
+    future_without_id_path.write_text(
+        "\n".join([*future_without_id_rows, ""]) + "\n",
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(full_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    with artifact_path.open("rb") as handle:
+        payload = pickle.load(handle)
+    payload["extra"] = dict(payload.get("extra", {}))
+    payload["extra"].pop("id_cols", None)
+    with artifact_path.open("wb") as handle:
+        pickle.dump(payload, handle)
+
+    expected_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_with_id_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+    )
+    assert expected_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--future-path",
+        str(future_without_id_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(expected_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
+def test_forecast_artifact_single_series_global_xreg_with_saved_id_cols_accepts_future_override_without_ids(
+    tmp_path: Path,
+) -> None:
+    full_path = tmp_path / "single_panel_full.csv"
+    history_path = tmp_path / "single_panel_history.csv"
+    future_with_id_path = tmp_path / "single_panel_future_with_id.csv"
+    future_without_id_path = tmp_path / "single_panel_future_without_id.csv"
+    artifact_path = tmp_path / "ridge-global.pkl"
+
+    full_rows = ["store,ds,y,promo"]
+    history_rows = ["store,ds,y,promo"]
+    future_with_id_rows = ["store,ds,promo"]
+    future_without_id_rows = ["ds,promo"]
+
+    for day in range(1, 19):
+        promo = int(day % 2 == 0)
+        y = 2.0 * float(day - 1) + 20.0 * float(promo)
+        row = f"s0,2020-01-{day:02d},{y:.1f},{promo}"
+        full_rows.append(row)
+        history_rows.append(row)
+    for day in (19, 20):
+        full_rows.append(f"s0,2020-01-{day:02d},,0")
+        future_with_id_rows.append(f"s0,2020-01-{day:02d},1")
+        future_without_id_rows.append(f"2020-01-{day:02d},1")
+
+    full_path.write_text("\n".join([*full_rows, ""]) + "\n", encoding="utf-8")
+    history_path.write_text("\n".join([*history_rows, ""]) + "\n", encoding="utf-8")
+    future_with_id_path.write_text("\n".join([*future_with_id_rows, ""]) + "\n", encoding="utf-8")
+    future_without_id_path.write_text(
+        "\n".join([*future_without_id_rows, ""]) + "\n",
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(full_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    expected_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "ridge-step-lag-global",
+        "--path",
+        str(history_path),
+        "--future-path",
+        str(future_with_id_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "alpha=0.5",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "add_time_features=true",
+        "--format",
+        "json",
+    )
+    assert expected_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--future-path",
+        str(future_without_id_path),
+        "--time-col",
+        "ds",
+        "--parse-dates",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+    assert json.loads(reuse_proc.stdout) == json.loads(expected_proc.stdout)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_forecast_artifact_rejects_intervals_for_global_artifact(tmp_path: Path) -> None:
     csv_path = tmp_path / "panel_future.csv"
     artifact_path = tmp_path / "ridge-global.pkl"
@@ -977,6 +1870,125 @@ def test_forecast_artifact_rejects_intervals_for_global_artifact(tmp_path: Path)
         "Forecast intervals are not yet supported for artifact model 'ridge-step-lag-global'"
         in (reuse_proc.stderr)
     )
+
+
+@pytest.mark.skipif(importlib.util.find_spec("xgboost") is None, reason="xgboost not installed")
+def test_forecast_artifact_emits_interval_columns_for_quantile_global_artifact(
+    tmp_path: Path,
+) -> None:
+    csv_path = tmp_path / "panel_future.csv"
+    artifact_path = tmp_path / "xgb-global.pkl"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "store,ds,y,promo",
+                "s0,2020-01-01,0.0,0",
+                "s0,2020-01-02,0.5,0",
+                "s0,2020-01-03,1.0,0",
+                "s0,2020-01-04,1.5,0",
+                "s0,2020-01-05,2.0,0",
+                "s0,2020-01-06,2.5,0",
+                "s0,2020-01-07,3.0,1",
+                "s0,2020-01-08,3.5,0",
+                "s0,2020-01-09,4.0,0",
+                "s0,2020-01-10,4.5,0",
+                "s0,2020-01-11,5.0,0",
+                "s0,2020-01-12,5.5,0",
+                "s0,2020-01-13,6.0,0",
+                "s0,2020-01-14,6.5,1",
+                "s0,2020-01-15,7.0,0",
+                "s0,2020-01-16,7.5,0",
+                "s0,2020-01-17,8.0,0",
+                "s0,2020-01-18,8.5,0",
+                "s0,2020-01-19,,1",
+                "s0,2020-01-20,,0",
+                "s1,2020-01-01,1.0,0",
+                "s1,2020-01-02,1.5,0",
+                "s1,2020-01-03,2.0,0",
+                "s1,2020-01-04,2.5,0",
+                "s1,2020-01-05,3.0,0",
+                "s1,2020-01-06,3.5,0",
+                "s1,2020-01-07,4.0,1",
+                "s1,2020-01-08,4.5,0",
+                "s1,2020-01-09,5.0,0",
+                "s1,2020-01-10,5.5,0",
+                "s1,2020-01-11,6.0,0",
+                "s1,2020-01-12,6.5,0",
+                "s1,2020-01-13,7.0,0",
+                "s1,2020-01-14,7.5,1",
+                "s1,2020-01-15,8.0,0",
+                "s1,2020-01-16,8.5,0",
+                "s1,2020-01-17,9.0,0",
+                "s1,2020-01-18,9.5,0",
+                "s1,2020-01-19,,1",
+                "s1,2020-01-20,,0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    fit_proc = _run_cli(
+        "forecast",
+        "csv",
+        "--model",
+        "xgb-step-lag-global",
+        "--path",
+        str(csv_path),
+        "--time-col",
+        "ds",
+        "--y-col",
+        "y",
+        "--id-cols",
+        "store",
+        "--parse-dates",
+        "--horizon",
+        "2",
+        "--model-param",
+        "lags=5",
+        "--model-param",
+        "n_estimators=25",
+        "--model-param",
+        "learning_rate=0.1",
+        "--model-param",
+        "max_depth=3",
+        "--model-param",
+        "subsample=0.9",
+        "--model-param",
+        "colsample_bytree=0.9",
+        "--model-param",
+        "x_cols=promo",
+        "--model-param",
+        "quantiles=0.1,0.5,0.9",
+        "--format",
+        "json",
+        "--save-artifact",
+        str(artifact_path),
+    )
+    assert fit_proc.returncode == 0
+
+    reuse_proc = _run_cli(
+        "forecast",
+        "artifact",
+        "--artifact",
+        str(artifact_path),
+        "--horizon",
+        "2",
+        "--interval-levels",
+        "80",
+        "--format",
+        "json",
+    )
+    assert reuse_proc.returncode == 0
+
+    payload = json.loads(reuse_proc.stdout)
+    assert payload
+    assert {"yhat_p10", "yhat_p50", "yhat_p90", "yhat_lo_80", "yhat_hi_80"}.issubset(
+        set(payload[0])
+    )
+    assert all(abs(float(row["yhat"]) - float(row["yhat_p50"])) < 1e-9 for row in payload)
+    assert all(abs(float(row["yhat_lo_80"]) - float(row["yhat_p10"])) < 1e-9 for row in payload)
+    assert all(abs(float(row["yhat_hi_80"]) - float(row["yhat_p90"])) < 1e-9 for row in payload)
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")

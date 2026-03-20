@@ -47,6 +47,38 @@ foresight artifact diff \
     --left-artifact /tmp/naive-last.pkl \
     --right-artifact /tmp/naive-last-v2.pkl \
     --path-prefix tracking_summary --format csv
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix future_override_schema --format markdown
+```
+
+## Cross-validation CLI
+
+Use the CV workflow when you need row-level rolling-origin predictions from a
+registered dataset or an arbitrary CSV file:
+
+```bash
+foresight cv run --model theta --dataset catfish --y-col Total \
+    --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30
+
+foresight cv csv --model naive-last --path ./my.csv \
+    --time-col ds --y-col y --parse-dates \
+    --horizon 3 --step-size 1 --min-train-size 24
+```
+
+## Anomaly Detection CLI
+
+Use the anomaly workflow when you need row-level residual or rolling-score flags:
+
+```bash
+foresight detect run --dataset catfish --y-col Total \
+    --model naive-last --score-method forecast-residual \
+    --min-train-size 24 --step-size 1
+
+foresight detect csv --path ./anomaly.csv \
+    --time-col ds --y-col y --parse-dates \
+    --score-method rolling-zscore --threshold-method zscore
 ```
 
 ## CLI runtime logging

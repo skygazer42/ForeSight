@@ -206,6 +206,16 @@ foresight leaderboard models --dataset catfish --y-col Total \
 # Forecast from any CSV
 foresight forecast csv --model naive-last --path ./data.csv \
     --time-col ds --y-col y --parse-dates --horizon 7
+
+# Cross-validation from any CSV
+foresight cv csv --model naive-last --path ./data.csv \
+    --time-col ds --y-col y --parse-dates \
+    --horizon 3 --step-size 1 --min-train-size 24
+
+# Detect anomalies from any CSV
+foresight detect csv --path ./anomaly.csv \
+    --time-col ds --y-col y --parse-dates \
+    --score-method rolling-zscore --threshold-method zscore
 ```
 
 Long-running CLI commands emit enhanced runtime logs to `stderr` by default, so
@@ -218,6 +228,7 @@ Long-running CLI commands emit enhanced runtime logs to `stderr` by default, so
 import pandas as pd
 from foresight import (
     bootstrap_intervals,
+    detect_anomalies,
     eval_hierarchical_forecast_df,
     forecast_model, tune_model, save_forecaster, load_forecaster,
     make_forecaster_object,
@@ -240,6 +251,16 @@ obj = make_forecaster_object("theta", alpha=0.3)
 obj.fit([1, 2, 3, 4, 5])
 save_forecaster(obj, "/tmp/theta.pkl")
 loaded = load_forecaster("/tmp/theta.pkl")
+
+# Detect anomalies from a dataset-backed series
+anomalies = detect_anomalies(
+    dataset="catfish",
+    y_col="Total",
+    model="naive-last",
+    score_method="forecast-residual",
+    min_train_size=24,
+    step_size=1,
+)
 
 # Grid search tuning
 result = tune_model(
@@ -292,6 +313,32 @@ foresight forecast csv --model naive-last --path ./my.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \
     --save-artifact /tmp/naive-last.pkl
 foresight forecast artifact --artifact /tmp/naive-last.pkl --horizon 3
+
+# Save and reuse a local x_cols artifact with the saved future covariates
+foresight forecast csv --model sarimax --path ./my_exog.csv \
+    --time-col ds --y-col y --parse-dates --horizon 3 \
+    --model-param order=0,0,0 --model-param seasonal_order=0,0,0,0 \
+    --model-param trend=c --model-param x_cols=promo \
+    --save-artifact /tmp/sarimax.pkl
+foresight forecast artifact --artifact /tmp/sarimax.pkl --horizon 2
+
+# Override the saved future covariates with a new future CSV
+foresight forecast artifact --artifact /tmp/sarimax.pkl \
+    --future-path ./my_exog_future.csv --time-col ds --parse-dates \
+    --horizon 4
+
+# Reuse a quantile-capable global artifact and derive interval columns
+foresight forecast artifact --artifact /tmp/xgb-global.pkl \
+    --horizon 2 --interval-levels 80
+
+# Override a saved global artifact with new future covariates
+# The override CSV can contain canonical unique_id values or the raw id columns
+# that were used when the artifact was saved, plus ds and required x_cols.
+# Single-series global artifacts can also omit id columns entirely.
+foresight forecast artifact --artifact /tmp/ridge-global.pkl \
+    --future-path ./my_global_future.csv --time-col ds --parse-dates \
+    --horizon 2
+
 foresight artifact info --artifact /tmp/naive-last.pkl
 foresight artifact info --artifact /tmp/naive-last.pkl --format markdown
 foresight artifact validate --artifact /tmp/naive-last.pkl
@@ -303,11 +350,23 @@ foresight artifact diff \
     --left-artifact /tmp/naive-last.pkl \
     --right-artifact /tmp/naive-last-v2.pkl \
     --path-prefix tracking_summary --format csv
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix future_override_schema --format markdown
 
 # SARIMAX with exogenous features
 foresight forecast csv --model sarimax --path ./my_exog.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \
     --model-param order=0,0,0 --model-param x_cols=promo
+
+# Anomaly detection with exogenous covariates
+foresight detect csv --model sarimax --path ./my_exog.csv \
+    --time-col ds --y-col y --parse-dates \
+    --score-method forecast-residual --threshold-method mad \
+    --min-train-size 24 --model-param order=0,0,0 \
+    --model-param seasonal_order=0,0,0,0 \
+    --model-param trend=c --model-param x_cols=promo
 
 # Multi-dataset sweep (parallel + resumable)
 foresight leaderboard sweep \
@@ -322,6 +381,15 @@ foresight eval run --model theta --dataset catfish --y-col Total \
 # Cross-validation predictions table
 foresight cv run --model theta --dataset catfish --y-col Total \
     --horizon 3 --step-size 3 --min-train-size 12 --n-windows 30
+
+# Cross-validation on arbitrary CSV data
+foresight cv csv --model sarimax --path ./my_exog.csv \
+    --time-col ds --y-col y --parse-dates \
+    --horizon 3 --step-size 3 --min-train-size 24 \
+    --model-param order=0,0,0 \
+    --model-param seasonal_order=0,0,0,0 \
+    --model-param trend=c --model-param x_cols=promo \
+    --format json > /tmp/cv.json
 ```
 
 </details>

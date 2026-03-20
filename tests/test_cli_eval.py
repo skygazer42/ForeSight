@@ -77,13 +77,14 @@ def test_eval_seasonal_naive_outputs_json(tmp_path: Path):
     assert out.exists()
 
 
-def test_docs_install_mentions_forecast_and_tuning_smoke_commands():
+def test_docs_install_mentions_forecast_tuning_and_detect_smoke_commands():
     repo_root = Path(__file__).resolve().parents[1]
     doc = (repo_root / "docs" / "INSTALL.md").read_text(encoding="utf-8")
 
     assert "python -m foresight forecast --help" in doc
     assert "python -m foresight tuning --help" in doc
     assert "python -m foresight forecast csv --help" in doc
+    assert "python -m foresight detect --help" in doc
     assert "    make_forecaster," in doc
     assert "    eval_model," in doc
 
@@ -123,7 +124,9 @@ def test_examples_use_root_package_for_high_level_workflow_helpers():
     assert "from foresight import eval_model" in leaderboard
     assert "from foresight.intervals import bootstrap_intervals" not in readme
     assert "    bootstrap_intervals," in readme
+    assert "    detect_anomalies," in readme
     assert "    eval_hierarchical_forecast_df," in readme
+    assert "foresight detect csv --path ./anomaly.csv" in readme
     assert "hier_payload = eval_hierarchical_forecast_df(" in readme
 
 
