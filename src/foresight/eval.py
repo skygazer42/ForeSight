@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from .backtesting import walk_forward
-from .datasets.loaders import load_dataset
+from .dataset_long_df_cache import get_or_build_dataset_frame
 from .metrics import mae, mape, rmse, smape
 from .models.naive import naive_last, seasonal_naive
 
@@ -16,6 +16,25 @@ def _to_1d_float_series(values: Any) -> np.ndarray:
     if y.ndim != 1:
         raise ValueError(f"Expected 1D series, got shape {y.shape}")
     return y
+
+
+def _load_dataset_target_series(
+    *,
+    dataset: str,
+    y_col: str,
+    data_dir: str | Path | None,
+) -> np.ndarray:
+    frame_bundle = get_or_build_dataset_frame(
+        dataset=str(dataset),
+        data_dir=data_dir,
+    )
+    df = frame_bundle["df"]
+    y_col_s = str(y_col)
+    if y_col_s not in df.columns:
+        raise KeyError(
+            f"Column {y_col_s!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}"
+        )
+    return _to_1d_float_series(df[y_col_s].dropna().to_numpy())
 
 
 def eval_naive_last(
@@ -28,13 +47,11 @@ def eval_naive_last(
     max_windows: int | None = None,
     data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    df = load_dataset(dataset, data_dir=data_dir)
-    if y_col not in df.columns:
-        raise KeyError(
-            f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}"
-        )
-
-    y = _to_1d_float_series(df[y_col].dropna().to_numpy())
+    y = _load_dataset_target_series(
+        dataset=str(dataset),
+        y_col=str(y_col),
+        data_dir=data_dir,
+    )
     res = walk_forward(
         y,
         horizon=horizon,
@@ -84,13 +101,11 @@ def eval_seasonal_naive(
     max_windows: int | None = None,
     data_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    df = load_dataset(dataset, data_dir=data_dir)
-    if y_col not in df.columns:
-        raise KeyError(
-            f"Column {y_col!r} not found in dataset {dataset!r}. Columns: {list(df.columns)}"
-        )
-
-    y = _to_1d_float_series(df[y_col].dropna().to_numpy())
+    y = _load_dataset_target_series(
+        dataset=str(dataset),
+        y_col=str(y_col),
+        data_dir=data_dir,
+    )
 
     def _forecaster(train: Any, h: int) -> np.ndarray:
         return seasonal_naive(train, h, season_length=season_length)

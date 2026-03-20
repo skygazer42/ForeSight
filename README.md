@@ -754,6 +754,15 @@ Model discovery surfaces machine-readable capability flags:
 
 | Flag | Meaning |
 |------|---------|
+| `supports_panel` | Supports panel / multi-series workflows through the high-level long-format APIs |
+| `supports_univariate` | Supports univariate forecasting targets |
+| `supports_multivariate` | Supports multivariate / wide-matrix forecasting targets |
+| `supports_probabilistic` | Supports probabilistic forecasting through intervals and/or quantiles |
+| `supports_conformal_eval` | Can participate in conformal backtest evaluation flows |
+| `supports_future_covariates` | Accepts known future covariates in supported workflows |
+| `supports_historic_covariates` | Accepts historical covariate values in supported workflows |
+| `supports_static_covariates` | Accepts series-level static covariates |
+| `supports_refit_free_cv` | Can reuse training state across CV cutoffs without refitting from scratch |
 | `supports_x_cols` | Accepts future covariates / exogenous regressors |
 | `supports_static_cols` | Accepts series-level static covariates from `long_df` |
 | `supports_quantiles` | Emits quantile forecast columns directly |

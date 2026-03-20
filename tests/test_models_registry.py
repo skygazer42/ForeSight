@@ -1678,6 +1678,15 @@ def test_model_spec_exposes_normalized_capabilities():
     spec = get_model_spec("naive-last")
 
     assert isinstance(spec.capabilities, dict)
+    assert spec.capabilities["supports_panel"] is True
+    assert spec.capabilities["supports_univariate"] is True
+    assert spec.capabilities["supports_multivariate"] is False
+    assert spec.capabilities["supports_probabilistic"] is True
+    assert spec.capabilities["supports_conformal_eval"] is True
+    assert spec.capabilities["supports_future_covariates"] is False
+    assert spec.capabilities["supports_historic_covariates"] is False
+    assert spec.capabilities["supports_static_covariates"] is False
+    assert spec.capabilities["supports_refit_free_cv"] is False
     assert spec.capabilities["supports_x_cols"] is False
     assert spec.capabilities["supports_static_cols"] is False
     assert spec.capabilities["supports_quantiles"] is False
@@ -1714,6 +1723,15 @@ def test_model_spec_capabilities_reflect_model_family_support():
     assert auto_arima.capabilities["supports_interval_forecast_with_x_cols"] is True
 
     global_xgb = get_model_spec("xgb-step-lag-global")
+    assert global_xgb.capabilities["supports_panel"] is True
+    assert global_xgb.capabilities["supports_univariate"] is True
+    assert global_xgb.capabilities["supports_multivariate"] is False
+    assert global_xgb.capabilities["supports_probabilistic"] is True
+    assert global_xgb.capabilities["supports_conformal_eval"] is True
+    assert global_xgb.capabilities["supports_future_covariates"] is True
+    assert global_xgb.capabilities["supports_historic_covariates"] is True
+    assert global_xgb.capabilities["supports_static_covariates"] is False
+    assert global_xgb.capabilities["supports_refit_free_cv"] is False
     assert global_xgb.capabilities["supports_x_cols"] is True
     assert global_xgb.capabilities["supports_static_cols"] is False
     assert global_xgb.capabilities["supports_quantiles"] is True
@@ -1723,6 +1741,14 @@ def test_model_spec_capabilities_reflect_model_family_support():
 
     var = get_model_spec("var")
     assert var.interface == "multivariate"
+    assert var.capabilities["supports_panel"] is False
+    assert var.capabilities["supports_univariate"] is False
+    assert var.capabilities["supports_multivariate"] is True
+    assert var.capabilities["supports_probabilistic"] is False
+    assert var.capabilities["supports_conformal_eval"] is False
+    assert var.capabilities["supports_future_covariates"] is False
+    assert var.capabilities["supports_historic_covariates"] is False
+    assert var.capabilities["supports_static_covariates"] is False
     assert var.capabilities["supports_artifact_save"] is False
 
     timexer_local = get_model_spec("torch-timexer-direct")
@@ -1860,10 +1886,19 @@ def test_readme_documents_all_model_capability_flags() -> None:
     assert documented == [
         "requires_future_covariates",
         "supports_artifact_save",
+        "supports_conformal_eval",
+        "supports_future_covariates",
+        "supports_historic_covariates",
         "supports_interval_forecast",
         "supports_interval_forecast_with_x_cols",
+        "supports_multivariate",
+        "supports_panel",
+        "supports_probabilistic",
         "supports_quantiles",
+        "supports_refit_free_cv",
         "supports_static_cols",
+        "supports_static_covariates",
+        "supports_univariate",
         "supports_x_cols",
     ]
     for key in documented:

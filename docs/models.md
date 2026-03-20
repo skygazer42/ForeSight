@@ -10,10 +10,19 @@ ForeSight currently registers **1265** models: **800** local, **449** global, an
 | --- | --- |
 | `requires_future_covariates` | Model expects known future covariates rather than treating them as optional. |
 | `supports_artifact_save` | Model can be persisted and restored through the artifact save/load workflow. |
+| `supports_conformal_eval` | Model can participate in conformal backtest evaluation flows. |
+| `supports_future_covariates` | Model accepts known future covariates in supported workflows. |
+| `supports_historic_covariates` | Model accepts historical covariate values in supported workflows. |
 | `supports_interval_forecast` | Model supports forecast intervals in at least one supported execution path. |
 | `supports_interval_forecast_with_x_cols` | Model supports forecast intervals when `x_cols` exogenous features are supplied. |
+| `supports_multivariate` | Model supports multivariate / wide-matrix forecasting targets. |
+| `supports_panel` | Model supports panel / multi-series workflows through the high-level long-format APIs. |
+| `supports_probabilistic` | Model supports probabilistic forecasting through intervals and/or quantiles. |
 | `supports_quantiles` | Model can emit quantile forecast columns directly. |
+| `supports_refit_free_cv` | Model can reuse training state across CV cutoffs without refitting from scratch. |
 | `supports_static_cols` | Model accepts static per-series covariates / attributes through `static_cols`. |
+| `supports_static_covariates` | Model accepts series-level static covariates. |
+| `supports_univariate` | Model supports univariate forecasting targets. |
 | `supports_x_cols` | Model accepts future covariates / exogenous regressors through `x_cols`. |
 
 ## Query the same metadata from code

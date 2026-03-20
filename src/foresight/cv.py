@@ -7,37 +7,66 @@ import numpy as np
 import pandas as pd
 
 from .cli_runtime import compact_log_payload, emit_cli_event
-from .data.format import to_long
-from .datasets.loaders import load_dataset
-from .datasets.registry import get_dataset_spec
-from .splits import rolling_origin_splits
+from .contracts.params import normalize_covariate_roles as _normalize_covariate_roles
+from .contracts.params import normalize_static_cols as _normalize_static_cols
+from .dataset_long_df_cache import get_or_build_dataset_long_df
+from .long_df_cache import (
+    cached_ds_array,
+    cached_series_slices,
+    cached_split_sequence,
+    cached_y_array,
+    cached_y_lookup,
+    long_df_cache,
+    sorted_long_df,
+)
 from .services import model_execution as _model_execution
 
 N_WINDOWS_MIN_ERROR = "n_windows must be >= 1"
 
 
-def _normalize_cv_x_cols(model_spec: Any, model_params: dict[str, Any] | None) -> tuple[str, ...]:
-    if model_spec.interface != "global" or not model_params or "x_cols" not in model_params:
-        return ()
-
-    raw = model_params.get("x_cols")
-    if raw is None:
-        return ()
-    if isinstance(raw, str):
-        return tuple(part.strip() for part in raw.split(",") if part.strip())
-    if isinstance(raw, list | tuple):
-        return tuple(str(part).strip() for part in raw if str(part).strip())
-
-    value = str(raw).strip()
-    return (value,) if value else ()
+def _normalize_cv_x_cols(
+    model_spec: Any,
+    model_params: dict[str, Any] | None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    if model_spec.interface != "global":
+        return (), (), ()
+    return (
+        *_normalize_covariate_roles(model_params),
+        _normalize_static_cols(model_params or {}),
+    )
 
 
-def _trim_cv_splits(splits: list[Any], *, n_windows: int | None) -> list[Any]:
-    if n_windows is None:
-        return splits
-    if int(n_windows) <= 0:
-        raise ValueError(N_WINDOWS_MIN_ERROR)
-    return splits[-int(n_windows) :]
+def _normalize_cv_covariate_roles(
+    model_spec: Any,
+    model_params: dict[str, Any] | None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    return _normalize_cv_x_cols(model_spec, model_params)
+
+
+def _trim_cv_splits(
+    df: pd.DataFrame,
+    *,
+    namespace: str,
+    n_obs: int,
+    horizon: int,
+    step_size: int,
+    min_train_size: int,
+    max_train_size: int | None,
+    n_windows: int | None,
+    keep: str,
+) -> tuple[Any, ...]:
+    return cached_split_sequence(
+        df,
+        namespace=str(namespace),
+        n_obs=int(n_obs),
+        horizon=int(horizon),
+        step_size=int(step_size),
+        min_train_size=int(min_train_size),
+        max_train_size=max_train_size,
+        limit=n_windows,
+        keep=str(keep),
+        limit_error=N_WINDOWS_MIN_ERROR,
+    )
 
 
 def _local_cv_split_rows(
@@ -89,23 +118,27 @@ def _local_cv_prediction_rows(
     rows: list[dict[str, Any]] = []
     n_series = 0
     n_series_skipped = 0
+    series_slices = cached_series_slices(df)
+    ds_all = cached_ds_array(df)
+    y_all = cached_y_array(df)
 
-    for uid, group in df.groupby("unique_id", sort=False):
+    for uid, start, stop in series_slices:
         n_series += 1
-        ds_arr = group["ds"].to_numpy(copy=False)
-        y_arr = group["y"].to_numpy(dtype=float, copy=False)
+        ds_arr = ds_all[start:stop]
+        y_arr = y_all[start:stop]
 
-        try:
-            splits = list(
-                rolling_origin_splits(
-                    y_arr.size,
-                    horizon=int(horizon),
-                    step_size=int(step_size),
-                    min_train_size=int(min_train_size),
-                    max_train_size=max_train_size,
-                )
-            )
-        except ValueError:
+        splits = _trim_cv_splits(
+            df,
+            namespace="cv_local",
+            n_obs=int(y_arr.size),
+            horizon=int(horizon),
+            step_size=int(step_size),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+            n_windows=n_windows,
+            keep="last",
+        )
+        if not splits:
             n_series_skipped += 1
             emit_cli_event(
                 "CV skip",
@@ -116,7 +149,7 @@ def _local_cv_prediction_rows(
             continue
 
         series_windows = 0
-        for split in _trim_cv_splits(splits, n_windows=n_windows):
+        for split in splits:
             rows.extend(
                 _local_cv_split_rows(
                     uid=str(uid),
@@ -151,20 +184,82 @@ def _global_cv_cutoffs(
     max_train_size: int | None,
     n_windows: int | None,
 ) -> tuple[str, list[Any]]:
-    ref_uid, ref_group = next(iter(df.groupby("unique_id", sort=False)))
-    ref_ds = ref_group["ds"].to_numpy(copy=False)
-    splits = list(
-        rolling_origin_splits(
-            int(ref_ds.size),
-            horizon=int(horizon),
-            step_size=int(step_size),
-            min_train_size=int(min_train_size),
-            max_train_size=max_train_size,
-        )
+    series_slices = cached_series_slices(df)
+    if not series_slices:
+        raise ValueError("long_df is empty")
+
+    ref_uid, start, stop = series_slices[0]
+    ref_ds = cached_ds_array(df)[start:stop]
+    splits = _trim_cv_splits(
+        df,
+        namespace="cv_global_cutoffs",
+        n_obs=int(ref_ds.size),
+        horizon=int(horizon),
+        step_size=int(step_size),
+        min_train_size=int(min_train_size),
+        max_train_size=max_train_size,
+        n_windows=n_windows,
+        keep="last",
     )
-    trimmed_splits = _trim_cv_splits(splits, n_windows=n_windows)
-    cutoffs = [ref_ds[split.train_end - 1] for split in trimmed_splits]
+    cutoffs = [ref_ds[split.train_end - 1] for split in splits]
     return str(ref_uid), cutoffs
+
+
+def _global_cv_context_cache_key(
+    *,
+    horizon: int,
+    step_size: int,
+    min_train_size: int,
+    max_train_size: int | None,
+    n_windows: int | None,
+) -> tuple[int, int, int, int | None, int | None]:
+    return (
+        int(horizon),
+        int(step_size),
+        int(min_train_size),
+        None if max_train_size is None else int(max_train_size),
+        None if n_windows is None else int(n_windows),
+    )
+
+
+def _get_cached_global_cv_context(
+    df: pd.DataFrame,
+    *,
+    horizon: int,
+    step_size: int,
+    min_train_size: int,
+    max_train_size: int | None,
+    n_windows: int | None,
+) -> dict[str, Any]:
+    cache = long_df_cache(df)
+    global_cache = cache.setdefault("global_cv_context", {})
+    key = _global_cv_context_cache_key(
+        horizon=horizon,
+        step_size=step_size,
+        min_train_size=min_train_size,
+        max_train_size=max_train_size,
+        n_windows=n_windows,
+    )
+    cached = global_cache.get(key)
+    if isinstance(cached, dict):
+        return cached
+
+    ref_uid, cutoffs = _global_cv_cutoffs(
+        df,
+        horizon=int(horizon),
+        step_size=int(step_size),
+        min_train_size=int(min_train_size),
+        max_train_size=max_train_size,
+        n_windows=n_windows,
+    )
+    context = {
+        "ref_uid": str(ref_uid),
+        "cutoffs": list(cutoffs),
+        "total_series": int(len(cached_series_slices(df))),
+        "y_lookup": cached_y_lookup(df),
+    }
+    global_cache[key] = context
+    return context
 
 
 def _validated_global_cv_prediction_table(pred: Any) -> pd.DataFrame:
@@ -183,14 +278,17 @@ def _validated_global_cv_prediction_table(pred: Any) -> pd.DataFrame:
 def _prepared_global_cv_frame(
     pred: pd.DataFrame,
     *,
-    y_lookup: pd.DataFrame,
+    y_lookup: pd.Series,
     horizon: int,
     total_series: int,
     cutoff: Any,
     model: str,
 ) -> tuple[pd.DataFrame | None, int]:
     pred_cols = [col for col in pred.columns if col not in {"unique_id", "ds"}]
-    merged = pred.merge(y_lookup, on=["unique_id", "ds"], how="left", validate="one_to_one")
+    pred_indexed = pred.set_index(["unique_id", "ds"])
+    merged = pred_indexed.copy()
+    merged["y"] = y_lookup.reindex(pred_indexed.index).to_numpy(copy=False)
+    merged = merged.reset_index()
     merged = merged.dropna(subset=["y", "ds", *pred_cols])
     if merged.empty:
         return None, total_series
@@ -228,7 +326,7 @@ def _global_cv_prediction_frames(
         str(model),
         global_params,
     )
-    ref_uid, cutoffs = _global_cv_cutoffs(
+    context = _get_cached_global_cv_context(
         df,
         horizon=horizon,
         step_size=step_size,
@@ -236,9 +334,11 @@ def _global_cv_prediction_frames(
         max_train_size=max_train_size,
         n_windows=n_windows,
     )
+    ref_uid = str(context["ref_uid"])
+    cutoffs = list(context["cutoffs"])
 
-    total_series = int(df["unique_id"].nunique())
-    y_lookup = df[["unique_id", "ds", "y"]]
+    total_series = int(context["total_series"])
+    y_lookup = context["y_lookup"]
     frames: list[pd.DataFrame] = []
     series_skipped_any = 0
 
@@ -293,30 +393,25 @@ def cross_validation_predictions(
     This mirrors the "predictions table" style used by many TS toolkits, and is
     a good foundation for interval calibration (e.g. conformal) and analysis.
     """
-    spec = get_dataset_spec(str(dataset))
-    y_col_final = (
-        str(y_col).strip() if (y_col is not None and str(y_col).strip()) else spec.default_y
-    )
-
-    df = load_dataset(str(dataset), data_dir=data_dir)
-
     model_spec = _model_execution.get_model_spec(str(model))
-    x_cols = _normalize_cv_x_cols(model_spec, model_params)
-
-    long_df = to_long(
-        df,
-        time_col=spec.time_col,
-        y_col=y_col_final,
-        id_cols=tuple(spec.group_cols),
-        x_cols=x_cols,
-        dropna=True,
+    historic_x_cols, future_x_cols, static_cols = _normalize_cv_x_cols(
+        model_spec,
+        model_params,
     )
-    if long_df.empty:
-        raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
+    frame_bundle = get_or_build_dataset_long_df(
+        dataset=str(dataset),
+        y_col=y_col,
+        data_dir=data_dir,
+        model_params={
+            "historic_x_cols": historic_x_cols,
+            "future_x_cols": future_x_cols,
+            "static_cols": static_cols,
+        },
+    )
 
     return cross_validation_predictions_long_df(
         model=str(model),
-        long_df=long_df,
+        long_df=frame_bundle["long_df"],
         horizon=int(horizon),
         step_size=int(step_size),
         min_train_size=int(min_train_size),
@@ -352,7 +447,7 @@ def cross_validation_predictions_long_df(
     model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
 
-    df = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
+    df = sorted_long_df(long_df, reset_index=False)
     emit_cli_event(
         "CV start",
         event="cv_started",

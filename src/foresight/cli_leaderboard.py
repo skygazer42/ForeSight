@@ -11,13 +11,176 @@ from pathlib import Path
 from typing import Any
 
 from . import cli_shared as _cli_shared
+from .dataset_long_df_cache import get_or_build_dataset_long_df
 
-_SWEEP_LONG_DF_CACHE: dict[tuple[str, str, str], Any] = {}
 _FORECAST_HORIZON_HELP = "Forecast horizon"
 _WALK_FORWARD_STEP_HELP = "Walk-forward step size"
 _MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
 _MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
 _OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
+_TASK_GROUP_CHOICES = ["all", "point", "probabilistic", "covariate"]
+
+
+def _leaderboard_status_sort_key(status: object) -> int:
+    return 0 if str(status).strip().lower() == "ok" else 1
+
+
+def _normalize_task_group_filter(raw: object) -> str | None:
+    value = str(raw).strip().lower()
+    if not value or value == "all":
+        return None
+    if value not in set(_TASK_GROUP_CHOICES):
+        raise ValueError(f"--task-group must be one of: {', '.join(_TASK_GROUP_CHOICES)}")
+    return value
+
+
+def _leaderboard_backend_family_for_model_spec(spec: Any) -> str:
+    requires = tuple(str(item).strip().lower() for item in getattr(spec, "requires", ()) if str(item).strip())
+    if not requires:
+        return "core"
+    return str(requires[0])
+
+
+def _leaderboard_requested_covariate_roles(
+    model_params: dict[str, Any],
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    from .contracts.params import (
+        normalize_covariate_roles as _normalize_covariate_roles,
+    )
+    from .contracts.params import (
+        normalize_static_cols as _normalize_static_cols,
+    )
+
+    historic_x_cols, future_x_cols = _normalize_covariate_roles(model_params)
+    static_cols = _normalize_static_cols(model_params)
+    return historic_x_cols, future_x_cols, static_cols
+
+
+def _leaderboard_has_requested_covariates(model_params: dict[str, Any]) -> bool:
+    historic_x_cols, future_x_cols, static_cols = _leaderboard_requested_covariate_roles(
+        model_params
+    )
+    return bool(historic_x_cols or future_x_cols or static_cols)
+
+
+def _leaderboard_has_requested_quantiles(model_params: dict[str, Any]) -> bool:
+    raw = model_params.get("quantiles")
+    if raw is None:
+        return False
+    if isinstance(raw, str):
+        return bool([part.strip() for part in raw.split(",") if part.strip()])
+    if isinstance(raw, list | tuple):
+        return bool(raw)
+    return True
+
+
+def _leaderboard_task_group_for_model_spec(spec: Any, *, model_params: dict[str, Any]) -> str:
+    capabilities = dict(getattr(spec, "capabilities", {}))
+    if bool(capabilities.get("requires_future_covariates", False)) or _leaderboard_has_requested_covariates(
+        model_params
+    ):
+        return "covariate"
+    if _leaderboard_has_requested_quantiles(model_params):
+        return "probabilistic"
+    return "point"
+
+
+def _leaderboard_model_metadata(
+    model_key: str,
+    *,
+    model_params: dict[str, Any],
+) -> tuple[str, str]:
+    from .models.registry import get_model_spec
+
+    try:
+        spec = get_model_spec(str(model_key))
+    except Exception:  # noqa: BLE001
+        return ("point", "unknown")
+    return (
+        _leaderboard_task_group_for_model_spec(spec, model_params=model_params),
+        _leaderboard_backend_family_for_model_spec(spec),
+    )
+
+
+def _get_or_build_leaderboard_long_df(
+    *,
+    dataset: str,
+    y_col: str | None,
+    data_dir: str,
+    model_params: dict[str, Any],
+) -> tuple[Any, str]:
+    frame_bundle = get_or_build_dataset_long_df(
+        dataset=str(dataset),
+        y_col=y_col,
+        data_dir=str(data_dir),
+        model_params=model_params,
+    )
+    return frame_bundle["long_df"], str(frame_bundle["y_col_final"])
+
+
+def _leaderboard_skip_row(
+    *,
+    model_key: str,
+    dataset_key: str,
+    y_col_final: str,
+    horizon: int,
+    step: int,
+    min_train_size: int,
+    max_windows: int | None,
+    data_dir_s: str,
+    model_params: dict[str, Any],
+    task_group: str,
+    backend_family: str,
+    error: Exception,
+) -> dict[str, Any]:
+    return {
+        "model": str(model_key),
+        "task_group": str(task_group),
+        "backend_family": str(backend_family),
+        "status": "skip",
+        "skip_reason": "error",
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "dataset": str(dataset_key),
+        "y_col": str(y_col_final),
+        "horizon": int(horizon),
+        "step": int(step),
+        "min_train_size": int(min_train_size),
+        "max_windows": None if max_windows is None else int(max_windows),
+        "n_series": 0,
+        "n_series_skipped": 0,
+        "n_windows": 0,
+        "n_points": 0,
+        "mae": None,
+        "rmse": None,
+        "mape": None,
+        "smape": None,
+        "data_dir": str(data_dir_s),
+        "model_params": dict(model_params),
+    }
+
+
+def _leaderboard_finalize_ok_row(
+    payload: dict[str, Any],
+    *,
+    dataset_key: str,
+    y_col_final: str,
+    data_dir_s: str,
+    model_params: dict[str, Any],
+    task_group: str,
+    backend_family: str,
+) -> dict[str, Any]:
+    payload["dataset"] = dataset_key
+    payload["y_col"] = y_col_final
+    payload["data_dir"] = data_dir_s
+    payload["model_params"] = dict(model_params)
+    payload["task_group"] = str(task_group)
+    payload["backend_family"] = str(backend_family)
+    payload["status"] = "ok"
+    payload["skip_reason"] = ""
+    payload["error_type"] = ""
+    payload["error_message"] = ""
+    return {k: v for k, v in payload.items() if not str(k).endswith("_by_step")}
 
 
 def register_leaderboard_subparsers(sub: Any) -> None:
@@ -103,6 +266,15 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         help="Include models requiring optional extras (e.g. statsmodels).",
     )
     leaderboard_models.add_argument(
+        "--model-param",
+        action="append",
+        default=[],
+        help=(
+            "Model parameter as key=value (repeatable). Example: --model-param window=7. "
+            "Applied to every selected model; models that don't accept the parameter may SKIP."
+        ),
+    )
+    leaderboard_models.add_argument(
         "--output",
         type=str,
         default="",
@@ -113,6 +285,12 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         choices=["json", "csv", "md"],
         default="json",
         help=_OUTPUT_JSON_FORMAT_HELP,
+    )
+    leaderboard_models.add_argument(
+        "--task-group",
+        choices=_TASK_GROUP_CHOICES,
+        default="all",
+        help="Optional protocol group filter (default: all).",
     )
     leaderboard_models.set_defaults(_handler=_cmd_leaderboard_models)
 
@@ -226,6 +404,12 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         help=_OUTPUT_JSON_FORMAT_HELP,
     )
     leaderboard_sweep.add_argument(
+        "--task-group",
+        choices=_TASK_GROUP_CHOICES,
+        default="all",
+        help="Optional protocol group filter (default: all).",
+    )
+    leaderboard_sweep.add_argument(
         "--jobs",
         type=int,
         default=1,
@@ -304,6 +488,12 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         default=0,
         help="Optional minimum dataset coverage for a model (default: 0 = no filter).",
     )
+    leaderboard_summarize.add_argument(
+        "--task-group",
+        choices=_TASK_GROUP_CHOICES,
+        default="all",
+        help="Optional protocol group filter before aggregation (default: all).",
+    )
     leaderboard_summarize.set_defaults(_handler=_cmd_leaderboard_summarize)
 
 
@@ -336,10 +526,11 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
 
 
 def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
-    from .eval_forecast import eval_model
+    from .eval_forecast import eval_model_long_df
     from .models.registry import get_model_spec, list_models
 
     y_col = str(args.y_col).strip() or None
+    model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
 
     if str(args.models).strip():
         keys = [k.strip() for k in str(args.models).split(",") if k.strip()]
@@ -347,26 +538,82 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
         keys = [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
 
     rows: list[dict[str, Any]] = []
+    task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+    filtered_keys: list[str] = []
     for key in keys:
+        task_group, backend_family = _leaderboard_model_metadata(
+            str(key),
+            model_params=model_params,
+        )
+        if task_group_filter is not None and task_group != task_group_filter:
+            continue
+        filtered_keys.append(str(key))
+
+    if not filtered_keys:
+        _cli_shared._emit(rows, output=str(args.output), fmt=str(args.format))
+        return 0
+
+    long_df, y_col_final = _get_or_build_leaderboard_long_df(
+        dataset=str(args.dataset),
+        y_col=y_col,
+        data_dir=str(args.data_dir),
+        model_params=model_params,
+    )
+
+    for key in filtered_keys:
+        task_group, backend_family = _leaderboard_model_metadata(
+            str(key),
+            model_params=model_params,
+        )
         try:
-            payload = eval_model(
+            payload = eval_model_long_df(
                 model=str(key),
-                dataset=str(args.dataset),
-                y_col=y_col,
+                long_df=long_df,
                 horizon=int(args.horizon),
                 step=int(args.step),
                 min_train_size=int(args.min_train_size),
                 max_windows=args.max_windows,
-                data_dir=str(args.data_dir),
+                model_params=dict(model_params),
             )
         except Exception as e:  # noqa: BLE001
             print(f"SKIP {key}: {type(e).__name__}: {e}", file=sys.stderr)
+            rows.append(
+                _leaderboard_skip_row(
+                    model_key=str(key),
+                    dataset_key=str(args.dataset),
+                    y_col_final=y_col_final,
+                    horizon=int(args.horizon),
+                    step=int(args.step),
+                    min_train_size=int(args.min_train_size),
+                    max_windows=args.max_windows,
+                    data_dir_s=str(args.data_dir),
+                    model_params=model_params,
+                    task_group=task_group,
+                    backend_family=backend_family,
+                    error=e,
+                )
+            )
             continue
 
-        slim = {k: v for k, v in payload.items() if not str(k).endswith("_by_step")}
-        rows.append(slim)
+        rows.append(
+            _leaderboard_finalize_ok_row(
+                payload,
+                dataset_key=str(args.dataset),
+                y_col_final=y_col_final,
+                data_dir_s=str(args.data_dir),
+                model_params=model_params,
+                task_group=task_group,
+                backend_family=backend_family,
+            )
+        )
 
-    rows.sort(key=lambda r: float(r.get("mae", float("inf"))))
+    rows.sort(
+        key=lambda r: (
+            _leaderboard_status_sort_key(r.get("status")),
+            float(r.get("mae", float("inf"))) if r.get("mae") is not None else float("inf"),
+            str(r.get("model", "")),
+        )
+    )
     _cli_shared._emit(rows, output=str(args.output), fmt=str(args.format))
     return 0
 
@@ -383,49 +630,24 @@ def _leaderboard_sweep_worker(
     strict: bool,
     model_params: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    import threading
-
-    from .data.format import to_long
-    from .datasets.loaders import load_dataset
-    from .datasets.registry import get_dataset_spec
     from .eval_forecast import eval_model_long_df
 
-    data_dir_s = str(data_dir).strip()
-    data_dir_arg = data_dir_s or None
-
     dataset_key = str(dataset)
-    spec = get_dataset_spec(dataset_key)
-    y_col_final = (
-        str(y_col).strip() if (y_col is not None and str(y_col).strip()) else spec.default_y
+    data_dir_s = str(data_dir).strip()
+    long_df, y_col_final = _get_or_build_leaderboard_long_df(
+        dataset=dataset_key,
+        y_col=y_col,
+        data_dir=data_dir_s,
+        model_params=model_params,
     )
-
-    cache_key = (dataset_key, y_col_final, data_dir_s)
-    lock = getattr(_leaderboard_sweep_worker, "_cache_lock", None)
-    if lock is None:
-        lock = threading.Lock()
-        setattr(_leaderboard_sweep_worker, "_cache_lock", lock)
-
-    with lock:
-        long_df = _SWEEP_LONG_DF_CACHE.get(cache_key)
-
-    if long_df is None:
-        df = load_dataset(dataset_key, data_dir=data_dir_arg)
-        long_df = to_long(
-            df,
-            time_col=spec.time_col,
-            y_col=y_col_final,
-            id_cols=tuple(spec.group_cols),
-            dropna=True,
-        )
-        if long_df.empty:
-            raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
-
-        with lock:
-            _SWEEP_LONG_DF_CACHE[cache_key] = long_df
 
     rows: list[dict[str, Any]] = []
     errors: list[str] = []
     for model_key in model_keys:
+        task_group, backend_family = _leaderboard_model_metadata(
+            str(model_key),
+            model_params=model_params,
+        )
         try:
             payload = eval_model_long_df(
                 model=str(model_key),
@@ -440,13 +662,35 @@ def _leaderboard_sweep_worker(
             if strict:
                 raise RuntimeError(f"{dataset_key}/{model_key}: {type(e).__name__}: {e}") from e
             errors.append(f"SKIP {dataset_key}/{model_key}: {type(e).__name__}: {e}")
+            rows.append(
+                _leaderboard_skip_row(
+                    model_key=str(model_key),
+                    dataset_key=dataset_key,
+                    y_col_final=y_col_final,
+                    horizon=int(horizon),
+                    step=int(step),
+                    min_train_size=int(min_train_size),
+                    max_windows=max_windows,
+                    data_dir_s=data_dir_s,
+                    model_params=model_params,
+                    task_group=task_group,
+                    backend_family=backend_family,
+                    error=e,
+                )
+            )
             continue
 
-        payload["dataset"] = dataset_key
-        payload["y_col"] = y_col_final
-        payload["data_dir"] = data_dir_s
-        payload["model_params"] = dict(model_params)
-        rows.append({k: v for k, v in payload.items() if not str(k).endswith("_by_step")})
+        rows.append(
+            _leaderboard_finalize_ok_row(
+                payload,
+                dataset_key=dataset_key,
+                y_col_final=y_col_final,
+                data_dir_s=data_dir_s,
+                model_params=model_params,
+                task_group=task_group,
+                backend_family=backend_family,
+            )
+        )
 
     return (rows, errors)
 
@@ -706,7 +950,9 @@ def _merge_leaderboard_sweep_rows(
     final_rows.sort(
         key=lambda row: (
             str(row.get("dataset", "")),
+            _leaderboard_status_sort_key(row.get("status")),
             _leaderboard_sweep_mae_key(row.get("mae", float("inf"))),
+            str(row.get("model", "")),
         )
     )
     return final_rows
@@ -761,6 +1007,13 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
         raise ValueError("--chunk-size must be >= 0")
     strict = bool(getattr(args, "strict", False))
     model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
+    task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+    if task_group_filter is not None:
+        keys = [
+            key
+            for key in keys
+            if _leaderboard_model_metadata(str(key), model_params=model_params)[0] == task_group_filter
+        ]
 
     resume_path = str(getattr(args, "resume", "")).strip()
     resume_rows, done_pairs = _load_leaderboard_sweep_resume_state(
@@ -824,6 +1077,13 @@ def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
     raw_text = _read_leaderboard_summarize_input_text(input_path)
     fmt = _detect_leaderboard_summarize_input_format(input_path, input_fmt, raw_text)
     rows_raw = _parse_leaderboard_summarize_rows(raw_text, fmt)
+    task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+    if task_group_filter is not None:
+        rows_raw = [
+            row
+            for row in rows_raw
+            if (str(row.get("task_group", "point")).strip().lower() or "point") == task_group_filter
+        ]
 
     if not rows_raw:
         raise ValueError("No rows found in input")
@@ -940,14 +1200,18 @@ def _clean_leaderboard_summary_rows(
     for row in rows_raw:
         model = str(row.get("model", "")).strip()
         dataset = str(row.get("dataset", "")).strip()
+        status = str(row.get("status", "ok")).strip().lower() or "ok"
         if not model or not dataset:
             bad += 1
+            continue
+        if status != "ok":
             continue
 
         cleaned.append(
             {
                 "model": model,
                 "dataset": dataset,
+                "task_group": str(row.get("task_group", "point")).strip() or "point",
                 "mae": _leaderboard_summary_as_float(row.get("mae")),
                 "rmse": _leaderboard_summary_as_float(row.get("rmse")),
                 "mape": _leaderboard_summary_as_float(row.get("mape")),
@@ -962,14 +1226,18 @@ def _leaderboard_summary_best_by_dataset_metric(
     cleaned: list[dict[str, Any]],
     metrics: list[str],
 ) -> dict[tuple[str, str], float]:
-    best_by_dataset_metric: dict[tuple[str, str], float] = {}
-    datasets = sorted({str(row["dataset"]) for row in cleaned})
-    for dataset in datasets:
-        rows_ds = [row for row in cleaned if str(row["dataset"]) == dataset]
+    best_by_dataset_metric: dict[tuple[str, str, str], float] = {}
+    groups = sorted({(str(row["task_group"]), str(row["dataset"])) for row in cleaned})
+    for task_group, dataset in groups:
+        rows_ds = [
+            row
+            for row in cleaned
+            if str(row["task_group"]) == task_group and str(row["dataset"]) == dataset
+        ]
         for metric in metrics:
             values = [float(row[metric]) for row in rows_ds if row.get(metric) is not None]
             if values:
-                best_by_dataset_metric[(dataset, metric)] = float(min(values))
+                best_by_dataset_metric[(task_group, dataset, metric)] = float(min(values))
     return best_by_dataset_metric
 
 
@@ -977,10 +1245,14 @@ def _leaderboard_summary_rank_by_dataset_metric_model(
     cleaned: list[dict[str, Any]],
     metrics: list[str],
 ) -> dict[tuple[str, str, str], float]:
-    rank_by_dataset_metric_model: dict[tuple[str, str, str], float] = {}
-    datasets = sorted({str(row["dataset"]) for row in cleaned})
-    for dataset in datasets:
-        rows_ds = [row for row in cleaned if str(row["dataset"]) == dataset]
+    rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float] = {}
+    groups = sorted({(str(row["task_group"]), str(row["dataset"])) for row in cleaned})
+    for task_group, dataset in groups:
+        rows_ds = [
+            row
+            for row in cleaned
+            if str(row["task_group"]) == task_group and str(row["dataset"]) == dataset
+        ]
         for metric in metrics:
             vals = [
                 (str(row["model"]), row.get(metric)) for row in rows_ds if row.get(metric) is not None
@@ -997,7 +1269,7 @@ def _leaderboard_summary_rank_by_dataset_metric_model(
                 elif v != prev:
                     rank += 1
                     prev = v
-                rank_by_dataset_metric_model[(dataset, metric, model)] = float(rank)
+                rank_by_dataset_metric_model[(task_group, dataset, metric, model)] = float(rank)
     return rank_by_dataset_metric_model
 
 
@@ -1044,14 +1316,16 @@ def _leaderboard_summary_metric_relative_values(
     items: list[dict[str, Any]],
     metric: str,
     *,
-    best_by_dataset_metric: dict[tuple[str, str], float],
+    best_by_dataset_metric: dict[tuple[str, str, str], float],
 ) -> list[float]:
     rels: list[float] = []
     for item in items:
         v_obj = item.get(metric)
         if v_obj is None:
             continue
-        best = best_by_dataset_metric.get((str(item["dataset"]), metric))
+        best = best_by_dataset_metric.get(
+            (str(item["task_group"]), str(item["dataset"]), metric)
+        )
         if best is None:
             continue
         rels.append(
@@ -1064,7 +1338,7 @@ def _leaderboard_summary_metric_relative_pairs(
     items: list[dict[str, Any]],
     metric: str,
     *,
-    best_by_dataset_metric: dict[tuple[str, str], float],
+    best_by_dataset_metric: dict[tuple[str, str, str], float],
 ) -> list[tuple[float, int]]:
     rel_pairs: list[tuple[float, int]] = []
     for item in items:
@@ -1074,7 +1348,9 @@ def _leaderboard_summary_metric_relative_pairs(
         weight = item.get("n_points")
         if weight is None or int(weight) <= 0:
             continue
-        best = best_by_dataset_metric.get((str(item["dataset"]), metric))
+        best = best_by_dataset_metric.get(
+            (str(item["task_group"]), str(item["dataset"]), metric)
+        )
         if best is None:
             continue
         rel_pairs.append(
@@ -1091,12 +1367,17 @@ def _leaderboard_summary_metric_ranks(
     metric: str,
     *,
     model: str,
-    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> list[float]:
     return [
-        float(rank_by_dataset_metric_model[(str(item["dataset"]), metric, model)])
+        float(
+            rank_by_dataset_metric_model[
+                (str(item["task_group"]), str(item["dataset"]), metric, model)
+            ]
+        )
         for item in items
-        if (str(item["dataset"]), metric, model) in rank_by_dataset_metric_model
+        if (str(item["task_group"]), str(item["dataset"]), metric, model)
+        in rank_by_dataset_metric_model
     ]
 
 
@@ -1105,15 +1386,20 @@ def _leaderboard_summary_metric_rank_pairs(
     metric: str,
     *,
     model: str,
-    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> list[tuple[float, int]]:
     return [
         (
-            float(rank_by_dataset_metric_model[(str(item["dataset"]), metric, model)]),
+            float(
+                rank_by_dataset_metric_model[
+                    (str(item["task_group"]), str(item["dataset"]), metric, model)
+                ]
+            ),
             int(item["n_points"]),
         )
         for item in items
-        if (str(item["dataset"]), metric, model) in rank_by_dataset_metric_model
+        if (str(item["task_group"]), str(item["dataset"]), metric, model)
+        in rank_by_dataset_metric_model
         and item.get("n_points") is not None
         and int(item["n_points"]) > 0
     ]
@@ -1125,8 +1411,8 @@ def _populate_leaderboard_metric_summary(
     *,
     metric: str,
     model: str,
-    best_by_dataset_metric: dict[tuple[str, str], float],
-    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+    best_by_dataset_metric: dict[tuple[str, str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> None:
     values = _leaderboard_summary_metric_values(items, metric)
     row[f"{metric}_mean"] = _leaderboard_summary_mean(values)
@@ -1180,17 +1466,19 @@ def _leaderboard_summary_metric_group_average(
 
 
 def _leaderboard_model_summary_row(
+    task_group: str,
     model: str,
     items: list[dict[str, Any]],
     *,
     metrics: list[str],
     n_datasets_total: int,
-    best_by_dataset_metric: dict[tuple[str, str], float],
-    rank_by_dataset_metric_model: dict[tuple[str, str, str], float],
+    best_by_dataset_metric: dict[tuple[str, str, str], float],
+    rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> dict[str, Any]:
     datasets = {str(item["dataset"]) for item in items}
     row: dict[str, Any] = {
         "model": model,
+        "task_group": str(task_group),
         "n_datasets": int(len(datasets)),
         "n_datasets_total": int(n_datasets_total),
         "dataset_coverage": (
@@ -1305,11 +1593,19 @@ def _summarize_leaderboard_rows(
     if not cleaned:
         raise ValueError(f"No valid rows found (bad_rows={bad})")
 
-    by_model: dict[str, list[dict[str, Any]]] = {}
+    by_group_model: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in cleaned:
-        by_model.setdefault(str(row["model"]), []).append(row)
+        key = (str(row["task_group"]), str(row["model"]))
+        by_group_model.setdefault(key, []).append(row)
 
-    n_datasets_total = int(len({str(row["dataset"]) for row in cleaned}))
+    n_datasets_total_by_group: dict[str, int] = {}
+    for row in cleaned:
+        task_group = str(row["task_group"])
+        datasets = n_datasets_total_by_group.setdefault(task_group, 0)
+        if datasets == 0:
+            n_datasets_total_by_group[task_group] = int(
+                len({str(item["dataset"]) for item in cleaned if str(item["task_group"]) == task_group})
+            )
 
     metrics = ["mae", "rmse", "mape", "smape"]
     best_by_dataset_metric = _leaderboard_summary_best_by_dataset_metric(cleaned, metrics)
@@ -1320,14 +1616,15 @@ def _summarize_leaderboard_rows(
 
     out = [
         _leaderboard_model_summary_row(
+            task_group,
             model,
             items,
             metrics=metrics,
-            n_datasets_total=n_datasets_total,
+            n_datasets_total=int(n_datasets_total_by_group.get(task_group, 0)),
             best_by_dataset_metric=best_by_dataset_metric,
             rank_by_dataset_metric_model=rank_by_dataset_metric_model,
         )
-        for model, items in by_model.items()
+        for (task_group, model), items in by_group_model.items()
     ]
 
     return _sort_leaderboard_summary_rows(
@@ -1345,6 +1642,7 @@ def _leaderboard_summary_columns() -> list[str]:
         "n_datasets_total",
         "dataset_coverage",
         "n_rows",
+        "task_group",
         "score_rank_mean",
         "score_rank_wmean",
         "score_rel_mean",

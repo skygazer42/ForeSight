@@ -43,6 +43,9 @@ def test_leaderboard_sweep_outputs_json_list(tmp_path: Path) -> None:
     assert isinstance(payload, list)
     assert {r["dataset"] for r in payload} == {"catfish", "ice_cream_interest"}
     assert {r["model"] for r in payload} == {"naive-last", "mean"}
+    assert {r["status"] for r in payload} == {"ok"}
+    assert {r["task_group"] for r in payload} == {"point"}
+    assert {r["backend_family"] for r in payload} == {"core"}
     assert out.exists()
 
 
@@ -302,6 +305,49 @@ def test_leaderboard_sweep_writes_failures_output(tmp_path: Path) -> None:
     assert failures.exists()
     text = failures.read_text(encoding="utf-8")
     assert "SKIP catfish/definitely-not-a-model" in text
+
+
+def test_leaderboard_sweep_outputs_structured_skip_rows_and_summary_ignores_them(
+    tmp_path: Path,
+) -> None:
+    summary = tmp_path / "summary.json"
+    proc = _run_cli(
+        "leaderboard",
+        "sweep",
+        "--datasets",
+        "catfish",
+        "--horizon",
+        "3",
+        "--step",
+        "3",
+        "--min-train-size",
+        "12",
+        "--models",
+        "naive-last,definitely-not-a-model",
+        "--summary-output",
+        str(summary),
+        "--summary-format",
+        "json",
+        "--jobs",
+        "1",
+    )
+    assert proc.returncode == 0
+
+    rows = json.loads(proc.stdout)
+    assert {(row["model"], row["status"]) for row in rows} == {
+        ("naive-last", "ok"),
+        ("definitely-not-a-model", "skip"),
+    }
+
+    skipped = next(row for row in rows if row["status"] == "skip")
+    assert skipped["task_group"] == "point"
+    assert skipped["backend_family"] == "unknown"
+    assert skipped["error_type"] == "KeyError"
+    assert "Unknown model key" in skipped["error_message"]
+    assert skipped["skip_reason"] == "error"
+
+    summary_rows = json.loads(summary.read_text(encoding="utf-8"))
+    assert [(row["model"], row["task_group"]) for row in summary_rows] == [("naive-last", "point")]
 
 
 def test_leaderboard_sweep_summary_min_datasets_filters_models(tmp_path: Path) -> None:

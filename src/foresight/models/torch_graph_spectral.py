@@ -81,6 +81,7 @@ def torch_graph_spectral_forecast(
     save_last_checkpoint: bool = False,
     resume_checkpoint_path: str = "",
     resume_checkpoint_strict: bool = True,
+    **_params: Any,
 ) -> np.ndarray:
     """
     StemGNN/FourierGNN-style graph-spectral lite forecasters.

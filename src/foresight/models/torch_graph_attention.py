@@ -85,6 +85,7 @@ def torch_graph_attention_forecast(
     save_last_checkpoint: bool = False,
     resume_checkpoint_path: str = "",
     resume_checkpoint_strict: bool = True,
+    **_params: Any,
 ) -> np.ndarray:
     """
     ASTGCN/GMAN-style graph-attention lite forecasters on wide `(T, N)` targets.

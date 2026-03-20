@@ -6,7 +6,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..backtesting import walk_forward
 from ..cli_runtime import compact_log_payload, emit_cli_event
 from ..conformal import summarize_conformal_predictions
 from ..contracts.capabilities import require_x_cols_if_needed as _contracts_require_x_cols_if_needed
@@ -17,16 +16,20 @@ from ..contracts.params import (
 from ..contracts.params import (
     normalize_static_cols as _contracts_normalize_static_cols,
 )
-from ..contracts.params import (
-    normalize_x_cols as _contracts_normalize_x_cols,
-)
-from ..data.format import to_long
-from ..datasets.loaders import load_dataset
-from ..datasets.registry import get_dataset_spec
+from ..dataset_long_df_cache import get_or_build_dataset_long_df
 from ..hierarchical import check_hierarchical_consistency, reconcile_hierarchical_forecasts
+from ..long_df_cache import (
+    cached_series_slices,
+    cached_split_sequence,
+    cached_x_matrix,
+    cached_y_array,
+    sorted_long_df,
+)
 from ..metrics import mae, mape, rmse, smape
 from ..splits import rolling_origin_splits
 from . import model_execution as _model_execution
+
+_MAX_WINDOWS_MIN_ERROR = "max_windows must be >= 1"
 
 
 def _require_long_df(long_df: Any) -> pd.DataFrame:
@@ -54,10 +57,6 @@ def _parse_levels(levels: Any) -> tuple[float, ...]:
             raise ValueError("conformal_levels must be in (0,1) or percentages like 80,90")
         out.append(f)
     return tuple(sorted(set(out)))
-
-
-def _normalize_x_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
-    return _contracts_normalize_x_cols(model_params or {})
 
 
 def _normalize_static_cols(model_params: dict[str, Any] | None) -> tuple[str, ...]:
@@ -441,24 +440,6 @@ def _update_global_eval_conformal_payload(
         )
 
 
-def _local_xreg_eval_arrays(
-    g: pd.DataFrame,
-    *,
-    x_cols: tuple[str, ...],
-) -> tuple[np.ndarray, np.ndarray]:
-    missing_x_cols = [col for col in x_cols if col not in g.columns]
-    if missing_x_cols:
-        raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
-
-    y = g["y"].to_numpy(dtype=float, copy=False)
-    x = g.loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
-    if np.isnan(y).any():
-        raise ValueError("eval_model_long_df does not support missing y values")
-    if np.isnan(x).any():
-        raise ValueError("eval_model_long_df does not support missing x_cols values")
-    return y, x
-
-
 def _append_eval_window_results(
     results: dict[str, Any],
     *,
@@ -489,7 +470,6 @@ def _validated_eval_long_df_request(
     if df.empty:
         raise ValueError("long_df is empty")
 
-    df = df.sort_values(["unique_id", "ds"], kind="mergesort")
     model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     params = dict(model_params or {})
@@ -515,6 +495,8 @@ def _validated_eval_long_df_request(
             f"Model {model!r} is multivariate and cannot be evaluated with `eval_model_long_df()`. "
             "Use `eval_multivariate_model_df()` with a wide DataFrame and explicit target columns instead."
         )
+    if interface != "global":
+        df = sorted_long_df(df, reset_index=True)
     return df, interface, params, capabilities, x_cols
 
 
@@ -558,6 +540,20 @@ def _local_eval_model_long_df_results(
     )
 
 
+def _local_xreg_eval_arrays(
+    df: pd.DataFrame,
+    *,
+    x_cols: tuple[str, ...],
+) -> tuple[np.ndarray, np.ndarray]:
+    y_all = cached_y_array(df)
+    x_all = cached_x_matrix(df, x_cols=x_cols)
+    if np.isnan(y_all).any():
+        raise ValueError("eval_model_long_df does not support missing y values")
+    if np.isnan(x_all).any():
+        raise ValueError("eval_model_long_df does not support missing x_cols values")
+    return y_all, x_all
+
+
 def _eval_local_xreg_model_long_df(
     *,
     model: str,
@@ -580,12 +576,14 @@ def _eval_local_xreg_model_long_df(
     }
     local_xreg_params = dict(params)
     local_xreg_params.pop("x_cols", None)
+    min_required = int(min_train_size) + int(horizon)
+    series_slices = cached_series_slices(df)
+    y_all, x_all = _local_xreg_eval_arrays(df, x_cols=x_cols)
 
-    for uid, g in df.groupby("unique_id", sort=False):
+    for uid, start, stop in series_slices:
         results["n_series"] += 1
-        y, x = _local_xreg_eval_arrays(g, x_cols=x_cols)
-
-        min_required = int(min_train_size) + int(horizon)
+        y = y_all[start:stop]
+        x = x_all[start:stop, :]
         if y.size < min_required:
             results["n_series_skipped"] += 1
             emit_cli_event(
@@ -596,14 +594,20 @@ def _eval_local_xreg_model_long_df(
             )
             continue
 
-        windows_run = 0
-        for split in rolling_origin_splits(
-            y.size,
+        splits = cached_split_sequence(
+            df,
+            namespace="eval_local",
+            n_obs=int(y.size),
             horizon=int(horizon),
             step_size=int(step),
             min_train_size=int(min_train_size),
             max_train_size=max_train_size,
-        ):
+            limit=max_windows,
+            keep="first",
+            limit_error=_MAX_WINDOWS_MIN_ERROR,
+        )
+        windows_run = 0
+        for split in splits:
             pred = _call_local_xreg_forecaster(
                 model=str(model),
                 train_y=y[split.train_start : split.train_end],
@@ -616,8 +620,6 @@ def _eval_local_xreg_model_long_df(
             _append_eval_window_results(results, y_true=y_true, y_pred=pred)
 
             windows_run += 1
-            if max_windows is not None and windows_run >= int(max_windows):
-                break
         emit_cli_event(
             "EVAL series",
             event="eval_series_completed",
@@ -648,11 +650,13 @@ def _eval_local_univariate_model_long_df(
         "n_series_skipped": 0,
     }
     forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
+    min_required = int(min_train_size) + int(horizon)
+    series_slices = cached_series_slices(df)
+    y_all = cached_y_array(df)
 
-    for uid, g in df.groupby("unique_id", sort=False):
+    for uid, start, stop in series_slices:
         results["n_series"] += 1
-        y = g["y"].to_numpy(dtype=float, copy=False)
-        min_required = int(min_train_size) + int(horizon)
+        y = y_all[start:stop]
         if y.size < min_required:
             results["n_series_skipped"] += 1
             emit_cli_event(
@@ -662,23 +666,41 @@ def _eval_local_univariate_model_long_df(
                 progress=True,
             )
             continue
-        res = walk_forward(
-            y,
+
+        splits = cached_split_sequence(
+            df,
+            namespace="eval_local",
+            n_obs=int(y.size),
             horizon=int(horizon),
-            step=int(step),
+            step_size=int(step),
             min_train_size=int(min_train_size),
             max_train_size=max_train_size,
-            max_windows=max_windows,
-            forecaster=forecaster,
+            limit=max_windows,
+            keep="first",
+            limit_error=_MAX_WINDOWS_MIN_ERROR,
         )
+        y_true_list: list[np.ndarray] = []
+        y_pred_list: list[np.ndarray] = []
+        for split in splits:
+            train = y[split.train_start : split.train_end]
+            true = y[split.test_start : split.test_end]
+            pred = np.asarray(forecaster(train, int(horizon)), dtype=float)
+            if pred.shape != (int(horizon),):
+                raise ValueError(f"forecaster must return shape ({int(horizon)},), got {pred.shape}")
+            y_true_list.append(true)
+            y_pred_list.append(pred)
 
-        _append_eval_window_results(results, y_true=res.y_true, y_pred=res.y_pred)
+        _append_eval_window_results(
+            results,
+            y_true=np.stack(y_true_list, axis=0),
+            y_pred=np.stack(y_pred_list, axis=0),
+        )
         emit_cli_event(
             "EVAL series",
             event="eval_series_completed",
             payload=compact_log_payload(
                 unique_id=str(uid),
-                windows=int(res.y_true.shape[0]),
+                windows=int(len(splits)),
             ),
             progress=True,
         )
@@ -866,7 +888,6 @@ def eval_model(
     Data is converted to a canonical long format (unique_id, ds, y), then evaluated
     per-series using walk-forward backtesting and aggregated across series.
     """
-    spec = get_dataset_spec(str(dataset))
     model_spec = _model_execution.get_model_spec(str(model))
     interface = str(model_spec.interface).lower().strip()
     if interface == "multivariate":
@@ -875,21 +896,14 @@ def eval_model(
             "Use `eval_multivariate_model_df()` with a loaded wide DataFrame and explicit target columns instead."
         )
 
-    y_col_final = str(y_col) if (y_col is not None and str(y_col).strip()) else spec.default_y
-
-    df = load_dataset(str(dataset), data_dir=data_dir)
-    x_cols = _normalize_x_cols(model_params)
-
-    long_df = to_long(
-        df,
-        time_col=spec.time_col,
-        y_col=y_col_final,
-        id_cols=tuple(spec.group_cols),
-        x_cols=x_cols,
-        dropna=True,
+    frame_bundle = get_or_build_dataset_long_df(
+        dataset=str(dataset),
+        y_col=y_col,
+        data_dir=data_dir,
+        model_params=model_params,
     )
-    if long_df.empty:
-        raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
+    long_df = frame_bundle["long_df"]
+    y_col_final = str(frame_bundle["y_col_final"])
 
     payload = eval_model_long_df(
         model=str(model),

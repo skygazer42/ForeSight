@@ -13,6 +13,12 @@ def _leaderboard_columns() -> list[str]:
     # Stable output makes diffs and automation easier.
     return [
         "model",
+        "task_group",
+        "backend_family",
+        "status",
+        "skip_reason",
+        "error_type",
+        "error_message",
         "dataset",
         "y_col",
         "horizon",

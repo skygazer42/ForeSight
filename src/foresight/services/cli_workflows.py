@@ -8,8 +8,9 @@ import pandas as pd
 
 from ..base import BaseForecaster, BaseGlobalForecaster
 from ..cli_runtime import compact_log_payload, emit_cli_event
-from ..contracts.params import normalize_x_cols as _contracts_normalize_x_cols
-from ..data.format import resolve_covariate_roles, to_long
+from ..contracts.params import normalize_covariate_roles as _contracts_normalize_covariate_roles
+from ..contracts.params import normalize_static_cols as _contracts_normalize_static_cols
+from ..data.format import to_long
 from ..io import ensure_datetime, load_csv
 from ..serialization import load_forecaster_artifact, save_forecaster
 from . import evaluation as _evaluation
@@ -371,14 +372,18 @@ def _filter_artifact_differences(
 def _resolve_forecast_covariates(
     params: dict[str, Any],
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    return resolve_covariate_roles(
-        x_cols=params.get("x_cols", ()),
-        historic_x_cols=params.get("historic_x_cols", ()),
-        future_x_cols=params.get("future_x_cols", ()),
-    )
+    historic_x_cols, future_x_cols = _contracts_normalize_covariate_roles(params)
+    static_cols = _contracts_normalize_static_cols(params)
+    return historic_x_cols, future_x_cols, static_cols
 
 
-def _build_long_forecast_frame(
+def _resolve_model_param_covariates(
+    params: dict[str, Any],
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    return _resolve_forecast_covariates(params)
+
+
+def _build_long_frame(
     df: pd.DataFrame,
     *,
     time_col: str,
@@ -386,7 +391,7 @@ def _build_long_forecast_frame(
     id_cols: tuple[str, ...],
     historic_x_cols: tuple[str, ...],
     future_x_cols: tuple[str, ...],
-    all_x_cols: tuple[str, ...],
+    static_cols: tuple[str, ...],
     dropna: bool,
 ) -> pd.DataFrame:
     return to_long(
@@ -396,7 +401,7 @@ def _build_long_forecast_frame(
         id_cols=id_cols,
         historic_x_cols=historic_x_cols,
         future_x_cols=future_x_cols,
-        x_cols=all_x_cols,
+        static_cols=static_cols,
         dropna=dropna,
     )
 
@@ -408,9 +413,7 @@ def _build_future_long_df(
     time_col: str,
     y_col: str,
     id_cols: tuple[str, ...],
-    historic_x_cols: tuple[str, ...],
     future_x_cols: tuple[str, ...],
-    all_x_cols: tuple[str, ...],
 ) -> pd.DataFrame | None:
     future_path_s = str(future_path or "").strip()
     if not future_path_s:
@@ -422,14 +425,14 @@ def _build_future_long_df(
     )
     if y_col not in future_raw.columns:
         future_raw[y_col] = np.nan
-    return _build_long_forecast_frame(
+    return _build_long_frame(
         future_raw,
         time_col=time_col,
         y_col=y_col,
         id_cols=id_cols,
-        historic_x_cols=historic_x_cols,
+        historic_x_cols=(),
         future_x_cols=future_x_cols,
-        all_x_cols=all_x_cols,
+        static_cols=(),
         dropna=False,
     )
 
@@ -444,18 +447,18 @@ def _build_forecast_long_frames(
     time_col: str,
     y_col: str,
     id_cols: tuple[str, ...],
-) -> tuple[Any, pd.DataFrame, pd.DataFrame | None, tuple[str, ...]]:
+) -> tuple[Any, pd.DataFrame, pd.DataFrame | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     df = _load_csv_frame(path, parse_dates=parse_dates, time_col=time_col)
     model_spec = _model_execution.get_model_spec(model_key)
-    historic_x_cols, future_x_cols, all_x_cols = _resolve_forecast_covariates(params)
-    long_df = _build_long_forecast_frame(
+    historic_x_cols, future_x_cols, static_cols = _resolve_forecast_covariates(params)
+    long_df = _build_long_frame(
         df,
         time_col=time_col,
         y_col=y_col,
         id_cols=id_cols,
         historic_x_cols=historic_x_cols,
         future_x_cols=future_x_cols,
-        all_x_cols=all_x_cols,
+        static_cols=static_cols,
         dropna=not (
             model_spec.interface == "global" or (model_spec.interface == "local" and future_x_cols)
         ),
@@ -466,11 +469,9 @@ def _build_forecast_long_frames(
         time_col=time_col,
         y_col=y_col,
         id_cols=id_cols,
-        historic_x_cols=historic_x_cols,
         future_x_cols=future_x_cols,
-        all_x_cols=all_x_cols,
     )
-    return model_spec, long_df, future_df, future_x_cols
+    return model_spec, long_df, future_df, historic_x_cols, future_x_cols, static_cols
 
 
 def _save_local_forecast_artifact(
@@ -690,7 +691,14 @@ def forecast_csv_workflow(
     time_col_s = str(time_col)
     y_col_s = str(y_col)
 
-    model_spec, long_df, future_df, future_x_cols = _build_forecast_long_frames(
+    (
+        model_spec,
+        long_df,
+        future_df,
+        historic_x_cols,
+        future_x_cols,
+        static_cols,
+    ) = _build_forecast_long_frames(
         model_key=model_key,
         params=params,
         path=path,
@@ -708,6 +716,9 @@ def forecast_csv_workflow(
             rows=int(len(long_df)),
             n_series=int(long_df["unique_id"].nunique()),
             future_rows=(None if future_df is None else int(len(future_df))),
+            historic_x_cols=list(historic_x_cols),
+            future_x_cols=list(future_x_cols),
+            static_cols=list(static_cols),
         ),
     )
 
@@ -878,7 +889,7 @@ def artifact_diff_rows_workflow(
                 "left": _stringify_artifact_diff_value(item["left"]),
                 "right": _stringify_artifact_diff_value(item["right"]),
             }
-    )
+        )
     return rows
 
 
@@ -1026,15 +1037,17 @@ def eval_csv_workflow(
     params = dict(model_params or {})
     time_col_s = str(time_col)
     y_col_s = str(y_col)
-    x_cols = _contracts_normalize_x_cols(params)
+    historic_x_cols, future_x_cols, static_cols = _resolve_forecast_covariates(params)
 
     df = _load_csv_frame(path, parse_dates=bool(parse_dates), time_col=time_col_s)
-    long_df = to_long(
+    long_df = _build_long_frame(
         df,
         time_col=time_col_s,
         y_col=y_col_s,
         id_cols=id_cols,
-        x_cols=x_cols,
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+        static_cols=static_cols,
         dropna=True,
     )
     emit_cli_event(
@@ -1044,7 +1057,9 @@ def eval_csv_workflow(
             model=str(model),
             rows=int(len(long_df)),
             n_series=int(long_df["unique_id"].nunique()),
-            x_cols=list(x_cols),
+            historic_x_cols=list(historic_x_cols),
+            future_x_cols=list(future_x_cols),
+            static_cols=list(static_cols),
         ),
     )
 

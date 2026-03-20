@@ -82,11 +82,23 @@ def compact_log_payload(
             items[str(key)] = value
     for key, value in kwargs.items():
         items[str(key)] = value
-    return {
-        key: value
-        for key, value in items.items()
-        if value is not None and value != "" and value != () and value != [] and value != {}
-    }
+    return {key: value for key, value in items.items() if _has_compact_log_value(value)}
+
+
+def _has_compact_log_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, np.ndarray):
+        return bool(value.size)
+    if isinstance(value, pd.Index | pd.Series | pd.DataFrame):
+        return not value.empty
+    if isinstance(value, Mapping):
+        return bool(value)
+    if isinstance(value, list | tuple | set):
+        return bool(value)
+    return True
 
 
 def _normalize_log_value(value: Any) -> Any:

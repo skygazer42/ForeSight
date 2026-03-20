@@ -269,6 +269,114 @@ def test_leaderboard_summarize_breaks_primary_sort_ties_with_mae_mean() -> None:
     assert [row["model"] for row in summary] == ["a", "b"]
 
 
+def test_leaderboard_summarize_separates_task_groups_and_ignores_skips() -> None:
+    rows = [
+        {
+            "model": "shared-model",
+            "dataset": "d1",
+            "task_group": "point",
+            "status": "ok",
+            "mae": 1.0,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+            "n_points": 10,
+        },
+        {
+            "model": "shared-model",
+            "dataset": "d2",
+            "task_group": "point",
+            "status": "ok",
+            "mae": 2.0,
+            "rmse": 2.0,
+            "mape": 0.2,
+            "smape": 0.4,
+            "n_points": 10,
+        },
+        {
+            "model": "shared-model",
+            "dataset": "d1",
+            "task_group": "probabilistic",
+            "status": "ok",
+            "mae": 10.0,
+            "rmse": 10.0,
+            "mape": 1.0,
+            "smape": 1.5,
+            "n_points": 10,
+        },
+        {
+            "model": "shared-model",
+            "dataset": "d2",
+            "task_group": "probabilistic",
+            "status": "skip",
+            "mae": None,
+            "rmse": None,
+            "mape": None,
+            "smape": None,
+            "n_points": 0,
+        },
+    ]
+
+    summary = _summarize_leaderboard_rows(rows, sort="task_group", limit=0)
+
+    assert [(row["model"], row["task_group"]) for row in summary] == [
+        ("shared-model", "point"),
+        ("shared-model", "probabilistic"),
+    ]
+    point_row = next(row for row in summary if row["task_group"] == "point")
+    probabilistic_row = next(row for row in summary if row["task_group"] == "probabilistic")
+
+    assert point_row["n_datasets"] == 2
+    assert point_row["mae_mean"] == pytest.approx(1.5)
+    assert probabilistic_row["n_datasets"] == 1
+    assert probabilistic_row["mae_mean"] == pytest.approx(10.0)
+
+
+def test_leaderboard_summarize_filters_to_requested_task_group(tmp_path: Path) -> None:
+    rows = [
+        {
+            "model": "shared-model",
+            "dataset": "d1",
+            "task_group": "point",
+            "status": "ok",
+            "mae": 1.0,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+            "n_points": 10,
+        },
+        {
+            "model": "shared-model",
+            "dataset": "d1",
+            "task_group": "probabilistic",
+            "status": "ok",
+            "mae": 10.0,
+            "rmse": 10.0,
+            "mape": 1.0,
+            "smape": 1.5,
+            "n_points": 10,
+        },
+    ]
+    inp = tmp_path / "sweep.json"
+    inp.write_text(json.dumps(rows), encoding="utf-8")
+
+    proc = _run_cli(
+        "leaderboard",
+        "summarize",
+        "--input",
+        str(inp),
+        "--format",
+        "json",
+        "--task-group",
+        "probabilistic",
+    )
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert [(row["model"], row["task_group"]) for row in payload] == [
+        ("shared-model", "probabilistic")
+    ]
+
+
 def test_leaderboard_summary_source_avoids_nested_sort_conditionals() -> None:
     root = Path(__file__).resolve().parents[1]
     source = (root / "src" / "foresight" / "cli_leaderboard.py").read_text(encoding="utf-8")
