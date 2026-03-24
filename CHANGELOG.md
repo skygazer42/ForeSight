@@ -4,6 +4,8 @@ This project follows a lightweight changelog format.
 
 ## Unreleased
 
+## 0.2.11
+
 - Add optional `scikit-learn` (`.[ml]`) global/panel step-lag regressors:
   - `adaboost-step-lag-global`
   - `mlp-step-lag-global`
@@ -33,6 +35,11 @@ This project follows a lightweight changelog format.
   - `xgb-dart-step-lag-global`
   - `xgb-linear-step-lag-global`
   - `xgbrf-step-lag-global`
+- Add a full-model training validation workflow driven by `tools/validate_all_models.py`:
+  - uses built-in `promotion_data`
+  - emits per-model artifacts and progress checkpoints
+  - supports CUDA-backed torch validation runs
+  - validates all `1265` registered models in the tested GPU environment
 
 ## 0.2.9
 
