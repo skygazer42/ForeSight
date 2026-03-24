@@ -3222,7 +3222,7 @@ def _train_torch_model_with_loaders(
                 value=train_completed_payload.get("final_lr"),
                 global_step=max(1, int(last_epoch)),
             )
-        return model
+    return model
 
 
 def _train_loop(

@@ -2673,6 +2673,7 @@ def torch_rnnpaper_direct_forecast(
                     self.base = base_enc
                     self.sentinel = bool(sentinel)
                     self.copy_mix = bool(copy_mix)
+                    self.pointer_pool = _DotAttentionPool()
                     self.gen = nn.Linear(hid, hid, bias=True)
                     self.s = nn.Parameter(torch.zeros((hid,), dtype=torch.float32))
                     self.mix = nn.Linear(hid, 1, bias=True)
@@ -2680,7 +2681,7 @@ def torch_rnnpaper_direct_forecast(
                 def forward(self, xb: Any) -> Any:
                     mem_seq = self.base(xb)  # repeated q: (B,T,H)
                     # pointer over original inputs (as values)
-                    ctx = _DotAttentionPool()(mem_seq)  # (B,H)
+                    ctx = self.pointer_pool(mem_seq)  # (B,H)
                     if self.sentinel:
                         g = torch.sigmoid(self.mix(ctx))
                         ctx = g * ctx + (1.0 - g) * self.s.unsqueeze(0)

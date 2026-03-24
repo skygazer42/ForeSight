@@ -19,3 +19,4 @@ venv/
 .idea/
 site/
 .coverage
+artifacts/
