@@ -16,8 +16,8 @@ from ..data.format import long_to_wide, to_long
 from ..data.prep import prepare_long_df
 from ..datasets import load_dataset
 from ..datasets.registry import get_dataset_spec
-from ..eval_forecast import eval_model_long_df, eval_multivariate_model_df
 from ..models.registry import get_model_spec, list_models
+from .evaluation import eval_model_long_df, eval_multivariate_model_df
 
 _VALIDATION_DATASET_KEY = "promotion_data"
 _VALIDATION_FREQ = "W-MON"

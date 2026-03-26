@@ -38,10 +38,14 @@ python tools/release_check.py
 python -m build
 ```
 
+If `dist/` already contains older builds, remove them before publishing or use
+version-scoped commands in the next steps so you only validate and upload the
+current release artifacts.
+
 ## 6) Validate artifacts
 
 ```bash
-twine check dist/*
+python -m twine check dist/foresight_ts-<version>*
 ```
 
 ## 7) Check serialization compatibility notes
@@ -58,7 +62,7 @@ artifact schema/version guardrails are updated intentionally:
 This step requires credentials and is intentionally not automated here.
 
 ```bash
-twine upload dist/*
+python -m twine upload dist/foresight_ts-<version>*
 ```
 
 ## Optional: GitHub Actions release

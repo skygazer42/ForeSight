@@ -51,7 +51,8 @@ def _quality_commands() -> list[list[str]]:
 
 
 def _display_command(cmd: list[str]) -> list[str]:
-    if cmd and Path(cmd[0]).name.lower() in {"python", "python.exe", "py", "py.exe"}:
+    executable = Path(cmd[0]).name.lower() if cmd else ""
+    if executable in {"py", "py.exe"} or executable.startswith("python"):
         return ["python", *cmd[1:]]
     return list(cmd)
 

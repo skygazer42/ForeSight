@@ -218,6 +218,14 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert ".github/workflows/docs.yml" in release_doc
 
 
+def test_release_docs_warn_about_version_scoped_uploads() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    release_doc = (repo_root / "docs" / "RELEASE.md").read_text(encoding="utf-8")
+
+    assert "dist/foresight_ts-<version>*" in release_doc
+    assert "older builds" in release_doc
+
+
 def test_architecture_import_check_passes() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     result = subprocess.run(
