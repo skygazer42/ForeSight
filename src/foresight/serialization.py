@@ -123,9 +123,7 @@ def _validate_optional_extra_payload(validated: dict[str, Any]) -> None:
     if "extra" not in validated:
         return
     if not isinstance(validated["extra"], dict):
-        raise TypeError(
-            "Serialized forecaster artifact field 'extra' must be a dict"
-        )
+        raise TypeError("Serialized forecaster artifact field 'extra' must be a dict")
 
 
 def _validate_payload(payload: Any) -> dict[str, Any]:

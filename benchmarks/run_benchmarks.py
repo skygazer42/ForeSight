@@ -154,12 +154,12 @@ def _summarize_rows(
 ) -> list[dict[str, Any]]:
     by_model: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        key = (
+        group_key = (
             str(row.get("task_group", "point")),
             str(row.get("backend_family", "unknown")),
             str(row["model"]),
         )
-        by_model[key].append(row)
+        by_model[group_key].append(row)
 
     out: list[dict[str, Any]] = []
     for task_group, backend_family, model in sorted(by_model):
@@ -177,13 +177,25 @@ def _summarize_rows(
                 [float(item["mae"]) for item in ok_items if _as_float(item.get("mae")) is not None]
             ),
             "rmse_mean": _mean(
-                [float(item["rmse"]) for item in ok_items if _as_float(item.get("rmse")) is not None]
+                [
+                    float(item["rmse"])
+                    for item in ok_items
+                    if _as_float(item.get("rmse")) is not None
+                ]
             ),
             "mape_mean": _mean(
-                [float(item["mape"]) for item in ok_items if _as_float(item.get("mape")) is not None]
+                [
+                    float(item["mape"])
+                    for item in ok_items
+                    if _as_float(item.get("mape")) is not None
+                ]
             ),
             "smape_mean": _mean(
-                [float(item["smape"]) for item in ok_items if _as_float(item.get("smape")) is not None]
+                [
+                    float(item["smape"])
+                    for item in ok_items
+                    if _as_float(item.get("smape")) is not None
+                ]
             ),
             "cv_seconds_total": float(sum(float(item["cv_seconds"]) for item in items)),
             "cv_seconds_mean": _mean([float(item["cv_seconds"]) for item in items]),
@@ -213,11 +225,13 @@ def _summarize_rows(
             )
         for suffix in conformal_levels:
             for metric in ("coverage", "mean_width", "interval_score"):
-                key = f"{metric}_{suffix}"
+                metric_key = f"{metric}_{suffix}"
                 values = [
-                    float(item[key]) for item in ok_items if _as_float(item.get(key)) is not None
+                    float(item[metric_key])
+                    for item in ok_items
+                    if _as_float(item.get(metric_key)) is not None
                 ]
-                summary[f"{key}_mean"] = _mean(values)
+                summary[f"{metric_key}_mean"] = _mean(values)
         out.append(summary)
 
     return out

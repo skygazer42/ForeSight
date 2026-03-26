@@ -787,11 +787,19 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         assert spec.default_params.get("wandb_run_name") == ""
         assert spec.default_params.get("wandb_dir") == ""
         assert spec.default_params.get("wandb_mode") == "online"
-        assert spec.param_help.get("min_epochs") == "Minimum epochs before early stopping can trigger"
+        assert (
+            spec.param_help.get("min_epochs") == "Minimum epochs before early stopping can trigger"
+        )
         assert spec.param_help.get("amp") == "Enable CUDA automatic mixed precision (true/false)"
         assert spec.param_help.get("amp_dtype") == "AMP compute dtype: auto, float16, bfloat16"
-        assert spec.param_help.get("warmup_epochs") == "Linear LR warmup epochs before the main scheduler"
-        assert spec.param_help.get("min_lr") == "Lower bound for learning rate during scheduler updates"
+        assert (
+            spec.param_help.get("warmup_epochs")
+            == "Linear LR warmup epochs before the main scheduler"
+        )
+        assert (
+            spec.param_help.get("min_lr")
+            == "Lower bound for learning rate during scheduler updates"
+        )
         assert spec.param_help.get("scheduler_restart_period") == (
             "Initial restart period in epochs for scheduler=cosine_restarts"
         )
@@ -803,10 +811,16 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         )
         assert spec.param_help.get("grad_accum_steps") == "Gradient accumulation steps (>=1)"
         assert spec.param_help.get("monitor") == "Early-stop metric: auto, train_loss, val_loss"
-        assert spec.param_help.get("monitor_mode") == "Whether the monitor should be minimized or maximized: min, max"
+        assert (
+            spec.param_help.get("monitor_mode")
+            == "Whether the monitor should be minimized or maximized: min, max"
+        )
         assert spec.param_help.get("min_delta") == "Minimum improvement required to reset patience"
         assert spec.param_help.get("num_workers") == "DataLoader worker count (0 uses main process)"
-        assert spec.param_help.get("pin_memory") == "Pin DataLoader memory before host-to-device transfer"
+        assert (
+            spec.param_help.get("pin_memory")
+            == "Pin DataLoader memory before host-to-device transfer"
+        )
         assert (
             spec.param_help.get("persistent_workers")
             == "Keep DataLoader workers alive across epochs (requires num_workers>0)"
@@ -814,9 +828,7 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         assert spec.param_help.get("scheduler_patience") == (
             "ReduceLROnPlateau patience in epochs (only for scheduler=plateau)"
         )
-        assert spec.param_help.get("grad_clip_mode") == (
-            "Gradient clipping strategy: norm, value"
-        )
+        assert spec.param_help.get("grad_clip_mode") == ("Gradient clipping strategy: norm, value")
         assert spec.param_help.get("grad_clip_value") == (
             "Gradient clipping absolute value threshold (only for grad_clip_mode=value)"
         )
@@ -898,12 +910,8 @@ def test_torch_catalog_exposes_wave1_trainer_defaults_and_help() -> None:
         assert spec.param_help.get("wandb_entity") == (
             "Optional Weights & Biases entity / team for wandb_project"
         )
-        assert spec.param_help.get("wandb_run_name") == (
-            "Optional Weights & Biases run name"
-        )
-        assert spec.param_help.get("wandb_dir") == (
-            "Optional Weights & Biases local run directory"
-        )
+        assert spec.param_help.get("wandb_run_name") == ("Optional Weights & Biases run name")
+        assert spec.param_help.get("wandb_dir") == ("Optional Weights & Biases local run directory")
         assert spec.param_help.get("wandb_mode") == (
             "Weights & Biases mode: online, offline, disabled"
         )

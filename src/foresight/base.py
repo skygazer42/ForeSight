@@ -25,7 +25,9 @@ def _unavailable_global_factory() -> Callable[[pd.DataFrame, Any, int], pd.DataF
     raise RuntimeError("serialized global forecaster runtime factory was not rebuilt")
 
 
-def _runtime_summary_for_model(*, model_key: str, model_params: dict[str, Any]) -> dict[str, Any] | None:
+def _runtime_summary_for_model(
+    *, model_key: str, model_params: dict[str, Any]
+) -> dict[str, Any] | None:
     from .models.neural_runtime import summarize_model_runtime
 
     return summarize_model_runtime(
