@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any
-import warnings
 
 import numpy as np
 
