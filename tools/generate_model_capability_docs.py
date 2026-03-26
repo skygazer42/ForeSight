@@ -40,6 +40,7 @@ _API_GROUP_ORDER = [
     GROUP_CORE_CLASSES,
     "Forecasting",
     "Evaluation",
+    "Detection",
     "Artifacts",
     GROUP_DATA_PREPARATION,
     GROUP_HIERARCHICAL_FORECASTING,
@@ -87,6 +88,16 @@ _API_METADATA: dict[str, dict[str, str]] = {
         "group": GROUP_DATA_PREPARATION,
         "source": SOURCE_FORESIGHT_DATA,
         "purpose": "Clip per-series numeric outliers in long-format data without dropping rows.",
+    },
+    "detect_anomalies": {
+        "group": "Detection",
+        "source": "foresight.detect",
+        "purpose": "Run anomaly detection on a packaged dataset using rolling scores or forecast residuals.",
+    },
+    "detect_anomalies_long_df": {
+        "group": "Detection",
+        "source": "foresight.detect",
+        "purpose": "Run anomaly detection on long-format panel data and return per-row anomaly scores and flags.",
     },
     "eval_hierarchical_forecast_df": {
         "group": GROUP_HIERARCHICAL_FORECASTING,

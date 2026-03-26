@@ -48,6 +48,13 @@ The Python API and CLI have different output contracts:
 | `eval_model_long_df` | `foresight.eval_forecast` | Walk-forward evaluation for long-format panel/global forecasting data. |
 | `eval_multivariate_model_df` | `foresight.eval_forecast` | Evaluate multivariate forecasters on wide data frames. |
 
+## Detection
+
+| symbol | source | purpose |
+| --- | --- | --- |
+| `detect_anomalies` | `foresight.detect` | Run anomaly detection on a packaged dataset using rolling scores or forecast residuals. |
+| `detect_anomalies_long_df` | `foresight.detect` | Run anomaly detection on long-format panel data and return per-row anomaly scores and flags. |
+
 ## Artifacts
 
 | symbol | source | purpose |
@@ -131,6 +138,8 @@ The Python API and CLI have different output contracts:
 - `build_hierarchy_spec`
 - `check_hierarchical_consistency`
 - `clip_long_df_outliers`
+- `detect_anomalies`
+- `detect_anomalies_long_df`
 - `eval_hierarchical_forecast_df`
 - `eval_model`
 - `eval_model_long_df`
