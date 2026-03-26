@@ -229,6 +229,8 @@ def clip_long_df_outliers(
     out = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
     for _unique_id, idx in out.groupby("unique_id", sort=False).groups.items():
         for col in value_cols:
+            # Pandas 2.3+ rejects assigning clipped float arrays back into int64 columns.
+            out[col] = out[col].astype(float, copy=False)
             series = out.loc[idx, col]
             if method_name == "iqr":
                 clipped = _clip_iqr(series, iqr_k=float(iqr_k))

@@ -11,6 +11,7 @@ from .torch_nn import (
     _normalize_series,
     _require_torch,
     _train_loop,
+    _validate_torch_train_config_kwargs,
 )
 
 HORIZON_MIN_ERROR = "horizon must be >= 1"
@@ -89,6 +90,7 @@ def torch_lmu_direct_forecast(
     """
     Torch LMU-style recurrent memory model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
@@ -296,6 +298,7 @@ def torch_ltc_direct_forecast(
     """
     Torch LTC-style liquid time-constant recurrent model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
 
@@ -500,6 +503,7 @@ def torch_cfc_direct_forecast(
     """
     Torch CfC-style closed-form continuous-time recurrent model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
 
@@ -710,6 +714,7 @@ def torch_xlstm_direct_forecast(
     """
     Torch xLSTM-style expanded-gate recurrent model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
 
@@ -924,6 +929,7 @@ def torch_griffin_direct_forecast(
     """
     Torch Griffin-style recurrent hybrid model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
@@ -1135,6 +1141,7 @@ def torch_hawk_direct_forecast(
     """
     Torch Hawk-style gated recurrent mixer (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
 

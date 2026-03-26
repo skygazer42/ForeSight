@@ -8,7 +8,7 @@ import time
 import warnings
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack, contextmanager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -828,6 +828,15 @@ def _validate_torch_train_config(cfg: TorchTrainConfig) -> None:
     wandb_mode = str(cfg.wandb_mode).lower().strip()
     if wandb_mode and wandb_mode not in {"online", "offline", "disabled"}:
         raise ValueError(_WANDB_MODE_OPTIONS_MSG)
+
+
+def _validate_torch_train_config_kwargs(params: Mapping[str, Any]) -> None:
+    cfg_kwargs = {
+        field.name: params[field.name]
+        for field in fields(TorchTrainConfig)
+        if field.name in params
+    }
+    _validate_torch_train_config(TorchTrainConfig(**cfg_kwargs))
 
 
 def _make_torch_dataloader(
@@ -6667,9 +6676,7 @@ def torch_tinytimemixer_direct_forecast(
     Patchifies the lag window, mixes information across patch tokens with token
     MLPs, then applies channel mixing before decoding the forecast horizon.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
+    _validate_torch_train_config_kwargs(locals())
     h = int(horizon)
     lag_count = int(lags)
     patch = int(patch_len)
@@ -6696,6 +6703,9 @@ def torch_tinytimemixer_direct_forecast(
         raise ValueError("channel_mixing_hidden must be >= 1")
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),
@@ -7480,9 +7490,6 @@ def torch_fits_direct_forecast(
     interpolate them onto an extended context+horizon spectrum, then reconstructs
     the forecast tail with an inverse real FFT.
     """
-    torch = _require_torch()
-    nn = torch.nn
-
     h = int(horizon)
     lag_count = int(lags)
     low_bins = int(low_freq_bins)
@@ -7501,6 +7508,9 @@ def torch_fits_direct_forecast(
         raise ValueError(_NUM_LAYERS_MIN_MSG)
     if not (0.0 <= drop < 1.0):
         raise ValueError(_DROPOUT_RANGE_MSG)
+
+    torch = _require_torch()
+    nn = torch.nn
 
     cfg = TorchTrainConfig(
         epochs=int(epochs),

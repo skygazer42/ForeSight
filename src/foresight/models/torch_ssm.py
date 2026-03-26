@@ -11,6 +11,7 @@ from .torch_nn import (
     _normalize_series,
     _require_torch,
     _train_loop,
+    _validate_torch_train_config_kwargs,
 )
 
 DMODEL_MIN_ERROR = "d_model must be >= 1"
@@ -127,6 +128,7 @@ def torch_s4d_direct_forecast(
     """
     Torch S4D-style diagonal state-space model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
@@ -322,6 +324,7 @@ def torch_mamba2_direct_forecast(
     """
     Torch Mamba-2-style selective state-space refinement (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
@@ -526,6 +529,7 @@ def torch_s4_direct_forecast(
     """
     Torch S4-style structured state-space model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
@@ -726,6 +730,7 @@ def torch_s5_direct_forecast(
     """
     Torch S5-style multi-state-space model (lite) direct multi-horizon forecast.
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional

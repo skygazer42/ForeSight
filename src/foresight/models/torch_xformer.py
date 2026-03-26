@@ -13,6 +13,7 @@ from .torch_nn import (
     _normalize_series,
     _require_torch,
     _train_loop,
+    _validate_torch_train_config_kwargs,
 )
 
 _EINSUM_QK_PROJ = "bhld,hdm->bhlm"
@@ -155,6 +156,7 @@ def torch_xformer_direct_forecast(
     It supports multiple attention approximations:
       attn = full | local | logsparse | longformer | bigbird | performer | linformer | nystrom | probsparse | autocorr | reformer
     """
+    _validate_torch_train_config_kwargs(locals())
     torch = _require_torch()
     nn = torch.nn
     F = torch.nn.functional
