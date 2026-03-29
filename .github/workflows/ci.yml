@@ -33,21 +33,7 @@ jobs:
         run: ruff check src tests tools benchmarks
 
       - name: Format
-        run: |
-          ruff format --check \
-            benchmarks/run_benchmarks.py \
-            src/foresight/__init__.py \
-            src/foresight/datasets/__init__.py \
-            src/foresight/datasets/registry.py \
-            tests/test_packaged_datasets_smoke.py \
-            tests/test_release_tooling.py \
-            src/foresight/base.py \
-            src/foresight/serialization.py \
-            tests/test_root_import.py \
-            tests/test_models_registry.py \
-            tools/check_capability_docs.py \
-            tools/generate_model_capability_docs.py \
-            tools/release_check.py
+        run: ruff format --check src tests tools benchmarks
 
       - name: Type check
         run: python -m mypy --no-incremental --cache-dir=/dev/null

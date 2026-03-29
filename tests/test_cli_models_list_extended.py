@@ -37,6 +37,33 @@ def test_models_list_tsv_columns_and_header_for_rnnpaper() -> None:
     assert lines[1].split("\t") == ["torch-rnnpaper-elman-srn-direct", "elman-srn", "1990"]
 
 
+def test_models_list_tsv_can_render_install_command_columns() -> None:
+    proc = _run_cli(
+        "models",
+        "list",
+        "--prefix",
+        "torch-rnnpaper-elman-srn",
+        "--columns",
+        "key,required_extra,package_install_command,editable_install_command",
+        "--header",
+    )
+    assert proc.returncode == 0
+    lines = proc.stdout.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].split("\t") == [
+        "key",
+        "required_extra",
+        "package_install_command",
+        "editable_install_command",
+    ]
+    assert lines[1].split("\t") == [
+        "torch-rnnpaper-elman-srn-direct",
+        "torch",
+        'pip install "foresight-ts[torch]"',
+        'pip install -e ".[torch]"',
+    ]
+
+
 def test_models_list_json_sort_and_limit() -> None:
     proc = _run_cli(
         "models",

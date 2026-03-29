@@ -610,6 +610,10 @@ def _models_list_column_value(row: dict[str, Any], col: str) -> object:
         return row.get("requires", "")
     if col == "required_extra":
         return row.get("required_extra", "")
+    if col == "package_install_command":
+        return row.get("package_install_command", "")
+    if col == "editable_install_command":
+        return row.get("editable_install_command", "")
     if col == "stability":
         return row.get("stability", "")
     if col == "description":
@@ -627,7 +631,7 @@ def _models_list_column_value(row: dict[str, Any], col: str) -> object:
     if col == "wrapper_title":
         return wrapper.get("title", "")
     raise ValueError(
-        "--columns must be a comma-separated list of: key, interface, requires, required_extra, stability, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
+        "--columns must be a comma-separated list of: key, interface, requires, required_extra, package_install_command, editable_install_command, stability, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
     )
 
 

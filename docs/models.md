@@ -29,6 +29,7 @@ ForeSight currently registers **1265** models: **800** local, **449** global, an
 
 ```bash
 foresight models list --format json
+foresight models list --columns key,required_extra,package_install_command --header
 foresight models info xgb-step-lag-global
 foresight doctor
 ```

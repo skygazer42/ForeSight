@@ -30,6 +30,7 @@ def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     assert proc.returncode == 0, proc.stderr
     assert "python tools/check_capability_docs.py" in proc.stdout
     assert "python tools/generate_model_capability_docs.py --check" in proc.stdout
+    assert "ruff format --check src tests tools benchmarks" in proc.stdout
     assert "python benchmarks/run_benchmarks.py --smoke" in proc.stdout
     assert "python tools/smoke_build_install.py" in proc.stdout
     assert "mkdocs build --strict" in proc.stdout
@@ -147,6 +148,14 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     )
     assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
     assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+
+
+def test_ci_quality_workflow_formats_full_source_directories() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "ruff format --check src tests tools benchmarks" in workflow
+    assert "benchmarks/run_benchmarks.py \\" not in workflow
 
 
 def test_sonar_project_configuration_targets_maintained_code() -> None:

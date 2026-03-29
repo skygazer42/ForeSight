@@ -10,22 +10,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-QUALITY_FORMAT_FILES = [
-    "benchmarks/run_benchmarks.py",
-    "src/foresight/__init__.py",
-    "src/foresight/base.py",
-    "src/foresight/datasets/__init__.py",
-    "src/foresight/datasets/registry.py",
-    "src/foresight/serialization.py",
-    "tests/test_packaged_datasets_smoke.py",
-    "tests/test_release_tooling.py",
-    "tests/test_root_import.py",
-    "tests/test_models_registry.py",
-    "tools/check_capability_docs.py",
-    "tools/generate_model_capability_docs.py",
-    "tools/release_check.py",
-]
-
 
 def _repo_root() -> Path:
     # tools/release_check.py -> repo root is parent of tools/
@@ -42,7 +26,7 @@ def _quality_commands() -> list[list[str]]:
         [sys.executable, "tools/check_capability_docs.py"],
         [sys.executable, "tools/generate_model_capability_docs.py", "--check"],
         ["ruff", "check", "src", "tests", "tools", "benchmarks"],
-        ["ruff", "format", "--check", *QUALITY_FORMAT_FILES],
+        ["ruff", "format", "--check", "src", "tests", "tools", "benchmarks"],
         [sys.executable, "-m", "mypy", "--no-incremental", "--cache-dir=/dev/null"],
         [sys.executable, "-m", "pytest", "-q"],
         [sys.executable, "benchmarks/run_benchmarks.py", "--smoke"],
