@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import builtins
 import types
 
+import pandas as pd
 import pytest
 
 import foresight.optional_deps as optional_deps
-from foresight.models import torch_nn
+from foresight.models import global_regression, multivariate, regression, torch_nn
 
 
 def test_torch_namespace_stub_is_reported_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,3 +70,49 @@ def test_missing_dependency_message_includes_package_and_editable_commands() -> 
         'ridge_lag_forecast requires scikit-learn. '
         'Install with: pip install "foresight-ts[ml]" or pip install -e ".[ml]"'
     )
+
+
+def _patch_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    blocked_roots: set[str],
+) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        root = str(name).split(".", 1)[0]
+        if root in blocked_roots:
+            raise ImportError(f"blocked import: {name}")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+
+def test_ridge_lag_forecast_missing_sklearn_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='ridge_lag_forecast requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        regression.ridge_lag_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_ridge_step_lag_global_missing_sklearn_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='ridge-step-lag-global requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        global_regression.ridge_step_lag_global_forecaster(lags=2)
+
+
+def test_var_forecast_missing_statsmodels_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"statsmodels"})
+
+    with pytest.raises(
+        ImportError,
+        match='var_forecast requires statsmodels\\. Install with: pip install "foresight-ts\\[stats\\]" or pip install -e "\\.\\[stats\\]"',
+    ):
+        multivariate.var_forecast([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]], 1)
