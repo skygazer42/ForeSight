@@ -168,3 +168,79 @@ def test_catboost_global_missing_catboost_message(monkeypatch: pytest.MonkeyPatc
         match='catboost-step-lag-global requires catboost\\. Install with: pip install "foresight-ts\\[catboost\\]" or pip install -e "\\.\\[catboost\\]"',
     ):
         global_regression.catboost_step_lag_global_forecaster(lags=2)
+
+
+def test_rf_lag_direct_missing_sklearn_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='rf_lag_direct_forecast requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        regression.rf_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_bayesian_ridge_lag_direct_missing_sklearn_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='bayesian_ridge_lag_direct_forecast requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        regression.bayesian_ridge_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_passive_aggressive_lag_direct_missing_sklearn_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='passive_aggressive_lag_direct_forecast requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        regression.passive_aggressive_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_decision_tree_lag_direct_missing_sklearn_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"sklearn"})
+
+    with pytest.raises(
+        ImportError,
+        match='decision_tree_lag_direct_forecast requires scikit-learn\\. Install with: pip install "foresight-ts\\[ml\\]" or pip install -e "\\.\\[ml\\]"',
+    ):
+        regression.decision_tree_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_xgb_lag_direct_missing_xgboost_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"xgboost"})
+
+    with pytest.raises(
+        ImportError,
+        match='xgboost lag models requires xgboost\\. Install with: pip install "foresight-ts\\[xgb\\]" or pip install -e "\\.\\[xgb\\]"',
+    ):
+        regression.xgb_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_lgbm_lag_direct_missing_lightgbm_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"lightgbm"})
+
+    with pytest.raises(
+        ImportError,
+        match='lightgbm lag models requires lightgbm\\. Install with: pip install "foresight-ts\\[lgbm\\]" or pip install -e "\\.\\[lgbm\\]"',
+    ):
+        regression.lgbm_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)
+
+
+def test_catboost_lag_direct_missing_catboost_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"catboost"})
+
+    with pytest.raises(
+        ImportError,
+        match='catboost lag models requires catboost\\. Install with: pip install "foresight-ts\\[catboost\\]" or pip install -e "\\.\\[catboost\\]"',
+    ):
+        regression.catboost_lag_direct_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 2, lags=2)

@@ -47,6 +47,10 @@ XGB_OBJECTIVE_GAMMA = "reg:gamma"
 XGB_OBJECTIVE_TWEEDIE = "reg:tweedie"
 
 
+def _raise_missing_ml(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("ml", subject=subject)) from exc
+
+
 def _as_1d_float_array(train: Any) -> np.ndarray:
     x = np.asarray(train, dtype=float)
     if x.ndim != 1:
@@ -795,9 +799,7 @@ def rf_lag_direct_forecast(
         from sklearn.ensemble import RandomForestRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'rf_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("rf_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -871,9 +873,7 @@ def lasso_lag_direct_forecast(
         from sklearn.linear_model import Lasso  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'lasso_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("lasso_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -943,9 +943,7 @@ def elasticnet_lag_direct_forecast(
         from sklearn.linear_model import ElasticNet  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'elasticnet_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("elasticnet_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1021,10 +1019,7 @@ def bayesian_ridge_lag_direct_forecast(
         from sklearn.linear_model import BayesianRidge  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'bayesian_ridge_lag_direct_forecast requires scikit-learn. '
-            'Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("bayesian_ridge_lag_direct_forecast", e)
 
     priors = {
         "alpha_1": float(alpha_1),
@@ -1085,9 +1080,7 @@ def ard_lag_direct_forecast(
         from sklearn.linear_model import ARDRegression  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'ard_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("ard_lag_direct_forecast", e)
 
     priors = {
         "alpha_1": float(alpha_1),
@@ -1150,9 +1143,7 @@ def omp_lag_direct_forecast(
         from sklearn.linear_model import OrthogonalMatchingPursuit  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'omp_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("omp_lag_direct_forecast", e)
 
     if n_nonzero_coefs is not None and int(n_nonzero_coefs) <= 0:
         raise ValueError(N_NONZERO_COEFS_MIN_ERROR)
@@ -1204,10 +1195,7 @@ def passive_aggressive_lag_direct_forecast(
         from sklearn.linear_model import PassiveAggressiveRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            "passive_aggressive_lag_direct_forecast requires scikit-learn. "
-            'Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("passive_aggressive_lag_direct_forecast", e)
 
     if float(C) <= 0.0:
         raise ValueError(SVR_C_ERROR)
@@ -1261,9 +1249,7 @@ def knn_lag_direct_forecast(
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
         from sklearn.neighbors import KNeighborsRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'knn_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("knn_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1334,9 +1320,7 @@ def gbrt_lag_direct_forecast(
         from sklearn.ensemble import GradientBoostingRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'gbrt_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("gbrt_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1411,9 +1395,7 @@ def ridge_lag_direct_forecast(
     try:
         from sklearn.linear_model import Ridge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'ridge_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("ridge_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
@@ -1479,10 +1461,7 @@ def decision_tree_lag_direct_forecast(
     try:
         from sklearn.tree import DecisionTreeRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            "decision_tree_lag_direct_forecast requires scikit-learn. Install with: "
-            'pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("decision_tree_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1554,9 +1533,7 @@ def extra_trees_lag_direct_forecast(
     try:
         from sklearn.ensemble import ExtraTreesRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'extra_trees_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("extra_trees_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1631,9 +1608,7 @@ def adaboost_lag_direct_forecast(
         from sklearn.ensemble import AdaBoostRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'adaboost_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("adaboost_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1707,9 +1682,7 @@ def bagging_lag_direct_forecast(
         from sklearn.ensemble import BaggingRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'bagging_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("bagging_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1786,9 +1759,7 @@ def hgb_lag_direct_forecast(
         from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'hgb_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("hgb_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -1866,9 +1837,7 @@ def svr_lag_direct_forecast(
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
         from sklearn.svm import SVR  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'svr_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("svr_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     c_value = float(_pop_legacy_keyword(kwargs, legacy_name="C", value=c))
@@ -1944,9 +1913,7 @@ def linear_svr_lag_direct_forecast(
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
         from sklearn.svm import LinearSVR  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'linear_svr_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("linear_svr_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     c_value = float(_pop_legacy_keyword(kwargs, legacy_name="C", value=c))
@@ -2026,9 +1993,7 @@ def kernel_ridge_lag_direct_forecast(
     try:
         from sklearn.kernel_ridge import KernelRidge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'kernel_ridge_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("kernel_ridge_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2098,9 +2063,7 @@ def mlp_lag_direct_forecast(
     try:
         from sklearn.neural_network import MLPRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mlp_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("mlp_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2179,9 +2142,7 @@ def huber_lag_direct_forecast(
         from sklearn.linear_model import HuberRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'huber_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("huber_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2256,9 +2217,7 @@ def quantile_lag_direct_forecast(
         from sklearn.linear_model import QuantileRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'quantile_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("quantile_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -2330,9 +2289,7 @@ def poisson_lag_direct_forecast(
         from sklearn.linear_model import PoissonRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'poisson_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("poisson_lag_direct_forecast", e)
 
     alpha_f = float(alpha)
     max_iter_int = int(max_iter)
@@ -2383,9 +2340,7 @@ def gamma_lag_direct_forecast(
         from sklearn.linear_model import GammaRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'gamma_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("gamma_lag_direct_forecast", e)
 
     alpha_f = float(alpha)
     max_iter_int = int(max_iter)
@@ -2437,9 +2392,7 @@ def tweedie_lag_direct_forecast(
         from sklearn.linear_model import TweedieRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'tweedie_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("tweedie_lag_direct_forecast", e)
 
     power_f = float(power)
     alpha_f = float(alpha)
@@ -2496,9 +2449,7 @@ def sgd_lag_direct_forecast(
         from sklearn.linear_model import SGDRegressor  # type: ignore
         from sklearn.multioutput import MultiOutputRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'sgd_lag_direct_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("sgd_lag_direct_forecast", e)
 
     x = _as_1d_float_array(train)
     if horizon <= 0:

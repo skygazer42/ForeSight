@@ -157,6 +157,8 @@ def test_models_search_accepts_stability_and_capability_filters() -> None:
     rows = json.loads(proc.stdout)
     assert rows
     assert rows[0]["key"] == "torch-rnnpaper-elman-srn-direct"
+    assert rows[0]["package_install_command"] == 'pip install "foresight-ts[torch]"'
+    assert rows[0]["editable_install_command"] == 'pip install -e ".[torch]"'
     assert rows[0]["required_extra"] == "torch"
     assert rows[0]["stability"] == "experimental"
     assert rows[0]["interface"] == "local"

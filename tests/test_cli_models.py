@@ -51,6 +51,8 @@ def test_models_info_outputs_json():
     payload = json.loads(proc.stdout)
     assert payload["key"] == "naive-last"
     assert payload["required_extra"] == "core"
+    assert payload["package_install_command"] == "pip install foresight-ts"
+    assert payload["editable_install_command"] == "pip install -e ."
     assert payload["stability"] == "stable"
     assert payload["capabilities"]["supports_x_cols"] is False
     assert payload["capabilities"]["supports_interval_forecast"] is True

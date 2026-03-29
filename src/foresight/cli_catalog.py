@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from . import cli_shared as _cli_shared
+from .optional_deps import editable_install_command, package_install_command
 
 _RNN_PAPER_METADATA_CACHE: dict[str, dict[str, Any]] | None = None
 _OUTPUT_FORMAT_DEFAULT_TSV_HELP = "Output format (default: tsv)"
@@ -515,11 +516,14 @@ def _model_spec_matches_filters(
 
 
 def _catalog_model_row_from_spec(spec: Any) -> dict[str, Any]:
+    required_extra = str(spec.required_extra)
     row: dict[str, Any] = {
         "key": spec.key,
         "interface": str(spec.interface),
         "requires": ",".join(spec.requires),
-        "required_extra": str(spec.required_extra),
+        "required_extra": required_extra,
+        "package_install_command": package_install_command(required_extra),
+        "editable_install_command": editable_install_command(required_extra),
         "stability": str(spec.stability_level),
         "description": spec.description,
         "default_params": dict(spec.default_params),
@@ -734,12 +738,15 @@ def _model_search_row(
     paper: dict[str, Any],
     wrapper: dict[str, Any],
 ) -> dict[str, Any]:
+    required_extra = str(spec.required_extra)
     row: dict[str, Any] = {
         "key": spec.key,
         "score": score,
         "interface": str(spec.interface),
         "requires": ",".join(spec.requires),
-        "required_extra": str(spec.required_extra),
+        "required_extra": required_extra,
+        "package_install_command": package_install_command(required_extra),
+        "editable_install_command": editable_install_command(required_extra),
         "stability": str(spec.stability_level),
         "description": spec.description,
         "capabilities": dict(spec.capabilities),
@@ -847,6 +854,8 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
         "description": spec.description,
         "requires": list(spec.requires),
         "required_extra": str(spec.required_extra),
+        "package_install_command": package_install_command(str(spec.required_extra)),
+        "editable_install_command": editable_install_command(str(spec.required_extra)),
         "stability": str(spec.stability_level),
         "default_params": dict(spec.default_params),
         "param_help": dict(spec.param_help),
