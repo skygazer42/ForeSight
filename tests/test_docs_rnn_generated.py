@@ -54,6 +54,7 @@ def test_model_capability_docs_are_up_to_date() -> None:
 
     assert actual_models == expected_models
     assert "`supports_interval_forecast`" in actual_models
+    assert "| stability |" in actual_models
     assert "`xgb-step-lag-global`" in actual_models
 
     assert actual_api == expected_api
@@ -73,6 +74,8 @@ def test_docs_site_navigation_includes_generated_pages() -> None:
     assert "Home: index.md" in mkdocs
     assert "Models: models.md" in mkdocs
     assert "API: api.md" in mkdocs
+    assert "Compatibility: compatibility.md" in mkdocs
 
     assert "[Model capability matrix](models.md)" in index_doc
     assert "[Python API reference](api.md)" in index_doc
+    assert "[Compatibility guide](compatibility.md)" in index_doc

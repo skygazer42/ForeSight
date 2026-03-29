@@ -50,6 +50,8 @@ def test_models_info_outputs_json():
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
     assert payload["key"] == "naive-last"
+    assert payload["required_extra"] == "core"
+    assert payload["stability"] == "stable"
     assert payload["capabilities"]["supports_x_cols"] is False
     assert payload["capabilities"]["supports_interval_forecast"] is True
     assert payload["capabilities"]["supports_artifact_save"] is True
@@ -58,6 +60,7 @@ def test_models_info_outputs_json():
 def test_root_help_mentions_forecast_and_tuning_commands():
     proc = _run_cli("--help")
     assert proc.returncode == 0
+    assert "doctor" in proc.stdout
     assert "forecast" in proc.stdout
     assert "tuning" in proc.stdout
 

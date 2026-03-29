@@ -8,6 +8,7 @@ classical, ML, and deep-learning model families.
 
 - [Artifact workflow](artifacts.md)
 - [CLI runtime logging](cli-logging.md)
+- [Compatibility guide](compatibility.md)
 - [Model capability matrix](models.md)
 - [Python API reference](api.md)
 - [Install guide](INSTALL.md)
@@ -27,6 +28,16 @@ from foresight import eval_model, forecast_model, make_forecaster_object
 Use the generated model matrix for registry capabilities, and use the API page
 for the supported forecast, evaluation, artifact, tuning, and data-prep entry
 points.
+
+## Environment Diagnostics
+
+Use the built-in doctor command when optional dependencies, data paths, or
+editable installs look suspicious:
+
+```bash
+foresight doctor
+foresight --data-dir /path/to/root doctor
+```
 
 ## Artifact CLI
 

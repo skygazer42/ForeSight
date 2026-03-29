@@ -9,6 +9,7 @@ nav:
   - Home: index.md
   - Models: models.md
   - API: api.md
+  - Compatibility: compatibility.md
   - Install: INSTALL.md
   - CLI Logging: cli-logging.md
   - Source Entrypoints: SOURCE_ENTRYPOINTS.md

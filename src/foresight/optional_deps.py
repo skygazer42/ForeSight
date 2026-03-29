@@ -1,0 +1,189 @@
+from __future__ import annotations
+
+import importlib.util
+from dataclasses import dataclass
+from importlib import import_module
+from typing import Any
+
+_ALIAS_TO_IMPORT_NAME = {
+    "catboost": "catboost",
+    "lgbm": "lightgbm",
+    "lightgbm": "lightgbm",
+    "ml": "sklearn",
+    "sklearn": "sklearn",
+    "stats": "statsmodels",
+    "statsmodels": "statsmodels",
+    "torch": "torch",
+    "transformers": "transformers",
+    "xgb": "xgboost",
+    "xgboost": "xgboost",
+}
+
+_EXTRA_REQUIREMENTS = {
+    "core": (),
+    "ml": ("ml",),
+    "xgb": ("xgb",),
+    "lgbm": ("lgbm",),
+    "catboost": ("catboost",),
+    "stats": ("stats",),
+    "torch": ("torch",),
+    "transformers": ("transformers", "torch"),
+    "all": ("ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"),
+}
+
+_TORCH_REQUIRED_ATTRS = ("nn",)
+
+_find_spec = importlib.util.find_spec
+_import_module = import_module
+
+
+@dataclass(frozen=True)
+class DependencyStatus:
+    name: str
+    import_name: str
+    available: bool
+    spec_found: bool
+    version: str | None
+    reason: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "import_name": self.import_name,
+            "available": self.available,
+            "spec_found": self.spec_found,
+            "version": self.version,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class ExtraStatus:
+    name: str
+    available: bool
+    requirements: tuple[str, ...]
+    details: dict[str, dict[str, Any]]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "available": self.available,
+            "requirements": list(self.requirements),
+            "details": dict(self.details),
+        }
+
+
+def _normalize_dependency_name(name: str) -> str:
+    key = str(name).strip().lower()
+    if key not in _ALIAS_TO_IMPORT_NAME:
+        raise KeyError(f"Unknown optional dependency key: {name!r}")
+    return key
+
+
+def _import_name_for_dependency(name: str) -> str:
+    normalized = _normalize_dependency_name(name)
+    return str(_ALIAS_TO_IMPORT_NAME[normalized])
+
+
+def _status_from_failure(name: str, import_name: str, *, spec_found: bool, reason: str) -> DependencyStatus:
+    return DependencyStatus(
+        name=name,
+        import_name=import_name,
+        available=False,
+        spec_found=spec_found,
+        version=None,
+        reason=reason,
+    )
+
+
+def get_dependency_status(name: str) -> DependencyStatus:
+    normalized = _normalize_dependency_name(name)
+    import_name = _import_name_for_dependency(normalized)
+    spec = _find_spec(import_name)
+    if spec is None:
+        return _status_from_failure(
+            normalized,
+            import_name,
+            spec_found=False,
+            reason="module spec not found",
+        )
+
+    try:
+        module = _import_module(import_name)
+    except Exception as exc:  # noqa: BLE001
+        return _status_from_failure(
+            normalized,
+            import_name,
+            spec_found=True,
+            reason=f"import failed: {type(exc).__name__}: {exc}",
+        )
+
+    if normalized == "torch":
+        missing = [attr for attr in _TORCH_REQUIRED_ATTRS if not hasattr(module, attr)]
+        if missing:
+            return _status_from_failure(
+                normalized,
+                import_name,
+                spec_found=True,
+                reason=f"missing required attributes: {', '.join(missing)}",
+            )
+
+    version = getattr(module, "__version__", None)
+    return DependencyStatus(
+        name=normalized,
+        import_name=import_name,
+        available=True,
+        spec_found=True,
+        version=str(version) if version is not None else None,
+        reason=None,
+    )
+
+
+def is_dependency_available(name: str) -> bool:
+    return bool(get_dependency_status(name).available)
+
+
+def require_dependency(name: str, *, install_hint: str | None = None) -> Any:
+    normalized = _normalize_dependency_name(name)
+    status = get_dependency_status(normalized)
+    if not status.available:
+        hint = f" Install with: {install_hint}" if install_hint else ""
+        raise ImportError(
+            f"Optional dependency {normalized!r} is not available ({status.reason}).{hint}".strip()
+        )
+    return _import_module(status.import_name)
+
+
+def get_extra_status(name: str) -> ExtraStatus:
+    extra_name = str(name).strip().lower()
+    try:
+        requirements = tuple(_EXTRA_REQUIREMENTS[extra_name])
+    except KeyError as exc:
+        raise KeyError(f"Unknown extra name: {name!r}") from exc
+
+    details = {req: get_dependency_status(req).as_dict() for req in requirements}
+    available = all(bool(detail["available"]) for detail in details.values())
+    if extra_name == "core":
+        available = True
+    return ExtraStatus(
+        name=extra_name,
+        available=available,
+        requirements=requirements,
+        details=details,
+    )
+
+
+def required_extra_name(requires: tuple[str, ...] | list[str]) -> str:
+    reqs = [str(item).strip() for item in requires if str(item).strip()]
+    return "core" if not reqs else "+".join(reqs)
+
+
+__all__ = [
+    "DependencyStatus",
+    "ExtraStatus",
+    "get_dependency_status",
+    "get_extra_status",
+    "is_dependency_available",
+    "require_dependency",
+    "required_extra_name",
+]

@@ -31,6 +31,7 @@ def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     assert "python tools/check_capability_docs.py" in proc.stdout
     assert "python tools/generate_model_capability_docs.py --check" in proc.stdout
     assert "python benchmarks/run_benchmarks.py --smoke" in proc.stdout
+    assert "python tools/smoke_build_install.py" in proc.stdout
     assert "mkdocs build --strict" in proc.stdout
 
 
@@ -214,6 +215,8 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "python tools/generate_model_capability_docs.py" in release_doc
     assert "python tools/generate_rnn_docs.py" in release_doc
     assert "python benchmarks/run_benchmarks.py --smoke" in release_doc
+    assert "python tools/smoke_build_install.py" in release_doc
+    assert "foresight doctor" in release_doc
     assert "mkdocs build --strict" in release_doc
     assert ".github/workflows/docs.yml" in release_doc
 
@@ -235,3 +238,23 @@ def test_architecture_import_check_passes() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_package_workflow_smokes_doctor_and_root_import_on_installed_artifacts() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "python -m foresight doctor" in workflow
+    assert 'python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
+    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor" in workflow
+    assert '/tmp/foresight_sdist_venv/bin/python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
+
+
+def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    script = (repo_root / "tools" / "smoke_build_install.py").read_text(encoding="utf-8")
+
+    assert '"import foresight; print(foresight.__version__)"' in script
+    assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
+    assert '"foresight", "doctor"' in script
+    assert 'sys.executable, "-m", "virtualenv"' in script

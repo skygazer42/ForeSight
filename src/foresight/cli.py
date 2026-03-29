@@ -72,6 +72,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
     _cli_catalog.register_catalog_subparsers(sub)
 
+    doctor = sub.add_parser("doctor", help="Inspect environment, datasets, and optional dependencies")
+    doctor.add_argument(
+        "--format",
+        choices=["json"],
+        default="json",
+        help=_OUTPUT_JSON_FORMAT_HELP,
+    )
+    doctor.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help=_OUTPUT_PATH_HELP,
+    )
+    doctor.set_defaults(_handler=_cmd_doctor)
+
     cv = sub.add_parser("cv", help="Cross-validation utilities")
     cv_sub = cv.add_subparsers(dest="cv_command", required=True)
 
@@ -999,6 +1014,50 @@ def _root_shortcut_handler(args: argparse.Namespace) -> Any:
         return lambda _args: _cli_data._cmd_datasets_list(shortcut_args)
 
     return None
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from . import __version__
+    from .datasets.registry import list_datasets, list_packaged_datasets, preview_dataset_path_info
+    from .optional_deps import get_dependency_status, get_extra_status
+
+    dependency_keys = ["ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"]
+    extra_keys = ["core", "ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "all"]
+    data_dir = str(getattr(args, "data_dir", ""))
+
+    datasets: dict[str, dict[str, Any]] = {}
+    packaged = set(list_packaged_datasets())
+    for key in list_datasets():
+        path, source, available = preview_dataset_path_info(key, data_dir=data_dir)
+        datasets[key] = {
+            "available": available,
+            "packaged": key in packaged,
+            "path": str(path),
+            "source": source,
+        }
+
+    package_path = Path(__file__).resolve().parent / "__init__.py"
+    payload = {
+        "package": {
+            "name": "foresight-ts",
+            "version": __version__,
+            "module_path": str(package_path),
+            "editable_like": "site-packages" not in str(package_path),
+        },
+        "python": {
+            "version": sys.version.split()[0],
+            "executable": sys.executable,
+        },
+        "data_dir": {
+            "argument": data_dir.strip() or None,
+            "env": os.environ.get("FORESIGHT_DATA_DIR", "").strip() or None,
+        },
+        "dependencies": {name: get_dependency_status(name).as_dict() for name in dependency_keys},
+        "extras": {name: get_extra_status(name).as_dict() for name in extra_keys},
+        "datasets": datasets,
+    }
+    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+    return 0
 
 
 def _log_payload(**kwargs: Any) -> dict[str, Any]:

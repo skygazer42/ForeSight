@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 from ..cli_runtime import compact_log_payload, emit_cli_event
+from ..optional_deps import require_dependency
 
 _HIDDEN_SIZE_MIN_MSG = "hidden_size must be >= 1"
 _NUM_LAYERS_MIN_MSG = "num_layers must be >= 1"
@@ -101,19 +102,18 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
 
 
 def _require_torch() -> Any:
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The pynvml package is deprecated.*",
-                category=FutureWarning,
-            )
-            import torch  # type: ignore
-    except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'Torch models require PyTorch. Install with: pip install -e ".[torch]"'
-        ) from e
-    return torch
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="The pynvml package is deprecated.*",
+            category=FutureWarning,
+        )
+        try:
+            return require_dependency("torch", install_hint='pip install -e ".[torch]"')
+        except ImportError as e:
+            raise ImportError(
+                'Torch models require PyTorch. Install with: pip install -e ".[torch]"'
+            ) from e
 
 
 def _make_transformer_encoder(

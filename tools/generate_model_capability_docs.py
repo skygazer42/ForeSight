@@ -364,6 +364,7 @@ def _render_models_doc() -> str:
 
     interface_counts = Counter(str(spec.interface) for spec in specs)
     requires_counts = Counter(",".join(spec.requires) or "core" for spec in specs)
+    stability_counts = Counter(str(spec.stability_level) for spec in specs)
 
     lines: list[str] = []
     lines.append("# Model Capability Matrix")
@@ -393,6 +394,7 @@ def _render_models_doc() -> str:
     lines.append("```bash")
     lines.append("foresight models list --format json")
     lines.append("foresight models info xgb-step-lag-global")
+    lines.append("foresight doctor")
     lines.append("```")
     lines.append("")
     lines.append("```python")
@@ -410,19 +412,26 @@ def _render_models_doc() -> str:
     for requires, count in sorted(requires_counts.items(), key=lambda item: (-item[1], item[0])):
         lines.append(f"| `{requires}` | {count} |")
     lines.append("")
+    lines.append("## Stability summary")
+    lines.append("")
+    lines.append("| stability | model_count |")
+    lines.append("| --- | ---: |")
+    for stability, count in sorted(stability_counts.items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"| `{stability}` | {count} |")
+    lines.append("")
     lines.append("## Full registry matrix")
     lines.append("")
     lines.append(
-        "| key | interface | requires | `supports_x_cols` | `supports_static_cols` | `supports_quantiles` | "
+        "| key | interface | requires | required_extra | stability | `supports_x_cols` | `supports_static_cols` | `supports_quantiles` | "
         "`supports_interval_forecast` | `supports_interval_forecast_with_x_cols` | "
         "`supports_artifact_save` | `requires_future_covariates` |"
     )
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for spec in specs:
         capabilities = dict(spec.capabilities)
         requires = ",".join(spec.requires) or "core"
         lines.append(
-            f"| `{spec.key}` | `{spec.interface}` | `{requires}` | "
+            f"| `{spec.key}` | `{spec.interface}` | `{requires}` | `{spec.required_extra}` | `{spec.stability_level}` | "
             f"{_bool_cell(capabilities.get('supports_x_cols'))} | "
             f"{_bool_cell(capabilities.get('supports_static_cols'))} | "
             f"{_bool_cell(capabilities.get('supports_quantiles'))} | "

@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import foresight.optional_deps as optional_deps
+
+
+def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(src) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.run(
+        [sys.executable, "-m", "foresight", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_doctor_json_reports_environment_and_dependency_status() -> None:
+    proc = _run_cli("doctor")
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert payload["package"]["version"]
+    assert payload["package"]["module_path"]
+    assert payload["python"]["version"]
+    assert payload["python"]["executable"]
+    assert payload["dependencies"]["torch"]["available"] is optional_deps.get_dependency_status(
+        "torch"
+    ).available
+    assert payload["datasets"]["store_sales"]["available"] in {True, False}
+    assert payload["datasets"]["store_sales"]["packaged"] is False
+    assert payload["datasets"]["catfish"]["source"] in {"package", "repo", "env", "data_dir"}
+
+
+def test_doctor_uses_explicit_data_dir_when_provided(tmp_path: Path) -> None:
+    data_root = tmp_path / "data-root"
+    catfish_dir = data_root / "statistics time series"
+    catfish_dir.mkdir(parents=True)
+    csv_path = catfish_dir / "catfish.csv"
+    csv_path.write_text("Date,Total\n2020-01-01,1\n", encoding="utf-8")
+
+    proc = _run_cli("--data-dir", str(data_root), "doctor")
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert payload["datasets"]["catfish"]["source"] == "data_dir"
+    assert payload["datasets"]["catfish"]["path"] == str(csv_path.resolve())
+    assert payload["datasets"]["store_sales"]["source"] == "data_dir"
+    assert payload["datasets"]["store_sales"]["available"] is False

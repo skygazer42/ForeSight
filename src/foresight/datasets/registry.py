@@ -101,19 +101,23 @@ def describe_dataset(key: str) -> str:
     return get_dataset_spec(key).description
 
 
-def resolve_dataset_path(key: str, *, data_dir: str | Path | None = None) -> Path:
+def resolve_dataset_path_info(
+    key: str,
+    *,
+    data_dir: str | Path | None = None,
+) -> tuple[Path, str]:
     spec = get_dataset_spec(key)
 
     if isinstance(data_dir, str) and not data_dir.strip():
         data_dir = None
     if data_dir is not None:
         base = Path(data_dir).expanduser()
-        return (base / spec.rel_path).resolve()
+        return (base / spec.rel_path).resolve(), "data_dir"
 
     env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
     if env_dir:
         base = Path(env_dir).expanduser()
-        return (base / spec.rel_path).resolve()
+        return (base / spec.rel_path).resolve(), "env"
 
     # Installed-package fallback: for a small subset of datasets we ship CSVs
     # under `foresight/data/` to support `pip install` demos.
@@ -121,15 +125,57 @@ def resolve_dataset_path(key: str, *, data_dir: str | Path | None = None) -> Pat
         pkg_root = Path(__file__).resolve().parents[1]  # foresight/
         pkg_path = (pkg_root / spec.package_rel_path).resolve()
         if pkg_path.exists():
-            return pkg_path
+            return pkg_path, "package"
 
     # Dev fallback: when running from the repo, `parents[3]` resolves repo root.
     repo_root = Path(__file__).resolve().parents[3]
     repo_path = (repo_root / spec.rel_path).resolve()
     if repo_path.exists():
-        return repo_path
+        return repo_path, "repo"
 
     raise FileNotFoundError(
         f"Dataset file not found for key={key!r}. "
         "Provide `--data-dir ...` or set FORESIGHT_DATA_DIR."
     )
+
+
+def resolve_dataset_path(key: str, *, data_dir: str | Path | None = None) -> Path:
+    path, _source = resolve_dataset_path_info(key, data_dir=data_dir)
+    return path
+
+
+def preview_dataset_path_info(
+    key: str,
+    *,
+    data_dir: str | Path | None = None,
+) -> tuple[Path, str, bool]:
+    spec = get_dataset_spec(key)
+
+    if isinstance(data_dir, str) and not data_dir.strip():
+        data_dir = None
+
+    candidates: list[tuple[Path, str]] = []
+    if data_dir is not None:
+        base = Path(data_dir).expanduser()
+        candidates.append(((base / spec.rel_path).resolve(), "data_dir"))
+    else:
+        env_dir = os.environ.get("FORESIGHT_DATA_DIR", "").strip()
+        if env_dir:
+            base = Path(env_dir).expanduser()
+            candidates.append(((base / spec.rel_path).resolve(), "env"))
+        else:
+            if spec.package_rel_path is not None:
+                pkg_root = Path(__file__).resolve().parents[1]
+                candidates.append(((pkg_root / spec.package_rel_path).resolve(), "package"))
+
+            repo_root = Path(__file__).resolve().parents[3]
+            candidates.append(((repo_root / spec.rel_path).resolve(), "repo"))
+
+    for path, source in candidates:
+        if path.exists():
+            return path, source, True
+
+    if not candidates:
+        raise RuntimeError(f"No dataset resolution candidates available for key={key!r}")
+    path, source = candidates[0]
+    return path, source, False

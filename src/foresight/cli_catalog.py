@@ -46,7 +46,7 @@ def _register_models_parser(sub: Any) -> None:
     )
     models_list.add_argument(
         "--interface",
-        choices=["any", "local", "global"],
+        choices=["any", "local", "global", "multivariate"],
         default="any",
         help="Filter by interface (default: any)",
     )
@@ -55,6 +55,12 @@ def _register_models_parser(sub: Any) -> None:
         type=str,
         default="",
         help="Filter by requires (comma-separated). Example: torch or core,torch",
+    )
+    models_list.add_argument(
+        "--extra",
+        dest="requires",
+        type=str,
+        help="Alias for --requires.",
     )
     models_list.add_argument(
         "--exclude-requires",
@@ -89,6 +95,18 @@ def _register_models_parser(sub: Any) -> None:
         type=int,
         default=0,
         help="Max number of results (0 means no limit)",
+    )
+    models_list.add_argument(
+        "--stability",
+        choices=["any", "stable", "beta", "experimental"],
+        default="any",
+        help="Filter by stability level (default: any)",
+    )
+    models_list.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="Capability filter as name=true/false. Repeatable. Example: --capability supports_x_cols=true",
     )
     models_list.set_defaults(_handler=_cmd_models_list)
 
@@ -132,7 +150,7 @@ def _register_models_parser(sub: Any) -> None:
     )
     models_search.add_argument(
         "--interface",
-        choices=["any", "local", "global"],
+        choices=["any", "local", "global", "multivariate"],
         default="any",
         help="Filter by interface (default: any)",
     )
@@ -141,6 +159,12 @@ def _register_models_parser(sub: Any) -> None:
         type=str,
         default="",
         help="Filter by requires (comma-separated). Example: torch or core,torch",
+    )
+    models_search.add_argument(
+        "--extra",
+        dest="requires",
+        type=str,
+        help="Alias for --requires.",
     )
     models_search.add_argument(
         "--exclude-requires",
@@ -153,6 +177,18 @@ def _register_models_parser(sub: Any) -> None:
         type=int,
         default=20,
         help="Max number of results (default: 20)",
+    )
+    models_search.add_argument(
+        "--stability",
+        choices=["any", "stable", "beta", "experimental"],
+        default="any",
+        help="Filter by stability level (default: any)",
+    )
+    models_search.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="Capability filter as name=true/false. Repeatable. Example: --capability supports_x_cols=true",
     )
     models_search.add_argument(
         "--any",
@@ -406,8 +442,8 @@ def _paper_payload_for_model_key(key: str) -> dict[str, Any] | None:
 
 def _validated_model_interface_filter(raw: object) -> str:
     interface_filter = str(raw).strip().lower()
-    if interface_filter not in {"any", "local", "global"}:
-        raise ValueError("--interface must be one of: any, local, global")
+    if interface_filter not in {"any", "local", "global", "multivariate"}:
+        raise ValueError("--interface must be one of: any, local, global, multivariate")
     return interface_filter
 
 
@@ -442,6 +478,8 @@ def _model_spec_matches_filters(
     *,
     prefix: str,
     interface_filter: str,
+    stability_filter: str,
+    capability_filters: dict[str, bool],
     req_set: set[str],
     include_core: bool,
     exc_set: set[str],
@@ -450,6 +488,8 @@ def _model_spec_matches_filters(
     if prefix and not str(spec.key).startswith(prefix):
         return False
     if interface_filter != "any" and str(spec.interface) != interface_filter:
+        return False
+    if stability_filter != "any" and str(spec.stability_level) != stability_filter:
         return False
 
     reqs = set(spec.requires)
@@ -466,6 +506,11 @@ def _model_spec_matches_filters(
     ):
         return False
 
+    capabilities = dict(spec.capabilities)
+    for name, expected in capability_filters.items():
+        if bool(capabilities.get(name, False)) is not expected:
+            return False
+
     return True
 
 
@@ -474,6 +519,8 @@ def _catalog_model_row_from_spec(spec: Any) -> dict[str, Any]:
         "key": spec.key,
         "interface": str(spec.interface),
         "requires": ",".join(spec.requires),
+        "required_extra": str(spec.required_extra),
+        "stability": str(spec.stability_level),
         "description": spec.description,
         "default_params": dict(spec.default_params),
         "capabilities": dict(spec.capabilities),
@@ -499,6 +546,10 @@ def _models_list_sort_value(row: dict[str, Any], sort_key: str) -> object | None
         return str(row.get("interface", "")).lower()
     if sort_key == "requires":
         return str(row.get("requires", "")).lower()
+    if sort_key == "required_extra":
+        return str(row.get("required_extra", "")).lower()
+    if sort_key == "stability":
+        return str(row.get("stability", "")).lower()
     if sort_key == "description":
         return str(row.get("description", "")).lower()
     if sort_key == "paper_id":
@@ -512,7 +563,7 @@ def _models_list_sort_value(row: dict[str, Any], sort_key: str) -> object | None
         year = wrapper.get("year", None)
         return int(year) if isinstance(year, int) else None
     raise ValueError(
-        "--sort must be one of: key, interface, requires, description, paper_id, paper_year, wrapper_paper_id, wrapper_year"
+        "--sort must be one of: key, interface, requires, required_extra, stability, description, paper_id, paper_year, wrapper_paper_id, wrapper_year"
     )
 
 
@@ -553,6 +604,10 @@ def _models_list_column_value(row: dict[str, Any], col: str) -> object:
         return row.get("interface", "")
     if col == "requires":
         return row.get("requires", "")
+    if col == "required_extra":
+        return row.get("required_extra", "")
+    if col == "stability":
+        return row.get("stability", "")
     if col == "description":
         return row.get("description", "")
     if col == "paper_id":
@@ -568,7 +623,7 @@ def _models_list_column_value(row: dict[str, Any], col: str) -> object:
     if col == "wrapper_title":
         return wrapper.get("title", "")
     raise ValueError(
-        "--columns must be a comma-separated list of: key, interface, requires, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
+        "--columns must be a comma-separated list of: key, interface, requires, required_extra, stability, description, paper_id, paper_year, paper_title, wrapper_paper_id, wrapper_year, wrapper_title"
     )
 
 
@@ -589,6 +644,26 @@ def _models_list_tsv_lines(
             )
         )
     return lines
+
+
+def _parse_capability_filters(raw_filters: list[str]) -> dict[str, bool]:
+    parsed: dict[str, bool] = {}
+    for raw in raw_filters:
+        item = str(raw).strip()
+        if not item:
+            continue
+        if "=" in item:
+            name, raw_value = item.split("=", 1)
+        else:
+            name, raw_value = item, "true"
+        key = str(name).strip()
+        value_s = str(raw_value).strip().lower()
+        if not key:
+            raise ValueError("--capability entries must include a capability name")
+        if value_s not in {"true", "false"}:
+            raise ValueError("--capability values must be true or false")
+        parsed[key] = value_s == "true"
+    return parsed
 
 
 def _score_model_search_token(
@@ -699,6 +774,8 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
     interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
+    stability_filter = str(getattr(args, "stability", "any")).strip().lower() or "any"
+    capability_filters = _parse_capability_filters(list(getattr(args, "capability", [])))
     req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
@@ -712,6 +789,8 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
             spec,
             prefix=prefix,
             interface_filter=interface_filter,
+            stability_filter=stability_filter,
+            capability_filters=capability_filters,
             req_set=req_set,
             include_core=include_core,
             exc_set=exc_set,
@@ -763,6 +842,8 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
         "interface": str(spec.interface),
         "description": spec.description,
         "requires": list(spec.requires),
+        "required_extra": str(spec.required_extra),
+        "stability": str(spec.stability_level),
         "default_params": dict(spec.default_params),
         "param_help": dict(spec.param_help),
         "capabilities": dict(spec.capabilities),
@@ -791,6 +872,8 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     prefix = str(args.prefix).strip()
 
     interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
+    stability_filter = str(getattr(args, "stability", "any")).strip().lower() or "any"
+    capability_filters = _parse_capability_filters(list(getattr(args, "capability", [])))
     req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
     exc_set, exclude_core = _cli_shared._parse_requires_filter(
         str(getattr(args, "exclude_requires", ""))
@@ -808,6 +891,8 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
             spec,
             prefix=prefix,
             interface_filter=interface_filter,
+            stability_filter=stability_filter,
+            capability_filters=capability_filters,
             req_set=req_set,
             include_core=include_core,
             exc_set=exc_set,

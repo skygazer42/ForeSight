@@ -84,3 +84,94 @@ def test_models_list_json_includes_capabilities() -> None:
     assert rows[0]["capabilities"]["supports_quantiles"] is True
     assert rows[0]["capabilities"]["supports_interval_forecast"] is True
     assert rows[0]["capabilities"]["supports_interval_forecast_with_x_cols"] is True
+
+
+def test_models_list_filter_interface_multivariate() -> None:
+    proc = _run_cli(
+        "models",
+        "list",
+        "--format",
+        "json",
+        "--interface",
+        "multivariate",
+        "--limit",
+        "5",
+    )
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows
+    assert all(r.get("interface") == "multivariate" for r in rows if isinstance(r, dict))
+
+
+def test_models_list_can_filter_by_capability() -> None:
+    proc = _run_cli(
+        "models",
+        "list",
+        "--format",
+        "json",
+        "--capability",
+        "supports_x_cols=true",
+        "--limit",
+        "20",
+    )
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows
+    assert all(rows[i]["capabilities"]["supports_x_cols"] is True for i in range(len(rows)))
+
+
+def test_models_list_can_filter_by_stability() -> None:
+    proc = _run_cli(
+        "models",
+        "list",
+        "--format",
+        "json",
+        "--prefix",
+        "torch-rnnpaper-elman-srn",
+        "--stability",
+        "experimental",
+    )
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows
+    assert rows[0]["key"] == "torch-rnnpaper-elman-srn-direct"
+    assert rows[0]["required_extra"] == "torch"
+    assert rows[0]["stability"] == "experimental"
+
+
+def test_models_search_accepts_stability_and_capability_filters() -> None:
+    proc = _run_cli(
+        "models",
+        "search",
+        "elman",
+        "--format",
+        "json",
+        "--stability",
+        "experimental",
+        "--capability",
+        "supports_artifact_save=true",
+        "--limit",
+        "10",
+    )
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows
+    assert rows[0]["key"] == "torch-rnnpaper-elman-srn-direct"
+
+
+def test_models_search_filter_interface_multivariate() -> None:
+    proc = _run_cli(
+        "models",
+        "search",
+        "graph",
+        "--format",
+        "json",
+        "--interface",
+        "multivariate",
+        "--limit",
+        "10",
+    )
+    assert proc.returncode == 0
+    rows = json.loads(proc.stdout)
+    assert rows
+    assert any("multivariate" in str(row["key"]) for row in rows)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import subprocess
 import sys
@@ -24,6 +25,39 @@ def _venv_python(venv_dir: Path) -> Path:
     if sys.platform.startswith("win"):
         return venv_dir / "Scripts" / "python.exe"
     return venv_dir / "bin" / "python"
+
+
+def _create_venv(*, venv_dir: Path, cwd: Path, env: dict[str, str]) -> None:
+    cmd = [sys.executable, "-m", "venv", "--system-site-packages", str(venv_dir)]
+    print(f"+ {' '.join(cmd)}", flush=True)
+    proc = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return
+
+    combined = ((proc.stdout or "") + (proc.stderr or "")).lower()
+    if "ensurepip" not in combined:
+        raise subprocess.CalledProcessError(
+            proc.returncode,
+            cmd,
+            output=proc.stdout,
+            stderr=proc.stderr,
+        )
+
+    if importlib.util.find_spec("virtualenv") is None:
+        raise RuntimeError(
+            "python -m venv failed because ensurepip is unavailable, and `virtualenv` is not installed."
+        )
+
+    print("NOTE: stdlib venv missing ensurepip; falling back to virtualenv", flush=True)
+    if proc.stdout:
+        print(proc.stdout, end="", flush=True)
+    if proc.stderr:
+        print(proc.stderr, end="", flush=True)
+    _run(
+        [sys.executable, "-m", "virtualenv", "--system-site-packages", str(venv_dir)],
+        cwd=cwd,
+        env=env,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,9 +93,15 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=root,
                 env=env,
             )
+            _run(
+                [str(py), "-c", "import foresight; print(sorted(foresight.__all__)[:3])"],
+                cwd=root,
+                env=env,
+            )
 
             # CLI smoke (module invocation avoids PATH concerns).
             _run([str(py), "-m", "foresight", "--version"], cwd=root, env=env)
+            _run([str(py), "-m", "foresight", "doctor"], cwd=root, env=env)
             _run(
                 [str(py), "-m", "foresight", "models", "info", "torch-rnnpaper-elman-srn-direct"],
                 cwd=root,
@@ -168,10 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         wheel = wheels[0]
 
         # Create a clean venv and install the wheel.
-        _run(
-            [sys.executable, "-m", "venv", "--system-site-packages", str(venv_wheel_dir)],
-            cwd=root,
-        )
+        _create_venv(venv_dir=venv_wheel_dir, cwd=root, env=env)
         py_wheel = _venv_python(venv_wheel_dir)
         _run(
             [
@@ -197,10 +234,7 @@ def main(argv: list[str] | None = None) -> int:
             sdist = sdists[0]
 
             venv_sdist_dir = tmp_path / "venv_sdist"
-            _run(
-                [sys.executable, "-m", "venv", "--system-site-packages", str(venv_sdist_dir)],
-                cwd=root,
-            )
+            _create_venv(venv_dir=venv_sdist_dir, cwd=root, env=env)
             py_sdist = _venv_python(venv_sdist_dir)
             _run(
                 [

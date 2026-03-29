@@ -23,7 +23,45 @@ class ModelSpec:
     param_help: dict[str, str] = field(default_factory=dict)
     requires: tuple[str, ...] = ()
     interface: str = "local"
+    stability: str = ""
     capability_overrides: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def required_extra(self) -> str:
+        reqs = [str(item).strip() for item in self.requires if str(item).strip()]
+        return "core" if not reqs else "+".join(reqs)
+
+    @property
+    def stability_level(self) -> str:
+        raw = str(self.stability).strip().lower()
+        if raw in {"stable", "beta", "experimental"}:
+            return raw
+
+        key_l = str(self.key).strip().lower()
+        reqs = {str(item).strip().lower() for item in self.requires if str(item).strip()}
+        experimental_prefixes = (
+            "torch-rnnpaper-",
+            "torch-graph-attention-",
+            "torch-graph-spectral-",
+            "torch-graph-structure-",
+            "torch-structured-rnn-",
+            "torch-reservoir-",
+            "hf-timeseries-",
+        )
+        experimental_keys = {
+            "chronos",
+            "chronos-bolt",
+            "lag-llama",
+            "moirai",
+            "time-moe",
+            "timer-s1",
+            "timesfm",
+        }
+        if key_l.startswith(experimental_prefixes) or key_l in experimental_keys:
+            return "experimental"
+        if "torch" in reqs or "transformers" in reqs:
+            return "beta"
+        return "stable"
 
     @property
     def capabilities(self) -> dict[str, Any]:

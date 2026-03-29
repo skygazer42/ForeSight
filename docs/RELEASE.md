@@ -23,6 +23,7 @@ python tools/generate_rnn_docs.py
 
 ```bash
 python benchmarks/run_benchmarks.py --smoke
+python tools/smoke_build_install.py
 mkdocs build --strict
 ```
 
@@ -73,6 +74,13 @@ There is a `Release` workflow at `.github/workflows/release.yml` that can run th
   inputs `publish=true` and `repository=pypi`.
 - To publish to **TestPyPI**, add a repository secret named `TESTPYPI_API_TOKEN`, then run the workflow with
   inputs `publish=true` and `repository=testpypi`.
+
+Before publishing, you can also sanity-check the installed artifact environment directly:
+
+```bash
+foresight doctor
+python -m foresight doctor
+```
 
 ## Optional: GitHub Pages docs publish
 

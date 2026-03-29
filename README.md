@@ -149,6 +149,13 @@ pip install "foresight-ts[torch]"       # PyTorch neural models
 pip install "foresight-ts[all]"         # everything above
 ```
 
+Check the active environment, optional dependencies, and dataset resolution:
+
+```bash
+foresight doctor
+foresight --data-dir /path/to/root doctor
+```
+
 <details>
 <summary><b>Install from source (for development)</b></summary>
 
@@ -192,7 +199,10 @@ yhat = obj.predict(3)
 # Discover models and datasets
 foresight models list                     # list all 250+ models
 foresight models info theta               # inspect parameters & defaults
+foresight models list --stability stable  # filter by maturity level
+foresight models list --capability supports_x_cols=true --format json
 foresight datasets list                   # browse built-in datasets
+foresight doctor                          # inspect optional deps and data paths
 
 # Evaluate a model
 foresight eval run --model theta --dataset catfish --y-col Total \

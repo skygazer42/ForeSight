@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import pickle
 import time
@@ -17,6 +16,7 @@ from ..data.prep import prepare_long_df
 from ..datasets import load_dataset
 from ..datasets.registry import get_dataset_spec
 from ..models.registry import get_model_spec, list_models
+from ..optional_deps import is_dependency_available, require_dependency
 from .evaluation import eval_model_long_df, eval_multivariate_model_df
 
 _VALIDATION_DATASET_KEY = "promotion_data"
@@ -174,7 +174,7 @@ def build_promotion_multivariate_wide_df(
 
 
 def _torch_installed() -> bool:
-    return importlib.util.find_spec("torch") is not None
+    return is_dependency_available("torch")
 
 
 def resolve_runtime_device(device: str = "auto") -> str:
@@ -190,7 +190,7 @@ def resolve_runtime_device(device: str = "auto") -> str:
             raise RuntimeError("device='cuda' requested but torch is not installed")
         return "cpu"
 
-    import torch
+    torch = require_dependency("torch", install_hint='pip install -e ".[torch]"')
 
     cuda_available = bool(torch.cuda.is_available())
     if requested == "cuda":

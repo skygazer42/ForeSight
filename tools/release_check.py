@@ -46,6 +46,7 @@ def _quality_commands() -> list[list[str]]:
         [sys.executable, "-m", "mypy", "--no-incremental", "--cache-dir=/dev/null"],
         [sys.executable, "-m", "pytest", "-q"],
         [sys.executable, "benchmarks/run_benchmarks.py", "--smoke"],
+        [sys.executable, "tools/smoke_build_install.py"],
         ["mkdocs", "build", "--strict"],
     ]
 
