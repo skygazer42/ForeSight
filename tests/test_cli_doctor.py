@@ -39,6 +39,23 @@ def test_doctor_json_reports_environment_and_dependency_status() -> None:
     assert payload["datasets"]["store_sales"]["available"] in {True, False}
     assert payload["datasets"]["store_sales"]["packaged"] is False
     assert payload["datasets"]["catfish"]["source"] in {"package", "repo", "env", "data_dir"}
+    assert isinstance(payload["findings"], list)
+    assert all("severity" in item and "scope" in item and "message" in item for item in payload["findings"])
+    assert payload["summary"]["status"] in {"ok", "warn", "error"}
+    assert isinstance(payload["summary"]["warning_count"], int)
+    assert isinstance(payload["summary"]["error_count"], int)
+
+
+def test_doctor_text_reports_sections() -> None:
+    proc = _run_cli("doctor", "--format", "text")
+
+    assert proc.returncode == 0
+    assert "ForeSight Doctor" in proc.stdout
+    assert "Package" in proc.stdout
+    assert "Python" in proc.stdout
+    assert "Dependencies" in proc.stdout
+    assert "Datasets" in proc.stdout
+    assert "Status:" in proc.stdout
 
 
 def test_doctor_uses_explicit_data_dir_when_provided(tmp_path: Path) -> None:
@@ -56,3 +73,17 @@ def test_doctor_uses_explicit_data_dir_when_provided(tmp_path: Path) -> None:
     assert payload["datasets"]["catfish"]["path"] == str(csv_path.resolve())
     assert payload["datasets"]["store_sales"]["source"] == "data_dir"
     assert payload["datasets"]["store_sales"]["available"] is False
+
+
+def test_doctor_strict_returns_one_when_warnings_present(tmp_path: Path) -> None:
+    data_root = tmp_path / "data-root"
+    catfish_dir = data_root / "statistics time series"
+    catfish_dir.mkdir(parents=True)
+    (catfish_dir / "catfish.csv").write_text("Date,Total\n2020-01-01,1\n", encoding="utf-8")
+
+    proc = _run_cli("--data-dir", str(data_root), "doctor", "--format", "text", "--strict")
+
+    assert proc.returncode == 1
+    assert "Status: WARN" in proc.stdout
+    assert "Warnings" in proc.stdout
+    assert "store_sales" in proc.stdout

@@ -205,6 +205,7 @@ jobs:
           foresight --version
           python -m foresight --version
           python -m foresight doctor
+          python -m foresight doctor --format text
           python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"
           python -m foresight models info torch-rnnpaper-elman-srn-direct
           python -m foresight datasets preview catfish --nrows 3
@@ -218,6 +219,7 @@ jobs:
           /tmp/foresight_sdist_venv/bin/foresight --version
           /tmp/foresight_sdist_venv/bin/python -m foresight --version
           /tmp/foresight_sdist_venv/bin/python -m foresight doctor
+          /tmp/foresight_sdist_venv/bin/python -m foresight doctor --format text
           /tmp/foresight_sdist_venv/bin/python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"
           /tmp/foresight_sdist_venv/bin/python -m foresight models info torch-rnnpaper-elman-srn-direct
           /tmp/foresight_sdist_venv/bin/python -m foresight datasets preview catfish --nrows 3

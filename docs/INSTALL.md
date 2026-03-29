@@ -39,6 +39,9 @@ pip install "foresight-ts[all]"
 ```bash
 python -m foresight --help
 python -m foresight --version
+python -m foresight doctor
+python -m foresight doctor --format text
+python -m foresight --data-dir /path/to/root doctor --format text --strict
 python -m foresight cv --help
 python -m foresight forecast --help
 python -m foresight detect --help
@@ -55,6 +58,9 @@ python -m foresight tuning run --model moving-average --dataset catfish --y-col 
 Runtime logs for long-running commands are written to `stderr` by default. Use
 `--no-progress`, `--log-style plain`, or `--log-file /tmp/run-log.jsonl` to
 control the CLI logging behavior without affecting `stdout`.
+
+Use `doctor --format text` for a human-readable environment summary and
+`doctor --strict` when you want warnings to return exit code `1` in automation.
 
 ## High-level Python helpers
 

@@ -75,15 +75,20 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="Inspect environment, datasets, and optional dependencies")
     doctor.add_argument(
         "--format",
-        choices=["json"],
+        choices=["json", "text"],
         default="json",
-        help=_OUTPUT_JSON_FORMAT_HELP,
+        help="Output format (default: json)",
     )
     doctor.add_argument(
         "--output",
         type=str,
         default="",
         help=_OUTPUT_PATH_HELP,
+    )
+    doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with code 1 when warnings are present, not just errors.",
     )
     doctor.set_defaults(_handler=_cmd_doctor)
 
@@ -1056,8 +1061,127 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         "extras": {name: get_extra_status(name).as_dict() for name in extra_keys},
         "datasets": datasets,
     }
-    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
-    return 0
+    findings = _doctor_findings(payload)
+    summary = _doctor_summary(findings=findings, strict=bool(getattr(args, "strict", False)))
+    payload["findings"] = findings
+    payload["summary"] = summary
+
+    fmt = str(args.format)
+    if fmt == "text":
+        _cli_shared._emit_text(_render_doctor_text(payload, findings=findings), output=str(args.output))
+    else:
+        _cli_shared._emit(payload, output=str(args.output), fmt=fmt)
+    return int(summary["exit_code"])
+
+
+def _doctor_findings(payload: dict[str, Any]) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+
+    for name, dep in sorted(dict(payload.get("dependencies", {})).items()):
+        if bool(dep.get("available", False)):
+            continue
+        findings.append(
+            {
+                "severity": "warning",
+                "scope": "dependency",
+                "key": str(name),
+                "message": (
+                    f"{name} unavailable: {dep.get('reason')}. "
+                    f"Install with: {dep.get('package_install_command')} or {dep.get('editable_install_command')}"
+                ),
+            }
+        )
+
+    for name, dataset in sorted(dict(payload.get("datasets", {})).items()):
+        if bool(dataset.get("available", False)):
+            continue
+        severity = (
+            "error"
+            if bool(dataset.get("packaged", False)) and str(dataset.get("source")) == "package"
+            else "warning"
+        )
+        findings.append(
+            {
+                "severity": severity,
+                "scope": "dataset",
+                "key": str(name),
+                "message": (
+                    f"{name} unavailable via {dataset.get('source')}: {dataset.get('path')}"
+                ),
+            }
+        )
+
+    return findings
+
+
+def _doctor_summary(*, findings: list[dict[str, str]], strict: bool) -> dict[str, Any]:
+    error_count = int(sum(1 for item in findings if item.get("severity") == "error"))
+    warning_count = int(sum(1 for item in findings if item.get("severity") == "warning"))
+    if error_count > 0:
+        status = "error"
+    elif warning_count > 0:
+        status = "warn"
+    else:
+        status = "ok"
+    exit_code = 1 if error_count > 0 or (strict and warning_count > 0) else 0
+    return {
+        "status": status,
+        "error_count": error_count,
+        "warning_count": warning_count,
+        "strict": bool(strict),
+        "exit_code": int(exit_code),
+    }
+
+
+def _render_doctor_text(payload: dict[str, Any], *, findings: list[dict[str, str]]) -> str:
+    summary = dict(payload.get("summary", {}))
+    package = dict(payload.get("package", {}))
+    python_info = dict(payload.get("python", {}))
+    data_dir = dict(payload.get("data_dir", {}))
+    dependencies = dict(payload.get("dependencies", {}))
+    datasets = dict(payload.get("datasets", {}))
+
+    lines: list[str] = []
+    lines.append("ForeSight Doctor")
+    lines.append(f"Status: {str(summary.get('status', 'unknown')).upper()}")
+    lines.append(f"Exit Code: {int(summary.get('exit_code', 0))}")
+    lines.append("")
+    lines.append("Package")
+    lines.append(f"- Name: {package.get('name')}")
+    lines.append(f"- Version: {package.get('version')}")
+    lines.append(f"- Module Path: {package.get('module_path')}")
+    lines.append(f"- Editable-like: {package.get('editable_like')}")
+    lines.append("")
+    lines.append("Python")
+    lines.append(f"- Version: {python_info.get('version')}")
+    lines.append(f"- Executable: {python_info.get('executable')}")
+    lines.append("")
+    lines.append("Data Dir")
+    lines.append(f"- Argument: {data_dir.get('argument')}")
+    lines.append(f"- Environment: {data_dir.get('env')}")
+    lines.append("")
+    lines.append("Dependencies")
+    for name in sorted(dependencies):
+        dep = dict(dependencies[name])
+        state = "OK" if bool(dep.get("available", False)) else "WARN"
+        detail = f" ({dep.get('reason')})" if dep.get("reason") else ""
+        lines.append(f"- {name}: {state}{detail}")
+    lines.append("")
+    lines.append("Datasets")
+    for name in sorted(datasets):
+        dataset = dict(datasets[name])
+        state = "OK" if bool(dataset.get("available", False)) else "WARN"
+        lines.append(
+            f"- {name}: {state} source={dataset.get('source')} packaged={dataset.get('packaged')} path={dataset.get('path')}"
+        )
+    if findings:
+        lines.append("")
+        lines.append("Warnings" if not any(item["severity"] == "error" for item in findings) else "Findings")
+        for item in findings:
+            lines.append(
+                f"- {str(item.get('severity', 'warning')).upper()} {item.get('scope')} {item.get('key')}: {item.get('message')}"
+            )
+    return "\n".join(lines)
 
 
 def _log_payload(**kwargs: Any) -> dict[str, Any]:

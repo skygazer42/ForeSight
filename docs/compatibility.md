@@ -40,6 +40,8 @@ Use `foresight doctor` to inspect the current runtime before filing an issue or 
 ```bash
 foresight doctor
 foresight --data-dir /path/to/root doctor
+foresight doctor --format text
+foresight --data-dir /path/to/root doctor --format text --strict
 ```
 
 The report includes:
@@ -49,6 +51,8 @@ The report includes:
 - optional dependency status and detected extras
 - packaged dataset resolution previews
 - `--data-dir` and `FORESIGHT_DATA_DIR` inputs
+- text output for human triage and JSON for machine-readable automation
+- strict mode that returns exit code `1` when warnings are present
 
 ## Dataset Resolution Order
 

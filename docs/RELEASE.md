@@ -80,7 +80,13 @@ Before publishing, you can also sanity-check the installed artifact environment 
 ```bash
 foresight doctor
 python -m foresight doctor
+python -m foresight doctor --format text
+python -m foresight --data-dir /path/to/root doctor --format text --strict
 ```
+
+Use `doctor --format text` for a human-readable release sanity check, and use
+`doctor --strict` when you want warnings to fail the release checklist with exit
+code `1`.
 
 ## Optional: GitHub Pages docs publish
 

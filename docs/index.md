@@ -38,6 +38,8 @@ editable installs look suspicious:
 ```bash
 foresight doctor
 foresight --data-dir /path/to/root doctor
+foresight doctor --format text
+foresight --data-dir /path/to/root doctor --format text --strict
 ```
 
 ## Artifact CLI

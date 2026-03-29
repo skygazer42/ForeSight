@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             # CLI smoke (module invocation avoids PATH concerns).
             _run([str(py), "-m", "foresight", "--version"], cwd=root, env=env)
             _run([str(py), "-m", "foresight", "doctor"], cwd=root, env=env)
+            _run([str(py), "-m", "foresight", "doctor", "--format", "text"], cwd=root, env=env)
             _run(
                 [str(py), "-m", "foresight", "models", "info", "torch-rnnpaper-elman-srn-direct"],
                 cwd=root,

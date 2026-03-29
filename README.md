@@ -154,6 +154,8 @@ Check the active environment, optional dependencies, and dataset resolution:
 ```bash
 foresight doctor
 foresight --data-dir /path/to/root doctor
+foresight doctor --format text
+foresight --data-dir /path/to/root doctor --format text --strict
 ```
 
 <details>
@@ -203,6 +205,7 @@ foresight models list --stability stable  # filter by maturity level
 foresight models list --capability supports_x_cols=true --format json
 foresight datasets list                   # browse built-in datasets
 foresight doctor                          # inspect optional deps and data paths
+foresight doctor --format text            # human-readable environment summary
 
 # Evaluate a model
 foresight eval run --model theta --dataset catfish --y-col Total \
