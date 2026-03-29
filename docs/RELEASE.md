@@ -82,11 +82,13 @@ foresight doctor
 python -m foresight doctor
 python -m foresight doctor --format text
 python -m foresight --data-dir /path/to/root doctor --format text --strict
+python -m foresight doctor --require-extra torch --strict
 ```
 
 Use `doctor --format text` for a human-readable release sanity check, and use
 `doctor --strict` when you want warnings to fail the release checklist with exit
-code `1`.
+code `1`. Use `doctor --require-extra <extra>` when the release target must
+include a specific optional backend.
 
 ## Optional: GitHub Pages docs publish
 

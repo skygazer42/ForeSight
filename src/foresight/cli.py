@@ -90,6 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exit with code 1 when warnings are present, not just errors.",
     )
+    doctor.add_argument(
+        "--require-extra",
+        action="append",
+        default=[],
+        choices=["core", "ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "all"],
+        help="Require an extra to be available; repeat to require multiple extras.",
+    )
     doctor.set_defaults(_handler=_cmd_doctor)
 
     cv = sub.add_parser("cv", help="Cross-validation utilities")
@@ -1029,6 +1036,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     dependency_keys = ["ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"]
     extra_keys = ["core", "ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "all"]
     data_dir = str(getattr(args, "data_dir", ""))
+    required_extras = [str(item).strip().lower() for item in list(getattr(args, "require_extra", [])) if str(item).strip()]
 
     datasets: dict[str, dict[str, Any]] = {}
     packaged = set(list_packaged_datasets())
@@ -1061,8 +1069,12 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         "extras": {name: get_extra_status(name).as_dict() for name in extra_keys},
         "datasets": datasets,
     }
-    findings = _doctor_findings(payload)
-    summary = _doctor_summary(findings=findings, strict=bool(getattr(args, "strict", False)))
+    findings = _doctor_findings(payload, required_extras=required_extras)
+    summary = _doctor_summary(
+        findings=findings,
+        strict=bool(getattr(args, "strict", False)),
+        required_extras=required_extras,
+    )
     payload["findings"] = findings
     payload["summary"] = summary
 
@@ -1074,7 +1086,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return int(summary["exit_code"])
 
 
-def _doctor_findings(payload: dict[str, Any]) -> list[dict[str, str]]:
+def _doctor_findings(payload: dict[str, Any], *, required_extras: list[str]) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
     for name, dep in sorted(dict(payload.get("dependencies", {})).items()):
@@ -1111,10 +1123,32 @@ def _doctor_findings(payload: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
+    extras = dict(payload.get("extras", {}))
+    for name in required_extras:
+        extra = dict(extras.get(name, {}))
+        if bool(extra.get("available", False)):
+            continue
+        findings.append(
+            {
+                "severity": "error",
+                "scope": "extra",
+                "key": str(name),
+                "message": (
+                    f"{name} extra unavailable. Install with: "
+                    f"{extra.get('package_install_command')} or {extra.get('editable_install_command')}"
+                ),
+            }
+        )
+
     return findings
 
 
-def _doctor_summary(*, findings: list[dict[str, str]], strict: bool) -> dict[str, Any]:
+def _doctor_summary(
+    *,
+    findings: list[dict[str, str]],
+    strict: bool,
+    required_extras: list[str],
+) -> dict[str, Any]:
     error_count = int(sum(1 for item in findings if item.get("severity") == "error"))
     warning_count = int(sum(1 for item in findings if item.get("severity") == "warning"))
     if error_count > 0:
@@ -1128,6 +1162,7 @@ def _doctor_summary(*, findings: list[dict[str, str]], strict: bool) -> dict[str
         "status": status,
         "error_count": error_count,
         "warning_count": warning_count,
+        "required_extras": list(required_extras),
         "strict": bool(strict),
         "exit_code": int(exit_code),
     }
@@ -1166,6 +1201,20 @@ def _render_doctor_text(payload: dict[str, Any], *, findings: list[dict[str, str
         state = "OK" if bool(dep.get("available", False)) else "WARN"
         detail = f" ({dep.get('reason')})" if dep.get("reason") else ""
         lines.append(f"- {name}: {state}{detail}")
+    if summary.get("required_extras"):
+        lines.append("")
+        lines.append("Required Extras")
+        extras = dict(payload.get("extras", {}))
+        for name in list(summary.get("required_extras", [])):
+            extra = dict(extras.get(name, {}))
+            state = "OK" if bool(extra.get("available", False)) else "ERROR"
+            line = f"- {name}: {state}"
+            if not bool(extra.get("available", False)):
+                line += (
+                    f" (install with: {extra.get('package_install_command')} or "
+                    f"{extra.get('editable_install_command')})"
+                )
+            lines.append(line)
     lines.append("")
     lines.append("Datasets")
     for name in sorted(datasets):

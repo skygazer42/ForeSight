@@ -42,6 +42,7 @@ python -m foresight --version
 python -m foresight doctor
 python -m foresight doctor --format text
 python -m foresight --data-dir /path/to/root doctor --format text --strict
+python -m foresight doctor --require-extra torch --strict
 python -m foresight cv --help
 python -m foresight forecast --help
 python -m foresight detect --help
@@ -61,6 +62,8 @@ control the CLI logging behavior without affecting `stdout`.
 
 Use `doctor --format text` for a human-readable environment summary and
 `doctor --strict` when you want warnings to return exit code `1` in automation.
+Use `doctor --require-extra <extra>` when you want the command to fail unless a
+specific optional stack is available.
 
 ## High-level Python helpers
 

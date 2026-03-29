@@ -42,6 +42,7 @@ foresight doctor
 foresight --data-dir /path/to/root doctor
 foresight doctor --format text
 foresight --data-dir /path/to/root doctor --format text --strict
+foresight doctor --require-extra torch --strict
 ```
 
 The report includes:
@@ -53,6 +54,7 @@ The report includes:
 - `--data-dir` and `FORESIGHT_DATA_DIR` inputs
 - text output for human triage and JSON for machine-readable automation
 - strict mode that returns exit code `1` when warnings are present
+- required-extra checks that promote missing requested extras to errors
 
 ## Dataset Resolution Order
 

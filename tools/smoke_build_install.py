@@ -104,6 +104,11 @@ def main(argv: list[str] | None = None) -> int:
             _run([str(py), "-m", "foresight", "doctor"], cwd=root, env=env)
             _run([str(py), "-m", "foresight", "doctor", "--format", "text"], cwd=root, env=env)
             _run(
+                [str(py), "-m", "foresight", "doctor", "--require-extra", "core", "--strict"],
+                cwd=root,
+                env=env,
+            )
+            _run(
                 [str(py), "-m", "foresight", "models", "info", "torch-rnnpaper-elman-srn-direct"],
                 cwd=root,
                 env=env,

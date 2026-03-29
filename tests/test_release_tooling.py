@@ -228,6 +228,7 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "foresight doctor" in release_doc
     assert "python -m foresight doctor --format text" in release_doc
     assert "doctor --strict" in release_doc
+    assert "doctor --require-extra torch --strict" in release_doc
     assert "mkdocs build --strict" in release_doc
     assert ".github/workflows/docs.yml" in release_doc
 
@@ -257,9 +258,11 @@ def test_package_workflow_smokes_doctor_and_root_import_on_installed_artifacts()
 
     assert "python -m foresight doctor" in workflow
     assert "python -m foresight doctor --format text" in workflow
+    assert "python -m foresight doctor --require-extra core --strict" in workflow
     assert 'python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
     assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor" in workflow
     assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor --format text" in workflow
+    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor --require-extra core --strict" in workflow
     assert '/tmp/foresight_sdist_venv/bin/python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
 
 
@@ -271,4 +274,5 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
+    assert '"foresight", "doctor", "--require-extra", "core", "--strict"' in script
     assert 'sys.executable, "-m", "virtualenv"' in script

@@ -84,6 +84,7 @@ def test_docs_install_mentions_forecast_tuning_and_detect_smoke_commands():
     assert "python -m foresight doctor" in doc
     assert "python -m foresight doctor --format text" in doc
     assert "python -m foresight --data-dir /path/to/root doctor --format text --strict" in doc
+    assert "python -m foresight doctor --require-extra torch --strict" in doc
     assert "python -m foresight forecast --help" in doc
     assert "python -m foresight tuning --help" in doc
     assert "python -m foresight forecast csv --help" in doc
