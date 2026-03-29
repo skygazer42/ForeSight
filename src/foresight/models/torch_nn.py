@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 
 from ..cli_runtime import compact_log_payload, emit_cli_event
-from ..optional_deps import require_dependency
+from ..optional_deps import dependency_install_hint, require_dependency
 
 _HIDDEN_SIZE_MIN_MSG = "hidden_size must be >= 1"
 _NUM_LAYERS_MIN_MSG = "num_layers must be >= 1"
@@ -112,7 +112,7 @@ def _require_torch() -> Any:
             return require_dependency("torch", install_hint='pip install -e ".[torch]"')
         except ImportError as e:
             raise ImportError(
-                'Torch models require PyTorch. Install with: pip install -e ".[torch]"'
+                f"Torch models require PyTorch. Install with: {dependency_install_hint('torch')}"
             ) from e
 
 

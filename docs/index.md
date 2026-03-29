@@ -9,6 +9,7 @@ classical, ML, and deep-learning model families.
 - [Artifact workflow](artifacts.md)
 - [CLI runtime logging](cli-logging.md)
 - [Compatibility guide](compatibility.md)
+- [How to choose a model](model-selection.md)
 - [Model capability matrix](models.md)
 - [Python API reference](api.md)
 - [Install guide](INSTALL.md)

@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 
+from ..optional_deps import missing_dependency_message
 from .torch_nn import _normalize_series, _require_torch
 
 
@@ -12,7 +13,7 @@ def _require_transformers() -> Any:
         import transformers  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ImportError(
-            'hf-timeseries-transformer-direct requires transformers. Install with: pip install "foresight-ts[transformers]"'
+            missing_dependency_message("transformers", subject="hf-timeseries-transformer-direct")
         ) from e
     return transformers
 

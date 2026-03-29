@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..optional_deps import missing_dependency_message
 from .torch_nn import TorchTrainConfig, _normalize_series, _require_torch, _train_loop
 
 HORIZON_MIN_ERROR = "horizon must be >= 1"
@@ -71,9 +72,7 @@ def var_forecast(
     try:
         from statsmodels.tsa.api import VAR  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'var_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        raise ImportError(missing_dependency_message("stats", subject="var_forecast")) from e
 
     x = _as_2d_float_array(train)
     if horizon <= 0:

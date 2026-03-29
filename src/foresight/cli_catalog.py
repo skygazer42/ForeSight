@@ -737,8 +737,12 @@ def _model_search_row(
     row: dict[str, Any] = {
         "key": spec.key,
         "score": score,
+        "interface": str(spec.interface),
         "requires": ",".join(spec.requires),
+        "required_extra": str(spec.required_extra),
+        "stability": str(spec.stability_level),
         "description": spec.description,
+        "capabilities": dict(spec.capabilities),
     }
     if paper:
         row["paper"] = paper

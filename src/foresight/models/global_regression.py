@@ -13,6 +13,7 @@ from ..features.tabular import (
     normalize_lag_steps,
 )
 from ..features.time import build_time_features
+from ..optional_deps import missing_dependency_message
 
 SVR_C_ERROR = "C must be > 0"
 SVR_EPSILON_ERROR = "epsilon must be >= 0"
@@ -896,7 +897,7 @@ def ridge_step_lag_global_forecaster(
         from sklearn.linear_model import Ridge  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ImportError(
-            'ridge-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
+            missing_dependency_message("ml", subject="ridge-step-lag-global")
         ) from e
 
     alpha_f = float(alpha)

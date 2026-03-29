@@ -84,3 +84,12 @@ from foresight import (
 
 The base directory is expected to contain files at the same relative paths as in
 `src/foresight/datasets/registry.py` (for example `data/store_sales.csv`).
+
+## Picking A Model
+
+After installation, use the model selection guide plus capability filters
+instead of scanning the full registry by hand:
+
+- [How to choose a model](model-selection.md)
+- `python -m foresight models list --stability stable --format json`
+- `python -m foresight models list --capability supports_x_cols=true --format json`

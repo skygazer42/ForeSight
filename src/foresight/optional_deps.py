@@ -31,6 +31,34 @@ _EXTRA_REQUIREMENTS = {
     "all": ("ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"),
 }
 
+_PREFERRED_EXTRA_FOR_DEPENDENCY = {
+    "catboost": "catboost",
+    "lgbm": "lgbm",
+    "lightgbm": "lgbm",
+    "ml": "ml",
+    "sklearn": "ml",
+    "stats": "stats",
+    "statsmodels": "stats",
+    "torch": "torch",
+    "transformers": "transformers",
+    "xgb": "xgb",
+    "xgboost": "xgb",
+}
+
+_DEPENDENCY_DISPLAY_NAME = {
+    "catboost": "catboost",
+    "lgbm": "lightgbm",
+    "lightgbm": "lightgbm",
+    "ml": "scikit-learn",
+    "sklearn": "scikit-learn",
+    "stats": "statsmodels",
+    "statsmodels": "statsmodels",
+    "torch": "PyTorch",
+    "transformers": "transformers",
+    "xgb": "xgboost",
+    "xgboost": "xgboost",
+}
+
 _TORCH_REQUIRED_ATTRS = ("nn",)
 
 _find_spec = importlib.util.find_spec
@@ -46,6 +74,18 @@ class DependencyStatus:
     version: str | None
     reason: str | None = None
 
+    @property
+    def recommended_extra(self) -> str:
+        return preferred_extra_for_dependency(self.name)
+
+    @property
+    def package_install_command(self) -> str:
+        return package_install_command(self.recommended_extra)
+
+    @property
+    def editable_install_command(self) -> str:
+        return editable_install_command(self.recommended_extra)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
@@ -54,6 +94,9 @@ class DependencyStatus:
             "spec_found": self.spec_found,
             "version": self.version,
             "reason": self.reason,
+            "recommended_extra": self.recommended_extra,
+            "package_install_command": self.package_install_command,
+            "editable_install_command": self.editable_install_command,
         }
 
 
@@ -64,12 +107,22 @@ class ExtraStatus:
     requirements: tuple[str, ...]
     details: dict[str, dict[str, Any]]
 
+    @property
+    def package_install_command(self) -> str:
+        return package_install_command(self.name)
+
+    @property
+    def editable_install_command(self) -> str:
+        return editable_install_command(self.name)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "available": self.available,
             "requirements": list(self.requirements),
             "details": dict(self.details),
+            "package_install_command": self.package_install_command,
+            "editable_install_command": self.editable_install_command,
         }
 
 
@@ -94,6 +147,43 @@ def _status_from_failure(name: str, import_name: str, *, spec_found: bool, reaso
         version=None,
         reason=reason,
     )
+
+
+def preferred_extra_for_dependency(name: str) -> str:
+    normalized = _normalize_dependency_name(name)
+    return str(_PREFERRED_EXTRA_FOR_DEPENDENCY[normalized])
+
+
+def package_install_command(extra_name: str) -> str:
+    extra = str(extra_name).strip().lower()
+    if extra == "core":
+        return "pip install foresight-ts"
+    return f'pip install "foresight-ts[{extra}]"'
+
+
+def editable_install_command(extra_name: str) -> str:
+    extra = str(extra_name).strip().lower()
+    if extra == "core":
+        return "pip install -e ."
+    return f'pip install -e ".[{extra}]"'
+
+
+def dependency_display_name(name: str) -> str:
+    normalized = _normalize_dependency_name(name)
+    return str(_DEPENDENCY_DISPLAY_NAME[normalized])
+
+
+def dependency_install_hint(name: str) -> str:
+    normalized = _normalize_dependency_name(name)
+    extra = preferred_extra_for_dependency(normalized)
+    return f'{package_install_command(extra)} or {editable_install_command(extra)}'
+
+
+def missing_dependency_message(name: str, *, subject: str | None = None) -> str:
+    normalized = _normalize_dependency_name(name)
+    display = dependency_display_name(normalized)
+    target = str(subject).strip() if subject is not None else display
+    return f"{target} requires {display}. Install with: {dependency_install_hint(normalized)}"
 
 
 def get_dependency_status(name: str) -> DependencyStatus:
@@ -147,7 +237,8 @@ def require_dependency(name: str, *, install_hint: str | None = None) -> Any:
     normalized = _normalize_dependency_name(name)
     status = get_dependency_status(normalized)
     if not status.available:
-        hint = f" Install with: {install_hint}" if install_hint else ""
+        resolved_hint = install_hint or dependency_install_hint(normalized)
+        hint = f" Install with: {resolved_hint}" if resolved_hint else ""
         raise ImportError(
             f"Optional dependency {normalized!r} is not available ({status.reason}).{hint}".strip()
         )
@@ -181,9 +272,15 @@ def required_extra_name(requires: tuple[str, ...] | list[str]) -> str:
 __all__ = [
     "DependencyStatus",
     "ExtraStatus",
+    "dependency_display_name",
+    "dependency_install_hint",
+    "editable_install_command",
     "get_dependency_status",
     "get_extra_status",
     "is_dependency_available",
+    "missing_dependency_message",
+    "package_install_command",
+    "preferred_extra_for_dependency",
     "require_dependency",
     "required_extra_name",
 ]

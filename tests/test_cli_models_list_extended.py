@@ -157,6 +157,10 @@ def test_models_search_accepts_stability_and_capability_filters() -> None:
     rows = json.loads(proc.stdout)
     assert rows
     assert rows[0]["key"] == "torch-rnnpaper-elman-srn-direct"
+    assert rows[0]["required_extra"] == "torch"
+    assert rows[0]["stability"] == "experimental"
+    assert rows[0]["interface"] == "local"
+    assert rows[0]["capabilities"]["supports_artifact_save"] is True
 
 
 def test_models_search_filter_interface_multivariate() -> None:

@@ -8,6 +8,7 @@ import numpy as np
 from ..features.lag import build_seasonal_lag_features, make_lagged_xy
 from ..features.tabular import build_lag_derived_features, normalize_int_tuple, normalize_lag_steps
 from ..features.time import build_fourier_features
+from ..optional_deps import missing_dependency_message
 
 TARGET_LAGS_MIN_ERROR = "target_lags must be >= 1"
 HORIZON_MIN_ERROR = "horizon must be >= 1"
@@ -36,7 +37,7 @@ L2_LEAF_REG_NON_NEGATIVE_ERROR = "l2_leaf_reg must be >= 0"
 THREAD_COUNT_NON_ZERO_ERROR = "thread_count must be non-zero"
 SVR_C_ERROR = "C must be > 0"
 SVR_EPSILON_ERROR = "epsilon must be >= 0"
-XGB_INSTALL_ERROR = 'xgboost lag models require xgboost. Install with: pip install -e ".[xgb]"'
+XGB_INSTALL_ERROR = missing_dependency_message("xgb", subject="xgboost lag models")
 XGB_OBJECTIVE_EMPTY_ERROR = "objective must be non-empty"
 XGB_OBJECTIVE_SQUAREDERROR = "reg:squarederror"
 XGB_OBJECTIVE_SQUAREDLOGERROR = "reg:squaredlogerror"
@@ -718,9 +719,7 @@ def ridge_lag_forecast(
     try:
         from sklearn.linear_model import Ridge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'ridge_lag_forecast requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        raise ImportError(missing_dependency_message("ml", subject="ridge_lag_forecast")) from e
 
     x = _as_1d_float_array(train)
     target_lags = normalize_lag_steps(lags, allow_zero=False, name="target_lags")
@@ -5086,9 +5085,7 @@ def _require_lightgbm() -> Any:
     try:
         import lightgbm as lgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'lightgbm lag models require lightgbm. Install with: pip install -e ".[lgbm]"'
-        ) from e
+        raise ImportError(missing_dependency_message("lgbm", subject="lightgbm lag models")) from e
     return lgb
 
 
@@ -5867,7 +5864,7 @@ def _require_catboost() -> Any:
         import catboost as cb  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ImportError(
-            'catboost lag models require catboost. Install with: pip install -e ".[catboost]"'
+            missing_dependency_message("catboost", subject="catboost lag models")
         ) from e
     return cb
 

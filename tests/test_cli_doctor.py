@@ -34,6 +34,8 @@ def test_doctor_json_reports_environment_and_dependency_status() -> None:
     assert payload["dependencies"]["torch"]["available"] is optional_deps.get_dependency_status(
         "torch"
     ).available
+    assert payload["dependencies"]["torch"]["recommended_extra"] == "torch"
+    assert payload["dependencies"]["torch"]["package_install_command"] == 'pip install "foresight-ts[torch]"'
     assert payload["datasets"]["store_sales"]["available"] in {True, False}
     assert payload["datasets"]["store_sales"]["packaged"] is False
     assert payload["datasets"]["catfish"]["source"] in {"package", "repo", "env", "data_dir"}

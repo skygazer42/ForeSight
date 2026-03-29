@@ -16,7 +16,7 @@ from ..data.prep import prepare_long_df
 from ..datasets import load_dataset
 from ..datasets.registry import get_dataset_spec
 from ..models.registry import get_model_spec, list_models
-from ..optional_deps import is_dependency_available, require_dependency
+from ..optional_deps import is_dependency_available, missing_dependency_message, require_dependency
 from .evaluation import eval_model_long_df, eval_multivariate_model_df
 
 _VALIDATION_DATASET_KEY = "promotion_data"
@@ -740,7 +740,7 @@ def _persist_var_artifact(
         from statsmodels.tsa.api import VAR  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ImportError(
-            'VAR artifact persistence requires statsmodels. Install with: pip install -e ".[stats]"'
+            missing_dependency_message("stats", subject="VAR artifact persistence")
         ) from e
 
     x = wide_df.loc[:, list(target_cols)].to_numpy(dtype=float, copy=False)

@@ -75,7 +75,9 @@ def test_docs_site_navigation_includes_generated_pages() -> None:
     assert "Models: models.md" in mkdocs
     assert "API: api.md" in mkdocs
     assert "Compatibility: compatibility.md" in mkdocs
+    assert "Choosing Models: model-selection.md" in mkdocs
 
     assert "[Model capability matrix](models.md)" in index_doc
     assert "[Python API reference](api.md)" in index_doc
     assert "[Compatibility guide](compatibility.md)" in index_doc
+    assert "[How to choose a model](model-selection.md)" in index_doc
