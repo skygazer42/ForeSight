@@ -3,11 +3,10 @@ from __future__ import annotations
 import builtins
 import types
 
-import pandas as pd
 import pytest
 
 import foresight.optional_deps as optional_deps
-from foresight.models import global_regression, multivariate, regression, torch_nn
+from foresight.models import global_regression, hf_time_series, multivariate, regression, statsmodels_wrap, torch_nn
 
 
 def test_torch_namespace_stub_is_reported_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,3 +115,56 @@ def test_var_forecast_missing_statsmodels_message(monkeypatch: pytest.MonkeyPatc
         match='var_forecast requires statsmodels\\. Install with: pip install "foresight-ts\\[stats\\]" or pip install -e "\\.\\[stats\\]"',
     ):
         multivariate.var_forecast([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]], 1)
+
+
+def test_sarimax_forecast_missing_statsmodels_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"statsmodels"})
+
+    with pytest.raises(
+        ImportError,
+        match='sarimax_forecast requires statsmodels\\. Install with: pip install "foresight-ts\\[stats\\]" or pip install -e "\\.\\[stats\\]"',
+    ):
+        statsmodels_wrap.sarimax_forecast([1.0, 2.0, 3.0, 4.0, 5.0], 1)
+
+
+def test_hf_timeseries_transformer_missing_transformers_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hf_time_series, "_require_torch", lambda: object())
+    _patch_import_error(monkeypatch, blocked_roots={"transformers"})
+
+    with pytest.raises(
+        ImportError,
+        match='hf-timeseries-transformer-direct requires transformers\\. Install with: pip install "foresight-ts\\[transformers\\]" or pip install -e "\\.\\[transformers\\]"',
+    ):
+        hf_time_series.hf_timeseries_transformer_direct_forecast([1.0] * 10, 1)
+
+
+def test_xgb_step_lag_global_missing_xgboost_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"xgboost"})
+
+    with pytest.raises(
+        ImportError,
+        match='xgb-step-lag-global requires xgboost\\. Install with: pip install "foresight-ts\\[xgb\\]" or pip install -e "\\.\\[xgb\\]"',
+    ):
+        global_regression.xgb_step_lag_global_forecaster(lags=2)
+
+
+def test_lightgbm_global_missing_lightgbm_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"lightgbm"})
+
+    with pytest.raises(
+        ImportError,
+        match='lgbm-step-lag-global requires lightgbm\\. Install with: pip install "foresight-ts\\[lgbm\\]" or pip install -e "\\.\\[lgbm\\]"',
+    ):
+        global_regression.lgbm_step_lag_global_forecaster(lags=2)
+
+
+def test_catboost_global_missing_catboost_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_import_error(monkeypatch, blocked_roots={"catboost"})
+
+    with pytest.raises(
+        ImportError,
+        match='catboost-step-lag-global requires catboost\\. Install with: pip install "foresight-ts\\[catboost\\]" or pip install -e "\\.\\[catboost\\]"',
+    ):
+        global_regression.catboost_step_lag_global_forecaster(lags=2)

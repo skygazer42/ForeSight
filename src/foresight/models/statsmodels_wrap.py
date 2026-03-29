@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from ..optional_deps import missing_dependency_message
+
 HORIZON_MUST_BE_AT_LEAST_ONE = "horizon must be >= 1"
 TRAIN_EXOG_ROWS_MUST_MATCH_TRAIN = "train_exog must have the same number of rows as train"
 FUTURE_EXOG_ROWS_MUST_MATCH_HORIZON = "future_exog must have horizon rows"
@@ -20,6 +22,10 @@ FOURIER_PERIODS_MUST_BE_VALID = "periods must contain integers >= 2"
 FOURIER_ORDERS_MUST_BE_NON_NEGATIVE = "orders must contain integers >= 0"
 UNEXPECTED_MSTL_SEASONAL_SHAPE = "Unexpected MSTL seasonal shape"
 UNEXPECTED_MSTL_COMPONENT_COUNT = "MSTL returned unexpected number of seasonal components"
+
+
+def _raise_missing_statsmodels(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("stats", subject=subject)) from exc
 
 
 def _call_with_filtered_statsmodels_warnings(func: Any, /, *args: Any, **kwargs: Any) -> Any:
@@ -198,9 +204,7 @@ def _fit_sarimax_result(
     try:
         from statsmodels.tsa.statespace.sarimax import SARIMAX  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'sarimax_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("sarimax_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -412,9 +416,7 @@ def _fit_auto_arima_best_result(
     try:
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'auto_arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("auto_arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -500,9 +502,7 @@ def arima_forecast(
     try:
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -615,9 +615,7 @@ def autoreg_forecast(
     try:
         from statsmodels.tsa.ar_model import AutoReg  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'autoreg_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("autoreg_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -667,9 +665,7 @@ def unobserved_components_forecast(
     try:
         from statsmodels.tsa.statespace.structural import UnobservedComponents  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'unobserved_components_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("unobserved_components_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -705,9 +701,7 @@ def stl_arima_forecast(
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
         from statsmodels.tsa.forecasting.stl import STLForecast  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -744,9 +738,7 @@ def stl_ets_forecast(
         from statsmodels.tsa.forecasting.stl import STLForecast  # type: ignore
         from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_ets_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_ets_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -790,9 +782,7 @@ def stl_autoreg_forecast(
         from statsmodels.tsa.ar_model import AutoReg  # type: ignore
         from statsmodels.tsa.forecasting.stl import STLForecast  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_autoreg_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_autoreg_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -835,9 +825,7 @@ def stl_uc_forecast(
     try:
         from statsmodels.tsa.seasonal import STL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_uc_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_uc_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -889,9 +877,7 @@ def stl_sarimax_forecast(
     try:
         from statsmodels.tsa.seasonal import STL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_sarimax_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_sarimax_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -946,9 +932,7 @@ def stl_auto_arima_forecast(
     try:
         from statsmodels.tsa.seasonal import STL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'stl_auto_arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("stl_auto_arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1325,9 +1309,7 @@ def fourier_ets_forecast(
     try:
         from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'fourier_ets_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("fourier_ets_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1515,9 +1497,7 @@ def mstl_arima_forecast(
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1576,9 +1556,7 @@ def mstl_autoreg_forecast(
     try:
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_autoreg_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_autoreg_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1643,9 +1621,7 @@ def mstl_ets_forecast(
         from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_ets_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_ets_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1711,9 +1687,7 @@ def mstl_uc_forecast(
     try:
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_uc_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_uc_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1778,9 +1752,7 @@ def mstl_sarimax_forecast(
     try:
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_sarimax_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_sarimax_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1848,9 +1820,7 @@ def mstl_auto_arima_forecast(
     try:
         from statsmodels.tsa.seasonal import MSTL  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mstl_auto_arima_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("mstl_auto_arima_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -1934,9 +1904,7 @@ def tbats_lite_forecast(
     try:
         from statsmodels.tsa.arima.model import ARIMA  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'tbats_lite_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("tbats_lite_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -2015,9 +1983,7 @@ def tbats_lite_autoreg_forecast(
     try:
         from statsmodels.tsa.ar_model import AutoReg  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'tbats_lite_autoreg_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("tbats_lite_autoreg_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -2105,9 +2071,7 @@ def tbats_lite_ets_forecast(
     try:
         from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'tbats_lite_ets_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("tbats_lite_ets_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)
@@ -2449,9 +2413,7 @@ def ets_forecast(
     try:
         from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'ets_forecast requires statsmodels. Install with: pip install -e ".[stats]"'
-        ) from e
+        _raise_missing_statsmodels("ets_forecast", e)
 
     x = _as_1d_float_array(train)
     _validate_positive_horizon(horizon)

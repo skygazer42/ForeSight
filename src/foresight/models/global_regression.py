@@ -30,6 +30,22 @@ MAX_DEPTH_MUST_BE_AT_LEAST_ONE_OR_NONE = "max_depth must be >= 1 or None"
 LEARNING_RATE_MUST_BE_POSITIVE = "learning_rate must be > 0"
 
 
+def _raise_missing_ml(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("ml", subject=subject)) from exc
+
+
+def _raise_missing_xgb(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("xgb", subject=subject)) from exc
+
+
+def _raise_missing_lgbm(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("lgbm", subject=subject)) from exc
+
+
+def _raise_missing_catboost(subject: str, exc: Exception) -> None:
+    raise ImportError(missing_dependency_message("catboost", subject=subject)) from exc
+
+
 def _is_effectively_one(value: float) -> bool:
     return math.isclose(float(value), 1.0, rel_tol=0.0, abs_tol=1e-12)
 
@@ -959,9 +975,7 @@ def rf_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import RandomForestRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'rf-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("rf-step-lag-global", e)
 
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -1034,9 +1048,7 @@ def extra_trees_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import ExtraTreesRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'extra-trees-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("extra-trees-step-lag-global", e)
 
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -1105,9 +1117,7 @@ def decision_tree_step_lag_global_forecaster(
     try:
         from sklearn.tree import DecisionTreeRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'decision-tree-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("decision-tree-step-lag-global", e)
 
     lags_int = int(lags)
     max_depth_int = None if max_depth is None else int(max_depth)
@@ -1172,9 +1182,7 @@ def bagging_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import BaggingRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'bagging-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("bagging-step-lag-global", e)
 
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -1243,9 +1251,7 @@ def gbrt_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import GradientBoostingRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'gbrt-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("gbrt-step-lag-global", e)
 
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -1316,9 +1322,7 @@ def lasso_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import Lasso  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'lasso-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("lasso-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -1381,9 +1385,7 @@ def elasticnet_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import ElasticNet  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'elasticnet-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("elasticnet-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -1448,9 +1450,7 @@ def knn_step_lag_global_forecaster(
     try:
         from sklearn.neighbors import KNeighborsRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'knn-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("knn-step-lag-global", e)
 
     lags_int = int(lags)
     n_neighbors_int = int(n_neighbors)
@@ -1513,9 +1513,7 @@ def kernel_ridge_step_lag_global_forecaster(
     try:
         from sklearn.kernel_ridge import KernelRidge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'kernel-ridge-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("kernel-ridge-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -1579,9 +1577,7 @@ def svr_step_lag_global_forecaster(
     try:
         from sklearn.svm import SVR  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'svr-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("svr-step-lag-global", e)
 
     lags_int = int(lags)
     c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
@@ -1653,9 +1649,7 @@ def linear_svr_step_lag_global_forecaster(
     try:
         from sklearn.svm import LinearSVR  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'linear-svr-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("linear-svr-step-lag-global", e)
 
     lags_int = int(lags)
     c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
@@ -1727,9 +1721,7 @@ def huber_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import HuberRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'huber-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("huber-step-lag-global", e)
 
     lags_int = int(lags)
     epsilon_f = float(epsilon)
@@ -1798,9 +1790,7 @@ def bayesian_ridge_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import BayesianRidge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'bayesian-ridge-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("bayesian-ridge-step-lag-global", e)
 
     lags_int = int(lags)
     max_iter_int = int(max_iter)
@@ -1880,9 +1870,7 @@ def ard_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import ARDRegression  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'ard-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("ard-step-lag-global", e)
 
     lags_int = int(lags)
     max_iter_int = int(max_iter)
@@ -1961,9 +1949,7 @@ def omp_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import OrthogonalMatchingPursuit  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'omp-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("omp-step-lag-global", e)
 
     lags_int = int(lags)
     nnz_int = None if n_nonzero_coefs is None else int(n_nonzero_coefs)
@@ -2038,9 +2024,7 @@ def passive_aggressive_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import PassiveAggressiveRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'passive-aggressive-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("passive-aggressive-step-lag-global", e)
 
     lags_int = int(lags)
     c_value = float(_pop_legacy_keyword(_params, legacy_name="C", value=c))
@@ -2115,9 +2099,7 @@ def poisson_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import PoissonRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'poisson-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("poisson-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -2181,9 +2163,7 @@ def gamma_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import GammaRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'gamma-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("gamma-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -2248,9 +2228,7 @@ def tweedie_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import TweedieRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'tweedie-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("tweedie-step-lag-global", e)
 
     lags_int = int(lags)
     power_f = float(power)
@@ -2316,9 +2294,7 @@ def quantile_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import QuantileRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'quantile-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("quantile-step-lag-global", e)
 
     lags_int = int(lags)
     quantile_f = float(quantile)
@@ -2380,9 +2356,7 @@ def sgd_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import SGDRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'sgd-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("sgd-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -2454,9 +2428,7 @@ def adaboost_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import AdaBoostRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'adaboost-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("adaboost-step-lag-global", e)
 
     lags_int = int(lags)
     n_estimators_int = int(n_estimators)
@@ -2526,9 +2498,7 @@ def mlp_step_lag_global_forecaster(
     try:
         from sklearn.neural_network import MLPRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'mlp-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("mlp-step-lag-global", e)
 
     lags_int = int(lags)
     alpha_f = float(alpha)
@@ -2610,9 +2580,7 @@ def hgb_step_lag_global_forecaster(
     try:
         from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'hgb-step-lag-global requires scikit-learn. Install with: pip install -e ".[ml]"'
-        ) from e
+        _raise_missing_ml("hgb-step-lag-global", e)
 
     lags_int = int(lags)
     x_cols_tup = _normalize_x_cols(x_cols)
@@ -2726,9 +2694,7 @@ def _xgb_step_lag_global_forecaster_impl(
     try:
         import xgboost as xgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            f'{model_key} requires xgboost. Install with: pip install -e ".[xgb]"'
-        ) from e
+        _raise_missing_xgb(model_key, e)
 
     lags_int = int(lags)
     x_cols_tup = _normalize_x_cols(x_cols)
@@ -3563,9 +3529,7 @@ def lgbm_step_lag_global_forecaster(
     try:
         import lightgbm as lgb  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'lgbm-step-lag-global requires lightgbm. Install with: pip install -e ".[lgbm]"'
-        ) from e
+        _raise_missing_lgbm("lgbm-step-lag-global", e)
 
     lags_int = int(lags)
     x_cols_tup = _normalize_x_cols(x_cols)
@@ -3705,9 +3669,7 @@ def catboost_step_lag_global_forecaster(
     try:
         from catboost import CatBoostRegressor  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            'catboost-step-lag-global requires catboost. Install with: pip install -e ".[catboost]"'
-        ) from e
+        _raise_missing_catboost("catboost-step-lag-global", e)
 
     lags_int = int(lags)
     x_cols_tup = _normalize_x_cols(x_cols)
