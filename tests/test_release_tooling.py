@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+_SONAR_SCAN_ACTION_SHA = "a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
+
 _SONAR_CURRENT_HOTSPOT_EXCLUSIONS = (
     "src/foresight/cli.py",
     "src/foresight/cli_leaderboard.py",
@@ -184,7 +186,7 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "src/foresight/models/torch_ssm.py" in scan_args
     assert "src/foresight/models/torch_xformer.py" in scan_args
     assert "tests/**" in scan_args
-    assert scan_step["uses"] == "SonarSource/sonarqube-scan-action@v7"
+    assert scan_step["uses"] == f"SonarSource/sonarqube-scan-action@{_SONAR_SCAN_ACTION_SHA}"
     assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
     assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
 

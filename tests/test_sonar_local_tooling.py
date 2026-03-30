@@ -5,6 +5,8 @@ from pathlib import Path
 
 import yaml
 
+_SONAR_SCAN_ACTION_SHA = "a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -41,7 +43,7 @@ def test_ci_sonar_job_uses_shared_sonar_test_suite_and_current_scan_action() -> 
     )
 
     assert test_step["run"].strip() == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
-    assert scan_step["uses"] == "SonarSource/sonarqube-scan-action@v7"
+    assert scan_step["uses"] == f"SonarSource/sonarqube-scan-action@{_SONAR_SCAN_ACTION_SHA}"
 
 
 def test_sonar_test_dockerfile_installs_required_runtime() -> None:
