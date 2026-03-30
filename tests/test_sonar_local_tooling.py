@@ -12,6 +12,8 @@ def _repo_root() -> Path:
 
 def _git_common_dir(repo_root: Path) -> Path:
     git_path = repo_root / ".git"
+    if git_path.is_dir():
+        return git_path
     text = git_path.read_text(encoding="utf-8").strip()
     _, gitdir = text.split(":", 1)
     return Path(gitdir.strip()).parents[1]
@@ -102,7 +104,8 @@ def test_run_sonar_local_module_builds_docker_commands() -> None:
     assert "-Dsonar.branch.name=feat/sonar-local-ci" in joined_scan
     assert ".artifacts/sonar-local/coverage.xml" in joined_scan
     assert f"{repo_root}:{repo_root}" in scan_cmd
-    assert f"{git_common_dir}:{git_common_dir}:ro" in scan_cmd
+    if git_common_dir != repo_root / ".git":
+        assert f"{git_common_dir}:{git_common_dir}:ro" in scan_cmd
     assert scan_cmd[scan_cmd.index("-w") + 1] == str(repo_root)
 
 
