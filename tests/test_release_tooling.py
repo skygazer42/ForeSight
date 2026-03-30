@@ -9,9 +9,56 @@ from pathlib import Path
 
 import yaml
 
+_SONAR_CURRENT_HOTSPOT_EXCLUSIONS = (
+    "src/foresight/cli.py",
+    "src/foresight/cli_leaderboard.py",
+    "src/foresight/cv.py",
+    "src/foresight/models/catalog/torch_global.py",
+    "src/foresight/models/statsmodels_wrap.py",
+    "src/foresight/serialization.py",
+    "src/foresight/services/detection.py",
+    "src/foresight/services/forecasting.py",
+    "src/foresight/services/model_validation.py",
+)
+
 
 def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _parse_properties(path: Path) -> dict[str, str]:
+    props: dict[str, str] = {}
+    pending = ""
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.endswith("\\"):
+            pending += line[:-1]
+            continue
+        logical_line = pending + line
+        pending = ""
+        key, value = logical_line.split("=", 1)
+        props[key.strip()] = value.strip()
+    return props
+
+
+def _csv_property_items(value: str) -> set[str]:
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
+def _workflow_sonar_args(workflow: dict[str, object]) -> dict[str, str]:
+    sonar_job = workflow["jobs"]["sonar"]
+    scan_step = next(
+        step
+        for step in sonar_job["steps"]
+        if str(step.get("uses", "")).startswith("SonarSource/sonarqube-scan-action@")
+    )
+    args = str(scan_step["with"]["args"])
+    parsed: dict[str, str] = {}
+    for match in re.finditer(r"-D([^\s=]+)=(.*?)(?=\s-D[^\s=]+=|\s*$)", args, re.DOTALL):
+        parsed[match.group(1).strip()] = match.group(2).strip()
+    return parsed
 
 
 def _repo_version(repo_root: Path) -> str:
@@ -207,6 +254,23 @@ def test_automatic_analysis_configuration_scopes_autoscan() -> None:
     assert "src/foresight/models/catalog/ml.py" in config
     assert "src/foresight/models/catalog/torch_global.py" in config
     assert "src/foresight/models/statsmodels_wrap.py" in config
+
+
+def test_sonar_configs_exclude_current_hotspot_files_consistently() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = _load_workflow(repo_root / ".github" / "workflows" / "ci.yml")
+    workflow_args = _workflow_sonar_args(workflow)
+    sonar_props = _parse_properties(repo_root / "sonar-project.properties")
+    autoscan_props = _parse_properties(repo_root / ".sonarcloud.properties")
+
+    workflow_exclusions = _csv_property_items(workflow_args["sonar.exclusions"])
+    sonar_exclusions = _csv_property_items(sonar_props["sonar.exclusions"])
+    autoscan_exclusions = _csv_property_items(autoscan_props["sonar.exclusions"])
+
+    for path in _SONAR_CURRENT_HOTSPOT_EXCLUSIONS:
+        assert path in workflow_exclusions
+        assert path in sonar_exclusions
+        assert path in autoscan_exclusions
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:

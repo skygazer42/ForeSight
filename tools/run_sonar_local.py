@@ -12,6 +12,20 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _git_common_dir(repo_root: Path) -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        cwd=str(repo_root),
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    git_common_dir = Path(result.stdout.strip())
+    if not git_common_dir.is_absolute():
+        git_common_dir = (repo_root / git_common_dir).resolve()
+    return git_common_dir
+
+
 def _docker_build_command(*, dockerfile: Path, image_tag: str) -> list[str]:
     return [
         "docker",
@@ -50,6 +64,7 @@ def _docker_scan_command(
     pull_request: str,
 ) -> list[str]:
     repo_root = _repo_root()
+    git_common_dir = _git_common_dir(repo_root)
     cmd = [
         "docker",
         "run",
@@ -57,14 +72,25 @@ def _docker_scan_command(
         "-e",
         str(token_env),
         "-v",
-        f"{repo_root}:/usr/src",
-        "-w",
-        "/usr/src",
-        "sonarsource/sonar-scanner-cli:latest",
-        "sonar-scanner",
-        "-Dsonar.host.url=https://sonarcloud.io",
-        f"-Dsonar.python.coverage.reportPaths={coverage_path}",
+        f"{repo_root}:{repo_root}",
     ]
+    if git_common_dir != repo_root / ".git":
+        cmd.extend(
+            [
+                "-v",
+                f"{git_common_dir}:{git_common_dir}:ro",
+            ]
+        )
+    cmd.extend(
+        [
+            "-w",
+            str(repo_root),
+            "sonarsource/sonar-scanner-cli:latest",
+            "sonar-scanner",
+            "-Dsonar.host.url=https://sonarcloud.io",
+            f"-Dsonar.python.coverage.reportPaths={coverage_path}",
+        ]
+    )
     branch_s = str(branch).strip()
     pr_s = str(pull_request).strip()
     if branch_s:

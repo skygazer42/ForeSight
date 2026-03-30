@@ -10,6 +10,13 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _git_common_dir(repo_root: Path) -> Path:
+    git_path = repo_root / ".git"
+    text = git_path.read_text(encoding="utf-8").strip()
+    _, gitdir = text.split(":", 1)
+    return Path(gitdir.strip()).parents[1]
+
+
 def _load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
@@ -61,6 +68,8 @@ def test_run_sonar_test_suite_module_builds_pytest_command() -> None:
 
 def test_run_sonar_local_module_builds_docker_commands() -> None:
     module = _load_module(_repo_root() / "tools" / "run_sonar_local.py", "run_sonar_local")
+    repo_root = _repo_root()
+    git_common_dir = _git_common_dir(repo_root)
 
     build_cmd = module._docker_build_command(  # type: ignore[attr-defined]
         dockerfile=Path("docker/sonar-test.Dockerfile"),
@@ -92,6 +101,9 @@ def test_run_sonar_local_module_builds_docker_commands() -> None:
     assert "-Dsonar.host.url=https://sonarcloud.io" in joined_scan
     assert "-Dsonar.branch.name=feat/sonar-local-ci" in joined_scan
     assert ".artifacts/sonar-local/coverage.xml" in joined_scan
+    assert f"{repo_root}:{repo_root}" in scan_cmd
+    assert f"{git_common_dir}:{git_common_dir}:ro" in scan_cmd
+    assert scan_cmd[scan_cmd.index("-w") + 1] == str(repo_root)
 
 
 def test_fetch_sonar_issues_module_builds_search_url() -> None:
