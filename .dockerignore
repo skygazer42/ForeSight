@@ -1,0 +1,15 @@
+.git
+.worktrees
+.pytest_cache
+.ruff_cache
+__pycache__
+.mypy_cache
+site
+dist
+build
+src/foresight_ts.egg-info
+paper
+statistics time series
+transformer time series
+ml time series
+artifacts

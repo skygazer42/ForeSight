@@ -561,6 +561,7 @@ def test_forecasting_source_extracts_forecast_model_long_df_helpers() -> None:
 
     assert "def _global_forecast_group_cutoff_and_future(" in source
     assert "def _global_forecast_group_future_frame(" in source
+    assert "def _append_future_rows_for_group(" in source
     assert "def _validated_global_forecast_cutoff(" in source
     assert "def _validate_global_forecast_group_x_cols(" in source
     assert "def _forecast_result_row(" in source
@@ -570,12 +571,17 @@ def test_forecasting_source_extracts_forecast_model_long_df_helpers() -> None:
     assert _function_uses_name(
         "src/foresight/services/forecasting.py",
         "_prepare_global_forecast_input",
-        "_global_forecast_group_future_frame",
+        "_global_forecast_group_cutoff_and_future",
     )
     assert _function_uses_name(
         "src/foresight/services/forecasting.py",
         "_prepare_global_forecast_input",
         "_validated_global_forecast_cutoff",
+    )
+    assert _function_uses_name(
+        "src/foresight/services/forecasting.py",
+        "_prepare_global_forecast_input",
+        "_append_future_rows_for_group",
     )
     assert _function_uses_name(
         "src/foresight/services/forecasting.py",
@@ -2516,7 +2522,7 @@ def test_cv_source_extracts_prediction_helpers() -> None:
     assert "def _normalize_cv_x_cols(" in source
     assert "def _trim_cv_splits(" in source
     assert "def _local_cv_prediction_rows(" in source
-    assert "def _global_cv_prediction_frames(" in source
+    assert "def _global_cv_prediction_table(" in source
     assert _function_uses_name(
         "src/foresight/cv.py",
         "cross_validation_predictions",
@@ -2530,7 +2536,7 @@ def test_cv_source_extracts_prediction_helpers() -> None:
     assert _function_uses_name(
         "src/foresight/cv.py",
         "cross_validation_predictions_long_df",
-        "_global_cv_prediction_frames",
+        "_global_cv_prediction_table",
     )
     assert _function_uses_name(
         "src/foresight/cv.py",

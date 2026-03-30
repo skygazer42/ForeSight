@@ -113,34 +113,7 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
 
     assert checkout["with"]["fetch-depth"] == 0
     assert "pip install -e .[dev,torch,stats]" in install_step["run"]
-    assert "coverage.xml" in test_step["run"]
-    assert "tests/test_fetch_rnn_paper_metadata.py" in test_step["run"]
-    assert "tests/test_models_adida.py" in test_step["run"]
-    assert "tests/test_models_global_regression_validation.py" in test_step["run"]
-    assert "tests/test_models_intermittent.py" in test_step["run"]
-    assert "tests/test_models_intermittent_more.py" in test_step["run"]
-    assert "tests/test_model_validation_messages.py" in test_step["run"]
-    assert "tests/test_models_theta.py" in test_step["run"]
-    assert "tests/test_models_theta_auto.py" in test_step["run"]
-    assert "tests/test_no_mergeable_nested_ifs.py" in test_step["run"]
-    assert "tests/test_no_nested_conditionals.py" in test_step["run"]
-    assert "tests/test_no_float_literal_comparisons.py" in test_step["run"]
-    assert "tests/test_forecasting_internals.py" in test_step["run"]
-    assert "tests/test_sonar_coverage_recent_fixes.py" in test_step["run"]
-    assert "tests/test_sonar_torch_rename_coverage_smoke.py" in test_step["run"]
-    assert "tests/test_torch_global_validation_messages.py" in test_step["run"]
-    assert (
-        "tests/test_models_optional_deps_torch.py::test_torch_global_models_smoke_when_installed"
-        in test_step["run"]
-    )
-    assert (
-        "tests/test_models_torch_xformer_seq2seq_smoke.py::test_torch_xformer_and_rnn_global_smoke"
-        in test_step["run"]
-    )
-    assert (
-        "tests/test_models_torch_crossformer_pyraformer_smoke.py::test_torch_crossformer_and_pyraformer_global_smoke"
-        in test_step["run"]
-    )
+    assert test_step["run"].strip() == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
     scan_args = str(scan_step["with"]["args"])
     assert "-Dsonar.sources=src,tools,.github/workflows" in scan_args
     assert "-Dsonar.tests=tests" in scan_args
@@ -164,10 +137,7 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
     assert "src/foresight/models/torch_ssm.py" in scan_args
     assert "src/foresight/models/torch_xformer.py" in scan_args
     assert "tests/**" in scan_args
-    assert (
-        scan_step["uses"]
-        == "SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
-    )
+    assert scan_step["uses"] == "SonarSource/sonarqube-scan-action@v7"
     assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
     assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
 
