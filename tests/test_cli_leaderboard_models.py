@@ -73,3 +73,34 @@ def test_leaderboard_models_outputs_csv(tmp_path: Path):
     assert first_line.startswith("model,")
     assert "naive-last" in proc.stdout
     assert out.exists()
+
+
+def test_leaderboard_models_emits_phase_timing_logs(tmp_path: Path):
+    out = tmp_path / "leaderboard_models_logs.json"
+    proc = _run_cli(
+        "leaderboard",
+        "models",
+        "--dataset",
+        "catfish",
+        "--y-col",
+        "Total",
+        "--horizon",
+        "3",
+        "--step",
+        "3",
+        "--min-train-size",
+        "12",
+        "--models",
+        "naive-last,mean",
+        "--log-style",
+        "plain",
+        "--output",
+        str(out),
+    )
+    assert proc.returncode == 0
+    stderr = proc.stderr
+    assert "RUN start" in stderr
+    assert "PHASE params" in stderr
+    assert "PHASE prepare" in stderr
+    assert "PHASE evaluate" in stderr
+    assert "PHASE emit" in stderr

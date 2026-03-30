@@ -69,3 +69,34 @@ def rolling_origin_splits(
             test_start=int(test_start),
             test_end=int(test_end),
         )
+
+
+def rolling_origin_split_sequence(
+    n_obs: int,
+    *,
+    horizon: int,
+    step_size: int = 1,
+    min_train_size: int,
+    max_train_size: int | None = None,
+    limit: int | None = None,
+    keep: str = "first",
+    limit_error: str = "limit must be >= 1",
+) -> tuple[RollingOriginSplit, ...]:
+    if keep not in {"first", "last"}:
+        raise ValueError("keep must be 'first' or 'last'")
+
+    splits = list(
+        rolling_origin_splits(
+            int(n_obs),
+            horizon=int(horizon),
+            step_size=int(step_size),
+            min_train_size=int(min_train_size),
+            max_train_size=max_train_size,
+        )
+    )
+    if limit is not None:
+        if int(limit) <= 0:
+            raise ValueError(str(limit_error))
+        count = int(limit)
+        splits = splits[:count] if keep == "first" else splits[-count:]
+    return tuple(splits)

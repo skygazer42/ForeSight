@@ -40,6 +40,7 @@ from ..contracts.params import (
     required_quantiles_for_interval_levels as _contracts_required_quantiles_for_interval_levels,
 )
 from ..intervals import bootstrap_intervals
+from ..long_df_cache import cached_series_slices, sorted_long_df
 from . import model_execution as _model_execution
 
 _HORIZON_MIN_MSG = "horizon must be >= 1"
@@ -333,6 +334,34 @@ def _future_frame_for_group(g: pd.DataFrame, *, horizon: int) -> pd.DataFrame:
     return out
 
 
+def _append_frame_rows(
+    columns: dict[str, list[Any]],
+    frame: pd.DataFrame,
+    *,
+    ordered_cols: list[str],
+) -> None:
+    for col in ordered_cols:
+        columns[str(col)].extend(frame[str(col)].tolist())
+
+
+def _append_future_rows_for_group(
+    columns: dict[str, list[Any]],
+    g: pd.DataFrame,
+    *,
+    horizon: int,
+    ordered_cols: list[str],
+) -> None:
+    future_ds = pd.Index(_infer_future_ds(g["ds"], int(horizon)))
+    uid = str(g["unique_id"].iloc[0])
+    columns["unique_id"].extend([uid] * int(horizon))
+    columns["ds"].extend(future_ds.tolist())
+    columns["y"].extend([np.nan] * int(horizon))
+    for col in ordered_cols:
+        if col in {"unique_id", "ds", "y"}:
+            continue
+        columns[str(col)].extend([np.nan] * int(horizon))
+
+
 def _prepare_local_xreg_forecast_group(
     g: pd.DataFrame,
     *,
@@ -482,28 +511,71 @@ def _prepare_global_forecast_input(
     if missing_x_cols:
         raise KeyError(f"long_df missing required x_cols: {missing_x_cols}")
 
-    df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    df = sorted_long_df(df, reset_index=True)
 
     cutoffs: list[Any] = []
-    future_frames: list[pd.DataFrame] = []
-    for uid, g in df.groupby("unique_id", sort=False):
-        cutoff, future_frame = _global_forecast_group_future_frame(
-            uid,
-            g,
-            horizon=h,
-            x_cols=x_cols,
-        )
+    ordered_cols = [str(col) for col in df.columns]
+    columns = {col: [] for col in ordered_cols}
+    has_future_rows = False
+    for uid, start, stop in cached_series_slices(df):
+        g = df.iloc[start:stop]
+        _append_frame_rows(columns, g, ordered_cols=ordered_cols)
+        if x_cols:
+            cutoff, future, observed_count = _global_forecast_group_cutoff_and_future(uid, g)
+            _validate_global_forecast_group_x_cols(
+                g,
+                future=future,
+                observed_count=observed_count,
+                horizon=h,
+                x_cols=x_cols,
+            )
+            future_frame = None
+        else:
+            cutoff, future, _observed_count = _global_forecast_group_cutoff_and_future(uid, g)
+            missing_future = int(h) - int(len(future))
+            future_frame = None if missing_future <= 0 else missing_future
         cutoffs.append(cutoff)
         if future_frame is not None:
-            future_frames.append(future_frame)
+            has_future_rows = True
+            _append_future_rows_for_group(
+                columns,
+                g,
+                horizon=int(future_frame),
+                ordered_cols=ordered_cols,
+            )
 
     cutoff = _validated_global_forecast_cutoff(cutoffs)
-    if not future_frames:
+    if not has_future_rows:
         return df, cutoff
 
-    augmented = pd.concat([df, *future_frames], axis=0, ignore_index=True, sort=False)
-    augmented = augmented.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    augmented = pd.DataFrame(columns, columns=ordered_cols)
     return augmented, cutoff
+
+
+def _is_sorted_forecast_frame(df: pd.DataFrame) -> bool:
+    if len(df) < 2:
+        return True
+
+    uid = df["unique_id"].astype("string")
+    ds = pd.to_datetime(df["ds"], errors="coerce")
+    prev_uid = uid.shift(1)
+    prev_ds = ds.shift(1)
+    uid_backwards = (uid < prev_uid).fillna(False)
+    ds_backwards = ((uid == prev_uid) & (ds < prev_ds)).fillna(False)
+    return not bool((uid_backwards | ds_backwards).any())
+
+
+def _forecast_step_index(pred: pd.DataFrame) -> np.ndarray:
+    uid_arr = pred["unique_id"].astype("string").to_numpy(copy=False)
+    if uid_arr.size == 0:
+        return np.array([], dtype=int)
+    boundaries = np.flatnonzero(uid_arr[1:] != uid_arr[:-1]) + 1 if uid_arr.size > 1 else np.array([], dtype=int)
+    starts = np.concatenate((np.array([0], dtype=int), boundaries.astype(int, copy=False)))
+    stops = np.concatenate((boundaries.astype(int, copy=False), np.array([uid_arr.size], dtype=int)))
+    steps = np.empty(uid_arr.size, dtype=int)
+    for start, stop in zip(starts.tolist(), stops.tolist(), strict=True):
+        steps[start:stop] = np.arange(1, int(stop - start) + 1, dtype=int)
+    return steps
 
 
 def _finalize_forecast_frame(pred: pd.DataFrame, *, cutoff: Any, model: str) -> pd.DataFrame:
@@ -514,10 +586,17 @@ def _finalize_forecast_frame(pred: pd.DataFrame, *, cutoff: Any, model: str) -> 
     if missing:
         raise KeyError(f"forecast output missing required columns: {sorted(missing)}")
 
-    pred = pred.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True).copy()
+    pred = (
+        pred
+        if _is_sorted_forecast_frame(pred)
+        and isinstance(pred.index, pd.RangeIndex)
+        and int(pred.index.start) == 0
+        and int(pred.index.step) == 1
+        else pred.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    ).copy()
     pred_cols = [c for c in pred.columns if c not in {"unique_id", "ds"}]
     pred["cutoff"] = cutoff
-    pred["step"] = pred.groupby("unique_id", sort=False).cumcount() + 1
+    pred["step"] = _forecast_step_index(pred)
     pred["model"] = str(model)
     ordered = ["unique_id", "ds", "cutoff", "step", *pred_cols, "model"]
     return pred.loc[:, ordered]
@@ -546,6 +625,53 @@ def _forecast_result_row(
     return row
 
 
+def _forecast_columns(*, interval_cols: list[str]) -> dict[str, list[Any]]:
+    columns = {
+        "unique_id": [],
+        "ds": [],
+        "cutoff": [],
+        "step": [],
+        "yhat": [],
+        "model": [],
+    }
+    for col in interval_cols:
+        columns[str(col)] = []
+    return columns
+
+
+def _append_forecast_prediction_rows(
+    columns: dict[str, list[Any]],
+    *,
+    uid: Any,
+    ds_values: Any,
+    cutoff: Any,
+    yhat: np.ndarray,
+    model: str,
+    interval_cols: list[str],
+    interval_data: dict[str, np.ndarray],
+) -> None:
+    future_ds = pd.Index(ds_values)
+    horizon = int(len(future_ds))
+    columns["unique_id"].extend([str(uid)] * horizon)
+    columns["ds"].extend(future_ds.tolist())
+    columns["cutoff"].extend([cutoff] * horizon)
+    columns["step"].extend(range(1, horizon + 1))
+    columns["yhat"].extend(np.asarray(yhat, dtype=float).tolist())
+    for col in interval_cols:
+        values = np.asarray(interval_data.get(str(col), np.repeat(np.nan, horizon)), dtype=float)
+        columns[str(col)].extend(values.tolist())
+    columns["model"].extend([str(model)] * horizon)
+
+
+def _forecast_frame_from_columns(
+    columns: dict[str, list[Any]],
+    *,
+    interval_cols: list[str],
+) -> pd.DataFrame:
+    ordered = ["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"]
+    return pd.DataFrame(columns, columns=ordered)
+
+
 def _forecast_local_xreg_long_df(
     *,
     model: str,
@@ -561,7 +687,7 @@ def _forecast_local_xreg_long_df(
 
     h = int(horizon)
     interval_cols = _interval_column_names(levels)
-    rows: list[dict[str, Any]] = []
+    columns = _forecast_columns(interval_cols=interval_cols)
     local_xreg_params = dict(params)
     local_xreg_params.pop("x_cols", None)
     for uid, g in df.groupby("unique_id", sort=False):
@@ -600,24 +726,19 @@ def _forecast_local_xreg_long_df(
                 model_params=local_xreg_params,
             )
 
-        for i in range(h):
-            interval_values = {col: float(pred_payload[col][i]) for col in interval_cols}
-            rows.append(
-                _forecast_result_row(
-                    uid=uid,
-                    ds=future["ds"].iloc[i],
-                    cutoff=cutoff,
-                    step=i + 1,
-                    yhat=yhat[i],
-                    model=model,
-                    interval_values=interval_values,
-                )
-            )
+        interval_data = {col: np.asarray(pred_payload.get(col, np.repeat(np.nan, h)), dtype=float) for col in interval_cols}
+        _append_forecast_prediction_rows(
+            columns,
+            uid=uid,
+            ds_values=future["ds"],
+            cutoff=cutoff,
+            yhat=np.asarray(yhat, dtype=float),
+            model=model,
+            interval_cols=interval_cols,
+            interval_data=interval_data,
+        )
 
-    return pd.DataFrame(
-        rows,
-        columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
-    )
+    return _forecast_frame_from_columns(columns, interval_cols=interval_cols)
 
 
 def _forecast_local_univariate_long_df(
@@ -635,7 +756,7 @@ def _forecast_local_univariate_long_df(
     df = _require_observed_history_only(df)
     h = int(horizon)
     interval_cols = _interval_column_names(levels)
-    rows: list[dict[str, Any]] = []
+    columns = _forecast_columns(interval_cols=interval_cols)
     for uid, g in df.groupby("unique_id", sort=False):
         if future_df is not None:
             observed, future, cutoff = _prepare_local_xreg_forecast_group(
@@ -666,24 +787,18 @@ def _forecast_local_univariate_long_df(
             interval_seed=interval_seed,
         )
 
-        for i in range(h):
-            interval_values = {col: float(interval_data[col][i]) for col in interval_cols}
-            rows.append(
-                _forecast_result_row(
-                    uid=uid,
-                    ds=future_ds[i],
-                    cutoff=cutoff,
-                    step=i + 1,
-                    yhat=yhat[i],
-                    model=model,
-                    interval_values=interval_values,
-                )
-            )
+        _append_forecast_prediction_rows(
+            columns,
+            uid=uid,
+            ds_values=future_ds,
+            cutoff=cutoff,
+            yhat=yhat,
+            model=model,
+            interval_cols=interval_cols,
+            interval_data=interval_data,
+        )
 
-    return pd.DataFrame(
-        rows,
-        columns=["unique_id", "ds", "cutoff", "step", "yhat", *interval_cols, "model"],
-    )
+    return _forecast_frame_from_columns(columns, interval_cols=interval_cols)
 
 
 def _forecast_global_long_df(

@@ -153,6 +153,46 @@ def test_forecast_model_long_df_supports_generic_local_xreg_models(
     assert pred["step"].tolist() == [1, 2, 3]
 
 
+def test_forecast_model_long_df_local_xreg_avoids_row_dict_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-xreg-columnar__")
+
+    history = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "promo": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 3,
+            "ds": pd.date_range("2020-01-07", periods=3, freq="D"),
+            "y": [np.nan, np.nan, np.nan],
+            "promo": [1.0, 0.0, 1.0],
+        }
+    )
+    long_df = pd.concat([history, future], ignore_index=True, sort=False)
+
+    def _forbid_row_builder(*args: object, **kwargs: object) -> object:
+        raise AssertionError("local xreg forecast should not build row dicts one-by-one")
+
+    monkeypatch.setattr(forecasting_mod, "_forecast_result_row", _forbid_row_builder)
+
+    pred = forecast_model_long_df(
+        model=key,
+        long_df=long_df,
+        horizon=3,
+        model_params={"x_cols": ("promo",)},
+    )
+
+    assert pred["yhat"].tolist() == [1.0, 0.0, 1.0]
+
+
 def test_forecast_model_long_df_supports_generic_local_xreg_models_with_future_x_cols(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -217,6 +257,34 @@ def test_forecast_model_long_df_supports_generic_local_xreg_models_with_future_d
 
     assert pred["yhat"].tolist() == [1.0, 0.0, 1.0]
     assert pred["step"].tolist() == [1, 2, 3]
+
+
+def test_forecast_model_long_df_local_univariate_avoids_row_dict_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 6,
+            "ds": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    def _forbid_row_builder(*args: object, **kwargs: object) -> object:
+        raise AssertionError("local forecast should not build row dicts one-by-one")
+
+    monkeypatch.setattr(forecasting_mod, "_forecast_result_row", _forbid_row_builder)
+
+    pred = forecast_model_long_df(
+        model="naive-last",
+        long_df=long_df,
+        horizon=2,
+    )
+
+    assert pred["yhat"].tolist() == [6.0, 6.0]
+    assert pred["step"].tolist() == [1, 2]
 
 
 def test_forecast_model_long_df_rejects_historic_x_cols_for_current_local_xreg_path(
@@ -777,6 +845,217 @@ def test_forecast_model_long_df_supports_global_models() -> None:
     assert pred["step"].tolist() == [1, 2, 1, 2]
     assert np.isfinite(pred["yhat"].to_numpy(dtype=float)).all()
     assert pred["model"].tolist() == ["ridge-step-lag-global"] * 4
+
+
+def test_finalize_forecast_frame_avoids_groupby_and_sort_for_sorted_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    pred = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-19", "2020-01-20", "2020-01-19", "2020-01-20"]),
+            "yhat": [1.0, 2.0, 3.0, 4.0],
+            "yhat_p10": [0.5, 1.5, 2.5, 3.5],
+        }
+    )
+
+    original_groupby = pd.DataFrame.groupby
+    original_sort_values = pd.DataFrame.sort_values
+
+    def _forbid_groupby(self, *args, **kwargs):
+        raise AssertionError("sorted forecast output should avoid groupby.cumcount")
+
+    def _forbid_sort_values(self, *args, **kwargs):
+        raise AssertionError("sorted forecast output should avoid sort_values")
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", _forbid_groupby)
+    monkeypatch.setattr(pd.DataFrame, "sort_values", _forbid_sort_values)
+    try:
+        out = forecasting_mod._finalize_forecast_frame(
+            pred,
+            cutoff=pd.Timestamp("2020-01-18"),
+            model="ridge-step-lag-global",
+        )
+    finally:
+        monkeypatch.setattr(pd.DataFrame, "groupby", original_groupby)
+        monkeypatch.setattr(pd.DataFrame, "sort_values", original_sort_values)
+
+    assert list(out.columns) == ["unique_id", "ds", "cutoff", "step", "yhat", "yhat_p10", "model"]
+    assert out["step"].tolist() == [1, 2, 1, 2]
+    assert out["model"].tolist() == ["ridge-step-lag-global"] * 4
+
+
+def test_prepare_global_forecast_input_avoids_groupby_and_sort_for_sorted_xreg_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s1", "s1", "s1"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                ]
+            ),
+            "y": [1.0, 2.0, np.nan, 3.0, 4.0, np.nan],
+            "promo": [0.0, 1.0, 1.0, 0.0, 1.0, 0.0],
+        }
+    )
+
+    original_groupby = pd.DataFrame.groupby
+    original_sort_values = pd.DataFrame.sort_values
+
+    def _forbid_groupby(self, *args, **kwargs):
+        raise AssertionError("sorted global forecast input should avoid groupby")
+
+    def _forbid_sort_values(self, *args, **kwargs):
+        raise AssertionError("sorted global forecast input should avoid sort_values")
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", _forbid_groupby)
+    monkeypatch.setattr(pd.DataFrame, "sort_values", _forbid_sort_values)
+    try:
+        augmented, cutoff = forecasting_mod._prepare_global_forecast_input(
+            long_df,
+            horizon=1,
+            x_cols=("promo",),
+        )
+    finally:
+        monkeypatch.setattr(pd.DataFrame, "groupby", original_groupby)
+        monkeypatch.setattr(pd.DataFrame, "sort_values", original_sort_values)
+
+    assert augmented is long_df
+    assert cutoff == pd.Timestamp("2020-01-18")
+
+
+def test_prepare_global_forecast_input_avoids_future_group_helper_for_sorted_xreg_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s1", "s1", "s1"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                ]
+            ),
+            "y": [1.0, 2.0, np.nan, 3.0, 4.0, np.nan],
+            "promo": [0.0, 1.0, 1.0, 0.0, 1.0, 0.0],
+        }
+    )
+
+    def _forbid_group_helper(*args, **kwargs):
+        raise AssertionError("sorted xreg global forecast input should avoid future group helper")
+
+    monkeypatch.setattr(
+        forecasting_mod,
+        "_global_forecast_group_future_frame",
+        _forbid_group_helper,
+    )
+
+    augmented, cutoff = forecasting_mod._prepare_global_forecast_input(
+        long_df,
+        horizon=1,
+        x_cols=("promo",),
+    )
+
+    assert augmented is long_df
+    assert cutoff == pd.Timestamp("2020-01-18")
+
+
+def test_prepare_global_forecast_input_avoids_concat_for_sorted_univariate_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s1", "s1", "s1"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                ]
+            ),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    original_concat = pd.concat
+
+    def _forbid_concat(*args, **kwargs):
+        raise AssertionError("sorted univariate global forecast input should avoid concat")
+
+    monkeypatch.setattr(pd, "concat", _forbid_concat)
+    try:
+        augmented, cutoff = forecasting_mod._prepare_global_forecast_input(
+            long_df,
+            horizon=2,
+            x_cols=(),
+        )
+    finally:
+        monkeypatch.setattr(pd, "concat", original_concat)
+
+    assert list(augmented.columns) == ["unique_id", "ds", "y"]
+    assert len(augmented) == 10
+    assert augmented["y"].isna().sum() == 4
+    assert cutoff == pd.Timestamp("2020-01-19")
+
+
+def test_prepare_global_forecast_input_avoids_future_frame_builder_for_sorted_univariate_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foresight.services.forecasting as forecasting_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0", "s1", "s1", "s1"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                    "2020-01-17",
+                    "2020-01-18",
+                    "2020-01-19",
+                ]
+            ),
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    def _forbid_future_frame_builder(*args, **kwargs):
+        raise AssertionError("sorted univariate global forecast input should avoid future frame DataFrames")
+
+    monkeypatch.setattr(forecasting_mod, "_future_frame_for_group", _forbid_future_frame_builder)
+
+    augmented, cutoff = forecasting_mod._prepare_global_forecast_input(
+        long_df,
+        horizon=2,
+        x_cols=(),
+    )
+
+    assert len(augmented) == 10
+    assert augmented["y"].isna().sum() == 4
+    assert cutoff == pd.Timestamp("2020-01-19")
 
 
 @pytest.mark.skipif(

@@ -2,6 +2,8 @@
   "smoke": {
     "description": "Tiny deterministic benchmark sweep for CI and local packaging checks.",
     "task_group": "point",
+    "workload": "panel_cv",
+    "scale": "tiny",
     "profiling": false,
     "conformal_levels": [80],
     "conformal_per_step": false,
@@ -43,6 +45,8 @@
   "baseline": {
     "description": "Slightly broader manual benchmark sweep for local regression tracking.",
     "task_group": "point",
+    "workload": "panel_cv",
+    "scale": "small",
     "profiling": false,
     "conformal_levels": [80],
     "conformal_per_step": false,
@@ -88,6 +92,12 @@
   "production_v1": {
     "description": "Production-oriented benchmark sweep with stable point-forecast protocol metadata.",
     "task_group": "point",
+    "workload": "panel_cv",
+    "scale": "small",
+    "budgets": {
+      "cv_seconds_mean_warn": 2.0,
+      "peak_memory_mb_warn": 64.0
+    },
     "profiling": true,
     "conformal_levels": [80],
     "conformal_per_step": false,

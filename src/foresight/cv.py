@@ -26,6 +26,65 @@ from .services import model_execution as _model_execution
 N_WINDOWS_MIN_ERROR = "n_windows must be >= 1"
 
 
+def _prediction_columns(*, pred_cols: tuple[str, ...] = ()) -> dict[str, list[Any]]:
+    pred_cols_effective = tuple(dict.fromkeys(("yhat", *pred_cols)))
+    columns = {
+        "unique_id": [],
+        "ds": [],
+        "cutoff": [],
+        "step": [],
+        "y": [],
+        "yhat": [],
+        "model": [],
+    }
+    for col in pred_cols_effective:
+        if col not in columns:
+            columns[str(col)] = []
+    return columns
+
+
+def _append_prediction_rows(
+    columns: dict[str, list[Any]],
+    *,
+    uid: str,
+    ds_true: np.ndarray,
+    cutoff: Any,
+    y_true: np.ndarray,
+    yhat: np.ndarray,
+    model: str,
+) -> None:
+    horizon = int(y_true.shape[0])
+    columns["unique_id"].extend([str(uid)] * horizon)
+    columns["ds"].extend(ds_true.tolist())
+    columns["cutoff"].extend([cutoff] * horizon)
+    columns["step"].extend(range(1, horizon + 1))
+    columns["y"].extend(np.asarray(y_true, dtype=float).tolist())
+    columns["yhat"].extend(np.asarray(yhat, dtype=float).tolist())
+    columns["model"].extend([str(model)] * horizon)
+
+
+def _prediction_frame_from_columns(
+    columns: dict[str, list[Any]],
+    *,
+    pred_cols: tuple[str, ...] = (),
+) -> pd.DataFrame:
+    pred_cols_effective = tuple(dict.fromkeys(("yhat", *pred_cols)))
+    ordered_cols = ["unique_id", "ds", "cutoff", "step", "y", *pred_cols_effective, "model"]
+    return pd.DataFrame(columns, columns=ordered_cols)
+
+
+def _append_prediction_frame_rows(
+    columns: dict[str, list[Any]],
+    frame: pd.DataFrame,
+    *,
+    pred_cols: tuple[str, ...],
+) -> None:
+    pred_cols_effective = tuple(dict.fromkeys(("yhat", *pred_cols)))
+    ordered_cols = ("unique_id", "ds", "cutoff", "step", "y", *pred_cols_effective, "model")
+    for col in ordered_cols:
+        columns[str(col)].extend(frame[str(col)].tolist())
+
+
 def _normalize_cv_x_cols(
     model_spec: Any,
     model_params: dict[str, Any] | None,
@@ -89,6 +148,7 @@ def _trim_cv_splits(
 
 def _local_cv_split_rows(
     *,
+    columns: dict[str, list[Any]],
     uid: str,
     ds_arr: np.ndarray,
     y_arr: np.ndarray,
@@ -96,7 +156,7 @@ def _local_cv_split_rows(
     forecaster: Any,
     horizon: int,
     model: str,
-) -> list[dict[str, Any]]:
+) -> None:
     train = y_arr[split.train_start : split.train_end]
     yhat = np.asarray(forecaster(train, int(horizon)), dtype=float)
     if yhat.shape != (int(horizon),):
@@ -108,18 +168,15 @@ def _local_cv_split_rows(
         raise RuntimeError("Internal error: unexpected slice length for horizon.")
 
     cutoff = ds_arr[split.train_end - 1]
-    return [
-        {
-            "unique_id": uid,
-            "ds": ds_true[idx],
-            "cutoff": cutoff,
-            "step": int(idx + 1),
-            "y": float(y_true[idx]),
-            "yhat": float(yhat[idx]),
-            "model": str(model),
-        }
-        for idx in range(int(horizon))
-    ]
+    _append_prediction_rows(
+        columns,
+        uid=uid,
+        ds_true=ds_true,
+        cutoff=cutoff,
+        y_true=y_true,
+        yhat=yhat,
+        model=model,
+    )
 
 
 def _local_cv_xreg_arrays(
@@ -138,6 +195,7 @@ def _local_cv_xreg_arrays(
 
 def _local_cv_xreg_split_rows(
     *,
+    columns: dict[str, list[Any]],
     uid: str,
     ds_arr: np.ndarray,
     y_arr: np.ndarray,
@@ -146,7 +204,7 @@ def _local_cv_xreg_split_rows(
     horizon: int,
     model: str,
     model_params: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> None:
     yhat = _model_execution.call_local_xreg_forecaster(
         model=str(model),
         train_y=y_arr[split.train_start : split.train_end],
@@ -162,18 +220,15 @@ def _local_cv_xreg_split_rows(
         raise RuntimeError("Internal error: unexpected slice length for horizon.")
 
     cutoff = ds_arr[split.train_end - 1]
-    return [
-        {
-            "unique_id": uid,
-            "ds": ds_true[idx],
-            "cutoff": cutoff,
-            "step": int(idx + 1),
-            "y": float(y_true[idx]),
-            "yhat": float(yhat[idx]),
-            "model": str(model),
-        }
-        for idx in range(int(horizon))
-    ]
+    _append_prediction_rows(
+        columns,
+        uid=uid,
+        ds_true=ds_true,
+        cutoff=cutoff,
+        y_true=y_true,
+        yhat=yhat,
+        model=model,
+    )
 
 
 def _local_cv_prediction_rows(
@@ -186,10 +241,11 @@ def _local_cv_prediction_rows(
     max_train_size: int | None,
     n_windows: int | None,
     model: str,
-) -> tuple[list[dict[str, Any]], int, int]:
-    rows: list[dict[str, Any]] = []
+) -> tuple[pd.DataFrame, int, int, int]:
+    columns = _prediction_columns()
     n_series = 0
     n_series_skipped = 0
+    total_windows = 0
     series_slices = cached_series_slices(df)
     ds_all = cached_ds_array(df)
     y_all = cached_y_array(df)
@@ -222,18 +278,18 @@ def _local_cv_prediction_rows(
 
         series_windows = 0
         for split in splits:
-            rows.extend(
-                _local_cv_split_rows(
-                    uid=str(uid),
-                    ds_arr=ds_arr,
-                    y_arr=y_arr,
-                    split=split,
-                    forecaster=forecaster,
-                    horizon=horizon,
-                    model=model,
-                )
+            _local_cv_split_rows(
+                columns=columns,
+                uid=str(uid),
+                ds_arr=ds_arr,
+                y_arr=y_arr,
+                split=split,
+                forecaster=forecaster,
+                horizon=horizon,
+                model=model,
             )
             series_windows += 1
+            total_windows += 1
         emit_cli_event(
             "CV series",
             event="cv_series_completed",
@@ -244,7 +300,7 @@ def _local_cv_prediction_rows(
             progress=True,
         )
 
-    return rows, n_series, n_series_skipped
+    return _prediction_frame_from_columns(columns), n_series, n_series_skipped, total_windows
 
 
 def _local_cv_xreg_prediction_rows(
@@ -258,10 +314,11 @@ def _local_cv_xreg_prediction_rows(
     min_train_size: int,
     max_train_size: int | None,
     n_windows: int | None,
-) -> tuple[list[dict[str, Any]], int, int]:
-    rows: list[dict[str, Any]] = []
+) -> tuple[pd.DataFrame, int, int, int]:
+    columns = _prediction_columns()
     n_series = 0
     n_series_skipped = 0
+    total_windows = 0
     local_xreg_params = dict(model_params)
     local_xreg_params.pop("x_cols", None)
     series_slices = cached_series_slices(df)
@@ -297,19 +354,19 @@ def _local_cv_xreg_prediction_rows(
 
         series_windows = 0
         for split in splits:
-            rows.extend(
-                _local_cv_xreg_split_rows(
-                    uid=str(uid),
-                    ds_arr=ds_arr,
-                    y_arr=y_arr,
-                    x_arr=x_arr,
-                    split=split,
-                    horizon=horizon,
-                    model=model,
-                    model_params=local_xreg_params,
-                )
+            _local_cv_xreg_split_rows(
+                columns=columns,
+                uid=str(uid),
+                ds_arr=ds_arr,
+                y_arr=y_arr,
+                x_arr=x_arr,
+                split=split,
+                horizon=horizon,
+                model=model,
+                model_params=local_xreg_params,
             )
             series_windows += 1
+            total_windows += 1
         emit_cli_event(
             "CV series",
             event="cv_series_completed",
@@ -320,7 +377,7 @@ def _local_cv_xreg_prediction_rows(
             progress=True,
         )
 
-    return rows, n_series, n_series_skipped
+    return _prediction_frame_from_columns(columns), n_series, n_series_skipped, total_windows
 
 
 def _global_cv_cutoffs(
@@ -423,6 +480,79 @@ def _validated_global_cv_prediction_table(pred: Any) -> pd.DataFrame:
     return pred
 
 
+def _prepared_global_cv_columns(
+    pred: pd.DataFrame,
+    *,
+    y_lookup: pd.Series,
+    horizon: int,
+    total_series: int,
+    cutoff: Any,
+    model: str,
+) -> tuple[dict[str, list[Any]] | None, int, tuple[str, ...], int]:
+    pred_cols = tuple(str(col) for col in pred.columns if col not in {"unique_id", "ds"})
+    pred_index = pd.MultiIndex.from_frame(pred.loc[:, ["unique_id", "ds"]], names=["unique_id", "ds"])
+    y_values = y_lookup.reindex(pred_index).to_numpy(copy=False)
+    ds_values = pred["ds"].to_numpy(copy=False)
+    uid_values = pred["unique_id"].astype("string").to_numpy(copy=False)
+    pred_arrays = {col: pred[col].to_numpy(copy=False) for col in pred_cols}
+
+    valid_mask = pd.notna(uid_values) & pd.notna(ds_values) & pd.notna(y_values)
+    for col in pred_cols:
+        valid_mask &= pd.notna(pred_arrays[col])
+    if not bool(np.any(valid_mask)):
+        return None, total_series, pred_cols, 0
+
+    uid_filtered = np.asarray(uid_values[valid_mask], dtype=str)
+    ds_filtered = ds_values[valid_mask]
+    y_filtered = np.asarray(y_values[valid_mask], dtype=float)
+    pred_filtered = {
+        col: np.asarray(pred_arrays[col][valid_mask], dtype=float if np.issubdtype(np.asarray(pred_arrays[col]).dtype, np.number) else object)
+        for col in pred_cols
+    }
+
+    ds_sort_key = np.asarray(ds_filtered).astype("datetime64[ns]").view("int64")
+    sort_index = np.lexsort((ds_sort_key, uid_filtered))
+    uid_sorted = uid_filtered[sort_index]
+    ds_sorted = ds_filtered[sort_index]
+    y_sorted = y_filtered[sort_index]
+    pred_sorted = {col: values[sort_index] for col, values in pred_filtered.items()}
+
+    if uid_sorted.size == 0:
+        return None, total_series, pred_cols, 0
+
+    boundaries = np.flatnonzero(uid_sorted[1:] != uid_sorted[:-1]) + 1 if uid_sorted.size > 1 else np.array([], dtype=int)
+    starts = np.concatenate((np.array([0], dtype=int), boundaries.astype(int, copy=False)))
+    stops = np.concatenate((boundaries.astype(int, copy=False), np.array([uid_sorted.size], dtype=int)))
+    row_keep = np.zeros(uid_sorted.size, dtype=bool)
+    steps = np.zeros(uid_sorted.size, dtype=int)
+    valid_series = 0
+    for start, stop in zip(starts.tolist(), stops.tolist(), strict=True):
+        width = int(stop - start)
+        if width != int(horizon):
+            continue
+        row_keep[start:stop] = True
+        steps[start:stop] = np.arange(1, width + 1, dtype=int)
+        valid_series += 1
+
+    if not bool(np.any(row_keep)):
+        return None, total_series, pred_cols, 0
+
+    columns = _prediction_columns(pred_cols=pred_cols)
+    row_count = int(np.count_nonzero(row_keep))
+    kept = row_keep.tolist()
+    columns["unique_id"].extend(uid_sorted[kept].tolist())
+    columns["ds"].extend(ds_sorted[kept].tolist())
+    columns["cutoff"].extend([cutoff] * row_count)
+    columns["step"].extend(steps[kept].tolist())
+    columns["y"].extend(y_sorted[kept].tolist())
+    for col in pred_cols:
+        columns[col].extend(pred_sorted[col][kept].tolist())
+    columns["model"].extend([str(model)] * row_count)
+
+    skipped_here = total_series - int(valid_series)
+    return columns, skipped_here, pred_cols, row_count
+
+
 def _prepared_global_cv_frame(
     pred: pd.DataFrame,
     *,
@@ -431,33 +561,21 @@ def _prepared_global_cv_frame(
     total_series: int,
     cutoff: Any,
     model: str,
-) -> tuple[pd.DataFrame | None, int]:
-    pred_cols = [col for col in pred.columns if col not in {"unique_id", "ds"}]
-    pred_indexed = pred.set_index(["unique_id", "ds"])
-    merged = pred_indexed.copy()
-    merged["y"] = y_lookup.reindex(pred_indexed.index).to_numpy(copy=False)
-    merged = merged.reset_index()
-    merged = merged.dropna(subset=["y", "ds", *pred_cols])
-    if merged.empty:
-        return None, total_series
-
-    merged = merged.sort_values(["unique_id", "ds"], kind="mergesort")
-    sizes = merged.groupby("unique_id", sort=False).size()
-    valid_uids = sizes.index[sizes.to_numpy(dtype=int, copy=False) == int(horizon)]
-    if len(valid_uids) == 0:
-        return None, total_series
-
-    merged = merged[merged["unique_id"].isin(valid_uids)].copy()
-    merged["step"] = merged.groupby("unique_id", sort=False).cumcount() + 1
-    merged["cutoff"] = cutoff
-    merged["model"] = str(model)
-    skipped_here = total_series - int(merged["unique_id"].nunique())
-
-    cols = ["unique_id", "ds", "cutoff", "step", "y", *pred_cols, "model"]
-    return merged.loc[:, cols], skipped_here
+) -> tuple[pd.DataFrame | None, int, tuple[str, ...]]:
+    columns, skipped_here, pred_cols, _row_count = _prepared_global_cv_columns(
+        pred,
+        y_lookup=y_lookup,
+        horizon=horizon,
+        total_series=total_series,
+        cutoff=cutoff,
+        model=model,
+    )
+    if columns is None:
+        return None, skipped_here, pred_cols
+    return _prediction_frame_from_columns(columns, pred_cols=pred_cols), skipped_here, pred_cols
 
 
-def _global_cv_prediction_frames(
+def _global_cv_prediction_table(
     df: pd.DataFrame,
     *,
     model: str,
@@ -467,7 +585,7 @@ def _global_cv_prediction_frames(
     min_train_size: int,
     max_train_size: int | None,
     n_windows: int | None,
-) -> tuple[list[pd.DataFrame], int, str]:
+) -> tuple[pd.DataFrame, int, str, int]:
     global_params = dict(model_params or {})
     global_params["max_train_size"] = max_train_size
     global_forecaster = _model_execution.make_global_forecaster_runner(
@@ -487,12 +605,13 @@ def _global_cv_prediction_frames(
 
     total_series = int(context["total_series"])
     y_lookup = context["y_lookup"]
-    frames: list[pd.DataFrame] = []
+    pred_cols: tuple[str, ...] | None = None
+    columns: dict[str, list[Any]] | None = None
     series_skipped_any = 0
 
     for cutoff_idx, cutoff in enumerate(cutoffs, start=1):
         pred = _validated_global_cv_prediction_table(global_forecaster(df, cutoff, int(horizon)))
-        frame, skipped_here = _prepared_global_cv_frame(
+        frame_columns, skipped_here, frame_pred_cols, row_count = _prepared_global_cv_columns(
             pred,
             y_lookup=y_lookup,
             horizon=horizon,
@@ -500,23 +619,37 @@ def _global_cv_prediction_frames(
             cutoff=cutoff,
             model=model,
         )
-        if frame is None:
+        if frame_columns is None:
             continue
+        if pred_cols is None:
+            pred_cols = frame_pred_cols
+            columns = _prediction_columns(pred_cols=pred_cols)
+        elif frame_pred_cols != pred_cols:
+            raise ValueError("Global prediction columns changed across CV cutoffs.")
         if skipped_here > 0:
             series_skipped_any += int(skipped_here)
-        frames.append(frame)
+        for col, values in frame_columns.items():
+            columns[col].extend(values)
         emit_cli_event(
             f"CV cutoff {cutoff_idx}/{len(cutoffs)}",
             event="cv_cutoff_completed",
             payload=compact_log_payload(
                 cutoff=cutoff,
-                rows=int(len(frame)),
+                rows=int(row_count),
                 series_skipped=int(skipped_here),
             ),
             progress=True,
         )
 
-    return frames, series_skipped_any, ref_uid
+    if columns is None or pred_cols is None:
+        raise ValueError("Global model produced 0 predictions for the requested CV parameters.")
+
+    return (
+        _prediction_frame_from_columns(columns, pred_cols=pred_cols),
+        series_skipped_any,
+        ref_uid,
+        len(cutoffs),
+    )
 
 
 def cross_validation_predictions(
@@ -649,7 +782,7 @@ def cross_validation_predictions_long_df(
                 raise ValueError(
                     f"Model {model!r} does not support x_cols in cross_validation_predictions_long_df"
                 )
-            rows, n_series, n_series_skipped = _local_cv_xreg_prediction_rows(
+            out, n_series, n_series_skipped, n_windows = _local_cv_xreg_prediction_rows(
                 df,
                 model=str(model),
                 model_params=params,
@@ -662,7 +795,7 @@ def cross_validation_predictions_long_df(
             )
         else:
             forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
-            rows, n_series, n_series_skipped = _local_cv_prediction_rows(
+            out, n_series, n_series_skipped, n_windows = _local_cv_prediction_rows(
                 df,
                 forecaster=forecaster,
                 horizon=int(horizon),
@@ -673,12 +806,12 @@ def cross_validation_predictions_long_df(
                 model=str(model),
             )
 
-        if not rows:
+        if out.empty:
             raise ValueError("No series had enough data for the requested CV parameters.")
 
-        out = pd.DataFrame(rows)
         out.attrs["n_series"] = int(n_series)
         out.attrs["n_series_skipped"] = int(n_series_skipped)
+        out.attrs["n_windows"] = int(n_windows)
         emit_cli_event(
             "CV done",
             event="cv_completed",
@@ -687,12 +820,13 @@ def cross_validation_predictions_long_df(
                 rows=int(len(out)),
                 n_series=int(n_series),
                 n_series_skipped=int(n_series_skipped),
+                n_windows=int(n_windows),
             ),
         )
         return out
 
     if interface == "global":
-        frames, series_skipped_any, ref_uid = _global_cv_prediction_frames(
+        out, series_skipped_any, ref_uid, n_windows = _global_cv_prediction_table(
             df,
             model=str(model),
             model_params=params,
@@ -703,13 +837,10 @@ def cross_validation_predictions_long_df(
             n_windows=n_windows,
         )
 
-        if not frames:
-            raise ValueError("Global model produced 0 predictions for the requested CV parameters.")
-
-        out = pd.concat(frames, axis=0, ignore_index=True)
         out.attrs["n_series"] = int(df["unique_id"].nunique())
         out.attrs["n_series_skipped"] = int(series_skipped_any)
         out.attrs["reference_unique_id"] = str(ref_uid)
+        out.attrs["n_windows"] = int(n_windows)
         emit_cli_event(
             "CV done",
             event="cv_completed",
@@ -718,6 +849,7 @@ def cross_validation_predictions_long_df(
                 rows=int(len(out)),
                 n_series=int(out.attrs["n_series"]),
                 n_series_skipped=int(series_skipped_any),
+                n_windows=int(n_windows),
             ),
         )
         return out

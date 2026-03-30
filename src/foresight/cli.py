@@ -1252,21 +1252,27 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
     from .cv import cross_validation_predictions
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(list(args.model_param))
-        y_col = str(args.y_col).strip() or None
-        df = cross_validation_predictions(
-            model=str(args.model),
-            dataset=str(args.dataset),
-            y_col=y_col,
-            horizon=int(args.horizon),
-            step_size=int(args.step_size),
-            min_train_size=int(args.min_train_size),
-            max_train_size=args.max_train_size,
-            n_windows=args.n_windows,
-            model_params=model_params,
-            data_dir=str(args.data_dir),
-        )
-        _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+        with _cli_runtime.phase_scope("params", payload=_log_payload(model=str(args.model))):
+            model_params = _cli_shared._parse_model_params(list(args.model_param))
+            y_col = str(args.y_col).strip() or None
+        with _cli_runtime.phase_scope(
+            "cv",
+            payload=_log_payload(model=str(args.model), dataset=str(args.dataset)),
+        ):
+            df = cross_validation_predictions(
+                model=str(args.model),
+                dataset=str(args.dataset),
+                y_col=y_col,
+                horizon=int(args.horizon),
+                step_size=int(args.step_size),
+                min_train_size=int(args.min_train_size),
+                max_train_size=args.max_train_size,
+                n_windows=args.n_windows,
+                model_params=model_params,
+                data_dir=str(args.data_dir),
+            )
+        with _cli_runtime.phase_scope("emit", payload=_log_payload(format=str(args.format))):
+            _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
         return 0
 
     return _run_logged_command(
@@ -1289,23 +1295,29 @@ def _cmd_cv_csv(args: argparse.Namespace) -> int:
     from .services.cli_workflows import cv_csv_workflow
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(list(args.model_param))
-        id_cols = parse_id_cols(str(args.id_cols))
-        df = cv_csv_workflow(
-            model=str(args.model),
-            path=str(args.path),
-            time_col=str(args.time_col),
-            y_col=str(args.y_col),
-            horizon=int(args.horizon),
-            step_size=int(args.step_size),
-            min_train_size=int(args.min_train_size),
-            id_cols=id_cols,
-            parse_dates=bool(args.parse_dates),
-            model_params=model_params,
-            max_train_size=args.max_train_size,
-            n_windows=args.n_windows,
-        )
-        _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
+        with _cli_runtime.phase_scope("params", payload=_log_payload(model=str(args.model))):
+            model_params = _cli_shared._parse_model_params(list(args.model_param))
+            id_cols = parse_id_cols(str(args.id_cols))
+        with _cli_runtime.phase_scope(
+            "cv",
+            payload=_log_payload(model=str(args.model), path=str(args.path)),
+        ):
+            df = cv_csv_workflow(
+                model=str(args.model),
+                path=str(args.path),
+                time_col=str(args.time_col),
+                y_col=str(args.y_col),
+                horizon=int(args.horizon),
+                step_size=int(args.step_size),
+                min_train_size=int(args.min_train_size),
+                id_cols=id_cols,
+                parse_dates=bool(args.parse_dates),
+                model_params=model_params,
+                max_train_size=args.max_train_size,
+                n_windows=args.n_windows,
+            )
+        with _cli_runtime.phase_scope("emit", payload=_log_payload(format=str(args.format))):
+            _cli_shared._emit_dataframe(df, output=str(args.output), fmt=str(args.format))
         return 0
 
     return _run_logged_command(
@@ -1328,25 +1340,31 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
     from .services.cli_workflows import forecast_csv_workflow
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(list(args.model_param))
-        id_cols = parse_id_cols(str(args.id_cols))
-        pred = forecast_csv_workflow(
-            model=str(args.model),
-            path=str(args.path),
-            time_col=str(args.time_col),
-            y_col=str(args.y_col),
-            id_cols=id_cols,
-            parse_dates=bool(args.parse_dates),
-            horizon=int(args.horizon),
-            model_params=model_params,
-            future_path=str(getattr(args, "future_path", "")).strip() or None,
-            interval_levels=str(getattr(args, "interval_levels", "")).strip(),
-            interval_min_train_size=getattr(args, "interval_min_train_size", None),
-            interval_samples=int(getattr(args, "interval_samples", 1000)),
-            interval_seed=getattr(args, "interval_seed", None),
-            save_artifact_path=str(getattr(args, "save_artifact", "")).strip() or None,
-        )
-        _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
+        with _cli_runtime.phase_scope("params", payload=_log_payload(model=str(args.model))):
+            model_params = _cli_shared._parse_model_params(list(args.model_param))
+            id_cols = parse_id_cols(str(args.id_cols))
+        with _cli_runtime.phase_scope(
+            "forecast",
+            payload=_log_payload(model=str(args.model), path=str(args.path)),
+        ):
+            pred = forecast_csv_workflow(
+                model=str(args.model),
+                path=str(args.path),
+                time_col=str(args.time_col),
+                y_col=str(args.y_col),
+                id_cols=id_cols,
+                parse_dates=bool(args.parse_dates),
+                horizon=int(args.horizon),
+                model_params=model_params,
+                future_path=str(getattr(args, "future_path", "")).strip() or None,
+                interval_levels=str(getattr(args, "interval_levels", "")).strip(),
+                interval_min_train_size=getattr(args, "interval_min_train_size", None),
+                interval_samples=int(getattr(args, "interval_samples", 1000)),
+                interval_seed=getattr(args, "interval_seed", None),
+                save_artifact_path=str(getattr(args, "save_artifact", "")).strip() or None,
+            )
+        with _cli_runtime.phase_scope("emit", payload=_log_payload(format=str(args.format))):
+            _cli_shared._emit_dataframe(pred, output=str(args.output), fmt=str(args.format))
         return 0
 
     return _run_logged_command(
@@ -1710,23 +1728,29 @@ def _cmd_eval_run(args: argparse.Namespace) -> int:
     from .eval_forecast import eval_model
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(list(args.model_param))
-        y_col = str(args.y_col).strip() or None
-        payload = eval_model(
-            model=str(args.model),
-            dataset=str(args.dataset),
-            y_col=y_col,
-            horizon=int(args.horizon),
-            step=int(args.step),
-            min_train_size=int(args.min_train_size),
-            max_windows=args.max_windows,
-            max_train_size=args.max_train_size,
-            conformal_levels=str(args.conformal_levels).strip() or None,
-            conformal_per_step=(not bool(args.conformal_pooled)),
-            model_params=model_params,
-            data_dir=str(args.data_dir),
-        )
-        _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
+        with _cli_runtime.phase_scope("params", payload=_log_payload(model=str(args.model))):
+            model_params = _cli_shared._parse_model_params(list(args.model_param))
+            y_col = str(args.y_col).strip() or None
+        with _cli_runtime.phase_scope(
+            "eval",
+            payload=_log_payload(model=str(args.model), dataset=str(args.dataset)),
+        ):
+            payload = eval_model(
+                model=str(args.model),
+                dataset=str(args.dataset),
+                y_col=y_col,
+                horizon=int(args.horizon),
+                step=int(args.step),
+                min_train_size=int(args.min_train_size),
+                max_windows=args.max_windows,
+                max_train_size=args.max_train_size,
+                conformal_levels=str(args.conformal_levels).strip() or None,
+                conformal_per_step=(not bool(args.conformal_pooled)),
+                model_params=model_params,
+                data_dir=str(args.data_dir),
+            )
+        with _cli_runtime.phase_scope("emit", payload=_log_payload(format=str(args.format))):
+            _cli_shared._emit(payload, output=args.output, fmt=str(args.format))
         return 0
 
     return _run_logged_command(
@@ -1749,25 +1773,31 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
     from .services.cli_workflows import eval_csv_workflow
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(list(args.model_param))
-        id_cols = parse_id_cols(str(args.id_cols))
-        payload = eval_csv_workflow(
-            model=str(args.model),
-            path=str(args.path),
-            time_col=str(args.time_col),
-            y_col=str(args.y_col),
-            id_cols=id_cols,
-            parse_dates=bool(args.parse_dates),
-            horizon=int(args.horizon),
-            step=int(args.step),
-            min_train_size=int(args.min_train_size),
-            model_params=model_params,
-            max_windows=args.max_windows,
-            max_train_size=args.max_train_size,
-            conformal_levels=str(args.conformal_levels).strip() or None,
-            conformal_per_step=(not bool(args.conformal_pooled)),
-        )
-        _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+        with _cli_runtime.phase_scope("params", payload=_log_payload(model=str(args.model))):
+            model_params = _cli_shared._parse_model_params(list(args.model_param))
+            id_cols = parse_id_cols(str(args.id_cols))
+        with _cli_runtime.phase_scope(
+            "eval",
+            payload=_log_payload(model=str(args.model), path=str(args.path)),
+        ):
+            payload = eval_csv_workflow(
+                model=str(args.model),
+                path=str(args.path),
+                time_col=str(args.time_col),
+                y_col=str(args.y_col),
+                id_cols=id_cols,
+                parse_dates=bool(args.parse_dates),
+                horizon=int(args.horizon),
+                step=int(args.step),
+                min_train_size=int(args.min_train_size),
+                model_params=model_params,
+                max_windows=args.max_windows,
+                max_train_size=args.max_train_size,
+                conformal_levels=str(args.conformal_levels).strip() or None,
+                conformal_per_step=(not bool(args.conformal_pooled)),
+            )
+        with _cli_runtime.phase_scope("emit", payload=_log_payload(format=str(args.format))):
+            _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
         return 0
 
     return _run_logged_command(

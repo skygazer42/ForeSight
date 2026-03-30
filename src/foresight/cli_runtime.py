@@ -11,6 +11,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -334,3 +335,29 @@ def emit_cli_event(
         level=str(level),
         progress=bool(progress),
     )
+
+
+@contextlib.contextmanager
+def phase_scope(
+    phase: str,
+    *,
+    payload: Mapping[str, Any] | None = None,
+    level: str = "info",
+) -> Iterator[None]:
+    started = perf_counter()
+    try:
+        yield
+    finally:
+        elapsed_ms = round((perf_counter() - started) * 1000.0, 3)
+        emit_cli_event(
+            f"PHASE {str(phase)}",
+            event="phase_completed",
+            payload=compact_log_payload(
+                {
+                    "phase": str(phase),
+                    "elapsed_ms": elapsed_ms,
+                },
+                **compact_log_payload(payload),
+            ),
+            level=level,
+        )

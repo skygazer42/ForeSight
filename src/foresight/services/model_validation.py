@@ -15,6 +15,7 @@ from ..data.format import long_to_wide, to_long
 from ..data.prep import prepare_long_df
 from ..datasets import load_dataset
 from ..datasets.registry import get_dataset_spec
+from ..long_df_cache import long_df_cache
 from ..models.registry import get_model_spec, list_models
 from ..optional_deps import is_dependency_available, missing_dependency_message, require_dependency
 from .evaluation import eval_model_long_df, eval_multivariate_model_df
@@ -42,6 +43,8 @@ _LIGHTWEIGHT_CONTEXT_LENGTH = 8
 _LIGHTWEIGHT_NUM_SAMPLES = 20
 _DEFAULT_OUTPUT_DIR = Path("artifacts") / "validate_all_models"
 _DEFAULT_PROGRESS_EVERY = 50
+_RANKED_UNIQUE_IDS_ATTR = "_validation_ranked_unique_ids"
+_PROMOTION_VALIDATION_BUNDLE_CACHE: dict[tuple[str | None, int | None], dict[str, Any]] = {}
 
 
 def _normalize_data_dir(data_dir: str | Path | None) -> str | None:
@@ -51,14 +54,36 @@ def _normalize_data_dir(data_dir: str | Path | None) -> str | None:
     return data_dir_s or None
 
 
-def _limit_series(long_df: pd.DataFrame, *, max_series: int | None) -> pd.DataFrame:
-    if max_series is None:
-        return long_df.reset_index(drop=True)
+def _promotion_validation_bundle_key(
+    *,
+    data_dir: str | Path | None,
+    max_series: int | None,
+) -> tuple[str | None, int | None]:
+    return (_normalize_data_dir(data_dir), None if max_series is None else int(max_series))
 
-    max_series_int = int(max_series)
-    if max_series_int < 2:
-        raise ValueError("max_series must be >= 2 or None")
 
+def _build_promotion_validation_bundle(
+    data_dir: str | Path | None = None,
+    *,
+    max_series: int | None = _VALIDATION_MAX_SERIES,
+) -> dict[str, Any]:
+    key = _promotion_validation_bundle_key(data_dir=data_dir, max_series=max_series)
+    cached = _PROMOTION_VALIDATION_BUNDLE_CACHE.get(key)
+    if isinstance(cached, dict):
+        return cached
+
+    long_df = prepare_promotion_long_df(data_dir=data_dir, max_series=max_series)
+    wide_df, target_cols = build_promotion_multivariate_wide_df(long_df)
+    bundle = {
+        "long_df": long_df,
+        "wide_df": wide_df,
+        "target_cols": list(target_cols),
+    }
+    _PROMOTION_VALIDATION_BUNDLE_CACHE[key] = bundle
+    return _PROMOTION_VALIDATION_BUNDLE_CACHE[key]
+
+
+def _compute_ranked_unique_ids(long_df: pd.DataFrame) -> list[str]:
     ranked = (
         long_df.groupby("unique_id", sort=False)["y"]
         .agg(
@@ -78,12 +103,47 @@ def _limit_series(long_df: pd.DataFrame, *, max_series: int | None) -> pd.DataFr
             kind="mergesort",
         )
     )
-    selected = ranked["unique_id"].head(max_series_int).tolist()
-    return (
+    return [str(item) for item in ranked["unique_id"].tolist()]
+
+
+def _ranked_unique_ids(long_df: pd.DataFrame) -> list[str]:
+    present = {str(item) for item in long_df["unique_id"].astype("string").unique().tolist()}
+    cached = long_df.attrs.get(_RANKED_UNIQUE_IDS_ATTR)
+    if isinstance(cached, list | tuple):
+        ordered = []
+        seen: set[str] = set()
+        for item in cached:
+            uid = str(item)
+            if uid in present and uid not in seen:
+                ordered.append(uid)
+                seen.add(uid)
+        if len(ordered) == len(present):
+            return ordered
+
+    ranked_ids = _compute_ranked_unique_ids(long_df)
+    long_df.attrs[_RANKED_UNIQUE_IDS_ATTR] = list(ranked_ids)
+    return ranked_ids
+
+
+def _limit_series(long_df: pd.DataFrame, *, max_series: int | None) -> pd.DataFrame:
+    ranked_ids = _ranked_unique_ids(long_df)
+    if max_series is None:
+        out = long_df.reset_index(drop=True)
+        out.attrs[_RANKED_UNIQUE_IDS_ATTR] = list(ranked_ids)
+        return out
+
+    max_series_int = int(max_series)
+    if max_series_int < 2:
+        raise ValueError("max_series must be >= 2 or None")
+
+    selected = ranked_ids[:max_series_int]
+    out = (
         long_df.loc[long_df["unique_id"].astype("string").isin(selected)]
         .sort_values(["unique_id", "ds"], kind="mergesort")
         .reset_index(drop=True)
     )
+    out.attrs[_RANKED_UNIQUE_IDS_ATTR] = list(ranked_ids)
+    return out
 
 
 def _requires_label(spec: Any) -> str:
@@ -139,26 +199,17 @@ def build_promotion_multivariate_wide_df(
     if long_df.empty:
         raise ValueError("long_df is empty")
 
-    ranked = (
-        long_df.groupby("unique_id", sort=False)["y"]
-        .agg(
-            n_obs="size",
-            n_nonzero=lambda s: int((s != 0).sum()),
-            n_unique="nunique",
-            y_std="std",
-        )
-        .reset_index()
-        .assign(
-            unique_id=lambda df: df["unique_id"].astype("string"),
-            y_std=lambda df: df["y_std"].fillna(0.0),
-        )
-        .sort_values(
-            ["n_nonzero", "n_unique", "y_std", "unique_id"],
-            ascending=[False, False, False, True],
-            kind="mergesort",
-        )
-    )
-    selected = ranked["unique_id"].head(int(n_series)).tolist()
+    cache = long_df_cache(long_df).setdefault("validation_multivariate_wide", {})
+    cache_key = int(n_series)
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        cached_wide_df = cached.get("wide_df")
+        cached_target_cols = cached.get("target_cols")
+        if isinstance(cached_wide_df, pd.DataFrame) and isinstance(cached_target_cols, list):
+            return cached_wide_df, list(cached_target_cols)
+
+    ranked_ids = _ranked_unique_ids(long_df)
+    selected = ranked_ids[: int(n_series)]
     if len(selected) < int(n_series):
         raise ValueError(f"Need at least {int(n_series)} series for multivariate validation")
 
@@ -170,6 +221,7 @@ def build_promotion_multivariate_wide_df(
         missing="zero",
     )
     target_cols = [str(col) for col in wide_df.columns if str(col) != "ds"]
+    cache[cache_key] = {"wide_df": wide_df, "target_cols": list(target_cols)}
     return wide_df, target_cols
 
 
@@ -216,13 +268,36 @@ def _write_foundation_fixture(output_dir: str | Path | None) -> Path:
     return fixture_path
 
 
+def _validation_transform_family(model_key: str) -> str:
+    model_key_s = str(model_key).strip().lower()
+    if "logistic" in model_key_s:
+        return "logistic"
+    if any(token in model_key_s for token in ("gamma", "poisson", "tweedie")) or model_key_s in {
+        "holt-winters-mul",
+        "holt-winters-mul-auto",
+    }:
+        return "positive_unit_scale"
+    if "catboost" in model_key_s:
+        return "catboost"
+    return "identity"
+
+
 def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str) -> pd.DataFrame:
     if not isinstance(long_df, pd.DataFrame):
         raise TypeError("long_df must be a pandas DataFrame")
 
     model_key = str(model).strip().lower()
-    out = long_df.copy()
-    if "logistic" in model_key:
+    family = _validation_transform_family(model_key)
+    if family == "identity":
+        return long_df
+
+    cache = long_df_cache(long_df).setdefault("validation_transforms", {})
+    cached = cache.get(family)
+    if isinstance(cached, pd.DataFrame):
+        return cached
+
+    if family == "logistic":
+        out = long_df.copy()
         def _scale(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             max_value = float(values.max(initial=0.0))
@@ -231,12 +306,11 @@ def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str)
             return pd.Series(values / max_value, index=group.index, dtype=float)
 
         out["y"] = out.groupby("unique_id", sort=False)["y"].transform(_scale)
+        cache[family] = out
         return out
 
-    if any(token in model_key for token in ("gamma", "poisson", "tweedie")) or model_key in {
-        "holt-winters-mul",
-        "holt-winters-mul-auto",
-    }:
+    if family == "positive_unit_scale":
+        out = long_df.copy()
         def _positive_unit_scale(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             min_value = float(values.min(initial=0.0))
@@ -247,18 +321,21 @@ def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str)
             return pd.Series(shifted, index=group.index, dtype=float)
 
         out["y"] = out.groupby("unique_id", sort=False)["y"].transform(_positive_unit_scale)
+        cache[family] = out
         return out
 
-    if "catboost" in model_key:
+    if family == "catboost":
+        out = long_df.copy()
         def _jitter(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             eps = 1e-6 * np.arange(values.size, dtype=float)
             return pd.Series(values + eps, index=group.index, dtype=float)
 
         out["y"] = out.groupby("unique_id", sort=False)["y"].transform(_jitter)
+        cache[family] = out
         return out
 
-    return out
+    return long_df
 
 
 def build_model_params(
@@ -453,7 +530,10 @@ def _evaluate_model(
     try:
         interface = str(spec.interface).strip().lower()
         if interface == "multivariate":
-            model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(model_long_df)
+            if model_long_df is long_df:
+                model_wide_df, model_target_cols = wide_df, list(target_cols)
+            else:
+                model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(model_long_df)
             payload = eval_multivariate_model_df(
                 model=str(model),
                 df=model_wide_df,
@@ -914,7 +994,10 @@ def _train_multivariate_model(
     from . import model_execution as _model_execution
 
     model_long_df = transform_validation_long_df_for_model(long_df, model=model)
-    model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(model_long_df)
+    if model_long_df is long_df:
+        model_wide_df, model_target_cols = wide_df, list(target_cols)
+    else:
+        model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(model_long_df)
     params = build_training_model_params(
         spec,
         device=device,
@@ -1023,8 +1106,10 @@ def run_registry_training_validation(
     output_path = _DEFAULT_OUTPUT_DIR if output_dir is None else Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     keys = _normalize_models(models)
-    long_df = prepare_promotion_long_df(data_dir=data_dir)
-    wide_df, target_cols = build_promotion_multivariate_wide_df(long_df)
+    bundle = _build_promotion_validation_bundle(data_dir=data_dir)
+    long_df = bundle["long_df"]
+    wide_df = bundle["wide_df"]
+    target_cols = list(bundle["target_cols"])
     fixture_path = _write_foundation_fixture(output_path)
 
     rows: list[dict[str, Any]] = []
@@ -1094,8 +1179,10 @@ def run_registry_validation(
 ) -> dict[str, Any]:
     runtime_device = resolve_runtime_device(device)
     keys = _normalize_models(models)
-    long_df = prepare_promotion_long_df(data_dir=data_dir)
-    wide_df, target_cols = build_promotion_multivariate_wide_df(long_df)
+    bundle = _build_promotion_validation_bundle(data_dir=data_dir)
+    long_df = bundle["long_df"]
+    wide_df = bundle["wide_df"]
+    target_cols = list(bundle["target_cols"])
     fixture_path = _write_foundation_fixture(output_dir)
 
     rows = [

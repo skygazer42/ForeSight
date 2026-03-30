@@ -9,7 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from foresight.cli_leaderboard import _summarize_leaderboard_rows
+from foresight.cli_leaderboard import (
+    _build_leaderboard_metric_contexts,
+    _leaderboard_summary_best_by_dataset_metric,
+    _leaderboard_summary_rank_by_dataset_metric_model,
+    _summarize_leaderboard_rows,
+)
 
 
 def _run_cli(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -383,3 +388,89 @@ def test_leaderboard_summary_source_avoids_nested_sort_conditionals() -> None:
 
     assert "sv = _num(row.get(secondary)) if secondary else None" not in source
     assert "0.0 if sv is None else (float(-sv) if descending else float(sv))" not in source
+
+
+def test_leaderboard_summary_best_by_dataset_metric_accepts_pre_grouped_rows() -> None:
+    cleaned = [
+        {"task_group": "point", "dataset": "d1", "model": "a", "mae": 2.0, "rmse": 4.0},
+        {"task_group": "point", "dataset": "d1", "model": "b", "mae": 1.0, "rmse": 3.0},
+        {"task_group": "point", "dataset": "d2", "model": "a", "mae": 5.0, "rmse": 6.0},
+    ]
+    rows_by_dataset = {
+        ("point", "d1"): cleaned[:2],
+        ("point", "d2"): cleaned[2:],
+    }
+
+    out = _leaderboard_summary_best_by_dataset_metric(
+        cleaned,
+        ["mae", "rmse"],
+        rows_by_dataset=rows_by_dataset,
+    )
+
+    assert out == {
+        ("point", "d1", "mae"): 1.0,
+        ("point", "d1", "rmse"): 3.0,
+        ("point", "d2", "mae"): 5.0,
+        ("point", "d2", "rmse"): 6.0,
+    }
+
+
+def test_leaderboard_summary_rank_by_dataset_metric_model_accepts_pre_grouped_rows() -> None:
+    cleaned = [
+        {"task_group": "point", "dataset": "d1", "model": "a", "mae": 2.0, "rmse": 4.0},
+        {"task_group": "point", "dataset": "d1", "model": "b", "mae": 1.0, "rmse": 3.0},
+        {"task_group": "point", "dataset": "d2", "model": "a", "mae": 5.0, "rmse": 6.0},
+    ]
+    rows_by_dataset = {
+        ("point", "d1"): cleaned[:2],
+        ("point", "d2"): cleaned[2:],
+    }
+
+    out = _leaderboard_summary_rank_by_dataset_metric_model(
+        cleaned,
+        ["mae", "rmse"],
+        rows_by_dataset=rows_by_dataset,
+    )
+
+    assert out == {
+        ("point", "d1", "mae", "b"): 1.0,
+        ("point", "d1", "mae", "a"): 2.0,
+        ("point", "d1", "rmse", "b"): 1.0,
+        ("point", "d1", "rmse", "a"): 2.0,
+        ("point", "d2", "mae", "a"): 1.0,
+        ("point", "d2", "rmse", "a"): 1.0,
+    }
+
+
+def test_build_leaderboard_metric_contexts_collects_metric_views() -> None:
+    items = [
+        {"task_group": "point", "dataset": "d1", "model": "a", "mae": 2.0, "rmse": 4.0, "n_points": 10},
+        {"task_group": "point", "dataset": "d2", "model": "a", "mae": 1.0, "rmse": 3.0, "n_points": 20},
+    ]
+    best_by_dataset_metric = {
+        ("point", "d1", "mae"): 1.0,
+        ("point", "d1", "rmse"): 4.0,
+        ("point", "d2", "mae"): 1.0,
+        ("point", "d2", "rmse"): 2.0,
+    }
+    rank_by_dataset_metric_model = {
+        ("point", "d1", "mae", "a"): 2.0,
+        ("point", "d1", "rmse", "a"): 1.0,
+        ("point", "d2", "mae", "a"): 1.0,
+        ("point", "d2", "rmse", "a"): 2.0,
+    }
+
+    out = _build_leaderboard_metric_contexts(
+        items,
+        metrics=["mae", "rmse"],
+        model="a",
+        best_by_dataset_metric=best_by_dataset_metric,
+        rank_by_dataset_metric_model=rank_by_dataset_metric_model,
+    )
+
+    assert out["mae"]["values"] == [2.0, 1.0]
+    assert out["mae"]["weighted_pairs"] == [(2.0, 10), (1.0, 20)]
+    assert out["mae"]["relative_values"] == [2.0, 1.0]
+    assert out["mae"]["rank_values"] == [2.0, 1.0]
+    assert out["rmse"]["values"] == [4.0, 3.0]
+    assert out["rmse"]["relative_pairs"] == [(1.0, 10), (1.5, 20)]

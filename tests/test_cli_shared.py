@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import csv
 import pytest
 from foresight import cli_shared as _cli_shared
 
@@ -20,3 +21,21 @@ def test_write_output_writes_nested_text_file(tmp_path: Path) -> None:
     _cli_shared._write_output('{"ok": true}', output=str(out_file))
 
     assert out_file.read_text(encoding="utf-8") == '{"ok": true}\n'
+
+
+def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
+        raise AssertionError("csv.DictWriter should not be used")
+
+    monkeypatch.setattr(csv, "DictWriter", _forbid_dict_writer)
+
+    text = _cli_shared._format_csv(
+        [{"b": 2, "a": 1, "extra": 99}, {"a": 3}],
+        columns=["a", "b"],
+    )
+
+    assert text.splitlines() == [
+        "a,b",
+        "1,2",
+        "3,",
+    ]

@@ -8,11 +8,14 @@ import io
 import json
 import sys
 import time
+import tracemalloc
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 _TASK_GROUPS = {"point", "probabilistic", "covariate"}
+_BENCHMARK_WORKLOADS = {"panel_cv"}
+_BENCHMARK_SCALES = {"tiny", "small", "medium", "large"}
 
 
 def _repo_root() -> Path:
@@ -68,6 +71,31 @@ def _validate_benchmark_config(config_name: str, config: Any) -> dict[str, Any]:
     if not isinstance(profiling, bool):
         raise TypeError(f"benchmark config {config_name!r} profiling must be a boolean")
 
+    workload = str(config.get("workload", "panel_cv")).strip().lower() or "panel_cv"
+    if workload not in _BENCHMARK_WORKLOADS:
+        raise ValueError(
+            f"benchmark config {config_name!r} workload must be one of: {', '.join(sorted(_BENCHMARK_WORKLOADS))}"
+        )
+
+    scale = str(config.get("scale", "small")).strip().lower() or "small"
+    if scale not in _BENCHMARK_SCALES:
+        raise ValueError(
+            f"benchmark config {config_name!r} scale must be one of: {', '.join(sorted(_BENCHMARK_SCALES))}"
+        )
+
+    budgets = config.get("budgets", {})
+    if not isinstance(budgets, dict):
+        raise TypeError(f"benchmark config {config_name!r} budgets must be a JSON object")
+    normalized_budgets: dict[str, float] = {}
+    for key, value in budgets.items():
+        metric_key = str(key).strip()
+        if not metric_key:
+            raise ValueError(f"benchmark config {config_name!r} budget keys must be non-empty")
+        metric_value = float(value)
+        if metric_value <= 0.0:
+            raise ValueError(f"benchmark config {config_name!r} budget {metric_key!r} must be > 0")
+        normalized_budgets[metric_key] = metric_value
+
     datasets = config.get("datasets", [])
     models = config.get("models", [])
     if not isinstance(datasets, list):
@@ -83,6 +111,9 @@ def _validate_benchmark_config(config_name: str, config: Any) -> dict[str, Any]:
     out = dict(config)
     out["task_group"] = task_group
     out["profiling"] = bool(profiling)
+    out["workload"] = workload
+    out["scale"] = scale
+    out["budgets"] = normalized_budgets
     return out
 
 
@@ -126,6 +157,9 @@ def _summary_columns(level_suffixes: list[int], *, include_profile: bool) -> lis
             "prepare_seconds_mean",
             "eval_seconds_total",
             "eval_seconds_mean",
+            "peak_memory_mb_max",
+            "points_per_second_mean",
+            "windows_per_second_mean",
         ]
         if include_profile
         else []
@@ -163,78 +197,93 @@ def _summarize_rows(
 
     out: list[dict[str, Any]] = []
     for task_group, backend_family, model in sorted(by_model):
-        items = by_model[(task_group, backend_family, model)]
-        ok_items = [item for item in items if str(item.get("status", "ok")).strip().lower() == "ok"]
-        summary: dict[str, Any] = {
-            "model": model,
-            "task_group": task_group,
-            "backend_family": backend_family,
-            "n_datasets": int(len({str(item["dataset"]) for item in items})),
-            "ok_rows": int(len(ok_items)),
-            "skip_rows": int(len(items) - len(ok_items)),
-            "n_points_total": int(sum(int(item.get("n_points", 0) or 0) for item in ok_items)),
-            "mae_mean": _mean(
-                [float(item["mae"]) for item in ok_items if _as_float(item.get("mae")) is not None]
-            ),
-            "rmse_mean": _mean(
-                [
-                    float(item["rmse"])
-                    for item in ok_items
-                    if _as_float(item.get("rmse")) is not None
-                ]
-            ),
-            "mape_mean": _mean(
-                [
-                    float(item["mape"])
-                    for item in ok_items
-                    if _as_float(item.get("mape")) is not None
-                ]
-            ),
-            "smape_mean": _mean(
-                [
-                    float(item["smape"])
-                    for item in ok_items
-                    if _as_float(item.get("smape")) is not None
-                ]
-            ),
-            "cv_seconds_total": float(sum(float(item["cv_seconds"]) for item in items)),
-            "cv_seconds_mean": _mean([float(item["cv_seconds"]) for item in items]),
-        }
-        if include_profile:
-            summary.update(
-                {
-                    "load_seconds_total": float(
-                        sum(float(item.get("load_seconds", 0.0) or 0.0) for item in items)
-                    ),
-                    "load_seconds_mean": _mean(
-                        [float(item.get("load_seconds", 0.0) or 0.0) for item in items]
-                    ),
-                    "prepare_seconds_total": float(
-                        sum(float(item.get("prepare_seconds", 0.0) or 0.0) for item in items)
-                    ),
-                    "prepare_seconds_mean": _mean(
-                        [float(item.get("prepare_seconds", 0.0) or 0.0) for item in items]
-                    ),
-                    "eval_seconds_total": float(
-                        sum(float(item.get("eval_seconds", 0.0) or 0.0) for item in items)
-                    ),
-                    "eval_seconds_mean": _mean(
-                        [float(item.get("eval_seconds", 0.0) or 0.0) for item in items]
-                    ),
-                }
-            )
-        for suffix in conformal_levels:
-            for metric in ("coverage", "mean_width", "interval_score"):
-                metric_key = f"{metric}_{suffix}"
-                values = [
-                    float(item[metric_key])
-                    for item in ok_items
-                    if _as_float(item.get(metric_key)) is not None
-                ]
-                summary[f"{metric_key}_mean"] = _mean(values)
+        summary = _build_benchmark_summary_context(
+            by_model[(task_group, backend_family, model)],
+            conformal_levels=conformal_levels,
+            include_profile=include_profile,
+        )
+        summary.update(
+            {
+                "model": model,
+                "task_group": task_group,
+                "backend_family": backend_family,
+            }
+        )
         out.append(summary)
 
     return out
+
+
+def _build_benchmark_summary_context(
+    items: list[dict[str, Any]],
+    *,
+    conformal_levels: list[int],
+    include_profile: bool,
+) -> dict[str, Any]:
+    ok_items = [item for item in items if str(item.get("status", "ok")).strip().lower() == "ok"]
+    summary: dict[str, Any] = {
+        "n_datasets": int(len({str(item["dataset"]) for item in items})),
+        "ok_rows": int(len(ok_items)),
+        "skip_rows": int(len(items) - len(ok_items)),
+        "n_points_total": int(sum(int(item.get("n_points", 0) or 0) for item in ok_items)),
+        "mae_mean": _mean(
+            [float(item["mae"]) for item in ok_items if _as_float(item.get("mae")) is not None]
+        ),
+        "rmse_mean": _mean(
+            [float(item["rmse"]) for item in ok_items if _as_float(item.get("rmse")) is not None]
+        ),
+        "mape_mean": _mean(
+            [float(item["mape"]) for item in ok_items if _as_float(item.get("mape")) is not None]
+        ),
+        "smape_mean": _mean(
+            [float(item["smape"]) for item in ok_items if _as_float(item.get("smape")) is not None]
+        ),
+        "cv_seconds_total": float(sum(float(item["cv_seconds"]) for item in items)),
+        "cv_seconds_mean": _mean([float(item["cv_seconds"]) for item in items]),
+    }
+    if include_profile:
+        summary.update(
+            {
+                "load_seconds_total": float(
+                    sum(float(item.get("load_seconds", 0.0) or 0.0) for item in items)
+                ),
+                "load_seconds_mean": _mean(
+                    [float(item.get("load_seconds", 0.0) or 0.0) for item in items]
+                ),
+                "prepare_seconds_total": float(
+                    sum(float(item.get("prepare_seconds", 0.0) or 0.0) for item in items)
+                ),
+                "prepare_seconds_mean": _mean(
+                    [float(item.get("prepare_seconds", 0.0) or 0.0) for item in items]
+                ),
+                "eval_seconds_total": float(
+                    sum(float(item.get("eval_seconds", 0.0) or 0.0) for item in items)
+                ),
+                "eval_seconds_mean": _mean(
+                    [float(item.get("eval_seconds", 0.0) or 0.0) for item in items]
+                ),
+                "peak_memory_mb_max": max(
+                    [float(item.get("peak_memory_mb", 0.0) or 0.0) for item in items],
+                    default=0.0,
+                ),
+                "points_per_second_mean": _mean(
+                    [float(item.get("points_per_second", 0.0) or 0.0) for item in items]
+                ),
+                "windows_per_second_mean": _mean(
+                    [float(item.get("windows_per_second", 0.0) or 0.0) for item in items]
+                ),
+            }
+        )
+    for suffix in conformal_levels:
+        for metric in ("coverage", "mean_width", "interval_score"):
+            metric_key = f"{metric}_{suffix}"
+            values = [
+                float(item[metric_key])
+                for item in ok_items
+                if _as_float(item.get(metric_key)) is not None
+            ]
+            summary[f"{metric_key}_mean"] = _mean(values)
+    return summary
 
 
 def _format_csv(rows: list[dict[str, Any]], *, columns: list[str]) -> str:
@@ -326,6 +375,9 @@ def _benchmark_result_row(
     conformal_per_step: bool,
     task_group: str,
     backend_family: str,
+    profiling: bool,
+    workload: str,
+    scale: str,
 ) -> dict[str, Any]:
     model_key = str(model_case["key"])
     params = dict(model_case.get("params", {}))
@@ -337,7 +389,11 @@ def _benchmark_result_row(
     max_windows = int(dataset_fields["max_windows"])
     load_elapsed = 0.0
     prepare_elapsed = 0.0
+    eval_started = 0.0
+    peak_memory_mb = 0.0
     try:
+        if profiling:
+            tracemalloc.start()
         frame_bundle = _get_or_build_benchmark_frame(
             dataset_fields=dataset_fields,
             model_params=params,
@@ -362,11 +418,18 @@ def _benchmark_result_row(
             conformal_levels=conformal_levels,
             conformal_per_step=conformal_per_step,
         )
+        if profiling:
+            _current, peak_bytes = tracemalloc.get_traced_memory()
+            peak_memory_mb = float(peak_bytes) / (1024.0 * 1024.0)
     except Exception as e:  # noqa: BLE001
+        if profiling:
+            tracemalloc.stop()
         return {
             "model": model_key,
             "task_group": str(task_group),
             "backend_family": str(backend_family),
+            "workload": str(workload),
+            "scale": str(scale),
             "status": "skip",
             "skip_reason": "error",
             "error_type": type(e).__name__,
@@ -377,6 +440,7 @@ def _benchmark_result_row(
             "step": step,
             "min_train_size": min_train_size,
             "max_windows": max_windows,
+            "n_windows": 0,
             "n_series": 0,
             "n_series_skipped": 0,
             "n_points": 0,
@@ -388,14 +452,26 @@ def _benchmark_result_row(
             "prepare_seconds": round(float(prepare_elapsed), 6),
             "eval_seconds": 0.0,
             "cv_seconds": round(float(load_elapsed + prepare_elapsed), 6),
+            "peak_memory_mb": round(float(peak_memory_mb), 6),
+            "points_per_second": 0.0,
+            "windows_per_second": 0.0,
         }
+    finally:
+        if profiling and tracemalloc.is_tracing():
+            tracemalloc.stop()
     eval_elapsed = time.perf_counter() - eval_started
     elapsed = float(load_elapsed + prepare_elapsed + eval_elapsed)
+    n_points = int(payload["n_points"])
+    n_windows = int(payload.get("n_windows", 0) or 0)
+    points_per_second = 0.0 if elapsed <= 0.0 else float(n_points) / elapsed
+    windows_per_second = 0.0 if elapsed <= 0.0 else float(n_windows) / elapsed
 
     row: dict[str, Any] = {
         "model": model_key,
         "task_group": str(task_group),
         "backend_family": str(backend_family),
+        "workload": str(workload),
+        "scale": str(scale),
         "status": "ok",
         "skip_reason": "",
         "error_type": "",
@@ -406,9 +482,10 @@ def _benchmark_result_row(
         "step": step,
         "min_train_size": min_train_size,
         "max_windows": max_windows,
+        "n_windows": n_windows,
         "n_series": int(payload["n_series"]),
         "n_series_skipped": int(payload["n_series_skipped"]),
-        "n_points": int(payload["n_points"]),
+        "n_points": n_points,
         "mae": float(payload["mae"]),
         "rmse": float(payload["rmse"]),
         "mape": float(payload["mape"]),
@@ -417,6 +494,9 @@ def _benchmark_result_row(
         "prepare_seconds": round(float(prepare_elapsed), 6),
         "eval_seconds": round(float(eval_elapsed), 6),
         "cv_seconds": round(float(elapsed), 6),
+        "peak_memory_mb": round(float(peak_memory_mb), 6),
+        "points_per_second": round(float(points_per_second), 6),
+        "windows_per_second": round(float(windows_per_second), 6),
     }
     for suffix in conformal_levels:
         for metric in ("coverage", "mean_width", "interval_score"):
@@ -450,7 +530,10 @@ def run_benchmark_suite(
     datasets = config.get("datasets", [])
     models = config.get("models", [])
     task_group = str(config.get("task_group", "point")).strip() or "point"
+    workload = str(config.get("workload", "panel_cv")).strip() or "panel_cv"
+    scale = str(config.get("scale", "small")).strip() or "small"
     profiling = bool(config.get("profiling", False))
+    budgets = dict(config.get("budgets", {}))
     if profile is not None:
         profiling = bool(profile)
     dataset_fields_list = [_benchmark_dataset_case_fields(case) for case in datasets]
@@ -480,6 +563,9 @@ def run_benchmark_suite(
                     conformal_per_step=conformal_per_step,
                     task_group=task_group,
                     backend_family=backend_family,
+                    profiling=profiling,
+                    workload=workload,
+                    scale=scale,
                 )
             )
 
@@ -493,7 +579,10 @@ def run_benchmark_suite(
         "config": config_name,
         "description": str(config.get("description", "")),
         "task_group": task_group,
+        "workload": workload,
+        "scale": scale,
         "profiling": profiling,
+        "budgets": budgets,
         "datasets": [str(item["dataset_key"]) for item in dataset_fields_list],
         "models": [str(item["key"]) for item in models],
         "rows": rows,

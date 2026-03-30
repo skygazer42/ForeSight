@@ -121,3 +121,18 @@ dataset/model backtests, and emits a deterministic summary table.
 - `--smoke` is the CI-safe subset: packaged datasets plus dependency-free local models
 - `--config baseline` is the broader manual baseline for local comparison runs
 - `--format csv|json|md` controls summary output formatting
+- `--profile` adds stage totals plus profile-only columns such as `peak_memory_mb_max`,
+  `points_per_second_mean`, and `windows_per_second_mean`
+
+Each benchmark config now carries:
+
+- `workload`: benchmark protocol family, currently `panel_cv`
+- `scale`: expected sweep size such as `tiny` or `small`
+- `budgets`: warning thresholds for regression tracking, e.g. mean CV seconds and peak memory
+
+Example:
+
+```bash
+python3 benchmarks/run_benchmarks.py --smoke --profile
+python3 benchmarks/run_benchmarks.py --config production_v1 --format md
+```

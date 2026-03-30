@@ -7,6 +7,7 @@ from pandas.api.types import is_numeric_dtype
 from pandas.tseries.frequencies import to_offset
 
 from ..contracts.covariates import resolve_covariate_roles as _resolve_covariate_roles
+from ..contracts.frames import coerce_sorted_long_df as _contracts_coerce_sorted_long_df
 from ..contracts.frames import require_long_df as _contracts_require_long_df
 
 _MISSING_POLICIES = {"error", "drop", "ffill", "zero", "interpolate"}
@@ -191,8 +192,9 @@ def _prepare_long_group_frame(
     overlap: set[str],
     historic_policy: str,
     future_policy: str,
+    assume_sorted: bool,
 ) -> pd.DataFrame:
-    out = group.copy().sort_values("ds", kind="mergesort").reset_index(drop=True)
+    out = group.reset_index(drop=True) if assume_sorted else group.sort_values("ds", kind="mergesort").reset_index(drop=True)
     if out["ds"].duplicated().any():
         raise ValueError(f"ds contains duplicates for unique_id={uid_s!r}")
 
@@ -330,8 +332,10 @@ def prepare_long_df(
     - Optionally enforces a single shared frequency across all series.
     - Fills or rejects missing ``y``/covariate values with configurable policies.
     """
-    df = _contracts_require_long_df(long_df, require_non_empty=True).copy()
-    df = df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    df = _contracts_coerce_sorted_long_df(
+        _contracts_require_long_df(long_df, require_non_empty=True),
+        reset_index=True,
+    )
 
     historic_x_cols_tup, future_x_cols_tup, all_x_cols = _resolve_long_covariate_columns(
         df,
@@ -362,11 +366,11 @@ def prepare_long_df(
                 overlap=overlap,
                 historic_policy=historic_policy,
                 future_policy=future_policy,
+                assume_sorted=True,
             )
         )
 
     prepared = pd.concat(frames, axis=0, ignore_index=True, sort=False)
-    prepared = prepared.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
     prepared.attrs["historic_x_cols"] = historic_x_cols_tup
     prepared.attrs["future_x_cols"] = future_x_cols_tup
     cols = ["unique_id", "ds", "y", *all_x_cols]

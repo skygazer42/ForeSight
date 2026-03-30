@@ -6,7 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .splits import rolling_origin_splits
+from .contracts.frames import coerce_sorted_long_df
+from .splits import rolling_origin_split_sequence
 
 _LONG_DF_CACHE_REGISTRY: dict[int, dict[str, Any]] = {}
 _LONG_DF_CACHE_REFS: dict[int, weakref.ReferenceType[pd.DataFrame]] = {}
@@ -48,10 +49,9 @@ def sorted_long_df(long_df: pd.DataFrame, *, reset_index: bool) -> pd.DataFrame:
     if isinstance(cached, pd.DataFrame):
         return cached
 
-    out = long_df.sort_values(["unique_id", "ds"], kind="mergesort")
-    if reset_index:
-        out = out.reset_index(drop=True)
-    _register_cache(out, cache)
+    out = coerce_sorted_long_df(long_df, reset_index=bool(reset_index))
+    if out is not long_df:
+        _register_cache(out, cache)
     cache[key] = out
     return out
 
@@ -158,22 +158,16 @@ def cached_split_sequence(
     if isinstance(cached, tuple):
         return cached
 
-    splits = list(
-        rolling_origin_splits(
-            int(n_obs),
-            horizon=int(horizon),
-            step_size=int(step_size),
-            min_train_size=int(min_train_size),
-            max_train_size=max_train_size,
-        )
+    out = rolling_origin_split_sequence(
+        int(n_obs),
+        horizon=int(horizon),
+        step_size=int(step_size),
+        min_train_size=int(min_train_size),
+        max_train_size=max_train_size,
+        limit=limit,
+        keep=str(keep),
+        limit_error=str(limit_error),
     )
-    if limit is not None:
-        if int(limit) <= 0:
-            raise ValueError(str(limit_error))
-        count = int(limit)
-        splits = splits[:count] if keep == "first" else splits[-count:]
-
-    out = tuple(splits)
     split_cache[key] = out
     return out
 

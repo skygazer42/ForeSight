@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from .splits import rolling_origin_splits
+from .splits import rolling_origin_split_sequence
 
 Forecaster = Callable[[Any, int], np.ndarray]
 
@@ -50,32 +50,31 @@ def walk_forward(
     if max_windows is not None and max_windows <= 0:
         raise ValueError("max_windows must be >= 1")
 
-    y_true_list: list[np.ndarray] = []
-    y_pred_list: list[np.ndarray] = []
-    train_ends: list[int] = []
-
-    for split in rolling_origin_splits(
+    splits = rolling_origin_split_sequence(
         series.size,
         horizon=int(horizon),
         step_size=int(step),
         min_train_size=int(min_train_size),
         max_train_size=max_train_size,
-    ):
+        limit=max_windows,
+        keep="first",
+        limit_error="max_windows must be >= 1",
+    )
+    n_windows = len(splits)
+    y_true_arr = np.empty((n_windows, int(horizon)), dtype=float)
+    y_pred_arr = np.empty((n_windows, int(horizon)), dtype=float)
+    train_ends_arr = np.empty(n_windows, dtype=int)
+
+    for idx, split in enumerate(splits):
         train = series[split.train_start : split.train_end]
         true = series[split.test_start : split.test_end]
         pred = np.asarray(forecaster(train, horizon), dtype=float)
         if pred.shape != (horizon,):
             raise ValueError(f"forecaster must return shape ({horizon},), got {pred.shape}")
 
-        y_true_list.append(true)
-        y_pred_list.append(pred)
-        train_ends.append(split.train_end)
-        if max_windows is not None and len(y_true_list) >= max_windows:
-            break
-
-    y_true_arr = np.stack(y_true_list, axis=0)
-    y_pred_arr = np.stack(y_pred_list, axis=0)
-    train_ends_arr = np.asarray(train_ends, dtype=int)
+        y_true_arr[idx, :] = true
+        y_pred_arr[idx, :] = pred
+        train_ends_arr[idx] = int(split.train_end)
 
     return WalkForwardResult(
         y_true=y_true_arr,

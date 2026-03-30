@@ -178,10 +178,10 @@ def _format_payload(payload: object, *, fmt: str) -> str:
 def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
     cols = list(columns) if columns is not None else _leaderboard_columns()
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
-    writer.writeheader()
+    writer = csv.writer(buf)
+    writer.writerow(cols)
     for row in rows:
-        writer.writerow({k: row.get(k, "") for k in cols})
+        writer.writerow([row.get(column, "") for column in cols])
     return buf.getvalue().rstrip("\n")
 
 

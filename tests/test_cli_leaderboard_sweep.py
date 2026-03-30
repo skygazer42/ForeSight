@@ -6,6 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from foresight.cli_leaderboard import (
+    _load_leaderboard_sweep_resume_state,
+    _merge_leaderboard_sweep_rows,
+)
+
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     repo_root = Path(__file__).resolve().parents[1]
@@ -143,6 +148,37 @@ def test_leaderboard_sweep_chunk_size_zero_groups_by_dataset(tmp_path: Path) -> 
     assert out.exists()
 
 
+def test_leaderboard_sweep_emits_phase_timing_logs(tmp_path: Path) -> None:
+    out = tmp_path / "leaderboard_sweep_logs.json"
+    proc = _run_cli(
+        "leaderboard",
+        "sweep",
+        "--datasets",
+        "catfish,ice_cream_interest",
+        "--horizon",
+        "3",
+        "--step",
+        "3",
+        "--min-train-size",
+        "12",
+        "--models",
+        "naive-last",
+        "--jobs",
+        "1",
+        "--log-style",
+        "plain",
+        "--output",
+        str(out),
+    )
+    assert proc.returncode == 0
+    stderr = proc.stderr
+    assert "RUN start" in stderr
+    assert "PHASE params" in stderr
+    assert "PHASE resume" in stderr
+    assert "PHASE evaluate" in stderr
+    assert "PHASE emit" in stderr
+
+
 def test_leaderboard_sweep_strict_fails_on_unknown_model() -> None:
     proc = _run_cli(
         "leaderboard",
@@ -247,6 +283,81 @@ def test_leaderboard_sweep_resume_skips_existing_pairs(tmp_path: Path) -> None:
 
     # The skipped task should not appear in the DONE progress lines.
     assert "catfish/naive-last" not in (proc.stderr or "")
+
+
+def test_merge_leaderboard_sweep_rows_deduplicates_pairs_with_last_value() -> None:
+    merged = _merge_leaderboard_sweep_rows(
+        resume_rows=[
+            {"dataset": "catfish", "model": "naive-last", "mae": 10.0},
+            {"dataset": "catfish", "model": "naive-last", "mae": 20.0},
+            {"dataset": "ice_cream_interest", "model": "mean", "mae": 30.0},
+        ],
+        rows=[
+            {"dataset": "catfish", "model": "mean", "mae": 40.0},
+            {"dataset": "catfish", "model": "naive-last", "mae": 50.0},
+        ],
+    )
+
+    assert [(row["dataset"], row["model"], float(row["mae"])) for row in merged] == [
+        ("catfish", "mean", 40.0),
+        ("catfish", "naive-last", 50.0),
+        ("ice_cream_interest", "mean", 30.0),
+    ]
+
+
+def test_load_leaderboard_sweep_resume_state_deduplicates_matching_pairs(tmp_path: Path) -> None:
+    resume = tmp_path / "resume.json"
+    resume.write_text(
+        json.dumps(
+            [
+                {
+                    "dataset": "catfish",
+                    "model": "naive-last",
+                    "y_col": "Total",
+                    "horizon": 3,
+                    "step": 3,
+                    "min_train_size": 12,
+                    "max_windows": None,
+                    "data_dir": "",
+                    "model_params": {},
+                    "mae": 10.0,
+                },
+                {
+                    "dataset": "catfish",
+                    "model": "naive-last",
+                    "y_col": "Total",
+                    "horizon": 3,
+                    "step": 3,
+                    "min_train_size": 12,
+                    "max_windows": None,
+                    "data_dir": "",
+                    "model_params": {},
+                    "mae": 20.0,
+                },
+            ],
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    resume_rows, done_pairs = _load_leaderboard_sweep_resume_state(
+        resume_path=str(resume),
+        datasets=["catfish"],
+        keys=["naive-last"],
+        y_col="Total",
+        horizon=3,
+        step=3,
+        min_train_size=12,
+        max_windows=None,
+        data_dir="",
+        model_params={},
+        progress=False,
+    )
+
+    assert done_pairs == {("catfish", "naive-last")}
+    assert len(resume_rows) == 1
+    assert float(resume_rows[0]["mae"]) == 20.0
 
 
 def test_leaderboard_sweep_writes_summary_output(tmp_path: Path) -> None:

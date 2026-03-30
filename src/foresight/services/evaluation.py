@@ -26,7 +26,7 @@ from ..long_df_cache import (
     sorted_long_df,
 )
 from ..metrics import mae, mape, rmse, smape
-from ..splits import rolling_origin_splits
+from ..splits import rolling_origin_split_sequence
 from . import model_execution as _model_execution
 
 _MAX_WINDOWS_MIN_ERROR = "max_windows must be >= 1"
@@ -134,16 +134,25 @@ def _walk_forward_multivariate(
     if matrix.ndim != 2:
         raise ValueError(f"Expected 2D multivariate series, got shape {matrix.shape}")
 
-    y_true_list: list[np.ndarray] = []
-    y_pred_list: list[np.ndarray] = []
-
-    for split in rolling_origin_splits(
+    splits = rolling_origin_split_sequence(
         matrix.shape[0],
         horizon=int(horizon),
         step_size=int(step),
         min_train_size=int(min_train_size),
         max_train_size=max_train_size,
-    ):
+        limit=max_windows,
+        keep="first",
+        limit_error=_MAX_WINDOWS_MIN_ERROR,
+    )
+    if not splits:
+        raise ValueError("No windows available for the requested multivariate backtest parameters.")
+
+    n_windows = len(splits)
+    n_targets = int(matrix.shape[1])
+    y_true_arr = np.empty((n_windows, int(horizon), n_targets), dtype=float)
+    y_pred_arr = np.empty((n_windows, int(horizon), n_targets), dtype=float)
+
+    for idx, split in enumerate(splits):
         train = matrix[split.train_start : split.train_end, :]
         true = matrix[split.test_start : split.test_end, :]
         pred = np.asarray(forecaster(train, int(horizon)), dtype=float)
@@ -153,15 +162,10 @@ def _walk_forward_multivariate(
                 f"multivariate forecaster must return shape {expected_shape}, got {pred.shape}"
             )
 
-        y_true_list.append(true)
-        y_pred_list.append(pred)
-        if max_windows is not None and len(y_true_list) >= max_windows:
-            break
+        y_true_arr[idx, :, :] = true
+        y_pred_arr[idx, :, :] = pred
 
-    if not y_true_list:
-        raise ValueError("No windows available for the requested multivariate backtest parameters.")
-
-    return np.stack(y_true_list, axis=0), np.stack(y_pred_list, axis=0)
+    return y_true_arr, y_pred_arr
 
 
 def eval_multivariate_model_df(
@@ -395,6 +399,7 @@ def _global_eval_metrics_payload(
         "max_train_size": None if max_train_size is None else int(max_train_size),
         "n_series": int(pred_df.attrs.get("n_series", pred_df["unique_id"].nunique())),
         "n_series_skipped": int(pred_df.attrs.get("n_series_skipped", 0)),
+        "n_windows": int(pred_df.attrs.get("n_windows", pred_df["cutoff"].nunique())),
         "n_points": int(metrics_payload["n_points"]),
         "mae": float(metrics_payload["mae"]),
         "rmse": float(metrics_payload["rmse"]),
@@ -446,8 +451,10 @@ def _append_eval_window_results(
     y_true: np.ndarray,
     y_pred: np.ndarray,
 ) -> None:
-    results["y_true_all"].append(y_true.reshape(-1))
-    results["y_pred_all"].append(y_pred.reshape(-1))
+    _update_eval_metric_state(results["metric_state"], y_true=y_true, y_pred=y_pred)
+
+    if not bool(results.get("collect_raw_arrays", False)):
+        return
 
     if y_true.ndim == 1:
         for i in range(y_true.size):
@@ -458,6 +465,118 @@ def _append_eval_window_results(
     for i in range(y_true.shape[1]):
         results["y_true_by_step"][i].append(y_true[:, i])
         results["y_pred_by_step"][i].append(y_pred[:, i])
+
+
+def _new_eval_metric_state(*, horizon: int) -> dict[str, Any]:
+    horizon_i = int(horizon)
+    return {
+        "n_points": 0,
+        "abs_error_sum": 0.0,
+        "sq_error_sum": 0.0,
+        "abs_pct_error_sum": 0.0,
+        "smape_sum": 0.0,
+        "n_points_by_step": [0] * horizon_i,
+        "abs_error_sum_by_step": [0.0] * horizon_i,
+        "sq_error_sum_by_step": [0.0] * horizon_i,
+        "abs_pct_error_sum_by_step": [0.0] * horizon_i,
+        "smape_sum_by_step": [0.0] * horizon_i,
+    }
+
+
+def _update_eval_metric_state(
+    metric_state: dict[str, Any],
+    *,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    eps: float = 1e-8,
+) -> None:
+    yt = np.asarray(y_true, dtype=float)
+    yp = np.asarray(y_pred, dtype=float)
+    if yt.shape != yp.shape:
+        raise ValueError(f"Shape mismatch: y_true{yt.shape} vs y_pred{yp.shape}")
+
+    abs_err = np.abs(yt - yp)
+    sq_err = (yt - yp) ** 2
+    pct_denom = np.where(np.abs(yt) < eps, eps, np.abs(yt))
+    abs_pct_err = abs_err / pct_denom
+    smape_denom = np.abs(yt) + np.abs(yp)
+    smape_denom = np.where(smape_denom < eps, eps, smape_denom)
+    smape_terms = 2.0 * abs_err / smape_denom
+
+    metric_state["n_points"] += int(abs_err.size)
+    metric_state["abs_error_sum"] += float(abs_err.sum())
+    metric_state["sq_error_sum"] += float(sq_err.sum())
+    metric_state["abs_pct_error_sum"] += float(abs_pct_err.sum())
+    metric_state["smape_sum"] += float(smape_terms.sum())
+
+    if yt.ndim == 1:
+        for idx in range(int(yt.size)):
+            metric_state["n_points_by_step"][idx] += 1
+            metric_state["abs_error_sum_by_step"][idx] += float(abs_err[idx])
+            metric_state["sq_error_sum_by_step"][idx] += float(sq_err[idx])
+            metric_state["abs_pct_error_sum_by_step"][idx] += float(abs_pct_err[idx])
+            metric_state["smape_sum_by_step"][idx] += float(smape_terms[idx])
+        return
+
+    for idx in range(int(yt.shape[1])):
+        metric_state["n_points_by_step"][idx] += int(yt[:, idx].size)
+        metric_state["abs_error_sum_by_step"][idx] += float(abs_err[:, idx].sum())
+        metric_state["sq_error_sum_by_step"][idx] += float(sq_err[:, idx].sum())
+        metric_state["abs_pct_error_sum_by_step"][idx] += float(abs_pct_err[:, idx].sum())
+        metric_state["smape_sum_by_step"][idx] += float(smape_terms[:, idx].sum())
+
+
+def _metric_state_mean(total: float, count: int) -> float:
+    if int(count) <= 0:
+        raise ValueError("count must be >= 1")
+    return float(total / float(count))
+
+
+def _metric_state_payload(metric_state: dict[str, Any]) -> dict[str, Any]:
+    n_points = int(metric_state["n_points"])
+    if n_points <= 0:
+        raise ValueError("No evaluated points are available.")
+
+    n_points_by_step = [int(item) for item in metric_state["n_points_by_step"]]
+    return {
+        "n_points": n_points,
+        "mae": _metric_state_mean(float(metric_state["abs_error_sum"]), n_points),
+        "rmse": float(np.sqrt(_metric_state_mean(float(metric_state["sq_error_sum"]), n_points))),
+        "mape": _metric_state_mean(float(metric_state["abs_pct_error_sum"]), n_points),
+        "smape": _metric_state_mean(float(metric_state["smape_sum"]), n_points),
+        "mae_by_step": [
+            _metric_state_mean(float(total), count)
+            for total, count in zip(
+                metric_state["abs_error_sum_by_step"],
+                n_points_by_step,
+                strict=True,
+            )
+        ],
+        "rmse_by_step": [
+            float(np.sqrt(_metric_state_mean(float(total), count)))
+            for total, count in zip(
+                metric_state["sq_error_sum_by_step"],
+                n_points_by_step,
+                strict=True,
+            )
+        ],
+        "mape_by_step": [
+            _metric_state_mean(float(total), count)
+            for total, count in zip(
+                metric_state["abs_pct_error_sum_by_step"],
+                n_points_by_step,
+                strict=True,
+            )
+        ],
+        "smape_by_step": [
+            _metric_state_mean(float(total), count)
+            for total, count in zip(
+                metric_state["smape_sum_by_step"],
+                n_points_by_step,
+                strict=True,
+            )
+        ],
+    }
 
 
 def _validated_eval_long_df_request(
@@ -512,6 +631,7 @@ def _local_eval_model_long_df_results(
     x_cols: tuple[str, ...],
     max_windows: int | None,
     max_train_size: int | None,
+    collect_raw_arrays: bool,
 ) -> dict[str, Any]:
     if x_cols:
         if not bool(capabilities.get("supports_x_cols", False)):
@@ -526,6 +646,7 @@ def _local_eval_model_long_df_results(
             x_cols=x_cols,
             max_windows=max_windows,
             max_train_size=max_train_size,
+            collect_raw_arrays=collect_raw_arrays,
         )
 
     return _eval_local_univariate_model_long_df(
@@ -537,6 +658,7 @@ def _local_eval_model_long_df_results(
         params=params,
         max_windows=max_windows,
         max_train_size=max_train_size,
+        collect_raw_arrays=collect_raw_arrays,
     )
 
 
@@ -565,14 +687,16 @@ def _eval_local_xreg_model_long_df(
     x_cols: tuple[str, ...],
     max_windows: int | None,
     max_train_size: int | None,
+    collect_raw_arrays: bool,
 ) -> dict[str, Any]:
     results: dict[str, Any] = {
-        "y_true_all": [],
-        "y_pred_all": [],
-        "y_true_by_step": [[] for _ in range(int(horizon))],
-        "y_pred_by_step": [[] for _ in range(int(horizon))],
+        "metric_state": _new_eval_metric_state(horizon=int(horizon)),
+        "collect_raw_arrays": bool(collect_raw_arrays),
+        "y_true_by_step": [[] for _ in range(int(horizon))] if collect_raw_arrays else None,
+        "y_pred_by_step": [[] for _ in range(int(horizon))] if collect_raw_arrays else None,
         "n_series": 0,
         "n_series_skipped": 0,
+        "n_windows": 0,
     }
     local_xreg_params = dict(params)
     local_xreg_params.pop("x_cols", None)
@@ -606,8 +730,11 @@ def _eval_local_xreg_model_long_df(
             keep="first",
             limit_error=_MAX_WINDOWS_MIN_ERROR,
         )
+        n_windows = len(splits)
+        y_true_arr = np.empty((n_windows, int(horizon)), dtype=float)
+        y_pred_arr = np.empty((n_windows, int(horizon)), dtype=float)
         windows_run = 0
-        for split in splits:
+        for idx, split in enumerate(splits):
             pred = _call_local_xreg_forecaster(
                 model=str(model),
                 train_y=y[split.train_start : split.train_end],
@@ -616,10 +743,12 @@ def _eval_local_xreg_model_long_df(
                 future_exog=x[split.test_start : split.test_end, :],
                 model_params=local_xreg_params,
             )
-            y_true = y[split.test_start : split.test_end]
-            _append_eval_window_results(results, y_true=y_true, y_pred=pred)
+            y_true_arr[idx, :] = y[split.test_start : split.test_end]
+            y_pred_arr[idx, :] = pred
 
             windows_run += 1
+            results["n_windows"] += 1
+        _append_eval_window_results(results, y_true=y_true_arr, y_pred=y_pred_arr)
         emit_cli_event(
             "EVAL series",
             event="eval_series_completed",
@@ -640,14 +769,16 @@ def _eval_local_univariate_model_long_df(
     params: dict[str, Any],
     max_windows: int | None,
     max_train_size: int | None,
+    collect_raw_arrays: bool,
 ) -> dict[str, Any]:
     results: dict[str, Any] = {
-        "y_true_all": [],
-        "y_pred_all": [],
-        "y_true_by_step": [[] for _ in range(int(horizon))],
-        "y_pred_by_step": [[] for _ in range(int(horizon))],
+        "metric_state": _new_eval_metric_state(horizon=int(horizon)),
+        "collect_raw_arrays": bool(collect_raw_arrays),
+        "y_true_by_step": [[] for _ in range(int(horizon))] if collect_raw_arrays else None,
+        "y_pred_by_step": [[] for _ in range(int(horizon))] if collect_raw_arrays else None,
         "n_series": 0,
         "n_series_skipped": 0,
+        "n_windows": 0,
     }
     forecaster = _model_execution.make_local_forecaster_runner(str(model), params)
     min_required = int(min_train_size) + int(horizon)
@@ -679,21 +810,22 @@ def _eval_local_univariate_model_long_df(
             keep="first",
             limit_error=_MAX_WINDOWS_MIN_ERROR,
         )
-        y_true_list: list[np.ndarray] = []
-        y_pred_list: list[np.ndarray] = []
-        for split in splits:
+        n_windows = len(splits)
+        y_true_arr = np.empty((n_windows, int(horizon)), dtype=float)
+        y_pred_arr = np.empty((n_windows, int(horizon)), dtype=float)
+        for idx, split in enumerate(splits):
             train = y[split.train_start : split.train_end]
-            true = y[split.test_start : split.test_end]
             pred = np.asarray(forecaster(train, int(horizon)), dtype=float)
             if pred.shape != (int(horizon),):
                 raise ValueError(f"forecaster must return shape ({int(horizon)},), got {pred.shape}")
-            y_true_list.append(true)
-            y_pred_list.append(pred)
+            y_true_arr[idx, :] = y[split.test_start : split.test_end]
+            y_pred_arr[idx, :] = pred
+            results["n_windows"] += 1
 
         _append_eval_window_results(
             results,
-            y_true=np.stack(y_true_list, axis=0),
-            y_pred=np.stack(y_pred_list, axis=0),
+            y_true=y_true_arr,
+            y_pred=y_pred_arr,
         )
         emit_cli_event(
             "EVAL series",
@@ -720,28 +852,7 @@ def _summarize_eval_model_long_df_results(
     conformal_per_step: bool,
     results: dict[str, Any],
 ) -> dict[str, Any]:
-    if not results["y_true_all"]:
-        raise ValueError("No series had enough data for the requested backtest parameters.")
-
-    yt = np.concatenate(results["y_true_all"], axis=0)
-    yp = np.concatenate(results["y_pred_all"], axis=0)
-
-    mae_by_step = [
-        mae(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
-    ]
-    rmse_by_step = [
-        rmse(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
-    ]
-    mape_by_step = [
-        mape(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
-    ]
-    smape_by_step = [
-        smape(np.concatenate(t), np.concatenate(p))
-        for t, p in zip(results["y_true_by_step"], results["y_pred_by_step"], strict=True)
-    ]
+    metric_payload = _metric_state_payload(results["metric_state"])
 
     out: dict[str, Any] = {
         "model": str(model),
@@ -752,19 +863,22 @@ def _summarize_eval_model_long_df_results(
         "max_train_size": None if max_train_size is None else int(max_train_size),
         "n_series": int(results["n_series"]),
         "n_series_skipped": int(results["n_series_skipped"]),
-        "n_points": int(yt.size),
-        "mae": mae(yt, yp),
-        "rmse": rmse(yt, yp),
-        "mape": mape(yt, yp),
-        "smape": smape(yt, yp),
-        "mae_by_step": mae_by_step,
-        "rmse_by_step": rmse_by_step,
-        "mape_by_step": mape_by_step,
-        "smape_by_step": smape_by_step,
+        "n_windows": int(results["n_windows"]),
+        "n_points": int(metric_payload["n_points"]),
+        "mae": float(metric_payload["mae"]),
+        "rmse": float(metric_payload["rmse"]),
+        "mape": float(metric_payload["mape"]),
+        "smape": float(metric_payload["smape"]),
+        "mae_by_step": list(metric_payload["mae_by_step"]),
+        "rmse_by_step": list(metric_payload["rmse_by_step"]),
+        "mape_by_step": list(metric_payload["mape_by_step"]),
+        "smape_by_step": list(metric_payload["smape_by_step"]),
     }
 
     levels = _parse_levels(conformal_levels)
     if levels:
+        if not bool(results.get("collect_raw_arrays", False)):
+            raise ValueError("Conformal summaries require raw per-step evaluation arrays.")
         conf_df = pd.concat(
             [
                 pd.DataFrame(
@@ -795,6 +909,7 @@ def _summarize_eval_model_long_df_results(
         event="eval_local_completed",
         payload=compact_log_payload(
             model=str(model),
+            n_windows=int(out["n_windows"]),
             n_points=int(out["n_points"]),
             n_series=int(out["n_series"]),
             n_series_skipped=int(out["n_series_skipped"]),
@@ -852,6 +967,7 @@ def eval_model_long_df(
         x_cols=x_cols,
         max_windows=max_windows,
         max_train_size=max_train_size,
+        collect_raw_arrays=bool(_parse_levels(conformal_levels)),
     )
 
     return _summarize_eval_model_long_df_results(

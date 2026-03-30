@@ -11,6 +11,8 @@ Typical commands that emit runtime logs:
 - `foresight eval run`
 - `foresight eval csv`
 - `foresight cv run`
+- `foresight leaderboard models`
+- `foresight leaderboard sweep`
 - `foresight tuning run`
 - `foresight artifact info`
 - `foresight artifact validate`
@@ -136,6 +138,11 @@ Examples include:
 
 Examples include:
 
+- `PHASE params`
+- `PHASE eval`
+- `PHASE cv`
+- `PHASE forecast`
+- `PHASE emit`
 - `EVAL series`
 - `EVAL done`
 - `CV start`
@@ -167,6 +174,15 @@ telemetry commonly expected from mature deep learning tooling, including:
 - per-epoch timing / throughput such as `epoch_seconds`, `step_seconds`,
   `samples_per_second`, and `batches_per_second`
 - completion metadata such as `best_epoch`, `best_improved`, `stop_reason`, and `total_seconds`
+
+For phase events, payloads also include:
+
+- `phase`: normalized phase name for the current command stage
+- `elapsed_ms`: wall-clock milliseconds spent in that stage
+
+This is useful when you want a fast breakdown of parameter parsing, dataset
+preparation, evaluation, forecasting, and output serialization without changing
+the machine-readable payload written to `stdout`.
 
 ### Optional TensorBoard tracking
 

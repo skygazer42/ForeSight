@@ -90,5 +90,34 @@ def require_observed_history_only(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def is_sorted_long_df(df: pd.DataFrame) -> bool:
+    if len(df) < 2:
+        return True
+
+    uid = df["unique_id"].astype("string")
+    ds = pd.to_datetime(df["ds"], errors="coerce")
+    prev_uid = uid.shift(1)
+    prev_ds = ds.shift(1)
+    uid_backwards = (uid < prev_uid).fillna(False)
+    ds_backwards = ((uid == prev_uid) & (ds < prev_ds)).fillna(False)
+    return not bool((uid_backwards | ds_backwards).any())
+
+
+def coerce_sorted_long_df(df: pd.DataFrame, *, reset_index: bool) -> pd.DataFrame:
+    if not is_sorted_long_df(df):
+        out = df.sort_values(["unique_id", "ds"], kind="mergesort")
+        return out.reset_index(drop=True) if reset_index else out
+
+    if reset_index:
+        if (
+            isinstance(df.index, pd.RangeIndex)
+            and int(df.index.start) == 0
+            and int(df.index.step) == 1
+        ):
+            return df
+        return df.reset_index(drop=True)
+    return df
+
+
 def sort_long_df(df: pd.DataFrame) -> pd.DataFrame:
-    return df.sort_values(["unique_id", "ds"], kind="mergesort").reset_index(drop=True)
+    return coerce_sorted_long_df(df, reset_index=True)

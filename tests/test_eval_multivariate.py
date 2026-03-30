@@ -63,6 +63,36 @@ def test_eval_model_long_df_rejects_multivariate_models_in_single_target_api():
         )
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None,
+    reason="statsmodels not installed",
+)
+def test_eval_multivariate_model_df_respects_max_windows() -> None:
+    from foresight.eval_forecast import eval_multivariate_model_df
+
+    df = pd.DataFrame(
+        {
+            "ds": pd.date_range("2020-01-01", periods=12, freq="D"),
+            "y_a": np.arange(12.0),
+            "y_b": np.arange(12.0) * 0.5 + 1.0,
+        }
+    )
+
+    out = eval_multivariate_model_df(
+        model="var",
+        df=df,
+        target_cols=["y_a", "y_b"],
+        horizon=2,
+        step=2,
+        min_train_size=6,
+        max_windows=2,
+        model_params={"maxlags": 1},
+    )
+
+    assert out["n_windows"] == 2
+    assert out["n_points"] == 8
+
+
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")
 def test_eval_multivariate_model_df_supports_torch_stid() -> None:
     from foresight.eval_forecast import eval_multivariate_model_df

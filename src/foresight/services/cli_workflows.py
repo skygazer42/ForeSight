@@ -188,18 +188,21 @@ def _flatten_artifact_summary_rows(
     path: str = "",
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    for key in sorted(payload):
-        value = payload[key]
-        next_path = str(key) if not path else f"{path}.{key}"
-        if isinstance(value, dict):
-            rows.extend(_flatten_artifact_summary_rows(value, path=next_path))
-            continue
-        rows.append(
-            {
-                "field": str(next_path),
-                "value": _stringify_artifact_diff_value(value),
-            }
-        )
+    stack: list[tuple[str, dict[str, Any]]] = [(str(path), payload)]
+    while stack:
+        current_path, current_payload = stack.pop()
+        for key in sorted(current_payload, reverse=True):
+            value = current_payload[key]
+            next_path = str(key) if not current_path else f"{current_path}.{key}"
+            if isinstance(value, dict):
+                stack.append((next_path, value))
+                continue
+            rows.append(
+                {
+                    "field": str(next_path),
+                    "value": _stringify_artifact_diff_value(value),
+                }
+            )
     return rows
 
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import foresight.services.cli_workflows as workflows_mod
 from foresight.models import make_forecaster_object
 from foresight.serialization import save_forecaster
 
@@ -978,3 +979,35 @@ def test_cli_artifact_info_exposes_structured_torch_runtime_metadata(tmp_path: P
     assert runtime["optimizer"]["name"] == "adamw"
     assert runtime["scheduler"]["name"] == "plateau"
     assert runtime["prediction"]["mode"] == "point"
+
+
+def test_flatten_artifact_summary_rows_uses_iterative_traversal(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = workflows_mod._flatten_artifact_summary_rows
+    calls = {"count": 0}
+
+    def _counting_flatten(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(workflows_mod, "_flatten_artifact_summary_rows", _counting_flatten)
+
+    rows = workflows_mod._flatten_artifact_summary_rows(
+        {
+            "metadata": {
+                "model_key": "naive-last",
+                "train_schema": {
+                    "kind": "local",
+                    "runtime": {"family": "core"},
+                },
+            },
+            "extra": {"artifact_type": "forecast-local"},
+        }
+    )
+
+    assert calls["count"] == 1
+    assert rows == [
+        {"field": "extra.artifact_type", "value": "forecast-local"},
+        {"field": "metadata.model_key", "value": "naive-last"},
+        {"field": "metadata.train_schema.kind", "value": "local"},
+        {"field": "metadata.train_schema.runtime.family", "value": "core"},
+    ]

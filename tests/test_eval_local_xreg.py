@@ -126,9 +126,39 @@ def test_eval_model_long_df_supports_generic_local_xreg_models(
     assert payload["model"] == key
     assert payload["n_series"] == 1
     assert payload["n_series_skipped"] == 0
+    assert payload["n_windows"] == 6
     assert payload["n_points"] == 18
     assert payload["mae"] < 1e-9
     assert payload["rmse"] < 1e-9
+
+
+def test_eval_model_long_df_local_xreg_respects_max_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(monkeypatch, key="__test-local-xreg-max-windows__")
+
+    promo = ([0, 1, 0, 1, 0, 1] * 5)[:30]
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 30,
+            "ds": pd.date_range("2020-01-01", periods=30, freq="D"),
+            "y": [float(p) for p in promo],
+            "promo": [float(p) for p in promo],
+        }
+    )
+
+    payload = eval_model_long_df(
+        model=key,
+        long_df=long_df,
+        horizon=3,
+        step=3,
+        min_train_size=12,
+        max_windows=2,
+        model_params={"x_cols": ("promo",)},
+    )
+
+    assert payload["n_windows"] == 2
+    assert payload["n_points"] == 6
 
 
 def test_eval_model_long_df_supports_generic_local_xreg_models_with_future_x_cols(

@@ -13,6 +13,7 @@ from .datasets.registry import get_dataset_spec
 
 _DATASET_LONG_DF_CACHE: dict[tuple[Any, ...], pd.DataFrame] = {}
 _DATASET_RAW_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+_DATASET_SPEC_CACHE: dict[str, Any] = {}
 
 
 def _normalize_dataset_long_df_request(
@@ -25,7 +26,7 @@ def _normalize_dataset_long_df_request(
     dataset_key = str(dataset)
     data_dir_s = "" if data_dir is None else str(data_dir).strip()
     data_dir_arg = data_dir_s or None
-    spec = get_dataset_spec(dataset_key)
+    spec = _get_cached_dataset_spec(dataset_key)
     y_col_final = (
         str(y_col).strip() if (y_col is not None and str(y_col).strip()) else str(spec.default_y)
     )
@@ -53,6 +54,19 @@ def _get_dataset_long_df_cache_lock() -> Any:
     return lock
 
 
+def _get_cached_dataset_spec(dataset_key: str) -> Any:
+    lock = _get_dataset_long_df_cache_lock()
+    with lock:
+        spec = _DATASET_SPEC_CACHE.get(str(dataset_key))
+    if spec is not None:
+        return spec
+
+    spec = get_dataset_spec(str(dataset_key))
+    with lock:
+        _DATASET_SPEC_CACHE[str(dataset_key)] = spec
+        return _DATASET_SPEC_CACHE[str(dataset_key)]
+
+
 def get_or_build_dataset_frame(
     *,
     dataset: str,
@@ -73,7 +87,7 @@ def get_or_build_dataset_frame(
     if raw_bundle is None:
         started = time.perf_counter()
         raw_bundle = {
-            "spec": get_dataset_spec(dataset_key),
+            "spec": _get_cached_dataset_spec(dataset_key),
             "df": load_dataset(dataset_key, data_dir=data_dir_arg),
         }
         load_seconds = float(time.perf_counter() - started)
@@ -121,34 +135,41 @@ def get_or_build_dataset_long_df(
         static_cols,
     )
     lock = _get_dataset_long_df_cache_lock()
+    with lock:
+        long_df = _DATASET_LONG_DF_CACHE.get(prepared_key)
+    if long_df is not None:
+        return {
+            "spec": spec,
+            "y_col_final": y_col_final,
+            "long_df": long_df,
+            "load_seconds": 0.0,
+            "prepare_seconds": 0.0,
+        }
+
     raw_bundle = get_or_build_dataset_frame(
         dataset=dataset_key,
         data_dir=data_dir_arg,
     )
     load_seconds = float(raw_bundle["load_seconds"])
 
-    with lock:
-        long_df = _DATASET_LONG_DF_CACHE.get(prepared_key)
-
     prepare_seconds = 0.0
-    if long_df is None:
-        started = time.perf_counter()
-        long_df = to_long(
-            raw_bundle["df"],
-            time_col=spec.time_col,
-            y_col=y_col_final,
-            id_cols=tuple(spec.group_cols),
-            historic_x_cols=historic_x_cols,
-            future_x_cols=future_x_cols,
-            static_cols=static_cols,
-            dropna=True,
-        )
-        prepare_seconds = float(time.perf_counter() - started)
-        if long_df.empty:
-            raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
-        with lock:
-            _DATASET_LONG_DF_CACHE[prepared_key] = long_df
-            long_df = _DATASET_LONG_DF_CACHE[prepared_key]
+    started = time.perf_counter()
+    long_df = to_long(
+        raw_bundle["df"],
+        time_col=spec.time_col,
+        y_col=y_col_final,
+        id_cols=tuple(spec.group_cols),
+        historic_x_cols=historic_x_cols,
+        future_x_cols=future_x_cols,
+        static_cols=static_cols,
+        dropna=True,
+    )
+    prepare_seconds = float(time.perf_counter() - started)
+    if long_df.empty:
+        raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
+    with lock:
+        _DATASET_LONG_DF_CACHE[prepared_key] = long_df
+        long_df = _DATASET_LONG_DF_CACHE[prepared_key]
 
     return {
         "spec": spec,

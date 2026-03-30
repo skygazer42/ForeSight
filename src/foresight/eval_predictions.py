@@ -7,16 +7,7 @@ import pandas as pd
 
 from .metrics import (
     crps_from_quantiles,
-    interval_coverage,
-    interval_score,
-    mae,
-    mape,
-    mean_interval_width,
-    pinball_loss,
-    rmse,
-    smape,
     weighted_interval_score,
-    winkler_score,
 )
 
 
@@ -52,6 +43,70 @@ def _symmetric_interval_levels(pcts: list[int], q_cols: dict[int, str]) -> list[
     return sorted(set(levels))
 
 
+def _vectorized_interval_metrics(
+    y: Any,
+    lo: Any,
+    hi: Any,
+    *,
+    alpha: float,
+    step_values: Any | None = None,
+) -> dict[str, Any]:
+    a = float(alpha)
+    if not (0.0 < a < 1.0):
+        raise ValueError("alpha must be in (0, 1)")
+
+    y_arr = np.asarray(y, dtype=float)
+    lo_arr = np.asarray(lo, dtype=float)
+    hi_arr = np.asarray(hi, dtype=float)
+    if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
+        raise ValueError(
+            f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
+        )
+
+    width = hi_arr - lo_arr
+    below = (lo_arr - y_arr) * (y_arr < lo_arr)
+    above = (y_arr - hi_arr) * (y_arr > hi_arr)
+    score = width + (2.0 / a) * below + (2.0 / a) * above
+    coverage = ((y_arr >= lo_arr) & (y_arr <= hi_arr)).astype(float)
+
+    out: dict[str, Any] = {
+        "coverage": float(np.mean(coverage)),
+        "mean_width": float(np.mean(width)),
+        "interval_score": float(np.mean(score)),
+        "winkler_score": float(np.mean(score)),
+    }
+    if step_values is None:
+        return out
+
+    steps = np.asarray(step_values)
+    uniq = _sorted_unique_steps(steps)
+    if not uniq:
+        return out
+
+    step_index = {int(step): idx for idx, step in enumerate(uniq)}
+    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
+    n_steps = len(uniq)
+    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
+
+    out.update(
+        {
+            "coverage_by_step": (
+                np.bincount(inverse, weights=coverage, minlength=n_steps) / counts
+            ).tolist(),
+            "mean_width_by_step": (
+                np.bincount(inverse, weights=width, minlength=n_steps) / counts
+            ).tolist(),
+            "interval_score_by_step": (
+                np.bincount(inverse, weights=score, minlength=n_steps) / counts
+            ).tolist(),
+            "winkler_score_by_step": (
+                np.bincount(inverse, weights=score, minlength=n_steps) / counts
+            ).tolist(),
+        }
+    )
+    return out
+
+
 def _per_step_interval_metrics(
     y: np.ndarray,
     lo: np.ndarray,
@@ -60,18 +115,19 @@ def _per_step_interval_metrics(
     alpha: float,
     step_values: Any,
 ) -> tuple[list[float], list[float], list[float], list[float]]:
-    steps = np.asarray(step_values)
-    coverage_by_step: list[float] = []
-    width_by_step: list[float] = []
-    score_by_step: list[float] = []
-    winkler_by_step: list[float] = []
-    for step in _sorted_unique_steps(step_values):
-        mask = steps == step
-        coverage_by_step.append(interval_coverage(y[mask], lo[mask], hi[mask]))
-        width_by_step.append(mean_interval_width(lo[mask], hi[mask]))
-        score_by_step.append(interval_score(y[mask], lo[mask], hi[mask], alpha=alpha))
-        winkler_by_step.append(winkler_score(y[mask], lo[mask], hi[mask], alpha=alpha))
-    return coverage_by_step, width_by_step, score_by_step, winkler_by_step
+    payload = _vectorized_interval_metrics(
+        y,
+        lo,
+        hi,
+        alpha=alpha,
+        step_values=step_values,
+    )
+    return (
+        list(payload["coverage_by_step"]),
+        list(payload["mean_width_by_step"]),
+        list(payload["interval_score_by_step"]),
+        list(payload["winkler_score_by_step"]),
+    )
 
 
 def _weighted_interval_score_by_step(
@@ -81,15 +137,142 @@ def _weighted_interval_score_by_step(
     wis_intervals: list[tuple[np.ndarray, np.ndarray, float]],
     step_values: Any,
 ) -> list[float]:
+    if not wis_intervals:
+        raise ValueError("wis_intervals must be non-empty")
+
+    y_arr = np.asarray(y, dtype=float).reshape(-1)
+    median_arr = np.asarray(median, dtype=float).reshape(-1)
+    if y_arr.shape != median_arr.shape:
+        raise ValueError(f"Shape mismatch: y{y_arr.shape} median{median_arr.shape}")
+
     steps = np.asarray(step_values)
-    wis_by_step: list[float] = []
-    for step in _sorted_unique_steps(step_values):
-        mask = steps == step
-        interval_subset = [(lo[mask], hi[mask], alpha) for lo, hi, alpha in wis_intervals]
-        wis_by_step.append(
-            weighted_interval_score(y[mask], median[mask], intervals=interval_subset)
+    uniq = _sorted_unique_steps(step_values)
+    if not uniq:
+        return []
+
+    step_index = {int(step): idx for idx, step in enumerate(uniq)}
+    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
+    n_steps = len(uniq)
+    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
+
+    total = 0.5 * (
+        np.bincount(inverse, weights=np.abs(y_arr - median_arr), minlength=n_steps) / counts
+    )
+    k = 0
+
+    for lo, hi, alpha in wis_intervals:
+        a = float(alpha)
+        if not (0.0 < a < 1.0):
+            raise ValueError("interval alpha must be in (0, 1)")
+        lo_arr = np.asarray(lo, dtype=float).reshape(-1)
+        hi_arr = np.asarray(hi, dtype=float).reshape(-1)
+        if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
+            raise ValueError(
+                f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
+            )
+        width = hi_arr - lo_arr
+        below = (lo_arr - y_arr) * (y_arr < lo_arr)
+        above = (y_arr - hi_arr) * (y_arr > hi_arr)
+        score = width + (2.0 / a) * below + (2.0 / a) * above
+        total += (a / 2.0) * (
+            np.bincount(inverse, weights=score, minlength=n_steps) / counts
         )
-    return wis_by_step
+        k += 1
+
+    return (total / (float(k) + 0.5)).tolist()
+
+
+def _vectorized_pinball_summary(
+    y: Any,
+    quantile_forecasts: Any,
+    pcts: list[int],
+) -> dict[str, Any]:
+    y_arr = np.asarray(y, dtype=float).reshape(-1)
+    qhat = np.asarray(quantile_forecasts, dtype=float)
+    if qhat.ndim != 2:
+        raise ValueError(f"Expected quantile_forecasts to be 2D, got shape {qhat.shape}")
+    if qhat.shape[0] != y_arr.size:
+        raise ValueError(
+            f"Row mismatch: y has {y_arr.size} rows but quantile_forecasts has shape {qhat.shape}"
+        )
+    if qhat.shape[1] != len(pcts):
+        raise ValueError(
+            f"Column mismatch: expected {len(pcts)} quantiles, got shape {qhat.shape}"
+        )
+
+    qs = np.asarray([float(pct) / 100.0 for pct in pcts], dtype=float)
+    residual = y_arr[:, None] - qhat
+    pinball_matrix = np.maximum(qs[None, :] * residual, (qs[None, :] - 1.0) * residual)
+    pinball_means = np.mean(pinball_matrix, axis=0)
+
+    out: dict[str, Any] = {"quantiles": list(pcts)}
+    for idx, pct in enumerate(pcts):
+        out[f"pinball_p{pct}"] = float(pinball_means[idx])
+    out["pinball_mean"] = float(np.mean(pinball_means))
+    out["crps"] = float(crps_from_quantiles(y_arr, qhat, quantiles=tuple(qs.tolist())))
+    return out
+
+
+def _vectorized_point_metrics(
+    y: np.ndarray,
+    yhat: np.ndarray,
+    *,
+    step_values: Any | None = None,
+    eps: float = 1e-8,
+) -> dict[str, Any]:
+    y_arr = np.asarray(y, dtype=float)
+    yhat_arr = np.asarray(yhat, dtype=float)
+    if y_arr.shape != yhat_arr.shape:
+        raise ValueError(f"Shape mismatch: y_true{y_arr.shape} vs y_pred{yhat_arr.shape}")
+
+    error = y_arr - yhat_arr
+    abs_error = np.abs(error)
+    sq_error = error ** 2
+    mape_denom = np.where(np.abs(y_arr) < eps, eps, np.abs(y_arr))
+    abs_pct_error = abs_error / mape_denom
+    smape_denom = np.abs(y_arr) + np.abs(yhat_arr)
+    smape_denom = np.where(smape_denom < eps, eps, smape_denom)
+    smape_terms = 2.0 * abs_error / smape_denom
+
+    out: dict[str, Any] = {
+        "n_points": int(y_arr.size),
+        "mae": float(np.mean(abs_error)),
+        "rmse": float(np.sqrt(np.mean(sq_error))),
+        "mape": float(np.mean(abs_pct_error)),
+        "smape": float(np.mean(smape_terms)),
+    }
+
+    if step_values is None:
+        return out
+
+    steps = np.asarray(step_values)
+    uniq = _sorted_unique_steps(steps)
+    if not uniq:
+        return out
+
+    step_index = {int(step): idx for idx, step in enumerate(uniq)}
+    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
+    n_steps = len(uniq)
+    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
+
+    out.update(
+        {
+            "steps": uniq,
+            "mae_by_step": (
+                np.bincount(inverse, weights=abs_error, minlength=n_steps) / counts
+            ).tolist(),
+            "rmse_by_step": np.sqrt(
+                np.bincount(inverse, weights=sq_error, minlength=n_steps) / counts
+            ).tolist(),
+            "mape_by_step": (
+                np.bincount(inverse, weights=abs_pct_error, minlength=n_steps) / counts
+            ).tolist(),
+            "smape_by_step": (
+                np.bincount(inverse, weights=smape_terms, minlength=n_steps) / counts
+            ).tolist(),
+        }
+    )
+    return out
 
 
 def evaluate_predictions(
@@ -114,42 +297,8 @@ def evaluate_predictions(
 
     y = df[y_col].to_numpy(dtype=float, copy=False)
     yhat = df[yhat_col].to_numpy(dtype=float, copy=False)
-
-    out: dict[str, Any] = {
-        "n_points": int(y.size),
-        "mae": mae(y, yhat),
-        "rmse": rmse(y, yhat),
-        "mape": mape(y, yhat),
-        "smape": smape(y, yhat),
-    }
-
-    if step_col in df.columns:
-        steps = np.asarray(df[step_col])
-        uniq = _sorted_unique_steps(steps)
-        mae_by_step: list[float] = []
-        rmse_by_step: list[float] = []
-        mape_by_step: list[float] = []
-        smape_by_step: list[float] = []
-        for s in uniq:
-            mask = steps == s
-            ys = y[mask]
-            yps = yhat[mask]
-            mae_by_step.append(mae(ys, yps))
-            rmse_by_step.append(rmse(ys, yps))
-            mape_by_step.append(mape(ys, yps))
-            smape_by_step.append(smape(ys, yps))
-
-        out.update(
-            {
-                "steps": uniq,
-                "mae_by_step": mae_by_step,
-                "rmse_by_step": rmse_by_step,
-                "mape_by_step": mape_by_step,
-                "smape_by_step": smape_by_step,
-            }
-        )
-
-    return out
+    steps = df[step_col] if step_col in df.columns else None
+    return _vectorized_point_metrics(y, yhat, step_values=steps)
 
 
 def evaluate_quantile_predictions(
@@ -180,22 +329,8 @@ def evaluate_quantile_predictions(
         return {"quantiles": [], "pinball_mean": float("nan")}
 
     pcts = sorted(q_cols)
-
-    out: dict[str, Any] = {"quantiles": pcts}
-
-    pinballs: list[float] = []
-    for pct in pcts:
-        q = float(pct) / 100.0
-        yp = df[q_cols[pct]].to_numpy(dtype=float, copy=False)
-        pb = pinball_loss(y, yp, q=q)
-        out[f"pinball_p{pct}"] = float(pb)
-        pinballs.append(float(pb))
-
-    out["pinball_mean"] = float(np.mean(np.asarray(pinballs, dtype=float)))
     qhat_mat = np.column_stack([df[q_cols[pct]].to_numpy(dtype=float, copy=False) for pct in pcts])
-    out["crps"] = float(
-        crps_from_quantiles(y, qhat_mat, quantiles=tuple(float(p) / 100.0 for p in pcts))
-    )
+    out = _vectorized_pinball_summary(y, qhat_mat, pcts)
 
     levels = _symmetric_interval_levels(pcts, q_cols)
     out["interval_levels"] = levels
@@ -216,10 +351,11 @@ def evaluate_quantile_predictions(
         lo = df[q_cols[int(lo_pct)]].to_numpy(dtype=float, copy=False)
         hi = df[q_cols[int(hi_pct)]].to_numpy(dtype=float, copy=False)
         alpha = 1.0 - float(level) / 100.0
-        out[f"coverage_{level}"] = interval_coverage(y, lo, hi)
-        out[f"mean_width_{level}"] = mean_interval_width(lo, hi)
-        out[f"interval_score_{level}"] = interval_score(y, lo, hi, alpha=alpha)
-        out[f"winkler_score_{level}"] = winkler_score(y, lo, hi, alpha=alpha)
+        interval_payload = _vectorized_interval_metrics(y, lo, hi, alpha=alpha)
+        out[f"coverage_{level}"] = float(interval_payload["coverage"])
+        out[f"mean_width_{level}"] = float(interval_payload["mean_width"])
+        out[f"interval_score_{level}"] = float(interval_payload["interval_score"])
+        out[f"winkler_score_{level}"] = float(interval_payload["winkler_score"])
         wis_intervals.append((lo, hi, alpha))
 
         if step_col in df.columns:

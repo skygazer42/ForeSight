@@ -110,3 +110,29 @@ def test_infer_series_frequency_rejects_irregular_series_in_strict_mode() -> Non
 
     with pytest.raises(ValueError, match="regular frequency"):
         infer_series_frequency(ds, strict=True)
+
+
+def test_prepare_long_df_sorted_input_fast_path_skips_sort_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-01", "2020-01-02"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+
+    original_sort_values = pd.DataFrame.sort_values
+    calls = {"count": 0}
+
+    def _counting_sort_values(self: pd.DataFrame, *args: object, **kwargs: object) -> pd.DataFrame:
+        calls["count"] += 1
+        return original_sort_values(self, *args, **kwargs)
+
+    monkeypatch.setattr(pd.DataFrame, "sort_values", _counting_sort_values)
+
+    out = prepare_long_df(long_df, freq="D")
+
+    assert calls["count"] == 0
+    assert out.reset_index(drop=True).equals(long_df.reset_index(drop=True))

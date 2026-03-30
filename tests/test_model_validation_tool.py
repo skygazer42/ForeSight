@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pytest
 
 
 def test_prepare_promotion_long_df_regularizes_weekly_grid_and_zero_fills() -> None:
@@ -93,6 +94,179 @@ def test_build_multivariate_validation_frame_selects_top_four_series_and_zero_fi
     assert sorted(target_cols) == expected
     assert list(wide_df.columns) == ["ds", *target_cols]
     assert not wide_df.loc[:, target_cols].isna().any().any()
+
+
+def test_limit_series_reuses_ranked_unique_ids_attr(monkeypatch: pytest.MonkeyPatch) -> None:
+    from foresight.services.model_validation import _limit_series
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["b", "b", "a", "a", "c", "c"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                ]
+            ),
+            "y": [5.0, 6.0, 1.0, 2.0, 9.0, 10.0],
+        }
+    )
+    long_df.attrs["_validation_ranked_unique_ids"] = ["c", "b", "a"]
+
+    original_groupby = pd.DataFrame.groupby
+
+    def _forbid_groupby(self, *args, **kwargs):
+        raise AssertionError("ranked unique ids attr should avoid groupby")
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", _forbid_groupby)
+    try:
+        out = _limit_series(long_df, max_series=2)
+    finally:
+        monkeypatch.setattr(pd.DataFrame, "groupby", original_groupby)
+
+    assert out["unique_id"].unique().tolist() == ["b", "c"]
+    assert out.attrs["_validation_ranked_unique_ids"] == ["c", "b", "a"]
+
+
+def test_build_multivariate_validation_frame_reuses_ranked_unique_ids_attr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from foresight.services.model_validation import build_promotion_multivariate_wide_df
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["b", "b", "a", "a", "c", "c"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                ]
+            ),
+            "y": [5.0, 6.0, 1.0, 2.0, 9.0, 10.0],
+        }
+    )
+    long_df.attrs["_validation_ranked_unique_ids"] = ["c", "b", "a"]
+
+    original_groupby = pd.DataFrame.groupby
+
+    def _forbid_groupby(self, *args, **kwargs):
+        raise AssertionError("ranked unique ids attr should avoid groupby")
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", _forbid_groupby)
+    try:
+        wide_df, target_cols = build_promotion_multivariate_wide_df(long_df, n_series=2)
+    finally:
+        monkeypatch.setattr(pd.DataFrame, "groupby", original_groupby)
+
+    assert target_cols == ["b", "c"]
+    assert list(wide_df.columns) == ["ds", "b", "c"]
+
+
+def test_build_multivariate_validation_frame_caches_wide_result_for_same_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from foresight.services import model_validation as mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["b", "b", "a", "a", "c", "c"],
+            "ds": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                    "2020-01-01",
+                    "2020-01-08",
+                ]
+            ),
+            "y": [5.0, 6.0, 1.0, 2.0, 9.0, 10.0],
+        }
+    )
+    long_df.attrs["_validation_ranked_unique_ids"] = ["c", "b", "a"]
+
+    first_wide, first_targets = mod.build_promotion_multivariate_wide_df(long_df, n_series=2)
+
+    def _forbid_long_to_wide(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("cached multivariate validation frame should avoid long_to_wide")
+
+    monkeypatch.setattr(mod, "long_to_wide", _forbid_long_to_wide)
+
+    second_wide, second_targets = mod.build_promotion_multivariate_wide_df(long_df, n_series=2)
+
+    assert second_wide is first_wide
+    assert second_targets == first_targets == ["b", "c"]
+
+
+def test_promotion_validation_bundle_cache_reuses_prepared_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from foresight.services import model_validation as mod
+
+    counts = {"prepare": 0, "wide": 0}
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13", "2020-01-06", "2020-01-13"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    wide_df = pd.DataFrame(
+        {
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13"]),
+            "s0": [1.0, 2.0],
+            "s1": [3.0, 4.0],
+        }
+    )
+
+    def _fake_prepare_promotion_long_df(
+        data_dir: str | Path | None = None,
+        *,
+        max_series: int | None = mod._VALIDATION_MAX_SERIES,
+    ) -> pd.DataFrame:
+        counts["prepare"] += 1
+        return long_df
+
+    def _fake_build_promotion_multivariate_wide_df(
+        frame: pd.DataFrame,
+        *,
+        n_series: int = mod._MULTIVARIATE_N_SERIES,
+    ) -> tuple[pd.DataFrame, list[str]]:
+        assert frame is long_df
+        counts["wide"] += 1
+        return wide_df, ["s0", "s1"]
+
+    cache_before = dict(getattr(mod, "_PROMOTION_VALIDATION_BUNDLE_CACHE", {}))
+    if hasattr(mod, "_PROMOTION_VALIDATION_BUNDLE_CACHE"):
+        mod._PROMOTION_VALIDATION_BUNDLE_CACHE.clear()
+    monkeypatch.setattr(mod, "prepare_promotion_long_df", _fake_prepare_promotion_long_df)
+    monkeypatch.setattr(
+        mod,
+        "build_promotion_multivariate_wide_df",
+        _fake_build_promotion_multivariate_wide_df,
+    )
+
+    try:
+        first = mod._build_promotion_validation_bundle()  # type: ignore[attr-defined]
+        second = mod._build_promotion_validation_bundle()  # type: ignore[attr-defined]
+    finally:
+        if hasattr(mod, "_PROMOTION_VALIDATION_BUNDLE_CACHE"):
+            mod._PROMOTION_VALIDATION_BUNDLE_CACHE.clear()
+            mod._PROMOTION_VALIDATION_BUNDLE_CACHE.update(cache_before)
+
+    assert counts == {"prepare": 1, "wide": 1}
+    assert first["long_df"] is second["long_df"]
+    assert first["wide_df"] is second["wide_df"]
+    assert first["target_cols"] == second["target_cols"] == ["s0", "s1"]
 
 
 def test_build_model_params_applies_lightweight_supported_overrides() -> None:
@@ -421,6 +595,35 @@ def test_transform_validation_long_df_for_catboost_breaks_constant_targets_per_s
     assert float(out["y"].min()) >= 0.0
 
 
+def test_transform_validation_long_df_reuses_cached_family_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from foresight.services.model_validation import transform_validation_long_df_for_model
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-01", "2020-01-08", "2020-01-01", "2020-01-08"]),
+            "y": [0.0, 20.0, 5.0, 10.0],
+        }
+    )
+
+    first = transform_validation_long_df_for_model(long_df, model="xgb-logistic-lag")
+
+    original_groupby = pd.DataFrame.groupby
+
+    def _forbid_groupby(self, *args, **kwargs):
+        raise AssertionError("cached family transform should avoid groupby")
+
+    monkeypatch.setattr(pd.DataFrame, "groupby", _forbid_groupby)
+    try:
+        second = transform_validation_long_df_for_model(long_df, model="catboost-logistic-lag")
+    finally:
+        monkeypatch.setattr(pd.DataFrame, "groupby", original_groupby)
+
+    assert second is first
+
+
 def test_run_registry_validation_writes_outputs_and_counts_failures(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -602,6 +805,130 @@ def test_run_registry_validation_marks_infinite_metrics_as_error(
     assert payload["summary"]["ok_models"] == 0
     assert payload["summary"]["failed_models"] == 1
     assert payload["rows"][0]["status"] == "error"
+
+
+def test_evaluate_model_multivariate_reuses_base_wide_frame_when_transform_is_noop(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from foresight.services import model_validation as mod
+
+    @dataclass(frozen=True)
+    class _Spec:
+        key: str = "var"
+        interface: str = "multivariate"
+        requires: tuple[str, ...] = ("stats",)
+        default_params: dict[str, Any] = field(default_factory=dict)
+        param_help: dict[str, str] = field(default_factory=dict)
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13", "2020-01-06", "2020-01-13"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    wide_df = pd.DataFrame(
+        {
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13"]),
+            "s0": [1.0, 2.0],
+            "s1": [3.0, 4.0],
+        }
+    )
+
+    def _forbid_rebuild(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("no-op multivariate validation should reuse provided wide frame")
+
+    captured: dict[str, Any] = {}
+
+    def _fake_eval_multivariate_model_df(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "model": kwargs["model"],
+            "n_points": 6,
+            "mae": 1.0,
+            "rmse": 2.0,
+            "mape": 3.0,
+            "smape": 4.0,
+        }
+
+    monkeypatch.setattr(mod, "build_promotion_multivariate_wide_df", _forbid_rebuild)
+    monkeypatch.setattr(mod, "eval_multivariate_model_df", _fake_eval_multivariate_model_df)
+    monkeypatch.setattr(mod, "build_model_params", lambda *args, **kwargs: {})
+
+    row = mod._evaluate_model(
+        model="var",
+        spec=_Spec(),
+        long_df=long_df,
+        wide_df=wide_df,
+        target_cols=["s0", "s1"],
+        device="cpu",
+        foundation_fixture_path=tmp_path / "fixture.json",
+    )
+
+    assert row["status"] == "ok"
+    assert captured["df"] is wide_df
+    assert captured["target_cols"] == ["s0", "s1"]
+
+
+def test_train_multivariate_model_reuses_base_wide_frame_when_transform_is_noop(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from foresight.services import model_validation as mod
+
+    @dataclass(frozen=True)
+    class _Spec:
+        key: str = "var"
+        interface: str = "multivariate"
+        requires: tuple[str, ...] = ("stats",)
+        default_params: dict[str, Any] = field(default_factory=dict)
+        param_help: dict[str, str] = field(default_factory=dict)
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13", "2020-01-06", "2020-01-13"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    wide_df = pd.DataFrame(
+        {
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13"]),
+            "s0": [1.0, 2.0],
+            "s1": [3.0, 4.0],
+        }
+    )
+    artifact_paths = mod.build_training_artifact_paths(output_dir=tmp_path, model="var")
+
+    def _forbid_rebuild(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("no-op multivariate training should reuse provided wide frame")
+
+    captured: dict[str, Any] = {}
+
+    def _fake_persist_var_artifact(**kwargs: Any) -> Path:
+        captured.update(kwargs)
+        artifact_path = kwargs["artifact_path"]
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text("var", encoding="utf-8")
+        return artifact_path
+
+    monkeypatch.setattr(mod, "build_promotion_multivariate_wide_df", _forbid_rebuild)
+    monkeypatch.setattr(mod, "_persist_var_artifact", _fake_persist_var_artifact)
+    monkeypatch.setattr(mod, "build_training_model_params", lambda *args, **kwargs: {})
+
+    row = mod._train_multivariate_model(
+        model="var",
+        spec=_Spec(),
+        long_df=long_df,
+        wide_df=wide_df,
+        target_cols=["s0", "s1"],
+        device="cpu",
+        artifact_paths=artifact_paths,
+        foundation_fixture_path=tmp_path / "fixture.json",
+    )
+
+    assert row["status"] == "ok"
+    assert captured["wide_df"] is wide_df
+    assert captured["target_cols"] == ["s0", "s1"]
 
 
 def test_build_training_artifact_paths_returns_expected_layout(tmp_path: Path) -> None:
