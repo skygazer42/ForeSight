@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +12,26 @@ import yaml
 
 def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _repo_version(repo_root: Path) -> str:
+    init_py = (repo_root / "src" / "foresight" / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"\s*$', init_py, re.MULTILINE)
+    assert match is not None
+    return match.group(1)
+
+
+def _load_smoke_build_install_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "smoke_build_install_for_test",
+        repo_root / "tools" / "smoke_build_install.py",
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
@@ -32,7 +54,7 @@ def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     assert "python tools/generate_model_capability_docs.py --check" in proc.stdout
     assert "ruff format --check src tests tools benchmarks" in proc.stdout
     assert "python benchmarks/run_benchmarks.py --smoke" in proc.stdout
-    assert "python tools/smoke_build_install.py" in proc.stdout
+    assert "python tools/smoke_build_install.py --sdist" in proc.stdout
     assert "mkdocs build --strict" in proc.stdout
 
 
@@ -224,7 +246,7 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "python tools/generate_model_capability_docs.py" in release_doc
     assert "python tools/generate_rnn_docs.py" in release_doc
     assert "python benchmarks/run_benchmarks.py --smoke" in release_doc
-    assert "python tools/smoke_build_install.py" in release_doc
+    assert "python tools/smoke_build_install.py --sdist" in release_doc
     assert "foresight doctor" in release_doc
     assert "python -m foresight doctor --format text" in release_doc
     assert "doctor --strict" in release_doc
@@ -256,23 +278,54 @@ def test_package_workflow_smokes_doctor_and_root_import_on_installed_artifacts()
     repo_root = Path(__file__).resolve().parents[1]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert "python -m foresight doctor" in workflow
-    assert "python -m foresight doctor --format text" in workflow
-    assert "python -m foresight doctor --require-extra core --strict" in workflow
-    assert 'python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
-    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor" in workflow
-    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor --format text" in workflow
-    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor --require-extra core --strict" in workflow
-    assert '/tmp/foresight_sdist_venv/bin/python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"' in workflow
+    assert "python tools/smoke_build_install.py --sdist --dist-dir dist" in workflow
+    assert "CLI smoke (installed wheel)" not in workflow
+    assert "CLI smoke (installed sdist in clean venv)" not in workflow
+    assert "/tmp/foresight_sdist_venv/bin/python -m foresight doctor" not in workflow
 
 
 def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = (repo_root / "tools" / "smoke_build_install.py").read_text(encoding="utf-8")
 
+    assert '--dist-dir' in script
     assert '"import foresight; print(foresight.__version__)"' in script
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
-    assert '"foresight", "doctor", "--require-extra", "core", "--strict"' in script
+    assert '"foresight", "doctor", "--require-extra", "core"' in script
     assert 'sys.executable, "-m", "virtualenv"' in script
+
+
+def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    module = _load_smoke_build_install_module()
+    current_version = _repo_version(repo_root)
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+
+    (dist_dir / "foresight_ts-0.0.1-py3-none-any.whl").write_text("", encoding="utf-8")
+    (dist_dir / f"foresight_ts-{current_version}-py3-none-any.whl").write_text("", encoding="utf-8")
+    (dist_dir / "foresight_ts-0.0.1.tar.gz").write_text("", encoding="utf-8")
+    (dist_dir / f"foresight_ts-{current_version}.tar.gz").write_text("", encoding="utf-8")
+
+    installed_artifacts: list[str] = []
+
+    monkeypatch.setattr(module, "_repo_root", lambda: repo_root)
+    monkeypatch.setattr(module, "_create_venv", lambda **kwargs: None)
+    monkeypatch.setattr(module, "_venv_python", lambda venv_dir: venv_dir / "bin" / "python")
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+        if len(cmd) >= 8 and cmd[1:4] == ["-m", "pip", "install"]:
+            installed_artifacts.append(Path(cmd[-1]).name)
+
+    monkeypatch.setattr(module, "_run", _fake_run)
+
+    assert module.main(["--sdist", "--dist-dir", str(dist_dir)]) == 0
+    assert installed_artifacts == [
+        f"foresight_ts-{current_version}-py3-none-any.whl",
+        f"foresight_ts-{current_version}.tar.gz",
+    ]

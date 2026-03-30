@@ -23,7 +23,7 @@ python tools/generate_rnn_docs.py
 
 ```bash
 python benchmarks/run_benchmarks.py --smoke
-python tools/smoke_build_install.py
+python tools/smoke_build_install.py --sdist
 mkdocs build --strict
 ```
 

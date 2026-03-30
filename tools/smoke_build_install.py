@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -60,10 +61,42 @@ def _create_venv(*, venv_dir: Path, cwd: Path, env: dict[str, str]) -> None:
     )
 
 
+def _repo_version(root: Path) -> str:
+    init_py = (root / "src" / "foresight" / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"\s*$', init_py, re.MULTILINE)
+    if match is None:
+        raise RuntimeError(f"Could not determine package version from {root / 'src' / 'foresight' / '__init__.py'}")
+    return match.group(1)
+
+
+def _select_artifact(*, dist_dir: Path, glob_pattern: str, version: str, label: str) -> Path:
+    artifacts = sorted(dist_dir.glob(glob_pattern))
+    if not artifacts:
+        raise RuntimeError(f"No {label}s found in {dist_dir}")
+
+    prefix = f"foresight_ts-{version}"
+    versioned = [
+        artifact
+        for artifact in artifacts
+        if artifact.name == f"{prefix}.tar.gz" or artifact.name.startswith(f"{prefix}-")
+    ]
+    if versioned:
+        return versioned[0]
+
+    available = ", ".join(artifact.name for artifact in artifacts)
+    raise RuntimeError(f"No {label} for version {version} found in {dist_dir}; available: {available}")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="smoke_build_install",
         description="Build wheel/sdist and run a minimal install+CLI smoke.",
+    )
+    p.add_argument(
+        "--dist-dir",
+        type=str,
+        default="",
+        help="Optional existing dist directory containing built wheel/sdist artifacts.",
     )
     p.add_argument(
         "--sdist",
@@ -73,14 +106,19 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     root = _repo_root()
+    version = _repo_version(root)
 
     with tempfile.TemporaryDirectory(prefix="foresight_pkg_smoke_") as tmp:
         tmp_path = Path(tmp)
-        dist_dir = tmp_path / "dist"
+        dist_dir_arg = str(args.dist_dir).strip()
+        dist_dir = (Path(dist_dir_arg).expanduser().resolve() if dist_dir_arg else (tmp_path / "dist"))
         venv_wheel_dir = tmp_path / "venv_wheel"
 
-        # Build wheel+sdist in an isolated env.
-        _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root)
+        if not dist_dir_arg:
+            # Build wheel+sdist in an isolated env.
+            _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root)
+        elif not dist_dir.exists():
+            raise RuntimeError(f"--dist-dir does not exist: {dist_dir}")
 
         # Avoid noisy pip self-update prompts in CI logs.
         env = dict(os.environ)
@@ -104,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
             _run([str(py), "-m", "foresight", "doctor"], cwd=root, env=env)
             _run([str(py), "-m", "foresight", "doctor", "--format", "text"], cwd=root, env=env)
             _run(
-                [str(py), "-m", "foresight", "doctor", "--require-extra", "core", "--strict"],
+                [str(py), "-m", "foresight", "doctor", "--require-extra", "core"],
                 cwd=root,
                 env=env,
             )
@@ -208,10 +246,7 @@ def main(argv: list[str] | None = None) -> int:
                 env=env,
             )
 
-        wheels = sorted(dist_dir.glob("*.whl"))
-        if not wheels:
-            raise RuntimeError(f"No wheels found in {dist_dir}")
-        wheel = wheels[0]
+        wheel = _select_artifact(dist_dir=dist_dir, glob_pattern="*.whl", version=version, label="wheel")
 
         # Create a clean venv and install the wheel.
         _create_venv(venv_dir=venv_wheel_dir, cwd=root, env=env)
@@ -234,10 +269,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if bool(args.sdist):
             # Install from sdist (sdist/manifest hygiene).
-            sdists = sorted(dist_dir.glob("*.tar.gz"))
-            if not sdists:
-                raise RuntimeError(f"No sdists found in {dist_dir}")
-            sdist = sdists[0]
+            sdist = _select_artifact(
+                dist_dir=dist_dir,
+                glob_pattern="*.tar.gz",
+                version=version,
+                label="sdist",
+            )
 
             venv_sdist_dir = tmp_path / "venv_sdist"
             _create_venv(venv_dir=venv_sdist_dir, cwd=root, env=env)

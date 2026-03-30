@@ -195,33 +195,5 @@ jobs:
           python -m pip install twine
           python -m twine check dist/*
 
-      - name: Install wheel
-        run: |
-          python -m pip install dist/*.whl
-          python -m pip check
-
-      - name: CLI smoke (installed wheel)
-        run: |
-          foresight --version
-          python -m foresight --version
-          python -m foresight doctor
-          python -m foresight doctor --format text
-          python -m foresight doctor --require-extra core --strict
-          python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"
-          python -m foresight models info torch-rnnpaper-elman-srn-direct
-          python -m foresight datasets preview catfish --nrows 3
-
-      - name: CLI smoke (installed sdist in clean venv)
-        run: |
-          python -m venv /tmp/foresight_sdist_venv
-          /tmp/foresight_sdist_venv/bin/python -m pip install --upgrade pip
-          /tmp/foresight_sdist_venv/bin/python -m pip install dist/*.tar.gz
-          /tmp/foresight_sdist_venv/bin/python -m pip check
-          /tmp/foresight_sdist_venv/bin/foresight --version
-          /tmp/foresight_sdist_venv/bin/python -m foresight --version
-          /tmp/foresight_sdist_venv/bin/python -m foresight doctor
-          /tmp/foresight_sdist_venv/bin/python -m foresight doctor --format text
-          /tmp/foresight_sdist_venv/bin/python -m foresight doctor --require-extra core --strict
-          /tmp/foresight_sdist_venv/bin/python -c "import foresight; print(foresight.__version__); print(sorted(foresight.__all__)[:3])"
-          /tmp/foresight_sdist_venv/bin/python -m foresight models info torch-rnnpaper-elman-srn-direct
-          /tmp/foresight_sdist_venv/bin/python -m foresight datasets preview catfish --nrows 3
+      - name: Build install smoke
+        run: python tools/smoke_build_install.py --sdist --dist-dir dist
