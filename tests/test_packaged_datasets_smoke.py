@@ -141,6 +141,26 @@ def test_benchmark_smoke_runner_emits_deterministic_csv_summary() -> None:
     assert all(float(row["cv_seconds_mean"]) >= 0.0 for row in rows)
 
 
+def test_benchmark_summary_columns_order_stays_stable_for_profile_mode() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    columns = mod._summary_columns([80], include_profile=True)  # type: ignore[attr-defined]
+
+    assert columns[:6] == [
+        "model",
+        "task_group",
+        "backend_family",
+        "n_datasets",
+        "ok_rows",
+        "skip_rows",
+    ]
+    assert columns[-2:] == ["cv_seconds_total", "cv_seconds_mean"]
+    assert "dispatch_seconds_total" in columns
+    assert "raw_cache_hits_total" in columns
+    assert "prepared_cache_hits_total" in columns
+
+
 def test_benchmark_smoke_runner_can_force_profile_columns() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     env = dict(os.environ)

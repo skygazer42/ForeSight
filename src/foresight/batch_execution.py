@@ -129,7 +129,12 @@ def write_task_reports(rows: list[dict[str, Any]], *, fmt: str, output: str) -> 
     text = format_task_reports(rows, fmt=fmt)
     out_s = str(output).strip()
     if out_s:
-        _get_cli_shared_module()._write_output(text, output=out_s)
+        _get_cli_shared_module()._write_table(
+            rows,
+            columns=task_report_columns(),
+            output=out_s,
+            fmt=fmt,
+        )
     return text
 
 

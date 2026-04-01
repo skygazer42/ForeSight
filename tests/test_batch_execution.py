@@ -355,8 +355,8 @@ def test_write_task_reports_uses_shared_cli_output_helper(monkeypatch: pytest.Mo
             return "formatted-json"
 
         @staticmethod
-        def _write_output(text: str, *, output: str) -> None:
-            writes.append((output, text))
+        def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
+            writes.append((output, "formatted-json"))
 
     monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())
 

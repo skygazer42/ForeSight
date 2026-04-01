@@ -37,3 +37,16 @@ def test_get_cached_module_preserves_existing_cached_object() -> None:
     )
 
     assert loaded is sentinel
+
+
+def test_get_cached_module_supports_package_relative_imports() -> None:
+    namespace: dict[str, Any] = {}
+
+    loaded = get_cached_module(
+        namespace,
+        "_batch_execution",
+        ".batch_execution",
+        "foresight",
+    )
+
+    assert loaded.__name__ == "foresight.batch_execution"

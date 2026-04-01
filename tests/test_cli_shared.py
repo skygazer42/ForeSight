@@ -39,3 +39,28 @@ def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytes
         "1,2",
         "3,",
     ]
+
+
+def test_write_table_formats_and_writes_without_printing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = tmp_path / "table.json"
+
+    monkeypatch.setattr(
+        _cli_shared,
+        "_format_table",
+        lambda rows, *, columns, fmt: '{"ok": true}',
+    )
+
+    _cli_shared._write_table(
+        [{"a": 1}],
+        columns=["a"],
+        output=str(out),
+        fmt="json",
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert out.read_text(encoding="utf-8") == '{"ok": true}\n'

@@ -1093,12 +1093,12 @@ def _write_leaderboard_sweep_summary(
             min_datasets=summary_min_datasets,
         )
     )
-    text = _cli_shared._format_table(
+    _cli_shared._write_table(
         summary_rows,
         columns=_leaderboard_summary_columns(),
+        output=summary_output,
         fmt=summary_format,
     )
-    _cli_shared._write_output(text, output=summary_output)
 
 
 def _write_leaderboard_sweep_task_reports(
