@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -44,6 +45,30 @@ def _coerce_timed_task_result(
         rows, errors = result
         return list(rows), list(errors), 0.0
     raise TypeError("task result must be (rows, errors) or (rows, errors, elapsed_seconds)")
+
+
+def resolve_auto_chunk_size(
+    raw_chunk_size: object,
+    *,
+    dataset_count: int,
+    model_count: int,
+    jobs: int,
+) -> int:
+    text = str(raw_chunk_size).strip().lower()
+    if text != "auto":
+        chunk_size = int(raw_chunk_size)
+        if chunk_size < 0:
+            raise ValueError("--chunk-size must be >= 0")
+        return chunk_size
+
+    if model_count <= 1:
+        return 1
+    if jobs <= 1 or dataset_count >= jobs:
+        return 0
+
+    target_tasks_per_dataset = max(1, math.ceil(float(jobs) / float(max(1, dataset_count))))
+    chunk_size = max(1, math.ceil(float(model_count) / float(target_tasks_per_dataset)))
+    return 0 if chunk_size >= model_count else int(chunk_size)
 
 
 def task_report_columns() -> list[str]:
@@ -343,6 +368,7 @@ __all__ = [
     "format_task_reports",
     "record_task_errors",
     "resolve_task_result",
+    "resolve_auto_chunk_size",
     "task_report_columns",
     "task_report_rows",
     "write_task_reports",

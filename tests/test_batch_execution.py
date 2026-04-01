@@ -291,3 +291,14 @@ def test_write_task_reports_formats_and_writes_output(tmp_path: Path) -> None:
 
     assert "| task_scope | dataset | model_count |" in text
     assert out.read_text(encoding="utf-8") == text + "\n"
+
+
+def test_resolve_auto_chunk_size_balances_jobs_and_datasets() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+
+    assert mod.resolve_auto_chunk_size("0", dataset_count=2, model_count=4, jobs=2) == 0
+    assert mod.resolve_auto_chunk_size("3", dataset_count=2, model_count=5, jobs=4) == 3
+    assert mod.resolve_auto_chunk_size("auto", dataset_count=2, model_count=4, jobs=2) == 0
+    assert mod.resolve_auto_chunk_size("auto", dataset_count=1, model_count=5, jobs=4) == 2
+    assert mod.resolve_auto_chunk_size("auto", dataset_count=1, model_count=1, jobs=4) == 1

@@ -70,6 +70,7 @@ foresight leaderboard models --dataset catfish --y-col Total --horizon 3 --step 
 
 # Multi-dataset sweep + summary (dependency-free core models)
 foresight leaderboard sweep --datasets catfish,ice_cream_interest --horizon 3 --step 3 --min-train-size 12 --max-windows 2 --models naive-last,mean --jobs 2 --backend process --progress --chunk-size 0 --output /tmp/sweep.json --summary-output /tmp/summary.md --summary-format md --failures-output /tmp/failures.txt
+foresight leaderboard sweep --datasets catfish,ice_cream_interest --horizon 3 --step 3 --min-train-size 12 --models naive-last,mean --jobs 2 --backend thread --chunk-size auto --task-reports-output /tmp/sweep-task-reports.json --task-reports-format json
 foresight leaderboard summarize --input /tmp/sweep.json --format md --min-datasets 2
 
 # Packaged benchmark smoke / baseline configs
@@ -124,6 +125,8 @@ dataset/model backtests, and emits a deterministic summary table.
 - `--jobs`, `--backend`, and `--chunk-size` control how the benchmark matrix is batched and executed
   `--chunk-size auto` picks a jobs-aware model chunk size from the current dataset/model matrix
 - `--progress` emits `DONE ...` task lines to stderr without polluting summary output
+- `--task-reports-output` writes per-task execution stats with a stable schema shared with leaderboard sweep
+- `--task-reports-format csv|json|md` controls task report formatting
 - `--budget-mode warn|fail` turns configured budget regressions into warnings or a failing exit code
 - `--profile` adds stage totals plus profile-only columns such as `peak_memory_mb_max`,
   `points_per_second_mean`, and `windows_per_second_mean`
@@ -140,6 +143,7 @@ Example:
 python3 benchmarks/run_benchmarks.py --smoke --profile
 python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-size 0 --progress
 python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-size auto --progress
+python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-size auto --task-reports-output /tmp/benchmark-task-reports.json --task-reports-format json
 python3 benchmarks/run_benchmarks.py --config production_v1 --budget-mode fail --format md
 python3 benchmarks/run_benchmarks.py --config production_v1 --format md
 ```

@@ -1046,21 +1046,14 @@ def _resolve_leaderboard_chunk_size(
     model_count: int,
     jobs: int,
 ) -> int:
-    text = str(raw_chunk_size).strip().lower()
-    if text != "auto":
-        chunk_size = int(raw_chunk_size)
-        if chunk_size < 0:
-            raise ValueError("--chunk-size must be >= 0")
-        return chunk_size
+    from .batch_execution import resolve_auto_chunk_size
 
-    if model_count <= 1:
-        return 1
-    if jobs <= 1 or dataset_count >= jobs:
-        return 0
-
-    target_tasks_per_dataset = max(1, math.ceil(float(jobs) / float(max(1, dataset_count))))
-    chunk_size = max(1, math.ceil(float(model_count) / float(target_tasks_per_dataset)))
-    return 0 if chunk_size >= model_count else int(chunk_size)
+    return resolve_auto_chunk_size(
+        raw_chunk_size,
+        dataset_count=dataset_count,
+        model_count=model_count,
+        jobs=jobs,
+    )
 
 
 def _leaderboard_sweep_mae_key(v: object) -> float:
