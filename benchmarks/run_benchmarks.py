@@ -31,21 +31,23 @@ def _ensure_src_on_path(root: Path) -> None:
 
 
 def _get_cli_shared_module() -> Any:
-    global _cli_shared
-    if _cli_shared is None:
-        from foresight import cli_shared as _cli_shared_module
-
-        _cli_shared = _cli_shared_module
-    return _cli_shared
+    return _get_cached_module("_cli_shared", ".cli_shared")
 
 
 def _get_batch_execution_module() -> Any:
-    global _batch_execution
-    if _batch_execution is None:
-        from foresight import batch_execution as _batch_execution_module
+    return _get_cached_module("_batch_execution", ".batch_execution")
 
-        _batch_execution = _batch_execution_module
-    return _batch_execution
+
+def _get_cached_module(cache_name: str, module_name: str) -> Any:
+    cached = globals().get(str(cache_name))
+    if cached is not None:
+        return cached
+
+    from importlib import import_module
+
+    module = import_module(str(module_name), "foresight")
+    globals()[str(cache_name)] = module
+    return module
 
 
 def _load_benchmark_config(path: Path | None = None) -> dict[str, Any]:

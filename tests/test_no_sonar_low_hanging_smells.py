@@ -1794,8 +1794,19 @@ def test_torch_local_catalog_source_extracts_variant_registration_helpers() -> N
 def test_run_benchmarks_source_extracts_benchmark_case_helpers() -> None:
     source = _read_repo_file("benchmarks/run_benchmarks.py")
 
+    assert "def _get_cached_module(" in source
     assert "def _benchmark_dataset_case_fields(" in source
     assert "def _benchmark_result_row(" in source
+    assert _function_uses_name(
+        "benchmarks/run_benchmarks.py",
+        "_get_cli_shared_module",
+        "_get_cached_module",
+    )
+    assert _function_uses_name(
+        "benchmarks/run_benchmarks.py",
+        "_get_batch_execution_module",
+        "_get_cached_module",
+    )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
         "run_benchmark_suite",

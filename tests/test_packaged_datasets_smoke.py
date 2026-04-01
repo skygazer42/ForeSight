@@ -473,6 +473,23 @@ def test_run_benchmark_suite_uses_shared_batch_module_for_task_reports(
     assert payload["task_reports"] == [{"label": "sentinel"}]
 
 
+def test_benchmark_module_accessors_cache_loaded_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    class _SentinelCliShared:
+        pass
+
+    class _SentinelBatchExecution:
+        pass
+
+    monkeypatch.setattr(mod, "_cli_shared", _SentinelCliShared())
+    monkeypatch.setattr(mod, "_batch_execution", _SentinelBatchExecution())
+
+    assert mod._get_cli_shared_module() is mod._cli_shared  # type: ignore[attr-defined]
+    assert mod._get_batch_execution_module() is mod._batch_execution  # type: ignore[attr-defined]
+
+
 def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
