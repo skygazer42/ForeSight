@@ -113,6 +113,54 @@ def test_emit_dataframe_uses_dataframe_text_helper(monkeypatch: pytest.MonkeyPat
     assert emitted == [('{"ok": true}', "frame.json")]
 
 
+def test_format_rows_formats_json_row_lists() -> None:
+    text = _cli_shared._format_rows(
+        [{"b": 2, "a": 1}],
+        columns=["a", "b"],
+        fmt="json",
+    )
+
+    assert text == '[{"a": 1, "b": 2}]'
+
+
+def test_format_rows_dispatches_csv_with_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[list[dict], list[str] | None]] = []
+
+    def _fake_format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
+        calls.append((rows, columns))
+        return "a,b\n1,2"
+
+    monkeypatch.setattr(_cli_shared, "_format_csv", _fake_format_csv)
+
+    text = _cli_shared._format_rows(
+        [{"a": 1, "b": 2}],
+        columns=["a", "b"],
+        fmt="csv",
+    )
+
+    assert text == "a,b\n1,2"
+    assert calls == [([{"a": 1, "b": 2}], ["a", "b"])]
+
+
+def test_format_rows_dispatches_markdown_with_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[list[dict], list[str] | None]] = []
+
+    def _fake_format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> str:
+        calls.append((rows, columns))
+        return "| a |"
+
+    monkeypatch.setattr(_cli_shared, "_format_markdown", _fake_format_markdown)
+
+    text = _cli_shared._format_rows(
+        [{"a": 1}],
+        columns=["a"],
+        fmt="md",
+    )
+
+    assert text == "| a |"
+    assert calls == [([{"a": 1}], ["a"])]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")

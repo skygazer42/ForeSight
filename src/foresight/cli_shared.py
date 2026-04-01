@@ -190,11 +190,7 @@ def _coerce_row_payload(payload: object, *, fmt: str) -> list[dict]:
 def _format_payload(payload: object, *, fmt: str) -> str:
     if fmt == "json":
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    if fmt == "csv":
-        return _format_csv(_coerce_row_payload(payload, fmt=fmt))
-    if fmt == "md":
-        return _format_markdown(_coerce_row_payload(payload, fmt=fmt))
-    raise ValueError(f"Unknown format: {fmt!r}")
+    return _format_rows(_coerce_row_payload(payload, fmt=fmt), fmt=fmt)
 
 
 def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
@@ -239,6 +235,10 @@ def _table_text(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> 
 
 
 def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+    return _format_rows(rows, columns=columns, fmt=fmt)
+
+
+def _format_rows(rows: list[dict], *, columns: list[str] | None = None, fmt: str) -> str:
     if fmt == "json":
         return json.dumps(rows, ensure_ascii=False, sort_keys=True)
     if fmt == "csv":
