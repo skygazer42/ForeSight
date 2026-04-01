@@ -193,8 +193,12 @@ def _format_payload(payload: object, *, fmt: str) -> str:
     return _format_rows(_coerce_row_payload(payload, fmt=fmt), fmt=fmt)
 
 
+def _resolved_columns(columns: list[str] | None) -> list[str]:
+    return list(columns) if columns is not None else _leaderboard_columns()
+
+
 def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
-    cols = list(columns) if columns is not None else _leaderboard_columns()
+    cols = _resolved_columns(columns)
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(cols)
@@ -204,7 +208,7 @@ def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
 
 
 def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> str:
-    cols = list(columns) if columns is not None else _leaderboard_columns()
+    cols = _resolved_columns(columns)
 
     def _fmt(v: object) -> str:
         if v is None:

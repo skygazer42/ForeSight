@@ -161,6 +161,25 @@ def test_format_rows_dispatches_markdown_with_columns(monkeypatch: pytest.Monkey
     assert calls == [([{"a": 1}], ["a"])]
 
 
+def test_resolved_columns_returns_copy_of_explicit_columns() -> None:
+    columns = ["a", "b"]
+
+    resolved = _cli_shared._resolved_columns(columns)
+
+    assert resolved == ["a", "b"]
+    assert resolved is not columns
+
+
+def test_resolved_columns_defaults_to_leaderboard_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_cli_shared, "_leaderboard_columns", lambda: ["x", "y"])
+
+    resolved = _cli_shared._resolved_columns(None)
+
+    assert resolved == ["x", "y"]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")

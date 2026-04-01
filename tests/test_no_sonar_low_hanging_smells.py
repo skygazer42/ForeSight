@@ -2113,6 +2113,22 @@ def test_cli_shared_source_extracts_format_rows_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_resolved_columns_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _resolved_columns(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_csv",
+        "_resolved_columns",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_markdown",
+        "_resolved_columns",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 
