@@ -165,6 +165,40 @@ def test_run_batch_tasks_can_collect_task_stats() -> None:
     assert all(float(stat.elapsed_seconds) >= 0.0 for stat in stats_out)
 
 
+def test_make_task_stat_copies_batch_task_metadata() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+
+    task = mod.BatchTask(
+        label="catfish/[2 models]",
+        task_args=("catfish", ("naive-last", "mean")),
+        task_scope="leaderboard_sweep",
+        dataset="catfish",
+        model_count=2,
+        requested_chunk_size="auto",
+        resolved_chunk_size=2,
+    )
+
+    stat = mod._make_task_stat(  # type: ignore[attr-defined]
+        task,
+        elapsed_seconds=0.25,
+        row_count=2,
+        failure_count=1,
+    )
+
+    assert stat == mod.BatchTaskStat(
+        label="catfish/[2 models]",
+        elapsed_seconds=0.25,
+        row_count=2,
+        failure_count=1,
+        task_scope="leaderboard_sweep",
+        dataset="catfish",
+        model_count=2,
+        requested_chunk_size="auto",
+        resolved_chunk_size=2,
+    )
+
+
 def test_task_report_rows_add_command_level_metadata() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mod = _load_batch_execution_module(repo_root)

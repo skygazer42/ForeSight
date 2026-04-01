@@ -51,6 +51,26 @@ def _coerce_timed_task_result(
     raise TypeError("task result must be (rows, errors) or (rows, errors, elapsed_seconds)")
 
 
+def _make_task_stat(
+    task: BatchTask,
+    *,
+    elapsed_seconds: float,
+    row_count: int,
+    failure_count: int,
+) -> BatchTaskStat:
+    return BatchTaskStat(
+        label=task.label,
+        elapsed_seconds=float(elapsed_seconds),
+        row_count=int(row_count),
+        failure_count=int(failure_count),
+        task_scope=str(task.task_scope),
+        dataset=str(task.dataset),
+        model_count=int(task.model_count),
+        requested_chunk_size=str(task.requested_chunk_size),
+        resolved_chunk_size=int(task.resolved_chunk_size),
+    )
+
+
 def resolve_auto_chunk_size(
     raw_chunk_size: object,
     *,
@@ -244,16 +264,11 @@ def run_batch_tasks_sequential(
             failures += task_failures
             if stats_out is not None:
                 stats_out.append(
-                    BatchTaskStat(
-                        label=task.label,
+                    _make_task_stat(
+                        task,
                         elapsed_seconds=elapsed_seconds,
                         row_count=len(rows),
                         failure_count=task_failures,
-                        task_scope=str(task.task_scope),
-                        dataset=str(task.dataset),
-                        model_count=int(task.model_count),
-                        requested_chunk_size=str(task.requested_chunk_size),
-                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
         except Exception as e:  # noqa: BLE001
@@ -267,16 +282,11 @@ def run_batch_tasks_sequential(
                 errors_out.append(line)
             if stats_out is not None:
                 stats_out.append(
-                    BatchTaskStat(
-                        label=task.label,
+                    _make_task_stat(
+                        task,
                         elapsed_seconds=elapsed_seconds,
                         row_count=0,
                         failure_count=1,
-                        task_scope=str(task.task_scope),
-                        dataset=str(task.dataset),
-                        model_count=int(task.model_count),
-                        requested_chunk_size=str(task.requested_chunk_size),
-                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
         if progress:
@@ -340,16 +350,11 @@ def run_batch_tasks(
             failures += task_failures
             if stats_out is not None:
                 stats_out.append(
-                    BatchTaskStat(
-                        label=task.label,
+                    _make_task_stat(
+                        task,
                         elapsed_seconds=elapsed_seconds,
                         row_count=len(rows),
                         failure_count=task_failures,
-                        task_scope=str(task.task_scope),
-                        dataset=str(task.dataset),
-                        model_count=int(task.model_count),
-                        requested_chunk_size=str(task.requested_chunk_size),
-                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
             done += 1
