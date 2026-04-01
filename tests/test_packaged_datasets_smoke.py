@@ -287,6 +287,66 @@ def test_benchmark_smoke_runner_writes_task_reports_output(tmp_path: Path) -> No
     assert all(float(row["elapsed_seconds"]) >= 0.0 for row in payload)
 
 
+def test_benchmark_main_writes_summary_output_with_shared_cli_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+    writes: list[tuple[str, str]] = []
+
+    def _fake_run_benchmark_suite(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "config": "smoke",
+            "description": "fake",
+            "task_group": "point",
+            "workload": "panel_cv",
+            "scale": "tiny",
+            "profiling": False,
+            "budgets": {},
+            "datasets": ["catfish"],
+            "models": ["naive-last"],
+            "rows": [],
+            "task_reports": [],
+            "summary": [
+                {
+                    "model": "naive-last",
+                    "task_group": "point",
+                    "backend_family": "core",
+                    "n_datasets": 1,
+                    "ok_rows": 1,
+                    "skip_rows": 0,
+                    "n_points_total": 3,
+                    "mae_mean": 1.0,
+                    "rmse_mean": 1.0,
+                    "mape_mean": 0.1,
+                    "smape_mean": 0.2,
+                    "cv_seconds_total": 0.5,
+                    "cv_seconds_mean": 0.5,
+                }
+            ],
+            "conformal_levels": [],
+        }
+
+    def _fake_write_output(text: str, *, output: str) -> None:
+        writes.append((output, text))
+
+    class _FakeCliShared:
+        @staticmethod
+        def _write_output(text: str, *, output: str) -> None:
+            _fake_write_output(text, output=output)
+
+    monkeypatch.setattr(mod, "run_benchmark_suite", _fake_run_benchmark_suite)
+    monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())
+
+    out = tmp_path / "summary.csv"
+    result = mod.main(["--smoke", "--output", str(out)])  # type: ignore[attr-defined]
+
+    assert result == 0
+    assert writes == [(str(out), writes[0][1])]
+    assert writes[0][1].splitlines()[0].startswith("model,task_group,backend_family,")
+
+
 def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

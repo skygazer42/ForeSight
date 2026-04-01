@@ -18,6 +18,7 @@ _BENCHMARK_WORKLOADS = {"panel_cv"}
 _BENCHMARK_SCALES = {"tiny", "small", "medium", "large"}
 _BENCHMARK_BACKENDS = {"thread", "process"}
 _BUDGET_MODES = {"warn", "fail"}
+_cli_shared: Any | None = None
 
 
 def _repo_root() -> Path:
@@ -28,6 +29,15 @@ def _ensure_src_on_path(root: Path) -> None:
     src_dir = root / "src"
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
+
+
+def _get_cli_shared_module() -> Any:
+    global _cli_shared
+    if _cli_shared is None:
+        from foresight import cli_shared as _cli_shared_module
+
+        _cli_shared = _cli_shared_module
+    return _cli_shared
 
 
 def _load_benchmark_config(path: Path | None = None) -> dict[str, Any]:
@@ -959,6 +969,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config_name = "smoke" if bool(args.smoke) else str(args.config)
+
     payload = run_benchmark_suite(
         config_name=config_name,
         data_dir=args.data_dir,
@@ -979,9 +990,7 @@ def main(argv: list[str] | None = None) -> int:
 
     output = str(args.output).strip()
     if output:
-        out_path = Path(output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
+        _get_cli_shared_module()._write_output(text, output=output)
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
         from foresight.batch_execution import write_task_reports
