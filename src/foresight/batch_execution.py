@@ -153,6 +153,22 @@ def write_task_reports(rows: list[dict[str, Any]], *, fmt: str, output: str) -> 
     return text
 
 
+def emit_task_reports(
+    stats: list[BatchTaskStat],
+    *,
+    backend: str,
+    jobs: int,
+    fmt: str,
+    output: str,
+) -> str:
+    rows = task_report_rows(
+        stats,
+        backend=backend,
+        jobs=jobs,
+    )
+    return write_task_reports(rows, fmt=fmt, output=output)
+
+
 def record_task_errors(
     errors: list[str],
     *,
@@ -366,6 +382,7 @@ __all__ = [
     "BatchTaskStat",
     "build_task_executor",
     "format_task_reports",
+    "emit_task_reports",
     "record_task_errors",
     "resolve_task_result",
     "resolve_auto_chunk_size",

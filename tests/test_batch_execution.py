@@ -293,6 +293,35 @@ def test_write_task_reports_formats_and_writes_output(tmp_path: Path) -> None:
     assert out.read_text(encoding="utf-8") == text + "\n"
 
 
+def test_emit_task_reports_builds_rows_and_writes_output(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+    out = tmp_path / "task-reports.json"
+
+    text = mod.emit_task_reports(
+        [
+            mod.BatchTaskStat(
+                label="catfish/[2 models]",
+                elapsed_seconds=0.25,
+                row_count=2,
+                failure_count=0,
+                task_scope="leaderboard_sweep",
+                dataset="catfish",
+                model_count=2,
+                requested_chunk_size="auto",
+                resolved_chunk_size=2,
+            )
+        ],
+        backend="thread",
+        jobs=4,
+        fmt="json",
+        output=str(out),
+    )
+
+    assert '"task_scope": "leaderboard_sweep"' in text
+    assert out.read_text(encoding="utf-8") == text + "\n"
+
+
 def test_resolve_auto_chunk_size_balances_jobs_and_datasets() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mod = _load_batch_execution_module(repo_root)

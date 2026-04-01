@@ -23,6 +23,9 @@ from .batch_execution import (
     build_task_executor as _shared_build_task_executor,
 )
 from .batch_execution import (
+    emit_task_reports as _shared_emit_task_reports,
+)
+from .batch_execution import (
     record_task_errors as _shared_record_task_errors,
 )
 from .batch_execution import (
@@ -30,12 +33,6 @@ from .batch_execution import (
 )
 from .batch_execution import (
     run_batch_tasks_sequential as _shared_run_batch_tasks_sequential,
-)
-from .batch_execution import (
-    task_report_rows as _shared_task_report_rows,
-)
-from .batch_execution import (
-    write_task_reports as _shared_write_task_reports,
 )
 from .dataset_long_df_cache import get_or_build_dataset_long_df
 
@@ -1121,15 +1118,17 @@ def _write_leaderboard_sweep_summary(
 
 def _write_leaderboard_sweep_task_reports(
     args: argparse.Namespace,
-    task_reports: list[dict[str, Any]],
+    task_stats: list[_BatchTaskStat],
 ) -> None:
     task_reports_output = str(getattr(args, "task_reports_output", "")).strip()
     if not task_reports_output:
         return
 
     task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
-    _shared_write_task_reports(
-        task_reports,
+    _shared_emit_task_reports(
+        task_stats,
+        backend=str(args.backend),
+        jobs=int(args.jobs),
         fmt=task_reports_format,
         output=task_reports_output,
     )
@@ -1222,11 +1221,6 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             )
 
         final_rows = _merge_leaderboard_sweep_rows(resume_rows, rows)
-        task_reports = _shared_task_report_rows(
-            task_stats,
-            backend=str(args.backend),
-            jobs=int(args.jobs),
-        )
 
         with _cli_runtime.phase_scope(
             "emit",
@@ -1237,7 +1231,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 _cli_shared._write_output("\n".join(failure_lines), output=failures_output)
 
             _write_leaderboard_sweep_summary(args, final_rows)
-            _write_leaderboard_sweep_task_reports(args, task_reports)
+            _write_leaderboard_sweep_task_reports(args, task_stats)
             _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
         return 0
 
