@@ -7,11 +7,31 @@ import json
 import math
 import statistics
 import sys
+import time
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from . import cli_runtime as _cli_runtime
 from . import cli_shared as _cli_shared
+from .batch_execution import (
+    BatchTask as _BatchTask,
+)
+from .batch_execution import (
+    BatchTaskStat as _BatchTaskStat,
+)
+from .batch_execution import (
+    build_task_executor as _shared_build_task_executor,
+)
+from .batch_execution import (
+    record_task_errors as _shared_record_task_errors,
+)
+from .batch_execution import (
+    resolve_task_result as _shared_resolve_task_result,
+)
+from .batch_execution import (
+    run_batch_tasks_sequential as _shared_run_batch_tasks_sequential,
+)
 from .dataset_long_df_cache import get_or_build_dataset_long_df
 
 _FORECAST_HORIZON_HELP = "Forecast horizon"
@@ -409,6 +429,18 @@ def register_leaderboard_subparsers(sub: Any) -> None:
         help="Optional path to write SKIP/failure lines (one per line).",
     )
     leaderboard_sweep.add_argument(
+        "--task-reports-output",
+        type=str,
+        default="",
+        help="Optional path to write per-task execution stats.",
+    )
+    leaderboard_sweep.add_argument(
+        "--task-reports-format",
+        choices=["json", "csv", "md"],
+        default="json",
+        help="Task report output format (default: json).",
+    )
+    leaderboard_sweep.add_argument(
         "--output",
         type=str,
         default="",
@@ -445,12 +477,12 @@ def register_leaderboard_subparsers(sub: Any) -> None:
     )
     leaderboard_sweep.add_argument(
         "--chunk-size",
-        type=int,
-        default=1,
+        type=str,
+        default="1",
         help=(
             "Number of models to evaluate per task, per dataset (default: 1). "
-            "Use 0 to run all models for a dataset in a single task (better dataset reuse, "
-            "less parallelism when there are few datasets)."
+            "Use 0 to run all models for a dataset in a single task, or auto to choose "
+            "a jobs-aware chunk size."
         ),
     )
     leaderboard_sweep.add_argument(
@@ -954,21 +986,69 @@ def _build_leaderboard_sweep_tasks(
     keys: list[str],
     done_pairs: set[tuple[str, str]],
     *,
-    chunk_size: int,
-) -> list[tuple[str, tuple[str, ...]]]:
-    tasks: list[tuple[str, tuple[str, ...]]] = []
+    chunk_size: int | str,
+    jobs: int = 1,
+) -> list[_BatchTask]:
+    tasks: list[_BatchTask] = []
     for dataset in datasets:
         remaining = [k for k in keys if (dataset, k) not in done_pairs]
         if not remaining:
             continue
-        if chunk_size == 0:
-            tasks.append((dataset, tuple(remaining)))
+        effective_chunk_size = _resolve_leaderboard_chunk_size(
+            chunk_size,
+            dataset_count=len(datasets),
+            model_count=len(remaining),
+            jobs=jobs,
+        )
+        if effective_chunk_size == 0:
+            model_keys = tuple(remaining)
+            tasks.append(
+                _BatchTask(
+                    label=_parallel_task_label(dataset, model_keys),
+                    task_args=(dataset, model_keys),
+                    task_scope="leaderboard_sweep",
+                    dataset=str(dataset),
+                    model_count=len(model_keys),
+                )
+            )
             continue
-        for i in range(0, len(remaining), chunk_size):
-            chunk = tuple(remaining[i : i + chunk_size])
+        for i in range(0, len(remaining), effective_chunk_size):
+            chunk = tuple(remaining[i : i + effective_chunk_size])
             if chunk:
-                tasks.append((dataset, chunk))
+                tasks.append(
+                    _BatchTask(
+                        label=_parallel_task_label(dataset, chunk),
+                        task_args=(dataset, chunk),
+                        task_scope="leaderboard_sweep",
+                        dataset=str(dataset),
+                        model_count=len(chunk),
+                    )
+                )
     return tasks
+
+
+def _resolve_leaderboard_chunk_size(
+    raw_chunk_size: object,
+    *,
+    dataset_count: int,
+    model_count: int,
+    jobs: int,
+) -> int:
+    text = str(raw_chunk_size).strip().lower()
+    if text != "auto":
+        chunk_size = int(raw_chunk_size)
+        if chunk_size < 0:
+            raise ValueError("--chunk-size must be >= 0")
+        return chunk_size
+
+    if model_count <= 1:
+        return 1
+    if jobs <= 1 or dataset_count >= jobs:
+        return 0
+
+    target_tasks_per_dataset = max(1, math.ceil(float(jobs) / float(max(1, dataset_count))))
+    chunk_size = max(1, math.ceil(float(model_count) / float(target_tasks_per_dataset)))
+    return 0 if chunk_size >= model_count else int(chunk_size)
 
 
 def _leaderboard_sweep_mae_key(v: object) -> float:
@@ -1037,6 +1117,38 @@ def _write_leaderboard_sweep_summary(
     _cli_shared._write_output(text, output=summary_output)
 
 
+def _leaderboard_task_report_columns() -> list[str]:
+    return [
+        "task_scope",
+        "dataset",
+        "model_count",
+        "backend",
+        "jobs",
+        "chunk_size",
+        "label",
+        "elapsed_seconds",
+        "row_count",
+        "failure_count",
+    ]
+
+
+def _write_leaderboard_sweep_task_reports(
+    args: argparse.Namespace,
+    task_reports: list[dict[str, Any]],
+) -> None:
+    task_reports_output = str(getattr(args, "task_reports_output", "")).strip()
+    if not task_reports_output:
+        return
+
+    task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
+    text = _cli_shared._format_table(
+        sorted(task_reports, key=lambda row: str(row.get("label", ""))),
+        columns=_leaderboard_task_report_columns(),
+        fmt=task_reports_format,
+    )
+    _cli_shared._write_output(text, output=task_reports_output)
+
+
 def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
     def _run() -> int:
         with _cli_runtime.phase_scope(
@@ -1054,9 +1166,13 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             if jobs <= 0:
                 raise ValueError("--jobs must be >= 1")
 
-            chunk_size = int(getattr(args, "chunk_size", 1))
-            if chunk_size < 0:
-                raise ValueError("--chunk-size must be >= 0")
+            chunk_size = str(getattr(args, "chunk_size", "1"))
+            _resolve_leaderboard_chunk_size(
+                chunk_size,
+                dataset_count=len(datasets),
+                model_count=len(keys),
+                jobs=jobs,
+            )
             strict = bool(getattr(args, "strict", False))
             model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
             task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
@@ -1089,9 +1205,11 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 keys,
                 done_pairs,
                 chunk_size=chunk_size,
+                jobs=jobs,
             )
 
         failure_lines: list[str] = []
+        task_stats: list[_BatchTaskStat] = []
         with _cli_runtime.phase_scope(
             "evaluate",
             payload=_log_payload(tasks=len(tasks), jobs=jobs, backend=str(args.backend)),
@@ -1114,9 +1232,19 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                     model_params,
                 ),
                 errors_out=failure_lines,
+                stats_out=task_stats,
             )
 
         final_rows = _merge_leaderboard_sweep_rows(resume_rows, rows)
+        task_reports = [
+            {
+                **asdict(stat),
+                "backend": str(args.backend),
+                "jobs": int(args.jobs),
+                "chunk_size": str(args.chunk_size),
+            }
+            for stat in task_stats
+        ]
 
         with _cli_runtime.phase_scope(
             "emit",
@@ -1127,6 +1255,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 _cli_shared._write_output("\n".join(failure_lines), output=failures_output)
 
             _write_leaderboard_sweep_summary(args, final_rows)
+            _write_leaderboard_sweep_task_reports(args, task_reports)
             _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
         return 0
 
@@ -1811,7 +1940,7 @@ def _leaderboard_summary_columns() -> list[str]:
 
 
 def _run_parallel_tasks(
-    tasks: list[tuple[str, tuple[str, ...]]],
+    tasks: list[_BatchTask | tuple[str, tuple[str, ...]]],
     *,
     jobs: int,
     backend: str,
@@ -1820,19 +1949,31 @@ def _run_parallel_tasks(
     worker: Any,
     worker_args: tuple[Any, ...] = (),
     errors_out: list[str] | None = None,
+    stats_out: list[_BatchTaskStat] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     n = len(tasks)
     if n <= 0:
         return ([], 0)
 
+    normalized_tasks = [
+        task
+        if isinstance(task, _BatchTask)
+        else _BatchTask(
+            label=_parallel_task_label(task[0], task[1]),
+            task_args=(task[0], task[1]),
+        )
+        for task in tasks
+    ]
+
     if jobs <= 1:
         return _run_parallel_tasks_sequential(
-            tasks,
+            normalized_tasks,
             progress=progress,
             strict=strict,
             worker=worker,
             worker_args=worker_args,
             errors_out=errors_out,
+            stats_out=stats_out,
         )
 
     max_workers = min(int(jobs), max(1, n))
@@ -1845,22 +1986,39 @@ def _run_parallel_tasks(
     failures = 0
     out: list[dict[str, Any]] = []
     try:
-        fut_to_task = {
-            executor.submit(worker, dataset, model_keys, *worker_args): (dataset, model_keys)
-            for dataset, model_keys in tasks
-        }
+        fut_to_task = {}
+        for task in normalized_tasks:
+            fut = executor.submit(worker, *task.task_args, *worker_args)
+            fut_to_task[fut] = (task, time.perf_counter())
         for fut in concurrent.futures.as_completed(fut_to_task):
-            dataset, model_keys = fut_to_task[fut]
-            label = _parallel_task_label(dataset, model_keys)
-            rows, task_failures = _resolve_parallel_task_result(
+            task, submitted_at = fut_to_task[fut]
+            label = task.label
+            rows, task_failures, elapsed_seconds = _resolve_parallel_task_result(
                 fut,
                 label=label,
                 strict=strict,
                 sibling_futures=fut_to_task.keys(),
                 errors_out=errors_out,
             )
+            effective_elapsed = (
+                float(elapsed_seconds)
+                if float(elapsed_seconds) > 0.0
+                else float(time.perf_counter() - submitted_at)
+            )
             out.extend(rows)
             failures += task_failures
+            if stats_out is not None:
+                stats_out.append(
+                    _BatchTaskStat(
+                        label=label,
+                        elapsed_seconds=effective_elapsed,
+                        row_count=len(rows),
+                        failure_count=task_failures,
+                        task_scope=str(task.task_scope),
+                        dataset=str(task.dataset),
+                        model_count=int(task.model_count),
+                    )
+                )
             done += 1
             if progress:
                 print(f"DONE {done}/{n} {label}", file=sys.stderr)
@@ -1881,61 +2039,41 @@ def _record_parallel_task_errors(
     *,
     errors_out: list[str] | None,
 ) -> int:
-    failures = 0
-    for err in errors:
-        failures += 1
-        print(err, file=sys.stderr)
-        if errors_out is not None:
-            errors_out.append(str(err))
-    return failures
+    return _shared_record_task_errors(errors, errors_out=errors_out)
 
 
 def _run_parallel_tasks_sequential(
-    tasks: list[tuple[str, tuple[str, ...]]],
+    tasks: list[_BatchTask | tuple[str, tuple[str, ...]]],
     *,
     progress: bool,
     strict: bool,
     worker: Any,
     worker_args: tuple[Any, ...],
     errors_out: list[str] | None,
+    stats_out: list[_BatchTaskStat] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    out: list[dict[str, Any]] = []
-    failures = 0
-    n = len(tasks)
-    for i, (dataset, model_keys) in enumerate(tasks, start=1):
-        label = _parallel_task_label(dataset, model_keys)
-        try:
-            rows, errors = worker(dataset, model_keys, *worker_args)
-            out.extend(rows)
-            failures += _record_parallel_task_errors(errors, errors_out=errors_out)
-        except Exception as e:  # noqa: BLE001
-            if strict:
-                raise
-            failures += 1
-            line = f"SKIP {label}: {type(e).__name__}: {e}"
-            print(line, file=sys.stderr)
-            if errors_out is not None:
-                errors_out.append(line)
-        if progress:
-            print(f"DONE {i}/{n} {label}", file=sys.stderr)
-    return (out, failures)
+    batch_tasks = [
+        task
+        if isinstance(task, _BatchTask)
+        else _BatchTask(
+            label=_parallel_task_label(task[0], task[1]),
+            task_args=(task[0], task[1]),
+        )
+        for task in tasks
+    ]
+    return _shared_run_batch_tasks_sequential(
+        batch_tasks,
+        progress=progress,
+        strict=strict,
+        worker=worker,
+        worker_args=worker_args,
+        errors_out=errors_out,
+        stats_out=stats_out,
+    )
 
 
 def _build_parallel_task_executor(*, backend_s: str, max_workers: int) -> Any:
-    import concurrent.futures
-    import multiprocessing
-
-    if backend_s not in {"thread", "process"}:
-        raise ValueError("--backend must be one of: thread, process")
-
-    if backend_s == "process":
-        ctx = multiprocessing.get_context("spawn")
-        return concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers,
-            mp_context=ctx,
-        )
-
-    return concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    return _shared_build_task_executor(backend_s=backend_s, max_workers=max_workers)
 
 
 def _resolve_parallel_task_result(
@@ -1945,19 +2083,12 @@ def _resolve_parallel_task_result(
     strict: bool,
     sibling_futures: Any,
     errors_out: list[str] | None,
-) -> tuple[list[dict[str, Any]], int]:
-    try:
-        rows, errors = fut.result()
-        return rows, _record_parallel_task_errors(errors, errors_out=errors_out)
-    except Exception as e:  # noqa: BLE001
-        if strict:
-            for other in sibling_futures:
-                if other is not fut:
-                    other.cancel()
-            raise RuntimeError(f"{label}: {type(e).__name__}: {e}") from e
-
-        line = f"SKIP {label}: {type(e).__name__}: {e}"
-        print(line, file=sys.stderr)
-        if errors_out is not None:
-            errors_out.append(line)
-        return [], 1
+) -> tuple[list[dict[str, Any]], int, float]:
+    rows, failures, elapsed_seconds = _shared_resolve_task_result(
+        fut,
+        label=label,
+        strict=strict,
+        sibling_futures=sibling_futures,
+        errors_out=errors_out,
+    )
+    return rows, failures, elapsed_seconds

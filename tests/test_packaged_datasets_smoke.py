@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import inspect
+import json
 import os
 import subprocess
 import sys
@@ -62,6 +64,28 @@ def test_smoke_benchmark_config_uses_packaged_datasets() -> None:
         "moving-average",
         "drift",
     ]
+
+
+def test_run_benchmark_suite_signature_exposes_parallel_and_budget_controls() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    params = inspect.signature(mod.run_benchmark_suite).parameters  # type: ignore[attr-defined]
+
+    assert "jobs" in params
+    assert "backend" in params
+    assert "chunk_size" in params
+    assert "progress" in params
+    assert "budget_mode" in params
+
+
+def test_resolve_benchmark_chunk_size_auto_balances_groups_and_workers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    assert mod._resolve_benchmark_chunk_size("auto", dataset_count=2, model_count=4, jobs=2) == 0  # type: ignore[attr-defined]
+    assert mod._resolve_benchmark_chunk_size("auto", dataset_count=1, model_count=5, jobs=4) == 2  # type: ignore[attr-defined]
+    assert mod._resolve_benchmark_chunk_size("3", dataset_count=2, model_count=5, jobs=4) == 3  # type: ignore[attr-defined]
 
 
 def test_benchmark_smoke_runner_emits_deterministic_csv_summary() -> None:
@@ -142,10 +166,180 @@ def test_benchmark_smoke_runner_can_force_profile_columns() -> None:
     assert "load_seconds_total" in reader.fieldnames
     assert "prepare_seconds_total" in reader.fieldnames
     assert "eval_seconds_total" in reader.fieldnames
+    assert "dispatch_seconds_total" in reader.fieldnames
+    assert "raw_cache_hits_total" in reader.fieldnames
+    assert "prepared_cache_hits_total" in reader.fieldnames
     assert "peak_memory_mb_max" in reader.fieldnames
     assert "points_per_second_mean" in reader.fieldnames
     assert "windows_per_second_mean" in reader.fieldnames
     assert rows
+
+
+def test_benchmark_smoke_runner_accepts_parallel_execution_flags() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/run_benchmarks.py",
+            "--smoke",
+            "--jobs",
+            "2",
+            "--backend",
+            "thread",
+            "--chunk-size",
+            "0",
+            "--progress",
+        ],
+        cwd=str(repo_root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert "DONE" in (proc.stderr or "")
+
+
+def test_benchmark_smoke_runner_accepts_auto_chunk_size() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/run_benchmarks.py",
+            "--smoke",
+            "--jobs",
+            "2",
+            "--backend",
+            "thread",
+            "--chunk-size",
+            "auto",
+            "--progress",
+        ],
+        cwd=str(repo_root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert "DONE" in (proc.stderr or "")
+
+
+def test_benchmark_smoke_runner_writes_task_reports_output(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
+    task_reports = tmp_path / "benchmark-task-reports.json"
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/run_benchmarks.py",
+            "--smoke",
+            "--jobs",
+            "2",
+            "--backend",
+            "thread",
+            "--chunk-size",
+            "auto",
+            "--task-reports-output",
+            str(task_reports),
+            "--task-reports-format",
+            "json",
+        ],
+        cwd=str(repo_root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert task_reports.exists()
+
+    payload = json.loads(task_reports.read_text(encoding="utf-8"))
+    assert isinstance(payload, list)
+    assert {row["label"] for row in payload} == {
+        "catfish/[3 models]",
+        "ice_cream_interest/[3 models]",
+    }
+    assert {row["task_scope"] for row in payload} == {"benchmark"}
+    assert {row["backend"] for row in payload} == {"thread"}
+    assert {int(row["jobs"]) for row in payload} == {2}
+    assert {int(row["chunk_size"]) for row in payload} == {0}
+    assert {row["dataset"] for row in payload} == {"catfish", "ice_cream_interest"}
+    assert {int(row["model_count"]) for row in payload} == {3}
+    assert {int(row["row_count"]) for row in payload} == {3}
+    assert {int(row["failure_count"]) for row in payload} == {0}
+    assert all(float(row["elapsed_seconds"]) >= 0.0 for row in payload)
+
+
+def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    def _fake_run_benchmark_suite(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "config": "smoke",
+            "description": "fake",
+            "task_group": "point",
+            "workload": "panel_cv",
+            "scale": "tiny",
+            "profiling": True,
+            "budgets": {"cv_seconds_mean_warn": 0.5},
+            "datasets": ["catfish"],
+            "models": ["naive-last"],
+            "rows": [],
+            "summary": [
+                {
+                    "model": "naive-last",
+                    "task_group": "point",
+                    "backend_family": "core",
+                    "n_datasets": 1,
+                    "ok_rows": 1,
+                    "skip_rows": 0,
+                    "n_points_total": 10,
+                    "mae_mean": 1.0,
+                    "rmse_mean": 1.0,
+                    "mape_mean": 0.1,
+                    "smape_mean": 0.2,
+                    "cv_seconds_total": 1.0,
+                    "cv_seconds_mean": 1.0,
+                    "load_seconds_total": 0.0,
+                    "load_seconds_mean": 0.0,
+                    "prepare_seconds_total": 0.0,
+                    "prepare_seconds_mean": 0.0,
+                    "eval_seconds_total": 1.0,
+                    "eval_seconds_mean": 1.0,
+                    "peak_memory_mb_max": 2.0,
+                    "points_per_second_mean": 10.0,
+                    "windows_per_second_mean": 2.0,
+                }
+            ],
+            "conformal_levels": [],
+        }
+
+    monkeypatch.setattr(mod, "run_benchmark_suite", _fake_run_benchmark_suite)
+
+    result = mod.main(["--smoke", "--budget-mode", "fail"])  # type: ignore[attr-defined]
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "cv_seconds_mean_warn" in captured.err
 
 
 def test_production_benchmark_suite_reports_stage_profile_metrics() -> None:
@@ -157,15 +351,26 @@ def test_production_benchmark_suite_reports_stage_profile_metrics() -> None:
     assert payload["profiling"] is True
     assert payload["task_group"] == "point"
     assert payload["summary"]
+    assert payload["task_reports"]
+    assert all("label" in row for row in payload["task_reports"])
+    assert all("row_count" in row for row in payload["task_reports"])
+    assert all("failure_count" in row for row in payload["task_reports"])
+    assert all("elapsed_seconds" in row for row in payload["task_reports"])
     assert all("load_seconds_total" in row for row in payload["summary"])
     assert all("prepare_seconds_total" in row for row in payload["summary"])
     assert all("eval_seconds_total" in row for row in payload["summary"])
+    assert all("dispatch_seconds_total" in row for row in payload["summary"])
+    assert all("raw_cache_hits_total" in row for row in payload["summary"])
+    assert all("prepared_cache_hits_total" in row for row in payload["summary"])
     assert all("peak_memory_mb_max" in row for row in payload["summary"])
     assert all("points_per_second_mean" in row for row in payload["summary"])
     assert all("windows_per_second_mean" in row for row in payload["summary"])
     assert all(float(row["load_seconds_total"]) >= 0.0 for row in payload["summary"])
     assert all(float(row["prepare_seconds_total"]) >= 0.0 for row in payload["summary"])
     assert all(float(row["eval_seconds_total"]) >= 0.0 for row in payload["summary"])
+    assert all(float(row["dispatch_seconds_total"]) >= 0.0 for row in payload["summary"])
+    assert all(float(row["raw_cache_hits_total"]) >= 0.0 for row in payload["summary"])
+    assert all(float(row["prepared_cache_hits_total"]) >= 0.0 for row in payload["summary"])
     assert all(float(row["peak_memory_mb_max"]) >= 0.0 for row in payload["summary"])
     assert all(float(row["points_per_second_mean"]) >= 0.0 for row in payload["summary"])
     assert all(float(row["windows_per_second_mean"]) >= 0.0 for row in payload["summary"])
@@ -174,6 +379,9 @@ def test_production_benchmark_suite_reports_stage_profile_metrics() -> None:
     assert all("load_seconds" in row for row in payload["rows"])
     assert all("prepare_seconds" in row for row in payload["rows"])
     assert all("eval_seconds" in row for row in payload["rows"])
+    assert all("dispatch_seconds" in row for row in payload["rows"])
+    assert all("raw_cache_hit" in row for row in payload["rows"])
+    assert all("prepared_cache_hit" in row for row in payload["rows"])
     assert all("peak_memory_mb" in row for row in payload["rows"])
     assert all("points_per_second" in row for row in payload["rows"])
     assert all("windows_per_second" in row for row in payload["rows"])
@@ -198,6 +406,9 @@ def test_benchmark_summary_context_collects_ok_rows_and_profile_metrics() -> Non
                 "load_seconds": 0.5,
                 "prepare_seconds": 0.25,
                 "eval_seconds": 2.25,
+                "dispatch_seconds": 0.05,
+                "raw_cache_hit": 0,
+                "prepared_cache_hit": 0,
                 "peak_memory_mb": 12.0,
                 "points_per_second": 5.0,
                 "windows_per_second": 2.0,
@@ -213,6 +424,9 @@ def test_benchmark_summary_context_collects_ok_rows_and_profile_metrics() -> Non
                 "load_seconds": 0.0,
                 "prepare_seconds": 0.0,
                 "eval_seconds": 0.0,
+                "dispatch_seconds": 0.01,
+                "raw_cache_hit": 1,
+                "prepared_cache_hit": 0,
                 "peak_memory_mb": 1.0,
                 "points_per_second": 0.0,
                 "windows_per_second": 0.0,
@@ -229,6 +443,9 @@ def test_benchmark_summary_context_collects_ok_rows_and_profile_metrics() -> Non
                 "load_seconds": 0.75,
                 "prepare_seconds": 0.5,
                 "eval_seconds": 3.75,
+                "dispatch_seconds": 0.07,
+                "raw_cache_hit": 1,
+                "prepared_cache_hit": 1,
                 "peak_memory_mb": 20.0,
                 "points_per_second": 10.0,
                 "windows_per_second": 4.0,
@@ -254,6 +471,9 @@ def test_benchmark_summary_context_collects_ok_rows_and_profile_metrics() -> Non
     assert context["load_seconds_total"] == pytest.approx(1.25)
     assert context["prepare_seconds_total"] == pytest.approx(0.75)
     assert context["eval_seconds_total"] == pytest.approx(6.0)
+    assert context["dispatch_seconds_total"] == pytest.approx(0.13)
+    assert context["raw_cache_hits_total"] == pytest.approx(2.0)
+    assert context["prepared_cache_hits_total"] == pytest.approx(1.0)
     assert context["peak_memory_mb_max"] == pytest.approx(20.0)
     assert context["points_per_second_mean"] == pytest.approx(5.0)
     assert context["windows_per_second_mean"] == pytest.approx(2.0)
@@ -291,6 +511,100 @@ def test_benchmark_config_validation_rejects_unknown_task_group() -> None:
         assert "task_group" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Expected invalid task_group to raise ValueError")
+
+
+def test_benchmark_rows_for_task_reuses_frame_bundle_for_shared_prep_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+    import foresight.dataset_long_df_cache as dataset_cache_mod
+    import foresight.eval_forecast as eval_mod
+    import foresight.models.registry as registry_mod
+
+    calls = {"frames": 0, "evals": 0}
+
+    class _Spec:
+        requires: tuple[str, ...] = ()
+
+    shared_frame = pd.DataFrame({"unique_id": ["s1"], "ds": [1], "y": [1.0]})
+
+    def _fake_get_or_build_dataset_long_df(
+        *,
+        dataset: str,
+        y_col: str,
+        data_dir: str | None,
+        model_params: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        assert dataset == "catfish"
+        assert y_col == "Total"
+        assert data_dir is None
+        assert model_params == {}
+        calls["frames"] += 1
+        return {
+            "spec": object(),
+            "y_col_final": "Total",
+            "long_df": shared_frame,
+            "load_seconds": 0.5,
+            "prepare_seconds": 0.25,
+            "raw_cache_hit": False,
+            "prepared_cache_hit": False,
+        }
+
+    def _fake_eval_model_long_df(**kwargs: Any) -> dict[str, Any]:
+        calls["evals"] += 1
+        assert kwargs["long_df"] is shared_frame
+        return {
+            "n_windows": 1,
+            "n_series": 1,
+            "n_series_skipped": 0,
+            "n_points": 3,
+            "mae": 1.0,
+            "rmse": 1.0,
+            "mape": 0.1,
+            "smape": 0.2,
+        }
+
+    def _fake_get_model_spec(key: str) -> _Spec:
+        assert key in {"naive-last", "mean"}
+        return _Spec()
+
+    monkeypatch.setattr(dataset_cache_mod, "get_or_build_dataset_long_df", _fake_get_or_build_dataset_long_df)
+    monkeypatch.setattr(eval_mod, "eval_model_long_df", _fake_eval_model_long_df)
+    monkeypatch.setattr(registry_mod, "get_model_spec", _fake_get_model_spec)
+
+    rows, errors = mod._benchmark_rows_for_task(  # type: ignore[attr-defined]
+        {
+            "dataset_key": "catfish",
+            "y_col": "Total",
+            "horizon": 3,
+            "step": 3,
+            "min_train_size": 12,
+            "max_windows": 2,
+        },
+        (
+            {"key": "naive-last", "params": {}},
+            {"key": "mean", "params": {}},
+        ),
+        None,
+        [],
+        False,
+        "point",
+        False,
+        "panel_cv",
+        "tiny",
+        mod._benchmark_result_row,  # type: ignore[attr-defined]
+    )
+
+    assert errors == []
+    assert len(rows) == 2
+    assert calls == {"frames": 1, "evals": 2}
+    assert float(rows[0]["load_seconds"]) == pytest.approx(0.5)
+    assert float(rows[0]["prepare_seconds"]) == pytest.approx(0.25)
+    assert float(rows[0]["dispatch_seconds"]) >= 0.0
+    assert float(rows[1]["load_seconds"]) == pytest.approx(0.0)
+    assert float(rows[1]["prepare_seconds"]) == pytest.approx(0.0)
+    assert float(rows[1]["dispatch_seconds"]) >= 0.0
 
 
 def test_dataset_long_df_cache_reuses_loaded_data_and_respects_covariate_roles(
@@ -410,6 +724,14 @@ def test_dataset_long_df_cache_reuses_loaded_data_and_respects_covariate_roles(
     assert second["prepare_seconds"] == 0.0
     assert third["load_seconds"] == 0.0
     assert third["prepare_seconds"] >= 0.0
+    assert first["raw_cache_hit"] is False
+    assert first["prepared_cache_hit"] is False
+    assert second["raw_cache_hit"] is False
+    assert second["prepared_cache_hit"] is True
+    assert third["raw_cache_hit"] is True
+    assert third["prepared_cache_hit"] is False
+    assert fourth["raw_cache_hit"] is False
+    assert fourth["prepared_cache_hit"] is True
 
 
 def test_dataset_long_df_cache_reuses_dataset_spec_lookup(
@@ -573,3 +895,5 @@ def test_dataset_long_df_cache_prepared_hit_skips_raw_frame_lookup(
     assert first["long_df"] is second["long_df"]
     assert second["load_seconds"] == 0.0
     assert second["prepare_seconds"] == 0.0
+    assert first["prepared_cache_hit"] is False
+    assert second["prepared_cache_hit"] is True

@@ -99,6 +99,7 @@ def get_or_build_dataset_frame(
         "spec": raw_bundle["spec"],
         "df": raw_bundle["df"],
         "load_seconds": round(load_seconds, 6),
+        "raw_cache_hit": bool(raw_bundle is not None and load_seconds == 0.0),
     }
 
 
@@ -144,6 +145,8 @@ def get_or_build_dataset_long_df(
             "long_df": long_df,
             "load_seconds": 0.0,
             "prepare_seconds": 0.0,
+            "raw_cache_hit": False,
+            "prepared_cache_hit": True,
         }
 
     raw_bundle = get_or_build_dataset_frame(
@@ -177,6 +180,8 @@ def get_or_build_dataset_long_df(
         "long_df": long_df,
         "load_seconds": round(load_seconds, 6),
         "prepare_seconds": round(prepare_seconds, 6),
+        "raw_cache_hit": bool(raw_bundle.get("raw_cache_hit", False)),
+        "prepared_cache_hit": False,
     }
 
 

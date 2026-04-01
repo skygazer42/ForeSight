@@ -121,6 +121,10 @@ dataset/model backtests, and emits a deterministic summary table.
 - `--smoke` is the CI-safe subset: packaged datasets plus dependency-free local models
 - `--config baseline` is the broader manual baseline for local comparison runs
 - `--format csv|json|md` controls summary output formatting
+- `--jobs`, `--backend`, and `--chunk-size` control how the benchmark matrix is batched and executed
+  `--chunk-size auto` picks a jobs-aware model chunk size from the current dataset/model matrix
+- `--progress` emits `DONE ...` task lines to stderr without polluting summary output
+- `--budget-mode warn|fail` turns configured budget regressions into warnings or a failing exit code
 - `--profile` adds stage totals plus profile-only columns such as `peak_memory_mb_max`,
   `points_per_second_mean`, and `windows_per_second_mean`
 
@@ -134,6 +138,9 @@ Example:
 
 ```bash
 python3 benchmarks/run_benchmarks.py --smoke --profile
+python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-size 0 --progress
+python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-size auto --progress
+python3 benchmarks/run_benchmarks.py --config production_v1 --budget-mode fail --format md
 python3 benchmarks/run_benchmarks.py --config production_v1 --format md
 ```
 

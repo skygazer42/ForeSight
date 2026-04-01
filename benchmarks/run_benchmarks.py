@@ -6,16 +6,20 @@ import argparse
 import csv
 import io
 import json
+import math
 import sys
 import time
 import tracemalloc
 from collections import defaultdict
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 _TASK_GROUPS = {"point", "probabilistic", "covariate"}
 _BENCHMARK_WORKLOADS = {"panel_cv"}
 _BENCHMARK_SCALES = {"tiny", "small", "medium", "large"}
+_BENCHMARK_BACKENDS = {"thread", "process"}
+_BUDGET_MODES = {"warn", "fail"}
 
 
 def _repo_root() -> Path:
@@ -157,6 +161,10 @@ def _summary_columns(level_suffixes: list[int], *, include_profile: bool) -> lis
             "prepare_seconds_mean",
             "eval_seconds_total",
             "eval_seconds_mean",
+            "dispatch_seconds_total",
+            "dispatch_seconds_mean",
+            "raw_cache_hits_total",
+            "prepared_cache_hits_total",
             "peak_memory_mb_max",
             "points_per_second_mean",
             "windows_per_second_mean",
@@ -262,6 +270,18 @@ def _build_benchmark_summary_context(
                 "eval_seconds_mean": _mean(
                     [float(item.get("eval_seconds", 0.0) or 0.0) for item in items]
                 ),
+                "dispatch_seconds_total": float(
+                    sum(float(item.get("dispatch_seconds", 0.0) or 0.0) for item in items)
+                ),
+                "dispatch_seconds_mean": _mean(
+                    [float(item.get("dispatch_seconds", 0.0) or 0.0) for item in items]
+                ),
+                "raw_cache_hits_total": float(
+                    sum(float(item.get("raw_cache_hit", 0.0) or 0.0) for item in items)
+                ),
+                "prepared_cache_hits_total": float(
+                    sum(float(item.get("prepared_cache_hit", 0.0) or 0.0) for item in items)
+                ),
                 "peak_memory_mb_max": max(
                     [float(item.get("peak_memory_mb", 0.0) or 0.0) for item in items],
                     default=0.0,
@@ -284,6 +304,181 @@ def _build_benchmark_summary_context(
             ]
             summary[f"{metric_key}_mean"] = _mean(values)
     return summary
+
+
+def _benchmark_task_label(
+    dataset_fields: dict[str, int | str],
+    model_cases: tuple[dict[str, Any], ...],
+) -> str:
+    dataset_key = str(dataset_fields["dataset_key"])
+    if len(model_cases) == 1:
+        return f"{dataset_key}/{model_cases[0]['key']}"
+    return f"{dataset_key}/[{len(model_cases)} models]"
+
+
+def _benchmark_model_case_chunks(
+    model_cases: list[dict[str, Any]],
+    *,
+    chunk_size: int,
+) -> tuple[tuple[dict[str, Any], ...], ...]:
+    if chunk_size < 0:
+        raise ValueError("--chunk-size must be >= 0")
+    if not model_cases:
+        return ()
+    if chunk_size == 0:
+        return (tuple(model_cases),)
+    return tuple(tuple(model_cases[i : i + chunk_size]) for i in range(0, len(model_cases), chunk_size))
+
+
+def _resolve_benchmark_chunk_size(
+    raw_chunk_size: object,
+    *,
+    dataset_count: int,
+    model_count: int,
+    jobs: int,
+) -> int:
+    text = str(raw_chunk_size).strip().lower()
+    if text != "auto":
+        chunk_size = int(raw_chunk_size)
+        if chunk_size < 0:
+            raise ValueError("--chunk-size must be >= 0")
+        return chunk_size
+
+    if model_count <= 1:
+        return 1
+    if jobs <= 1 or dataset_count >= jobs:
+        return 0
+
+    target_tasks_per_dataset = max(1, math.ceil(float(jobs) / float(max(1, dataset_count))))
+    chunk_size = max(1, math.ceil(float(model_count) / float(target_tasks_per_dataset)))
+    return 0 if chunk_size >= model_count else int(chunk_size)
+
+
+def _build_benchmark_tasks(
+    *,
+    dataset_fields_list: list[dict[str, int | str]],
+    model_cases: list[dict[str, Any]],
+    chunk_size: int,
+) -> list[Any]:
+    from foresight.batch_execution import BatchTask
+
+    tasks: list[Any] = []
+    for dataset_fields in dataset_fields_list:
+        for chunk in _benchmark_model_case_chunks(model_cases, chunk_size=chunk_size):
+            tasks.append(
+                BatchTask(
+                    label=_benchmark_task_label(dataset_fields, chunk),
+                    task_args=(dict(dataset_fields), tuple(dict(case) for case in chunk)),
+                    task_scope="benchmark",
+                    dataset=str(dataset_fields["dataset_key"]),
+                    model_count=len(chunk),
+                )
+            )
+    return tasks
+
+
+def _benchmark_rows_for_task(
+    dataset_fields: dict[str, int | str],
+    model_cases: tuple[dict[str, Any], ...],
+    data_dir: str | Path | None,
+    conformal_levels: list[int],
+    conformal_per_step: bool,
+    task_group: str,
+    profiling: bool,
+    workload: str,
+    scale: str,
+    benchmark_row_builder: Any,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    from foresight.dataset_long_df_cache import get_or_build_dataset_long_df
+    from foresight.eval_forecast import eval_model_long_df
+    from foresight.models.registry import get_model_spec
+
+    task_started = time.perf_counter()
+    frame_bundles: dict[tuple[Any, ...], dict[str, Any]] = {}
+    frame_use_counts: dict[tuple[Any, ...], int] = {}
+    rows: list[dict[str, Any]] = []
+    for model_case in model_cases:
+        model_key = str(model_case["key"])
+        frame_key = _benchmark_frame_request_key(
+            dataset_fields=dataset_fields,
+            model_params=dict(model_case.get("params", {})),
+            data_dir=data_dir,
+        )
+        frame_bundle = frame_bundles.get(frame_key)
+        if frame_bundle is None:
+            frame_bundle = _get_or_build_benchmark_frame(
+                dataset_fields=dataset_fields,
+                model_params=dict(model_case.get("params", {})),
+                data_dir=data_dir,
+                get_or_build_dataset_long_df=get_or_build_dataset_long_df,
+            )
+            frame_bundles[frame_key] = frame_bundle
+            frame_use_counts[frame_key] = 0
+        use_count = int(frame_use_counts.get(frame_key, 0))
+        frame_use_counts[frame_key] = use_count + 1
+        effective_frame_bundle = (
+            frame_bundle
+            if use_count == 0
+            else _benchmark_reused_frame_bundle(frame_bundle)
+        )
+        try:
+            spec = get_model_spec(model_key)
+            requires = tuple(str(item).strip().lower() for item in getattr(spec, "requires", ()) if str(item).strip())
+            backend_family = "core" if not requires else str(requires[0])
+        except Exception:  # noqa: BLE001
+            backend_family = "unknown"
+
+        rows.append(
+            _benchmark_result_row_from_frame_bundle(
+                eval_model_long_df,
+                effective_frame_bundle,
+                dataset_fields,
+                model_case,
+                data_dir=data_dir,
+                conformal_levels=conformal_levels,
+                conformal_per_step=conformal_per_step,
+                task_group=task_group,
+                backend_family=backend_family,
+                profiling=profiling,
+                workload=workload,
+                scale=scale,
+            )
+        )
+    task_elapsed = float(time.perf_counter() - task_started)
+    accounted_seconds = float(
+        sum(float(row.get("cv_seconds", 0.0) or 0.0) for row in rows)
+    )
+    dispatch_seconds = max(0.0, task_elapsed - accounted_seconds)
+    dispatch_per_row = 0.0 if not rows else dispatch_seconds / float(len(rows))
+    for row in rows:
+        row["dispatch_seconds"] = round(float(dispatch_per_row), 6)
+    return rows, []
+
+
+def _budget_metric_key(budget_key: str) -> str:
+    if budget_key.endswith("_warn"):
+        return budget_key[: -len("_warn")]
+    if budget_key.endswith("_fail"):
+        return budget_key[: -len("_fail")]
+    return budget_key
+
+
+def _benchmark_budget_findings(
+    summary_rows: list[dict[str, Any]],
+    budgets: dict[str, float],
+) -> list[str]:
+    findings: list[str] = []
+    for budget_key, threshold in sorted(budgets.items()):
+        metric_key = _budget_metric_key(str(budget_key))
+        for row in summary_rows:
+            actual = _as_float(row.get(metric_key))
+            if actual is None or float(actual) <= float(threshold):
+                continue
+            findings.append(
+                f"BUDGET {budget_key} exceeded for {row.get('model', 'unknown')}: "
+                f"{metric_key}={float(actual):.6g} > {float(threshold):.6g}"
+            )
+    return findings
 
 
 def _format_csv(rows: list[dict[str, Any]], *, columns: list[str]) -> str:
@@ -329,6 +524,32 @@ def _format_summary(
     raise ValueError(f"Unknown format: {fmt!r}")
 
 
+def _task_report_columns() -> list[str]:
+    return [
+        "task_scope",
+        "dataset",
+        "model_count",
+        "backend",
+        "jobs",
+        "chunk_size",
+        "label",
+        "elapsed_seconds",
+        "row_count",
+        "failure_count",
+    ]
+
+
+def _format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
+    columns = _task_report_columns()
+    if fmt == "csv":
+        return _format_csv(rows, columns=columns)
+    if fmt == "json":
+        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    if fmt == "md":
+        return _format_markdown(rows, columns=columns)
+    raise ValueError(f"Unknown format: {fmt!r}")
+
+
 def _benchmark_dataset_case_fields(dataset_case: Any) -> dict[str, int | str]:
     return {
         "dataset_key": str(dataset_case["key"]),
@@ -358,15 +579,39 @@ def _get_or_build_benchmark_frame(
 
     return {
         "spec": frame_bundle["spec"],
+        "y_col_final": str(frame_bundle["y_col_final"]),
         "long_df": frame_bundle["long_df"],
         "load_seconds": float(frame_bundle["load_seconds"]),
         "prepare_seconds": float(frame_bundle["prepare_seconds"]),
+        "raw_cache_hit": bool(frame_bundle.get("raw_cache_hit", False)),
+        "prepared_cache_hit": bool(frame_bundle.get("prepared_cache_hit", False)),
     }
 
 
-def _benchmark_result_row(
+def _benchmark_frame_request_key(
+    *,
+    dataset_fields: dict[str, int | str],
+    model_params: dict[str, Any],
+    data_dir: str | Path | None,
+) -> tuple[Any, ...]:
+    from foresight.contracts.params import normalize_covariate_roles, normalize_static_cols
+
+    historic_x_cols, future_x_cols = normalize_covariate_roles(model_params)
+    static_cols = normalize_static_cols(model_params)
+    data_dir_s = "" if data_dir is None else str(data_dir).strip()
+    return (
+        str(dataset_fields["dataset_key"]),
+        str(dataset_fields["y_col"]),
+        data_dir_s,
+        tuple(historic_x_cols),
+        tuple(future_x_cols),
+        tuple(static_cols),
+    )
+
+
+def _benchmark_result_row_from_frame_bundle(
     eval_model_long_df: Any,
-    get_or_build_dataset_long_df: Any,
+    frame_bundle: dict[str, Any],
     dataset_fields: dict[str, int | str],
     model_case: Any,
     *,
@@ -382,27 +627,19 @@ def _benchmark_result_row(
     model_key = str(model_case["key"])
     params = dict(model_case.get("params", {}))
     dataset_key = str(dataset_fields["dataset_key"])
-    y_col = str(dataset_fields["y_col"])
+    y_col = str(frame_bundle.get("y_col_final", dataset_fields["y_col"]))
     horizon = int(dataset_fields["horizon"])
     step = int(dataset_fields["step"])
     min_train_size = int(dataset_fields["min_train_size"])
     max_windows = int(dataset_fields["max_windows"])
-    load_elapsed = 0.0
-    prepare_elapsed = 0.0
+    load_elapsed = float(frame_bundle.get("load_seconds", 0.0) or 0.0)
+    prepare_elapsed = float(frame_bundle.get("prepare_seconds", 0.0) or 0.0)
     eval_started = 0.0
     peak_memory_mb = 0.0
+    long_df = frame_bundle["long_df"]
     try:
         if profiling:
             tracemalloc.start()
-        frame_bundle = _get_or_build_benchmark_frame(
-            dataset_fields=dataset_fields,
-            model_params=params,
-            data_dir=data_dir,
-            get_or_build_dataset_long_df=get_or_build_dataset_long_df,
-        )
-        long_df = frame_bundle["long_df"]
-        load_elapsed = float(frame_bundle["load_seconds"])
-        prepare_elapsed = float(frame_bundle["prepare_seconds"])
         if long_df.empty:
             raise ValueError("Loaded 0 rows after to_long(dropna=True). Check dataset and y_col.")
 
@@ -422,7 +659,7 @@ def _benchmark_result_row(
             _current, peak_bytes = tracemalloc.get_traced_memory()
             peak_memory_mb = float(peak_bytes) / (1024.0 * 1024.0)
     except Exception as e:  # noqa: BLE001
-        if profiling:
+        if profiling and tracemalloc.is_tracing():
             tracemalloc.stop()
         return {
             "model": model_key,
@@ -451,6 +688,9 @@ def _benchmark_result_row(
             "load_seconds": round(float(load_elapsed), 6),
             "prepare_seconds": round(float(prepare_elapsed), 6),
             "eval_seconds": 0.0,
+            "dispatch_seconds": 0.0,
+            "raw_cache_hit": int(bool(frame_bundle.get("raw_cache_hit", False))),
+            "prepared_cache_hit": int(bool(frame_bundle.get("prepared_cache_hit", False))),
             "cv_seconds": round(float(load_elapsed + prepare_elapsed), 6),
             "peak_memory_mb": round(float(peak_memory_mb), 6),
             "points_per_second": 0.0,
@@ -493,6 +733,9 @@ def _benchmark_result_row(
         "load_seconds": round(float(load_elapsed), 6),
         "prepare_seconds": round(float(prepare_elapsed), 6),
         "eval_seconds": round(float(eval_elapsed), 6),
+        "dispatch_seconds": 0.0,
+        "raw_cache_hit": int(bool(frame_bundle.get("raw_cache_hit", False))),
+        "prepared_cache_hit": int(bool(frame_bundle.get("prepared_cache_hit", False))),
         "cv_seconds": round(float(elapsed), 6),
         "peak_memory_mb": round(float(peak_memory_mb), 6),
         "points_per_second": round(float(points_per_second), 6),
@@ -506,18 +749,67 @@ def _benchmark_result_row(
     return row
 
 
+def _benchmark_reused_frame_bundle(frame_bundle: dict[str, Any]) -> dict[str, Any]:
+    reused = dict(frame_bundle)
+    reused["load_seconds"] = 0.0
+    reused["prepare_seconds"] = 0.0
+    reused["raw_cache_hit"] = False
+    reused["prepared_cache_hit"] = False
+    return reused
+
+
+def _benchmark_result_row(
+    eval_model_long_df: Any,
+    get_or_build_dataset_long_df: Any,
+    dataset_fields: dict[str, int | str],
+    model_case: Any,
+    *,
+    data_dir: str | Path | None,
+    conformal_levels: list[int],
+    conformal_per_step: bool,
+    task_group: str,
+    backend_family: str,
+    profiling: bool,
+    workload: str,
+    scale: str,
+) -> dict[str, Any]:
+    frame_bundle = _get_or_build_benchmark_frame(
+        dataset_fields=dataset_fields,
+        model_params=dict(model_case.get("params", {})),
+        data_dir=data_dir,
+        get_or_build_dataset_long_df=get_or_build_dataset_long_df,
+    )
+    return _benchmark_result_row_from_frame_bundle(
+        eval_model_long_df,
+        frame_bundle,
+        dataset_fields,
+        model_case,
+        data_dir=data_dir,
+        conformal_levels=conformal_levels,
+        conformal_per_step=conformal_per_step,
+        task_group=task_group,
+        backend_family=backend_family,
+        profiling=profiling,
+        workload=workload,
+        scale=scale,
+    )
+
+
 def run_benchmark_suite(
     *,
     config_name: str,
     data_dir: str | Path | None = None,
     profile: bool | None = None,
+    jobs: int = 1,
+    backend: str = "process",
+    chunk_size: int | str = 1,
+    progress: bool = False,
+    budget_mode: str = "warn",
 ) -> dict[str, Any]:
     root = _repo_root()
     _ensure_src_on_path(root)
 
-    from foresight.dataset_long_df_cache import get_or_build_dataset_long_df
-    from foresight.eval_forecast import eval_model_long_df
-    from foresight.models.registry import get_model_spec
+    from foresight.batch_execution import BatchTaskStat, run_batch_tasks
 
     all_config = _load_benchmark_config()
     if config_name not in all_config:
@@ -536,38 +828,54 @@ def run_benchmark_suite(
     budgets = dict(config.get("budgets", {}))
     if profile is not None:
         profiling = bool(profile)
+    backend_s = str(backend).strip().lower() or "process"
+    if backend_s not in _BENCHMARK_BACKENDS:
+        raise ValueError(
+            f"--backend must be one of: {', '.join(sorted(_BENCHMARK_BACKENDS))}"
+        )
+    if int(jobs) <= 0:
+        raise ValueError("--jobs must be >= 1")
+    budget_mode_s = str(budget_mode).strip().lower() or "warn"
+    if budget_mode_s not in _BUDGET_MODES:
+        raise ValueError(
+            f"--budget-mode must be one of: {', '.join(sorted(_BUDGET_MODES))}"
+        )
     dataset_fields_list = [_benchmark_dataset_case_fields(case) for case in datasets]
+    resolved_chunk_size = _resolve_benchmark_chunk_size(
+        chunk_size,
+        dataset_count=len(dataset_fields_list),
+        model_count=len(models),
+        jobs=int(jobs),
+    )
     conformal_levels = [int(float(level)) for level in config.get("conformal_levels", [])]
     conformal_per_step = bool(config.get("conformal_per_step", False))
+    benchmark_row_builder = _benchmark_result_row
+    task_stats: list[BatchTaskStat] = []
 
-    rows: list[dict[str, Any]] = []
-    for dataset_fields in dataset_fields_list:
-        for model_case in models:
-            model_key = str(model_case["key"])
-            try:
-                backend_family = (
-                    "core"
-                    if not tuple(get_model_spec(model_key).requires)
-                    else str(get_model_spec(model_key).requires[0]).strip().lower()
-                )
-            except Exception:  # noqa: BLE001
-                backend_family = "unknown"
-            rows.append(
-                _benchmark_result_row(
-                    eval_model_long_df,
-                    get_or_build_dataset_long_df,
-                    dataset_fields,
-                    model_case,
-                    data_dir=data_dir,
-                    conformal_levels=conformal_levels,
-                    conformal_per_step=conformal_per_step,
-                    task_group=task_group,
-                    backend_family=backend_family,
-                    profiling=profiling,
-                    workload=workload,
-                    scale=scale,
-                )
-            )
+    tasks = _build_benchmark_tasks(
+        dataset_fields_list=dataset_fields_list,
+        model_cases=[dict(case) for case in models],
+        chunk_size=resolved_chunk_size,
+    )
+    rows, failures = run_batch_tasks(
+        tasks,
+        jobs=int(jobs),
+        backend=backend_s,
+        progress=bool(progress),
+        strict=False,
+        worker=_benchmark_rows_for_task,
+        worker_args=(
+            data_dir,
+            conformal_levels,
+            conformal_per_step,
+            task_group,
+            profiling,
+            workload,
+            scale,
+            benchmark_row_builder,
+        ),
+        stats_out=task_stats,
+    )
 
     rows.sort(key=lambda row: (str(row["dataset"]), str(row["model"])))
     summary = _summarize_rows(
@@ -575,6 +883,7 @@ def run_benchmark_suite(
         conformal_levels=conformal_levels,
         include_profile=profiling,
     )
+    budget_findings = _benchmark_budget_findings(summary, budgets)
     return {
         "config": config_name,
         "description": str(config.get("description", "")),
@@ -582,10 +891,18 @@ def run_benchmark_suite(
         "workload": workload,
         "scale": scale,
         "profiling": profiling,
+        "jobs": int(jobs),
+        "backend": backend_s,
+        "chunk_size": int(resolved_chunk_size),
+        "progress": bool(progress),
+        "budget_mode": budget_mode_s,
+        "failures": int(failures),
         "budgets": budgets,
+        "budget_findings": budget_findings,
         "datasets": [str(item["dataset_key"]) for item in dataset_fields_list],
         "models": [str(item["key"]) for item in models],
         "rows": rows,
+        "task_reports": [asdict(stat) for stat in task_stats],
         "summary": summary,
         "conformal_levels": conformal_levels,
     }
@@ -617,6 +934,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to write the formatted summary output.",
     )
     parser.add_argument(
+        "--task-reports-output",
+        default="",
+        help="Optional path to write per-task execution stats.",
+    )
+    parser.add_argument(
+        "--task-reports-format",
+        choices=["csv", "json", "md"],
+        default="json",
+        help="Task report output format (default: json).",
+    )
+    parser.add_argument(
         "--data-dir",
         default=None,
         help="Optional dataset base directory override.",
@@ -626,6 +954,35 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Force per-stage profiling columns in the summary output.",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="Number of benchmark worker tasks to run concurrently (default: 1).",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["thread", "process"],
+        default="process",
+        help="Parallel backend for benchmark task execution (default: process).",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=str,
+        default="1",
+        help="Models per dataset task; use 0 for dataset-wide tasks or auto for jobs-aware chunking.",
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Emit per-task DONE progress lines to stderr.",
+    )
+    parser.add_argument(
+        "--budget-mode",
+        choices=["warn", "fail"],
+        default="warn",
+        help="Whether benchmark budget regressions warn or fail the command (default: warn).",
+    )
     args = parser.parse_args(argv)
 
     config_name = "smoke" if bool(args.smoke) else str(args.config)
@@ -633,6 +990,11 @@ def main(argv: list[str] | None = None) -> int:
         config_name=config_name,
         data_dir=args.data_dir,
         profile=True if bool(args.profile) else None,
+        jobs=int(args.jobs),
+        backend=str(args.backend),
+        chunk_size=str(args.chunk_size),
+        progress=bool(args.progress),
+        budget_mode=str(args.budget_mode),
     )
     text = _format_summary(
         payload["summary"],
@@ -647,7 +1009,36 @@ def main(argv: list[str] | None = None) -> int:
         out_path = Path(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text + "\n", encoding="utf-8")
-    return 0
+    task_reports_output = str(args.task_reports_output).strip()
+    if task_reports_output:
+        task_report_rows = [
+            {
+                **row,
+                "backend": str(payload.get("backend", "")),
+                "jobs": int(payload.get("jobs", 0) or 0),
+                "chunk_size": int(payload.get("chunk_size", 0) or 0),
+            }
+            for row in list(payload.get("task_reports", []))
+        ]
+        task_reports_text = _format_task_reports(
+            task_report_rows,
+            fmt=str(args.task_reports_format),
+        )
+        out_path = Path(task_reports_output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(task_reports_text + "\n", encoding="utf-8")
+    budget_findings = list(
+        payload.get(
+            "budget_findings",
+            _benchmark_budget_findings(
+                list(payload.get("summary", [])),
+                dict(payload.get("budgets", {})),
+            ),
+        )
+    )
+    for line in budget_findings:
+        print(line, file=sys.stderr)
+    return 1 if budget_findings and str(args.budget_mode) == "fail" else 0
 
 
 if __name__ == "__main__":

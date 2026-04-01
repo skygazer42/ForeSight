@@ -6,9 +6,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from foresight.batch_execution import BatchTask
 from foresight.cli_leaderboard import (
+    _build_leaderboard_sweep_tasks,
     _load_leaderboard_sweep_resume_state,
     _merge_leaderboard_sweep_rows,
+    _run_parallel_tasks,
 )
 
 
@@ -146,6 +149,70 @@ def test_leaderboard_sweep_chunk_size_zero_groups_by_dataset(tmp_path: Path) -> 
     assert {r["model"] for r in payload} == {"naive-last", "mean"}
     assert "DONE" in (proc.stderr or "")
     assert out.exists()
+
+
+def test_build_leaderboard_sweep_tasks_returns_batch_tasks() -> None:
+    tasks = _build_leaderboard_sweep_tasks(
+        datasets=["catfish", "ice_cream_interest"],
+        keys=["naive-last", "mean"],
+        done_pairs={("catfish", "naive-last")},
+        chunk_size=0,
+    )
+
+    assert tasks == [
+        BatchTask(
+            label="catfish/mean",
+            task_args=("catfish", ("mean",)),
+            task_scope="leaderboard_sweep",
+            dataset="catfish",
+            model_count=1,
+        ),
+        BatchTask(
+            label="ice_cream_interest/[2 models]",
+            task_args=("ice_cream_interest", ("naive-last", "mean")),
+            task_scope="leaderboard_sweep",
+            dataset="ice_cream_interest",
+            model_count=2,
+        ),
+    ]
+
+
+def test_build_leaderboard_sweep_tasks_supports_auto_chunk_size() -> None:
+    tasks = _build_leaderboard_sweep_tasks(
+        datasets=["catfish"],
+        keys=["naive-last", "mean", "moving-average", "drift", "ses"],
+        done_pairs=set(),
+        chunk_size="auto",
+        jobs=4,
+    )
+
+    assert [tuple(task.task_args[1]) for task in tasks] == [
+        ("naive-last", "mean"),
+        ("moving-average", "drift"),
+        ("ses",),
+    ]
+
+
+def test_run_parallel_tasks_accepts_batch_task_inputs() -> None:
+    rows, failures = _run_parallel_tasks(
+        [
+            BatchTask(
+                label="catfish/[2 models]",
+                task_args=("catfish", ("naive-last", "mean")),
+            )
+        ],
+        jobs=1,
+        backend="thread",
+        progress=False,
+        strict=False,
+        worker=lambda dataset, model_keys: (
+            [{"dataset": dataset, "models": list(model_keys)}],
+            [],
+        ),
+    )
+
+    assert failures == 0
+    assert rows == [{"dataset": "catfish", "models": ["naive-last", "mean"]}]
 
 
 def test_leaderboard_sweep_emits_phase_timing_logs(tmp_path: Path) -> None:
@@ -416,6 +483,51 @@ def test_leaderboard_sweep_writes_failures_output(tmp_path: Path) -> None:
     assert failures.exists()
     text = failures.read_text(encoding="utf-8")
     assert "SKIP catfish/definitely-not-a-model" in text
+
+
+def test_leaderboard_sweep_writes_task_reports_output(tmp_path: Path) -> None:
+    task_reports = tmp_path / "task_reports.json"
+    proc = _run_cli(
+        "leaderboard",
+        "sweep",
+        "--datasets",
+        "catfish,ice_cream_interest",
+        "--horizon",
+        "3",
+        "--step",
+        "3",
+        "--min-train-size",
+        "12",
+        "--models",
+        "naive-last,mean",
+        "--jobs",
+        "2",
+        "--backend",
+        "thread",
+        "--chunk-size",
+        "auto",
+        "--task-reports-output",
+        str(task_reports),
+        "--task-reports-format",
+        "json",
+    )
+    assert proc.returncode == 0
+    assert task_reports.exists()
+
+    payload = json.loads(task_reports.read_text(encoding="utf-8"))
+    assert isinstance(payload, list)
+    assert {row["label"] for row in payload} == {
+        "catfish/[2 models]",
+        "ice_cream_interest/[2 models]",
+    }
+    assert {row["task_scope"] for row in payload} == {"leaderboard_sweep"}
+    assert {row["backend"] for row in payload} == {"thread"}
+    assert {int(row["jobs"]) for row in payload} == {2}
+    assert {row["dataset"] for row in payload} == {"catfish", "ice_cream_interest"}
+    assert {int(row["model_count"]) for row in payload} == {2}
+    assert {int(row["row_count"]) for row in payload} == {2}
+    assert {int(row["failure_count"]) for row in payload} == {0}
+    assert all(float(row["elapsed_seconds"]) > 0.0 for row in payload)
 
 
 def test_leaderboard_sweep_outputs_structured_skip_rows_and_summary_ignores_them(
