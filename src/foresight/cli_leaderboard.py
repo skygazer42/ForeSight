@@ -13,27 +13,6 @@ from typing import Any
 
 from . import cli_runtime as _cli_runtime
 from . import cli_shared as _cli_shared
-from .batch_execution import (
-    BatchTask as _BatchTask,
-)
-from .batch_execution import (
-    BatchTaskStat as _BatchTaskStat,
-)
-from .batch_execution import (
-    build_task_executor as _shared_build_task_executor,
-)
-from .batch_execution import (
-    emit_task_reports as _shared_emit_task_reports,
-)
-from .batch_execution import (
-    record_task_errors as _shared_record_task_errors,
-)
-from .batch_execution import (
-    resolve_task_result as _shared_resolve_task_result,
-)
-from .batch_execution import (
-    run_batch_tasks_sequential as _shared_run_batch_tasks_sequential,
-)
 from .dataset_long_df_cache import get_or_build_dataset_long_df
 
 _FORECAST_HORIZON_HELP = "Forecast horizon"
@@ -42,6 +21,16 @@ _MIN_TRAIN_SIZE_FIRST_WINDOW_HELP = "Minimum training size for first window"
 _MAX_WINDOWS_LIMIT_HELP = "Optional limit on the number of walk-forward windows"
 _OUTPUT_JSON_FORMAT_HELP = "Output format (default: json)"
 _TASK_GROUP_CHOICES = ["all", "point", "probabilistic", "covariate"]
+_batch_execution: Any | None = None
+
+
+def _get_batch_execution_module() -> Any:
+    global _batch_execution
+    if _batch_execution is None:
+        from . import batch_execution as _batch_execution_module
+
+        _batch_execution = _batch_execution_module
+    return _batch_execution
 
 
 def _log_payload(**kwargs: Any) -> dict[str, Any]:
@@ -990,8 +979,9 @@ def _build_leaderboard_sweep_tasks(
     *,
     chunk_size: int | str,
     jobs: int = 1,
-) -> list[_BatchTask]:
-    tasks: list[_BatchTask] = []
+) -> list[Any]:
+    batch_execution = _get_batch_execution_module()
+    tasks: list[Any] = []
     for dataset in datasets:
         remaining = [k for k in keys if (dataset, k) not in done_pairs]
         if not remaining:
@@ -1005,7 +995,7 @@ def _build_leaderboard_sweep_tasks(
         if effective_chunk_size == 0:
             model_keys = tuple(remaining)
             tasks.append(
-                _BatchTask(
+                batch_execution.BatchTask(
                     label=_parallel_task_label(dataset, model_keys),
                     task_args=(dataset, model_keys),
                     task_scope="leaderboard_sweep",
@@ -1020,7 +1010,7 @@ def _build_leaderboard_sweep_tasks(
             chunk = tuple(remaining[i : i + effective_chunk_size])
             if chunk:
                 tasks.append(
-                    _BatchTask(
+                    batch_execution.BatchTask(
                         label=_parallel_task_label(dataset, chunk),
                         task_args=(dataset, chunk),
                         task_scope="leaderboard_sweep",
@@ -1040,9 +1030,7 @@ def _resolve_leaderboard_chunk_size(
     model_count: int,
     jobs: int,
 ) -> int:
-    from .batch_execution import resolve_auto_chunk_size
-
-    return resolve_auto_chunk_size(
+    return _get_batch_execution_module().resolve_auto_chunk_size(
         raw_chunk_size,
         dataset_count=dataset_count,
         model_count=model_count,
@@ -1118,14 +1106,14 @@ def _write_leaderboard_sweep_summary(
 
 def _write_leaderboard_sweep_task_reports(
     args: argparse.Namespace,
-    task_stats: list[_BatchTaskStat],
+    task_stats: list[Any],
 ) -> None:
     task_reports_output = str(getattr(args, "task_reports_output", "")).strip()
     if not task_reports_output:
         return
 
     task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
-    _shared_emit_task_reports(
+    _get_batch_execution_module().emit_task_reports(
         task_stats,
         backend=str(args.backend),
         jobs=int(args.jobs),
@@ -1194,7 +1182,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             )
 
         failure_lines: list[str] = []
-        task_stats: list[_BatchTaskStat] = []
+        task_stats: list[Any] = []
         with _cli_runtime.phase_scope(
             "evaluate",
             payload=_log_payload(tasks=len(tasks), jobs=jobs, backend=str(args.backend)),
@@ -1916,7 +1904,7 @@ def _leaderboard_summary_columns() -> list[str]:
 
 
 def _run_parallel_tasks(
-    tasks: list[_BatchTask | tuple[str, tuple[str, ...]]],
+    tasks: list[Any],
     *,
     jobs: int,
     backend: str,
@@ -1925,16 +1913,17 @@ def _run_parallel_tasks(
     worker: Any,
     worker_args: tuple[Any, ...] = (),
     errors_out: list[str] | None = None,
-    stats_out: list[_BatchTaskStat] | None = None,
+    stats_out: list[Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     n = len(tasks)
     if n <= 0:
         return ([], 0)
 
+    batch_execution = _get_batch_execution_module()
     normalized_tasks = [
         task
-        if isinstance(task, _BatchTask)
-        else _BatchTask(
+        if isinstance(task, batch_execution.BatchTask)
+        else batch_execution.BatchTask(
             label=_parallel_task_label(task[0], task[1]),
             task_args=(task[0], task[1]),
         )
@@ -1985,7 +1974,7 @@ def _run_parallel_tasks(
             failures += task_failures
             if stats_out is not None:
                 stats_out.append(
-                    _BatchTaskStat(
+                    batch_execution.BatchTaskStat(
                         label=label,
                         elapsed_seconds=effective_elapsed,
                         row_count=len(rows),
@@ -2017,29 +2006,30 @@ def _record_parallel_task_errors(
     *,
     errors_out: list[str] | None,
 ) -> int:
-    return _shared_record_task_errors(errors, errors_out=errors_out)
+    return _get_batch_execution_module().record_task_errors(errors, errors_out=errors_out)
 
 
 def _run_parallel_tasks_sequential(
-    tasks: list[_BatchTask | tuple[str, tuple[str, ...]]],
+    tasks: list[Any],
     *,
     progress: bool,
     strict: bool,
     worker: Any,
     worker_args: tuple[Any, ...],
     errors_out: list[str] | None,
-    stats_out: list[_BatchTaskStat] | None = None,
+    stats_out: list[Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
+    batch_execution = _get_batch_execution_module()
     batch_tasks = [
         task
-        if isinstance(task, _BatchTask)
-        else _BatchTask(
+        if isinstance(task, batch_execution.BatchTask)
+        else batch_execution.BatchTask(
             label=_parallel_task_label(task[0], task[1]),
             task_args=(task[0], task[1]),
         )
         for task in tasks
     ]
-    return _shared_run_batch_tasks_sequential(
+    return batch_execution.run_batch_tasks_sequential(
         batch_tasks,
         progress=progress,
         strict=strict,
@@ -2051,7 +2041,10 @@ def _run_parallel_tasks_sequential(
 
 
 def _build_parallel_task_executor(*, backend_s: str, max_workers: int) -> Any:
-    return _shared_build_task_executor(backend_s=backend_s, max_workers=max_workers)
+    return _get_batch_execution_module().build_task_executor(
+        backend_s=backend_s,
+        max_workers=max_workers,
+    )
 
 
 def _resolve_parallel_task_result(
@@ -2062,7 +2055,7 @@ def _resolve_parallel_task_result(
     sibling_futures: Any,
     errors_out: list[str] | None,
 ) -> tuple[list[dict[str, Any]], int, float]:
-    rows, failures, elapsed_seconds = _shared_resolve_task_result(
+    rows, failures, elapsed_seconds = _get_batch_execution_module().resolve_task_result(
         fut,
         label=label,
         strict=strict,
