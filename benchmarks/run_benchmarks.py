@@ -17,6 +17,7 @@ _BENCHMARK_SCALES = {"tiny", "small", "medium", "large"}
 _BENCHMARK_BACKENDS = {"thread", "process"}
 _BUDGET_MODES = {"warn", "fail"}
 _cli_shared: Any | None = None
+_batch_execution: Any | None = None
 
 
 def _repo_root() -> Path:
@@ -36,6 +37,15 @@ def _get_cli_shared_module() -> Any:
 
         _cli_shared = _cli_shared_module
     return _cli_shared
+
+
+def _get_batch_execution_module() -> Any:
+    global _batch_execution
+    if _batch_execution is None:
+        from foresight import batch_execution as _batch_execution_module
+
+        _batch_execution = _batch_execution_module
+    return _batch_execution
 
 
 def _load_benchmark_config(path: Path | None = None) -> dict[str, Any]:
@@ -947,9 +957,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
-        from foresight.batch_execution import write_task_reports
-
-        write_task_reports(
+        _get_batch_execution_module().write_task_reports(
             list(payload.get("task_reports", [])),
             fmt=str(args.task_reports_format),
             output=task_reports_output,

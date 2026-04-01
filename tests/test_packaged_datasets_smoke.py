@@ -348,6 +348,53 @@ def test_benchmark_main_writes_summary_output_with_shared_cli_helper(
     assert writes == [(str(out), "formatted-summary")]
 
 
+def test_benchmark_main_writes_task_reports_with_shared_batch_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+    emitted: list[tuple[str, str]] = []
+
+    def _fake_run_benchmark_suite(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "config": "smoke",
+            "description": "fake",
+            "task_group": "point",
+            "workload": "panel_cv",
+            "scale": "tiny",
+            "profiling": False,
+            "budgets": {},
+            "datasets": ["catfish"],
+            "models": ["naive-last"],
+            "rows": [],
+            "task_reports": [],
+            "summary": [],
+            "conformal_levels": [],
+        }
+
+    class _FakeCliShared:
+        @staticmethod
+        def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
+            return None
+
+    class _FakeBatchExecution:
+        @staticmethod
+        def write_task_reports(rows: list[dict[str, Any]], *, fmt: str, output: str) -> str:
+            emitted.append((output, fmt))
+            return "ok"
+
+    monkeypatch.setattr(mod, "run_benchmark_suite", _fake_run_benchmark_suite)
+    monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())
+    monkeypatch.setattr(mod, "_get_batch_execution_module", lambda: _FakeBatchExecution())
+
+    out = tmp_path / "task-reports.json"
+    result = mod.main(["--smoke", "--task-reports-output", str(out)])  # type: ignore[attr-defined]
+
+    assert result == 0
+    assert emitted == [(str(out), "json")]
+
+
 def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
