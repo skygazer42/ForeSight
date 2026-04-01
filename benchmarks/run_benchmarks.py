@@ -518,18 +518,6 @@ def _format_summary(
     raise ValueError(f"Unknown format: {fmt!r}")
 
 
-def _task_report_columns() -> list[str]:
-    from foresight.batch_execution import task_report_columns
-
-    return task_report_columns()
-
-
-def _format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
-    from foresight.batch_execution import format_task_reports
-
-    return format_task_reports(rows, fmt=fmt)
-
-
 def _benchmark_dataset_case_fields(dataset_case: Any) -> dict[str, int | str]:
     return {
         "dataset_key": str(dataset_case["key"]),

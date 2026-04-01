@@ -32,9 +32,6 @@ from .batch_execution import (
     run_batch_tasks_sequential as _shared_run_batch_tasks_sequential,
 )
 from .batch_execution import (
-    task_report_columns as _shared_task_report_columns,
-)
-from .batch_execution import (
     task_report_rows as _shared_task_report_rows,
 )
 from .batch_execution import (
@@ -1120,10 +1117,6 @@ def _write_leaderboard_sweep_summary(
         fmt=summary_format,
     )
     _cli_shared._write_output(text, output=summary_output)
-
-
-def _leaderboard_task_report_columns() -> list[str]:
-    return _shared_task_report_columns()
 
 
 def _write_leaderboard_sweep_task_reports(
