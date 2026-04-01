@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import json
 import sys
 import time
@@ -485,49 +483,6 @@ def _benchmark_budget_findings(
     return findings
 
 
-def _format_csv(rows: list[dict[str, Any]], *, columns: list[str]) -> str:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({column: row.get(column, "") for column in columns})
-    return buf.getvalue().rstrip("\n")
-
-
-def _format_markdown(rows: list[dict[str, Any]], *, columns: list[str]) -> str:
-    def _fmt(value: object) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, float):
-            return f"{value:.6f}"
-        return str(value)
-
-    lines = [
-        "| " + " | ".join(columns) + " |",
-        "| " + " | ".join(["---"] * len(columns)) + " |",
-    ]
-    for row in rows:
-        lines.append("| " + " | ".join(_fmt(row.get(column, "")) for column in columns) + " |")
-    return "\n".join(lines)
-
-
-def _format_summary(
-    rows: list[dict[str, Any]],
-    *,
-    conformal_levels: list[int],
-    fmt: str,
-    include_profile: bool,
-) -> str:
-    columns = _summary_columns(conformal_levels, include_profile=include_profile)
-    if fmt == "csv":
-        return _format_csv(rows, columns=columns)
-    if fmt == "json":
-        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
-    if fmt == "md":
-        return _format_markdown(rows, columns=columns)
-    raise ValueError(f"Unknown format: {fmt!r}")
-
-
 def _benchmark_dataset_case_fields(dataset_case: Any) -> dict[str, int | str]:
     return {
         "dataset_key": str(dataset_case["key"]),
@@ -970,6 +925,7 @@ def main(argv: list[str] | None = None) -> int:
 
     config_name = "smoke" if bool(args.smoke) else str(args.config)
 
+    cli_shared = _get_cli_shared_module()
     payload = run_benchmark_suite(
         config_name=config_name,
         data_dir=args.data_dir,
@@ -980,17 +936,19 @@ def main(argv: list[str] | None = None) -> int:
         progress=bool(args.progress),
         budget_mode=str(args.budget_mode),
     )
-    text = _format_summary(
+    text = cli_shared._format_table(
         payload["summary"],
-        conformal_levels=list(payload["conformal_levels"]),
+        columns=_summary_columns(
+            list(payload["conformal_levels"]),
+            include_profile=bool(payload.get("profiling", False)),
+        ),
         fmt=str(args.format),
-        include_profile=bool(payload.get("profiling", False)),
     )
     print(text)
 
     output = str(args.output).strip()
     if output:
-        _get_cli_shared_module()._write_output(text, output=output)
+        cli_shared._write_output(text, output=output)
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
         from foresight.batch_execution import write_task_reports

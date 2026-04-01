@@ -333,6 +333,13 @@ def test_benchmark_main_writes_summary_output_with_shared_cli_helper(
 
     class _FakeCliShared:
         @staticmethod
+        def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+            assert rows == _fake_run_benchmark_suite()["summary"]
+            assert fmt == "csv"
+            assert columns[:3] == ["model", "task_group", "backend_family"]
+            return "formatted-summary"
+
+        @staticmethod
         def _write_output(text: str, *, output: str) -> None:
             _fake_write_output(text, output=output)
 
@@ -343,8 +350,7 @@ def test_benchmark_main_writes_summary_output_with_shared_cli_helper(
     result = mod.main(["--smoke", "--output", str(out)])  # type: ignore[attr-defined]
 
     assert result == 0
-    assert writes == [(str(out), writes[0][1])]
-    assert writes[0][1].splitlines()[0].startswith("model,task_group,backend_family,")
+    assert writes == [(str(out), "formatted-summary")]
 
 
 def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
