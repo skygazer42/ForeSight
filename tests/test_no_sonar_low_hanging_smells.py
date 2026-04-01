@@ -2086,6 +2086,17 @@ def test_cli_shared_source_extracts_rendered_output_helpers() -> None:
     )
 
 
+def test_cli_shared_source_extracts_dataframe_text_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _dataframe_text(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_emit_dataframe",
+        "_dataframe_text",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 

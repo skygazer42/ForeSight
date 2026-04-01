@@ -161,14 +161,14 @@ def _emit_text(text: str, *, output: str) -> None:
 
 
 def _emit_dataframe(df: Any, *, output: str, fmt: str) -> None:
+    _emit_text(_dataframe_text(df, fmt=fmt), output=output)
+
+
+def _dataframe_text(df: Any, *, fmt: str) -> str:
     if fmt == "csv":
-        text = df.to_csv(index=False).rstrip("\n")
-        _emit_text(text, output=output)
-        return
+        return df.to_csv(index=False).rstrip("\n")
     if fmt == "json":
-        text = df.to_json(orient="records", date_format="iso")
-        _emit_text(text, output=output)
-        return
+        return df.to_json(orient="records", date_format="iso")
     raise ValueError(f"Unknown dataframe format: {fmt!r}")
 
 

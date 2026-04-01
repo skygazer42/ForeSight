@@ -66,6 +66,53 @@ def test_emit_rendered_formats_once_then_prints_and_writes(
     assert emitted == [("payload", "report.txt")]
 
 
+def test_dataframe_text_formats_csv_without_trailing_newline() -> None:
+    calls: list[tuple[str, object]] = []
+
+    class _FakeFrame:
+        def to_csv(self, *, index: bool) -> str:
+            calls.append(("csv", index))
+            return "a\n1\n"
+
+    text = _cli_shared._dataframe_text(_FakeFrame(), fmt="csv")
+
+    assert text == "a\n1"
+    assert calls == [("csv", False)]
+
+
+def test_dataframe_text_formats_json_records_with_iso_dates() -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    class _FakeFrame:
+        def to_json(self, *, orient: str, date_format: str) -> str:
+            calls.append(("json", orient, date_format))
+            return '[{"a":1}]'
+
+    text = _cli_shared._dataframe_text(_FakeFrame(), fmt="json")
+
+    assert text == '[{"a":1}]'
+    assert calls == [("json", "records", "iso")]
+
+
+def test_emit_dataframe_uses_dataframe_text_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    emitted: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        _cli_shared,
+        "_dataframe_text",
+        lambda df, *, fmt: '{"ok": true}',
+    )
+    monkeypatch.setattr(
+        _cli_shared,
+        "_emit_text",
+        lambda text, *, output: emitted.append((text, output)),
+    )
+
+    _cli_shared._emit_dataframe(object(), output="frame.json", fmt="json")
+
+    assert emitted == [('{"ok": true}', "frame.json")]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")
