@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-import csv
-import io
-import json
 import math
 import sys
 import time
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any, TextIO
+
+_cli_shared: Any | None = None
+
+
+def _get_cli_shared_module() -> Any:
+    from .module_cache import get_cached_module
+
+    return get_cached_module(globals(), "_cli_shared", ".cli_shared", __package__)
 
 
 @dataclass(frozen=True)
@@ -114,42 +118,18 @@ def task_report_rows(
 
 
 def format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
-    columns = task_report_columns()
-    if fmt == "json":
-        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
-    if fmt == "csv":
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({column: row.get(column, "") for column in columns})
-        return buf.getvalue().rstrip("\n")
-    if fmt == "md":
-        header = "| " + " | ".join(columns) + " |"
-        sep = "| " + " | ".join(["---"] * len(columns)) + " |"
-
-        def _fmt(value: object) -> str:
-            if value is None:
-                return ""
-            if isinstance(value, float):
-                return f"{value:.6f}"
-            return str(value)
-
-        body = [
-            "| " + " | ".join(_fmt(row.get(column, "")) for column in columns) + " |"
-            for row in rows
-        ]
-        return "\n".join([header, sep, *body])
-    raise ValueError(f"Unknown format: {fmt!r}")
+    return _get_cli_shared_module()._format_table(
+        rows,
+        columns=task_report_columns(),
+        fmt=fmt,
+    )
 
 
 def write_task_reports(rows: list[dict[str, Any]], *, fmt: str, output: str) -> str:
     text = format_task_reports(rows, fmt=fmt)
     out_s = str(output).strip()
     if out_s:
-        out_path = Path(out_s)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text + "\n", encoding="utf-8")
+        _get_cli_shared_module()._write_output(text, output=out_s)
     return text
 
 

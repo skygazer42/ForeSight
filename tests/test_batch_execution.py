@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import importlib.util
+import importlib
 from pathlib import Path
-import sys
 from typing import Any
 
 import pytest
@@ -11,13 +10,7 @@ import pytest
 def _load_batch_execution_module(repo_root: Path):
     path = repo_root / "src" / "foresight" / "batch_execution.py"
     assert path.exists()
-    spec = importlib.util.spec_from_file_location("foresight.batch_execution", path)
-    assert spec is not None
-    assert spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    return importlib.import_module("foresight.batch_execution")
 
 
 def test_run_batch_tasks_sequentially_returns_rows_in_completion_order() -> None:
@@ -266,6 +259,64 @@ def test_format_task_reports_supports_json_csv_and_markdown() -> None:
     assert "| task_scope | dataset | model_count |" in md_text
 
 
+def test_format_task_reports_uses_shared_cli_formatter(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+    calls: list[tuple[list[dict[str, Any]], list[str], str]] = []
+
+    class _FakeCliShared:
+        @staticmethod
+        def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+            calls.append((rows, columns, fmt))
+            return "formatted"
+
+    monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())
+
+    text = mod.format_task_reports(
+        [
+            {
+                "task_scope": "benchmark",
+                "dataset": "catfish",
+                "model_count": 3,
+                "requested_chunk_size": "auto",
+                "resolved_chunk_size": 0,
+                "backend": "thread",
+                "jobs": 2,
+                "chunk_size": 0,
+                "label": "catfish/[3 models]",
+                "elapsed_seconds": 0.5,
+                "row_count": 3,
+                "failure_count": 0,
+            }
+        ],
+        fmt="md",
+    )
+
+    assert text == "formatted"
+    assert calls == [
+        (
+            [
+                {
+                    "task_scope": "benchmark",
+                    "dataset": "catfish",
+                    "model_count": 3,
+                    "requested_chunk_size": "auto",
+                    "resolved_chunk_size": 0,
+                    "backend": "thread",
+                    "jobs": 2,
+                    "chunk_size": 0,
+                    "label": "catfish/[3 models]",
+                    "elapsed_seconds": 0.5,
+                    "row_count": 3,
+                    "failure_count": 0,
+                }
+            ],
+            mod.task_report_columns(),
+            "md",
+        )
+    ]
+
+
 def test_write_task_reports_formats_and_writes_output(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mod = _load_batch_execution_module(repo_root)
@@ -291,6 +342,47 @@ def test_write_task_reports_formats_and_writes_output(tmp_path: Path) -> None:
 
     assert "| task_scope | dataset | model_count |" in text
     assert out.read_text(encoding="utf-8") == text + "\n"
+
+
+def test_write_task_reports_uses_shared_cli_output_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+    writes: list[tuple[str, str]] = []
+
+    class _FakeCliShared:
+        @staticmethod
+        def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+            return "formatted-json"
+
+        @staticmethod
+        def _write_output(text: str, *, output: str) -> None:
+            writes.append((output, text))
+
+    monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())
+
+    text = mod.write_task_reports(
+        [
+            {
+                "task_scope": "benchmark",
+                "dataset": "catfish",
+                "model_count": 3,
+                "requested_chunk_size": "auto",
+                "resolved_chunk_size": 0,
+                "backend": "thread",
+                "jobs": 2,
+                "chunk_size": 0,
+                "label": "catfish/[3 models]",
+                "elapsed_seconds": 0.5,
+                "row_count": 3,
+                "failure_count": 0,
+            }
+        ],
+        fmt="json",
+        output="/tmp/fake-task-report.json",
+    )
+
+    assert text == "formatted-json"
+    assert writes == [("/tmp/fake-task-report.json", "formatted-json")]
 
 
 def test_emit_task_reports_builds_rows_and_writes_output(tmp_path: Path) -> None:

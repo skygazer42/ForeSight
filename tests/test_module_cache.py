@@ -23,3 +23,17 @@ def test_get_cached_module_imports_once_and_reuses_namespace_slot() -> None:
 
     assert first is second
     assert namespace["_cli_shared"] is first
+
+
+def test_get_cached_module_preserves_existing_cached_object() -> None:
+    sentinel = object()
+    namespace: dict[str, Any] = {"_batch_execution": sentinel}
+
+    loaded = get_cached_module(
+        namespace,
+        "_batch_execution",
+        ".batch_execution",
+        "foresight",
+    )
+
+    assert loaded is sentinel
