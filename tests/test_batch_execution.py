@@ -179,6 +179,17 @@ def test_task_report_rows_add_command_level_metadata() -> None:
     rows = mod.task_report_rows(
         [
             mod.BatchTaskStat(
+                label="ice_cream_interest/[2 models]",
+                elapsed_seconds=0.5,
+                row_count=2,
+                failure_count=0,
+                task_scope="leaderboard_sweep",
+                dataset="ice_cream_interest",
+                model_count=2,
+                requested_chunk_size="auto",
+                resolved_chunk_size=2,
+            ),
+            mod.BatchTaskStat(
                 label="catfish/[2 models]",
                 elapsed_seconds=0.25,
                 row_count=2,
@@ -188,7 +199,7 @@ def test_task_report_rows_add_command_level_metadata() -> None:
                 model_count=2,
                 requested_chunk_size="auto",
                 resolved_chunk_size=2,
-            )
+            ),
         ],
         backend="thread",
         jobs=4,
@@ -206,6 +217,20 @@ def test_task_report_rows_add_command_level_metadata() -> None:
             "chunk_size": 2,
             "label": "catfish/[2 models]",
             "elapsed_seconds": 0.25,
+            "row_count": 2,
+            "failure_count": 0,
+        },
+        {
+            "task_scope": "leaderboard_sweep",
+            "dataset": "ice_cream_interest",
+            "model_count": 2,
+            "requested_chunk_size": "auto",
+            "resolved_chunk_size": 2,
+            "backend": "thread",
+            "jobs": 4,
+            "chunk_size": 2,
+            "label": "ice_cream_interest/[2 models]",
+            "elapsed_seconds": 0.5,
             "row_count": 2,
             "failure_count": 0,
         }

@@ -65,7 +65,7 @@ def task_report_rows(
     backend: str,
     jobs: int,
 ) -> list[dict[str, Any]]:
-    return [
+    rows = [
         {
             **asdict(stat),
             "backend": str(backend),
@@ -74,6 +74,14 @@ def task_report_rows(
         }
         for stat in stats
     ]
+    rows.sort(
+        key=lambda row: (
+            str(row.get("task_scope", "")),
+            str(row.get("dataset", "")),
+            str(row.get("label", "")),
+        )
+    )
+    return rows
 
 
 def record_task_errors(
