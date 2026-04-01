@@ -533,14 +533,9 @@ def _task_report_columns() -> list[str]:
 
 
 def _format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
-    columns = _task_report_columns()
-    if fmt == "csv":
-        return _format_csv(rows, columns=columns)
-    if fmt == "json":
-        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
-    if fmt == "md":
-        return _format_markdown(rows, columns=columns)
-    raise ValueError(f"Unknown format: {fmt!r}")
+    from foresight.batch_execution import format_task_reports
+
+    return format_task_reports(rows, fmt=fmt)
 
 
 def _benchmark_dataset_case_fields(dataset_case: Any) -> dict[str, int | str]:

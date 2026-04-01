@@ -235,3 +235,32 @@ def test_task_report_rows_add_command_level_metadata() -> None:
             "failure_count": 0,
         }
     ]
+
+
+def test_format_task_reports_supports_json_csv_and_markdown() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+    rows = [
+        {
+            "task_scope": "benchmark",
+            "dataset": "catfish",
+            "model_count": 3,
+            "requested_chunk_size": "auto",
+            "resolved_chunk_size": 0,
+            "backend": "thread",
+            "jobs": 2,
+            "chunk_size": 0,
+            "label": "catfish/[3 models]",
+            "elapsed_seconds": 0.5,
+            "row_count": 3,
+            "failure_count": 0,
+        }
+    ]
+
+    json_text = mod.format_task_reports(rows, fmt="json")
+    csv_text = mod.format_task_reports(rows, fmt="csv")
+    md_text = mod.format_task_reports(rows, fmt="md")
+
+    assert '"task_scope": "benchmark"' in json_text
+    assert csv_text.splitlines()[0].startswith("task_scope,dataset,model_count,")
+    assert "| task_scope | dataset | model_count |" in md_text

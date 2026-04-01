@@ -23,6 +23,9 @@ from .batch_execution import (
     build_task_executor as _shared_build_task_executor,
 )
 from .batch_execution import (
+    format_task_reports as _shared_format_task_reports,
+)
+from .batch_execution import (
     record_task_errors as _shared_record_task_errors,
 )
 from .batch_execution import (
@@ -1139,11 +1142,7 @@ def _write_leaderboard_sweep_task_reports(
         return
 
     task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
-    text = _cli_shared._format_table(
-        sorted(task_reports, key=lambda row: str(row.get("label", ""))),
-        columns=_leaderboard_task_report_columns(),
-        fmt=task_reports_format,
-    )
+    text = _shared_format_task_reports(task_reports, fmt=task_reports_format)
     _cli_shared._write_output(text, output=task_reports_output)
 
 

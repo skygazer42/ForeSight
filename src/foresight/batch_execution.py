@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import csv
+import io
+import json
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -82,6 +85,36 @@ def task_report_rows(
         )
     )
     return rows
+
+
+def format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
+    columns = task_report_columns()
+    if fmt == "json":
+        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    if fmt == "csv":
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: row.get(column, "") for column in columns})
+        return buf.getvalue().rstrip("\n")
+    if fmt == "md":
+        header = "| " + " | ".join(columns) + " |"
+        sep = "| " + " | ".join(["---"] * len(columns)) + " |"
+
+        def _fmt(value: object) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, float):
+                return f"{value:.6f}"
+            return str(value)
+
+        body = [
+            "| " + " | ".join(_fmt(row.get(column, "")) for column in columns) + " |"
+            for row in rows
+        ]
+        return "\n".join([header, sep, *body])
+    raise ValueError(f"Unknown format: {fmt!r}")
 
 
 def record_task_errors(
@@ -296,6 +329,7 @@ __all__ = [
     "BatchTask",
     "BatchTaskStat",
     "build_task_executor",
+    "format_task_reports",
     "record_task_errors",
     "resolve_task_result",
     "task_report_columns",
