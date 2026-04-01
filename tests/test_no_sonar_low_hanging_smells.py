@@ -1794,18 +1794,17 @@ def test_torch_local_catalog_source_extracts_variant_registration_helpers() -> N
 def test_run_benchmarks_source_extracts_benchmark_case_helpers() -> None:
     source = _read_repo_file("benchmarks/run_benchmarks.py")
 
-    assert "def _get_cached_module(" in source
     assert "def _benchmark_dataset_case_fields(" in source
     assert "def _benchmark_result_row(" in source
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
         "_get_cli_shared_module",
-        "_get_cached_module",
+        "get_cached_module",
     )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
         "_get_batch_execution_module",
-        "_get_cached_module",
+        "get_cached_module",
     )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
@@ -1991,7 +1990,6 @@ def test_cli_catalog_source_extracts_models_search_helpers() -> None:
 def test_cli_leaderboard_source_extracts_parallel_task_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_leaderboard.py")
 
-    assert "def _get_cached_module(" in source
     assert "def _get_batch_execution_module(" in source
     assert "def _parallel_task_label(" in source
     assert "def _record_parallel_task_errors(" in source
@@ -2001,7 +1999,7 @@ def test_cli_leaderboard_source_extracts_parallel_task_helpers() -> None:
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",
         "_get_batch_execution_module",
-        "_get_cached_module",
+        "get_cached_module",
     )
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",
