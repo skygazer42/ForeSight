@@ -90,3 +90,14 @@ def test_emit_table_formats_prints_and_writes(
     captured = capsys.readouterr()
     assert captured.out == "| ok |\n"
     assert out.read_text(encoding="utf-8") == "| ok |\n"
+
+
+def test_write_lines_joins_with_trailing_newline(tmp_path: Path) -> None:
+    out = tmp_path / "lines.txt"
+
+    _cli_shared._write_lines(
+        ["first", "second"],
+        output=str(out),
+    )
+
+    assert out.read_text(encoding="utf-8") == "first\nsecond\n"

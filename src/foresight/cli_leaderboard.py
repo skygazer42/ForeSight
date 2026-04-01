@@ -1213,7 +1213,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
         ):
             failures_output = str(getattr(args, "failures_output", "")).strip()
             if failures_output:
-                _cli_shared._write_output("\n".join(failure_lines), output=failures_output)
+                _cli_shared._write_lines(failure_lines, output=failures_output)
 
             _write_leaderboard_sweep_summary(args, final_rows)
             _write_leaderboard_sweep_task_reports(args, task_stats)
