@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -132,13 +133,17 @@ def _write_output(text: str, *, output: str) -> None:
 
 
 def _write_lines(lines: list[str], *, output: str) -> str:
-    text = _lines_text(lines)
-    _write_output(text, output=output)
-    return text
+    return _write_rendered(lambda: _lines_text(lines), output=output)
 
 
 def _lines_text(lines: list[str]) -> str:
     return "\n".join(str(line) for line in lines)
+
+
+def _write_rendered(render: Callable[[], str], *, output: str) -> str:
+    text = render()
+    _write_output(text, output=output)
+    return text
 
 
 def _print_and_write(text: str, *, output: str) -> str:
@@ -147,8 +152,12 @@ def _print_and_write(text: str, *, output: str) -> str:
     return text
 
 
+def _emit_rendered(render: Callable[[], str], *, output: str) -> None:
+    _print_and_write(render(), output=output)
+
+
 def _emit_text(text: str, *, output: str) -> None:
-    _print_and_write(text, output=output)
+    _emit_rendered(lambda: text, output=output)
 
 
 def _emit_dataframe(df: Any, *, output: str, fmt: str) -> None:
@@ -164,8 +173,7 @@ def _emit_dataframe(df: Any, *, output: str, fmt: str) -> None:
 
 
 def _emit(payload: object, *, output: str, fmt: str) -> None:
-    text = _format_payload(payload, fmt=fmt)
-    _print_and_write(text, output=output)
+    _emit_rendered(lambda: _format_payload(payload, fmt=fmt), output=output)
 
 
 def _coerce_row_payload(payload: object, *, fmt: str) -> list[dict]:
@@ -216,14 +224,14 @@ def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> s
 
 
 def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
-    text = _table_text(rows, columns=columns, fmt=fmt)
-    _print_and_write(text, output=output)
+    _emit_rendered(lambda: _table_text(rows, columns=columns, fmt=fmt), output=output)
 
 
 def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> str:
-    text = _table_text(rows, columns=columns, fmt=fmt)
-    _write_output(text, output=output)
-    return text
+    return _write_rendered(
+        lambda: _table_text(rows, columns=columns, fmt=fmt),
+        output=output,
+    )
 
 
 def _table_text(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:

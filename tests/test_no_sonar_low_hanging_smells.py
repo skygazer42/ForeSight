@@ -2059,6 +2059,33 @@ def test_cli_shared_source_extracts_table_text_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_rendered_output_helpers() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _write_rendered(" in source
+    assert "def _emit_rendered(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_write_lines",
+        "_write_rendered",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_write_table",
+        "_write_rendered",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_emit",
+        "_emit_rendered",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_emit_table",
+        "_emit_rendered",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 

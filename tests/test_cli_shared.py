@@ -23,6 +23,49 @@ def test_write_output_writes_nested_text_file(tmp_path: Path) -> None:
     assert out_file.read_text(encoding="utf-8") == '{"ok": true}\n'
 
 
+def test_write_rendered_writes_formatted_text_and_returns_it(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    written: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        _cli_shared,
+        "_write_output",
+        lambda text, *, output: written.append((text, output)),
+    )
+
+    text = _cli_shared._write_rendered(lambda: "joined", output="out.txt")
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert text == "joined"
+    assert written == [("joined", "out.txt")]
+
+
+def test_emit_rendered_formats_once_then_prints_and_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[tuple[str, str]] = []
+    render_calls = 0
+
+    def _render() -> str:
+        nonlocal render_calls
+        render_calls += 1
+        return "payload"
+
+    monkeypatch.setattr(
+        _cli_shared,
+        "_print_and_write",
+        lambda text, *, output: emitted.append((text, output)) or text,
+    )
+
+    _cli_shared._emit_rendered(_render, output="report.txt")
+
+    assert render_calls == 1
+    assert emitted == [("payload", "report.txt")]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")
