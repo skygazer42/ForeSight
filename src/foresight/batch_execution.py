@@ -257,8 +257,11 @@ def run_batch_tasks_sequential(
     for i, task in enumerate(tasks, start=1):
         started = time.perf_counter()
         try:
-            rows, errors = worker(*task.task_args, *worker_args)
-            elapsed_seconds = float(time.perf_counter() - started)
+            rows, errors, elapsed_seconds = _run_timed_task(
+                worker,
+                task.task_args,
+                worker_args,
+            )
             task_failures = record_task_errors(errors, errors_out=errors_out)
             out.extend(rows)
             failures += task_failures

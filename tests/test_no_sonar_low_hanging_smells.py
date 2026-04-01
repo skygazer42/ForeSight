@@ -2059,6 +2059,17 @@ def test_cli_shared_source_extracts_table_text_helper() -> None:
     )
 
 
+def test_batch_execution_source_extracts_timed_task_helper() -> None:
+    source = _read_repo_file("src/foresight/batch_execution.py")
+
+    assert "def _run_timed_task(" in source
+    assert _function_uses_name(
+        "src/foresight/batch_execution.py",
+        "run_batch_tasks_sequential",
+        "_run_timed_task",
+    )
+
+
 def test_cli_leaderboard_source_extracts_sweep_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_leaderboard.py")
 
