@@ -209,6 +209,12 @@ def test_parse_param_assignment_reuses_grid_param_error_message() -> None:
         )
 
 
+def test_json_text_sorts_keys_and_preserves_unicode() -> None:
+    text = _cli_shared._json_text({"b": 1, "a": "中"})
+
+    assert text == '{"a": "中", "b": 1}'
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")

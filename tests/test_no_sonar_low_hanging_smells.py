@@ -2145,6 +2145,22 @@ def test_cli_shared_source_extracts_param_assignment_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_json_text_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _json_text(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_payload",
+        "_json_text",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_rows",
+        "_json_text",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 
