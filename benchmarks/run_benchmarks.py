@@ -347,9 +347,7 @@ def _resolve_benchmark_chunk_size(
     model_count: int,
     jobs: int,
 ) -> int:
-    from foresight.batch_execution import resolve_auto_chunk_size
-
-    return resolve_auto_chunk_size(
+    return _get_batch_execution_module().resolve_auto_chunk_size(
         raw_chunk_size,
         dataset_count=dataset_count,
         model_count=model_count,

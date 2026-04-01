@@ -436,6 +436,16 @@ def test_run_benchmark_suite_uses_shared_batch_module_for_task_reports(
 
     class _FakeBatchExecution:
         @staticmethod
+        def resolve_auto_chunk_size(
+            raw_chunk_size: object,
+            *,
+            dataset_count: int,
+            model_count: int,
+            jobs: int,
+        ) -> int:
+            return int(raw_chunk_size)
+
+        @staticmethod
         def run_batch_tasks(*args: object, **kwargs: object) -> tuple[list[dict[str, Any]], int]:
             return (
                 [

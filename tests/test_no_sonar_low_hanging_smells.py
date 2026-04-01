@@ -1808,6 +1808,11 @@ def test_run_benchmarks_source_extracts_benchmark_case_helpers() -> None:
     )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
+        "_resolve_benchmark_chunk_size",
+        "_get_batch_execution_module",
+    )
+    assert _function_uses_name(
+        "benchmarks/run_benchmarks.py",
         "run_benchmark_suite",
         "_benchmark_dataset_case_fields",
     )
