@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, TextIO
 
 
@@ -40,6 +40,40 @@ def _coerce_timed_task_result(
         rows, errors = result
         return list(rows), list(errors), 0.0
     raise TypeError("task result must be (rows, errors) or (rows, errors, elapsed_seconds)")
+
+
+def task_report_columns() -> list[str]:
+    return [
+        "task_scope",
+        "dataset",
+        "model_count",
+        "requested_chunk_size",
+        "resolved_chunk_size",
+        "backend",
+        "jobs",
+        "chunk_size",
+        "label",
+        "elapsed_seconds",
+        "row_count",
+        "failure_count",
+    ]
+
+
+def task_report_rows(
+    stats: list[BatchTaskStat],
+    *,
+    backend: str,
+    jobs: int,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            **asdict(stat),
+            "backend": str(backend),
+            "jobs": int(jobs),
+            "chunk_size": int(stat.resolved_chunk_size),
+        }
+        for stat in stats
+    ]
 
 
 def record_task_errors(
@@ -256,6 +290,8 @@ __all__ = [
     "build_task_executor",
     "record_task_errors",
     "resolve_task_result",
+    "task_report_columns",
+    "task_report_rows",
     "run_batch_tasks",
     "run_batch_tasks_sequential",
 ]

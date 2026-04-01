@@ -8,7 +8,6 @@ import math
 import statistics
 import sys
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +30,12 @@ from .batch_execution import (
 )
 from .batch_execution import (
     run_batch_tasks_sequential as _shared_run_batch_tasks_sequential,
+)
+from .batch_execution import (
+    task_report_columns as _shared_task_report_columns,
+)
+from .batch_execution import (
+    task_report_rows as _shared_task_report_rows,
 )
 from .dataset_long_df_cache import get_or_build_dataset_long_df
 
@@ -1122,20 +1127,7 @@ def _write_leaderboard_sweep_summary(
 
 
 def _leaderboard_task_report_columns() -> list[str]:
-    return [
-        "task_scope",
-        "dataset",
-        "model_count",
-        "requested_chunk_size",
-        "resolved_chunk_size",
-        "backend",
-        "jobs",
-        "chunk_size",
-        "label",
-        "elapsed_seconds",
-        "row_count",
-        "failure_count",
-    ]
+    return _shared_task_report_columns()
 
 
 def _write_leaderboard_sweep_task_reports(
@@ -1242,15 +1234,11 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
             )
 
         final_rows = _merge_leaderboard_sweep_rows(resume_rows, rows)
-        task_reports = [
-            {
-                **asdict(stat),
-                "backend": str(args.backend),
-                "jobs": int(args.jobs),
-                "chunk_size": int(stat.resolved_chunk_size),
-            }
-            for stat in task_stats
-        ]
+        task_reports = _shared_task_report_rows(
+            task_stats,
+            backend=str(args.backend),
+            jobs=int(args.jobs),
+        )
 
         with _cli_runtime.phase_scope(
             "emit",

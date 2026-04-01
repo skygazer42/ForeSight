@@ -355,6 +355,10 @@ def test_production_benchmark_suite_reports_stage_profile_metrics() -> None:
     assert payload["summary"]
     assert payload["task_reports"]
     assert all("label" in row for row in payload["task_reports"])
+    assert all("task_scope" in row for row in payload["task_reports"])
+    assert all("backend" in row for row in payload["task_reports"])
+    assert all("jobs" in row for row in payload["task_reports"])
+    assert all("chunk_size" in row for row in payload["task_reports"])
     assert all("row_count" in row for row in payload["task_reports"])
     assert all("failure_count" in row for row in payload["task_reports"])
     assert all("elapsed_seconds" in row for row in payload["task_reports"])

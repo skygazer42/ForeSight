@@ -11,7 +11,6 @@ import sys
 import time
 import tracemalloc
 from collections import defaultdict
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -528,20 +527,9 @@ def _format_summary(
 
 
 def _task_report_columns() -> list[str]:
-    return [
-        "task_scope",
-        "dataset",
-        "model_count",
-        "requested_chunk_size",
-        "resolved_chunk_size",
-        "backend",
-        "jobs",
-        "chunk_size",
-        "label",
-        "elapsed_seconds",
-        "row_count",
-        "failure_count",
-    ]
+    from foresight.batch_execution import task_report_columns
+
+    return task_report_columns()
 
 
 def _format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
@@ -814,7 +802,7 @@ def run_benchmark_suite(
     root = _repo_root()
     _ensure_src_on_path(root)
 
-    from foresight.batch_execution import BatchTaskStat, run_batch_tasks
+    from foresight.batch_execution import BatchTaskStat, run_batch_tasks, task_report_rows
 
     all_config = _load_benchmark_config()
     if config_name not in all_config:
@@ -908,7 +896,11 @@ def run_benchmark_suite(
         "datasets": [str(item["dataset_key"]) for item in dataset_fields_list],
         "models": [str(item["key"]) for item in models],
         "rows": rows,
-        "task_reports": [asdict(stat) for stat in task_stats],
+        "task_reports": task_report_rows(
+            task_stats,
+            backend=backend_s,
+            jobs=int(jobs),
+        ),
         "summary": summary,
         "conformal_levels": conformal_levels,
     }
@@ -1017,24 +1009,8 @@ def main(argv: list[str] | None = None) -> int:
         out_path.write_text(text + "\n", encoding="utf-8")
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
-        task_report_rows = [
-            {
-                **row,
-                "backend": str(payload.get("backend", "")),
-                "jobs": int(payload.get("jobs", 0) or 0),
-                "chunk_size": int(payload.get("chunk_size", 0) or 0),
-            }
-            for row in list(payload.get("task_reports", []))
-        ]
         task_reports_text = _format_task_reports(
-            [
-                {
-                    **row,
-                    "requested_chunk_size": str(args.chunk_size),
-                    "resolved_chunk_size": int(payload.get("chunk_size", 0) or 0),
-                }
-                for row in task_report_rows
-            ],
+            list(payload.get("task_reports", [])),
             fmt=str(args.task_reports_format),
         )
         out_path = Path(task_reports_output)
