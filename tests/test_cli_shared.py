@@ -215,6 +215,12 @@ def test_json_text_sorts_keys_and_preserves_unicode() -> None:
     assert text == '{"a": "中", "b": 1}'
 
 
+def test_markdown_cell_text_formats_supported_value_types() -> None:
+    assert _cli_shared._markdown_cell_text(None) == ""
+    assert _cli_shared._markdown_cell_text(12.3456789) == "12.3457"
+    assert _cli_shared._markdown_cell_text(7) == "7"
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")

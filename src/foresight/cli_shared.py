@@ -228,18 +228,21 @@ def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
 
 def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> str:
     cols = _resolved_columns(columns)
-
-    def _fmt(v: object) -> str:
-        if v is None:
-            return ""
-        if isinstance(v, float):
-            return f"{v:.6g}"
-        return str(v)
-
     header = "| " + " | ".join(cols) + " |"
     sep = "| " + " | ".join(["---"] * len(cols)) + " |"
-    body = ["| " + " | ".join(_fmt(row.get(k, "")) for k in cols) + " |" for row in rows]
+    body = [
+        "| " + " | ".join(_markdown_cell_text(row.get(k, "")) for k in cols) + " |"
+        for row in rows
+    ]
     return "\n".join([header, sep, *body])
+
+
+def _markdown_cell_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
 
 
 def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:

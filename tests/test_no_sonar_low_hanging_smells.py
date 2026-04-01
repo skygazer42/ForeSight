@@ -2161,6 +2161,17 @@ def test_cli_shared_source_extracts_json_text_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_markdown_cell_text_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _markdown_cell_text(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_markdown",
+        "_markdown_cell_text",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 
