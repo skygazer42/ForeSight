@@ -31,15 +31,15 @@ def _ensure_src_on_path(root: Path) -> None:
 
 
 def _get_cli_shared_module() -> Any:
-    from foresight.module_cache import get_cached_module
+    from foresight.module_cache import get_cli_shared_module
 
-    return get_cached_module(globals(), "_cli_shared", ".cli_shared", "foresight")
+    return get_cli_shared_module(globals(), "foresight")
 
 
 def _get_batch_execution_module() -> Any:
-    from foresight.module_cache import get_cached_module
+    from foresight.module_cache import get_batch_execution_module
 
-    return get_cached_module(globals(), "_batch_execution", ".batch_execution", "foresight")
+    return get_batch_execution_module(globals(), "foresight")
 
 
 def _load_benchmark_config(path: Path | None = None) -> dict[str, Any]:

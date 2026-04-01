@@ -1799,12 +1799,12 @@ def test_run_benchmarks_source_extracts_benchmark_case_helpers() -> None:
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
         "_get_cli_shared_module",
-        "get_cached_module",
+        "get_cli_shared_module",
     )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
         "_get_batch_execution_module",
-        "get_cached_module",
+        "get_batch_execution_module",
     )
     assert _function_uses_name(
         "benchmarks/run_benchmarks.py",
@@ -2004,7 +2004,7 @@ def test_cli_leaderboard_source_extracts_parallel_task_helpers() -> None:
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",
         "_get_batch_execution_module",
-        "get_cached_module",
+        "get_batch_execution_module",
     )
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",

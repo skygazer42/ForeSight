@@ -19,4 +19,16 @@ def get_cached_module(
     return module
 
 
-__all__ = ["get_cached_module"]
+def get_cli_shared_module(namespace: dict[str, Any], package: str) -> Any:
+    return get_cached_module(namespace, "_cli_shared", ".cli_shared", package)
+
+
+def get_batch_execution_module(namespace: dict[str, Any], package: str) -> Any:
+    return get_cached_module(namespace, "_batch_execution", ".batch_execution", package)
+
+
+__all__ = [
+    "get_batch_execution_module",
+    "get_cached_module",
+    "get_cli_shared_module",
+]

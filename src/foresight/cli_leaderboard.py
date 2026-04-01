@@ -25,9 +25,9 @@ _batch_execution: Any | None = None
 
 
 def _get_batch_execution_module() -> Any:
-    from .module_cache import get_cached_module
+    from .module_cache import get_batch_execution_module
 
-    return get_cached_module(globals(), "_batch_execution", ".batch_execution", __package__)
+    return get_batch_execution_module(globals(), __package__)
 
 
 def _log_payload(**kwargs: Any) -> dict[str, Any]:

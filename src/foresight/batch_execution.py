@@ -10,9 +10,9 @@ _cli_shared: Any | None = None
 
 
 def _get_cli_shared_module() -> Any:
-    from .module_cache import get_cached_module
+    from .module_cache import get_cli_shared_module
 
-    return get_cached_module(globals(), "_cli_shared", ".cli_shared", __package__)
+    return get_cli_shared_module(globals(), __package__)
 
 
 @dataclass(frozen=True)
