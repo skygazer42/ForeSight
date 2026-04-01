@@ -207,9 +207,10 @@ def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, 
     _write_output(text, output=output)
 
 
-def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
+def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> str:
     text = _format_table(rows, columns=columns, fmt=fmt)
     _write_output(text, output=output)
+    return text
 
 
 def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:

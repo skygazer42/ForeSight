@@ -54,7 +54,7 @@ def test_write_table_formats_and_writes_without_printing(
         lambda rows, *, columns, fmt: '{"ok": true}',
     )
 
-    _cli_shared._write_table(
+    text = _cli_shared._write_table(
         [{"a": 1}],
         columns=["a"],
         output=str(out),
@@ -63,4 +63,5 @@ def test_write_table_formats_and_writes_without_printing(
 
     captured = capsys.readouterr()
     assert captured.out == ""
+    assert text == '{"ok": true}'
     assert out.read_text(encoding="utf-8") == '{"ok": true}\n'
