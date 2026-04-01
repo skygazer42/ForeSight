@@ -1004,13 +1004,13 @@ def main(argv: list[str] | None = None) -> int:
         out_path.write_text(text + "\n", encoding="utf-8")
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
-        task_reports_text = _format_task_reports(
+        from foresight.batch_execution import write_task_reports
+
+        write_task_reports(
             list(payload.get("task_reports", [])),
             fmt=str(args.task_reports_format),
+            output=task_reports_output,
         )
-        out_path = Path(task_reports_output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(task_reports_text + "\n", encoding="utf-8")
     budget_findings = list(
         payload.get(
             "budget_findings",

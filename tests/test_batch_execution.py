@@ -264,3 +264,30 @@ def test_format_task_reports_supports_json_csv_and_markdown() -> None:
     assert '"task_scope": "benchmark"' in json_text
     assert csv_text.splitlines()[0].startswith("task_scope,dataset,model_count,")
     assert "| task_scope | dataset | model_count |" in md_text
+
+
+def test_write_task_reports_formats_and_writes_output(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_batch_execution_module(repo_root)
+    rows = [
+        {
+            "task_scope": "benchmark",
+            "dataset": "catfish",
+            "model_count": 3,
+            "requested_chunk_size": "auto",
+            "resolved_chunk_size": 0,
+            "backend": "thread",
+            "jobs": 2,
+            "chunk_size": 0,
+            "label": "catfish/[3 models]",
+            "elapsed_seconds": 0.5,
+            "row_count": 3,
+            "failure_count": 0,
+        }
+    ]
+    out = tmp_path / "task-reports.md"
+
+    text = mod.write_task_reports(rows, fmt="md", output=str(out))
+
+    assert "| task_scope | dataset | model_count |" in text
+    assert out.read_text(encoding="utf-8") == text + "\n"

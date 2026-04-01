@@ -6,6 +6,7 @@ import json
 import sys
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, TextIO
 
 
@@ -115,6 +116,16 @@ def format_task_reports(rows: list[dict[str, Any]], *, fmt: str) -> str:
         ]
         return "\n".join([header, sep, *body])
     raise ValueError(f"Unknown format: {fmt!r}")
+
+
+def write_task_reports(rows: list[dict[str, Any]], *, fmt: str, output: str) -> str:
+    text = format_task_reports(rows, fmt=fmt)
+    out_s = str(output).strip()
+    if out_s:
+        out_path = Path(out_s)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text + "\n", encoding="utf-8")
+    return text
 
 
 def record_task_errors(
@@ -334,6 +345,7 @@ __all__ = [
     "resolve_task_result",
     "task_report_columns",
     "task_report_rows",
+    "write_task_reports",
     "run_batch_tasks",
     "run_batch_tasks_sequential",
 ]

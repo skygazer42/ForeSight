@@ -23,9 +23,6 @@ from .batch_execution import (
     build_task_executor as _shared_build_task_executor,
 )
 from .batch_execution import (
-    format_task_reports as _shared_format_task_reports,
-)
-from .batch_execution import (
     record_task_errors as _shared_record_task_errors,
 )
 from .batch_execution import (
@@ -39,6 +36,9 @@ from .batch_execution import (
 )
 from .batch_execution import (
     task_report_rows as _shared_task_report_rows,
+)
+from .batch_execution import (
+    write_task_reports as _shared_write_task_reports,
 )
 from .dataset_long_df_cache import get_or_build_dataset_long_df
 
@@ -1142,8 +1142,11 @@ def _write_leaderboard_sweep_task_reports(
         return
 
     task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
-    text = _shared_format_task_reports(task_reports, fmt=task_reports_format)
-    _cli_shared._write_output(text, output=task_reports_output)
+    _shared_write_task_reports(
+        task_reports,
+        fmt=task_reports_format,
+        output=task_reports_output,
+    )
 
 
 def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
