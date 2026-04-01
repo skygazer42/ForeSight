@@ -395,6 +395,84 @@ def test_benchmark_main_writes_task_reports_with_shared_batch_helper(
     assert emitted == [(str(out), "json")]
 
 
+def test_run_benchmark_suite_uses_shared_batch_module_for_task_reports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    def _fake_load_benchmark_config(path: Path | None = None) -> dict[str, Any]:
+        return {
+            "smoke": {
+                "description": "fake",
+                "task_group": "point",
+                "workload": "panel_cv",
+                "scale": "tiny",
+                "profiling": False,
+                "datasets": [
+                    {
+                        "key": "catfish",
+                        "y_col": "Total",
+                        "horizon": 3,
+                        "step": 3,
+                        "min_train_size": 12,
+                        "max_windows": 2,
+                    }
+                ],
+                "models": [{"key": "naive-last", "params": {}}],
+            }
+        }
+
+    def _fake_build_benchmark_tasks(**kwargs: Any) -> list[object]:
+        return ["task"]
+
+    def _fake_summarize_rows(
+        rows: list[dict[str, Any]],
+        *,
+        conformal_levels: list[int],
+        include_profile: bool,
+    ) -> list[dict[str, Any]]:
+        return [{"model": "naive-last"}]
+
+    class _FakeBatchExecution:
+        @staticmethod
+        def run_batch_tasks(*args: object, **kwargs: object) -> tuple[list[dict[str, Any]], int]:
+            return (
+                [
+                    {
+                        "dataset": "catfish",
+                        "model": "naive-last",
+                        "status": "ok",
+                        "task_group": "point",
+                        "backend_family": "core",
+                        "n_points": 3,
+                        "mae": 1.0,
+                        "rmse": 1.0,
+                        "mape": 0.1,
+                        "smape": 0.2,
+                        "cv_seconds": 0.5,
+                    }
+                ],
+                0,
+            )
+
+        @staticmethod
+        def task_report_rows(stats: list[object], *, backend: str, jobs: int) -> list[dict[str, Any]]:
+            assert backend == "process"
+            assert jobs == 1
+            return [{"label": "sentinel"}]
+
+    monkeypatch.setattr(mod, "_load_benchmark_config", _fake_load_benchmark_config)
+    monkeypatch.setattr(mod, "_build_benchmark_tasks", _fake_build_benchmark_tasks)
+    monkeypatch.setattr(mod, "_summarize_rows", _fake_summarize_rows)
+    monkeypatch.setattr(mod, "_benchmark_budget_findings", lambda *args, **kwargs: [])
+    monkeypatch.setattr(mod, "_get_batch_execution_module", lambda: _FakeBatchExecution())
+
+    payload = mod.run_benchmark_suite(config_name="smoke")  # type: ignore[attr-defined]
+
+    assert payload["task_reports"] == [{"label": "sentinel"}]
+
+
 def test_benchmark_main_budget_mode_fail_returns_nonzero_on_budget_regression(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

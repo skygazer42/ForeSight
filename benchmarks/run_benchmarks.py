@@ -752,7 +752,7 @@ def run_benchmark_suite(
     root = _repo_root()
     _ensure_src_on_path(root)
 
-    from foresight.batch_execution import BatchTaskStat, run_batch_tasks, task_report_rows
+    batch_execution = _get_batch_execution_module()
 
     all_config = _load_benchmark_config()
     if config_name not in all_config:
@@ -793,7 +793,7 @@ def run_benchmark_suite(
     conformal_levels = [int(float(level)) for level in config.get("conformal_levels", [])]
     conformal_per_step = bool(config.get("conformal_per_step", False))
     benchmark_row_builder = _benchmark_result_row
-    task_stats: list[BatchTaskStat] = []
+    task_stats: list[Any] = []
 
     tasks = _build_benchmark_tasks(
         dataset_fields_list=dataset_fields_list,
@@ -801,7 +801,7 @@ def run_benchmark_suite(
         requested_chunk_size=chunk_size,
         chunk_size=resolved_chunk_size,
     )
-    rows, failures = run_batch_tasks(
+    rows, failures = batch_execution.run_batch_tasks(
         tasks,
         jobs=int(jobs),
         backend=backend_s,
@@ -846,7 +846,7 @@ def run_benchmark_suite(
         "datasets": [str(item["dataset_key"]) for item in dataset_fields_list],
         "models": [str(item["key"]) for item in models],
         "rows": rows,
-        "task_reports": task_report_rows(
+        "task_reports": batch_execution.task_report_rows(
             task_stats,
             backend=backend_s,
             jobs=int(jobs),
