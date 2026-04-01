@@ -2043,6 +2043,22 @@ def test_cli_leaderboard_source_extracts_parallel_task_helpers() -> None:
     )
 
 
+def test_cli_shared_source_extracts_table_text_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _table_text(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_emit_table",
+        "_table_text",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_write_table",
+        "_table_text",
+    )
+
+
 def test_cli_leaderboard_source_extracts_sweep_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_leaderboard.py")
 

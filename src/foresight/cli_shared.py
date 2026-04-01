@@ -206,14 +206,18 @@ def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> s
 
 
 def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
-    text = _format_table(rows, columns=columns, fmt=fmt)
+    text = _table_text(rows, columns=columns, fmt=fmt)
     _print_and_write(text, output=output)
 
 
 def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> str:
-    text = _format_table(rows, columns=columns, fmt=fmt)
+    text = _table_text(rows, columns=columns, fmt=fmt)
     _write_output(text, output=output)
     return text
+
+
+def _table_text(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+    return _format_table(rows, columns=columns, fmt=fmt)
 
 
 def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
