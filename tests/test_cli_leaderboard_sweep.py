@@ -166,6 +166,8 @@ def test_build_leaderboard_sweep_tasks_returns_batch_tasks() -> None:
             task_scope="leaderboard_sweep",
             dataset="catfish",
             model_count=1,
+            requested_chunk_size="0",
+            resolved_chunk_size=0,
         ),
         BatchTask(
             label="ice_cream_interest/[2 models]",
@@ -173,6 +175,8 @@ def test_build_leaderboard_sweep_tasks_returns_batch_tasks() -> None:
             task_scope="leaderboard_sweep",
             dataset="ice_cream_interest",
             model_count=2,
+            requested_chunk_size="0",
+            resolved_chunk_size=0,
         ),
     ]
 
@@ -523,6 +527,9 @@ def test_leaderboard_sweep_writes_task_reports_output(tmp_path: Path) -> None:
     assert {row["task_scope"] for row in payload} == {"leaderboard_sweep"}
     assert {row["backend"] for row in payload} == {"thread"}
     assert {int(row["jobs"]) for row in payload} == {2}
+    assert {row["requested_chunk_size"] for row in payload} == {"auto"}
+    assert {int(row["resolved_chunk_size"]) for row in payload} == {0}
+    assert {int(row["chunk_size"]) for row in payload} == {0}
     assert {row["dataset"] for row in payload} == {"catfish", "ice_cream_interest"}
     assert {int(row["model_count"]) for row in payload} == {2}
     assert {int(row["row_count"]) for row in payload} == {2}

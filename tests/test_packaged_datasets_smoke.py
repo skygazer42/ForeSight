@@ -277,6 +277,8 @@ def test_benchmark_smoke_runner_writes_task_reports_output(tmp_path: Path) -> No
     assert {row["task_scope"] for row in payload} == {"benchmark"}
     assert {row["backend"] for row in payload} == {"thread"}
     assert {int(row["jobs"]) for row in payload} == {2}
+    assert {row["requested_chunk_size"] for row in payload} == {"auto"}
+    assert {int(row["resolved_chunk_size"]) for row in payload} == {0}
     assert {int(row["chunk_size"]) for row in payload} == {0}
     assert {row["dataset"] for row in payload} == {"catfish", "ice_cream_interest"}
     assert {int(row["model_count"]) for row in payload} == {3}

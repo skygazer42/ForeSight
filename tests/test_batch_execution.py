@@ -129,6 +129,8 @@ def test_run_batch_tasks_can_collect_task_stats() -> None:
                 task_scope="leaderboard_sweep",
                 dataset="catfish",
                 model_count=2,
+                requested_chunk_size="auto",
+                resolved_chunk_size=2,
             ),
             mod.BatchTask(
                 label="ice_cream_interest/naive-last",
@@ -136,6 +138,8 @@ def test_run_batch_tasks_can_collect_task_stats() -> None:
                 task_scope="leaderboard_sweep",
                 dataset="ice_cream_interest",
                 model_count=1,
+                requested_chunk_size="auto",
+                resolved_chunk_size=2,
             ),
         ],
         jobs=1,
@@ -161,6 +165,8 @@ def test_run_batch_tasks_can_collect_task_stats() -> None:
         "ice_cream_interest",
     ]
     assert [stat.model_count for stat in stats_out] == [2, 1]
+    assert [stat.requested_chunk_size for stat in stats_out] == ["auto", "auto"]
+    assert [stat.resolved_chunk_size for stat in stats_out] == [2, 2]
     assert [stat.row_count for stat in stats_out] == [2, 1]
     assert [stat.failure_count for stat in stats_out] == [1, 0]
     assert all(float(stat.elapsed_seconds) >= 0.0 for stat in stats_out)

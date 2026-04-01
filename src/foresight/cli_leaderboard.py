@@ -1009,6 +1009,8 @@ def _build_leaderboard_sweep_tasks(
                     task_scope="leaderboard_sweep",
                     dataset=str(dataset),
                     model_count=len(model_keys),
+                    requested_chunk_size=str(chunk_size),
+                    resolved_chunk_size=int(effective_chunk_size),
                 )
             )
             continue
@@ -1022,6 +1024,8 @@ def _build_leaderboard_sweep_tasks(
                         task_scope="leaderboard_sweep",
                         dataset=str(dataset),
                         model_count=len(chunk),
+                        requested_chunk_size=str(chunk_size),
+                        resolved_chunk_size=int(effective_chunk_size),
                     )
                 )
     return tasks
@@ -1122,6 +1126,8 @@ def _leaderboard_task_report_columns() -> list[str]:
         "task_scope",
         "dataset",
         "model_count",
+        "requested_chunk_size",
+        "resolved_chunk_size",
         "backend",
         "jobs",
         "chunk_size",
@@ -1241,7 +1247,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 **asdict(stat),
                 "backend": str(args.backend),
                 "jobs": int(args.jobs),
-                "chunk_size": str(args.chunk_size),
+                "chunk_size": int(stat.resolved_chunk_size),
             }
             for stat in task_stats
         ]
@@ -2017,6 +2023,8 @@ def _run_parallel_tasks(
                         task_scope=str(task.task_scope),
                         dataset=str(task.dataset),
                         model_count=int(task.model_count),
+                        requested_chunk_size=str(task.requested_chunk_size),
+                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
             done += 1

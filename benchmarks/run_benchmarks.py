@@ -358,6 +358,7 @@ def _build_benchmark_tasks(
     *,
     dataset_fields_list: list[dict[str, int | str]],
     model_cases: list[dict[str, Any]],
+    requested_chunk_size: object,
     chunk_size: int,
 ) -> list[Any]:
     from foresight.batch_execution import BatchTask
@@ -372,6 +373,8 @@ def _build_benchmark_tasks(
                     task_scope="benchmark",
                     dataset=str(dataset_fields["dataset_key"]),
                     model_count=len(chunk),
+                    requested_chunk_size=str(requested_chunk_size),
+                    resolved_chunk_size=int(chunk_size),
                 )
             )
     return tasks
@@ -529,6 +532,8 @@ def _task_report_columns() -> list[str]:
         "task_scope",
         "dataset",
         "model_count",
+        "requested_chunk_size",
+        "resolved_chunk_size",
         "backend",
         "jobs",
         "chunk_size",
@@ -855,6 +860,7 @@ def run_benchmark_suite(
     tasks = _build_benchmark_tasks(
         dataset_fields_list=dataset_fields_list,
         model_cases=[dict(case) for case in models],
+        requested_chunk_size=chunk_size,
         chunk_size=resolved_chunk_size,
     )
     rows, failures = run_batch_tasks(
@@ -1021,7 +1027,14 @@ def main(argv: list[str] | None = None) -> int:
             for row in list(payload.get("task_reports", []))
         ]
         task_reports_text = _format_task_reports(
-            task_report_rows,
+            [
+                {
+                    **row,
+                    "requested_chunk_size": str(args.chunk_size),
+                    "resolved_chunk_size": int(payload.get("chunk_size", 0) or 0),
+                }
+                for row in task_report_rows
+            ],
             fmt=str(args.task_reports_format),
         )
         out_path = Path(task_reports_output)

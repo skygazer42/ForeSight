@@ -13,6 +13,8 @@ class BatchTask:
     task_scope: str = ""
     dataset: str = ""
     model_count: int = 0
+    requested_chunk_size: str = ""
+    resolved_chunk_size: int = 0
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,8 @@ class BatchTaskStat:
     task_scope: str = ""
     dataset: str = ""
     model_count: int = 0
+    requested_chunk_size: str = ""
+    resolved_chunk_size: int = 0
 
 
 def _coerce_timed_task_result(
@@ -137,6 +141,8 @@ def run_batch_tasks_sequential(
                         task_scope=str(task.task_scope),
                         dataset=str(task.dataset),
                         model_count=int(task.model_count),
+                        requested_chunk_size=str(task.requested_chunk_size),
+                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
         except Exception as e:  # noqa: BLE001
@@ -158,6 +164,8 @@ def run_batch_tasks_sequential(
                         task_scope=str(task.task_scope),
                         dataset=str(task.dataset),
                         model_count=int(task.model_count),
+                        requested_chunk_size=str(task.requested_chunk_size),
+                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
         if progress:
@@ -229,6 +237,8 @@ def run_batch_tasks(
                         task_scope=str(task.task_scope),
                         dataset=str(task.dataset),
                         model_count=int(task.model_count),
+                        requested_chunk_size=str(task.requested_chunk_size),
+                        resolved_chunk_size=int(task.resolved_chunk_size),
                     )
                 )
             done += 1
