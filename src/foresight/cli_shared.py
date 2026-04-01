@@ -87,15 +87,31 @@ def _coerce_model_param_value(raw: str) -> Any:
     return s
 
 
+def _parse_param_assignment(
+    item: object,
+    *,
+    option: str,
+    value_spec: str,
+) -> tuple[str, str]:
+    raw = str(item)
+    message = f"{option} must be {value_spec}, got: {item!r}"
+    if "=" not in raw:
+        raise ValueError(message)
+    key, value = raw.split("=", 1)
+    key = key.strip()
+    if not key:
+        raise ValueError(message)
+    return key, value
+
+
 def _parse_model_params(items: list[str]) -> dict[str, Any]:
     params: dict[str, Any] = {}
     for item in items:
-        if "=" not in str(item):
-            raise ValueError(f"--model-param must be key=value, got: {item!r}")
-        key, value = str(item).split("=", 1)
-        key = key.strip()
-        if not key:
-            raise ValueError(f"--model-param must be key=value, got: {item!r}")
+        key, value = _parse_param_assignment(
+            item,
+            option="--model-param",
+            value_spec="key=value",
+        )
         params[key] = _coerce_model_param_value(value)
     return params
 
@@ -103,12 +119,11 @@ def _parse_model_params(items: list[str]) -> dict[str, Any]:
 def _parse_grid_params(items: list[str]) -> dict[str, tuple[Any, ...]]:
     params: dict[str, tuple[Any, ...]] = {}
     for item in items:
-        if "=" not in str(item):
-            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
-        key, value = str(item).split("=", 1)
-        key = key.strip()
-        if not key:
-            raise ValueError(f"--grid-param must be key=v1,v2,..., got: {item!r}")
+        key, value = _parse_param_assignment(
+            item,
+            option="--grid-param",
+            value_spec="key=v1,v2,...",
+        )
         parsed = _coerce_model_param_value(value)
         if isinstance(parsed, tuple):
             values = parsed

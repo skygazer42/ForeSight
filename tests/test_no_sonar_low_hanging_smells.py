@@ -2129,6 +2129,22 @@ def test_cli_shared_source_extracts_resolved_columns_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_param_assignment_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _parse_param_assignment(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_parse_model_params",
+        "_parse_param_assignment",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_parse_grid_params",
+        "_parse_param_assignment",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 

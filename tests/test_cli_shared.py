@@ -180,6 +180,35 @@ def test_resolved_columns_defaults_to_leaderboard_columns(
     assert resolved == ["x", "y"]
 
 
+def test_parse_param_assignment_splits_item_and_strips_key() -> None:
+    key, value = _cli_shared._parse_param_assignment(
+        " season_length = 12 ",
+        option="--model-param",
+        value_spec="key=value",
+    )
+
+    assert key == "season_length"
+    assert value == " 12 "
+
+
+def test_parse_param_assignment_reuses_model_param_error_message() -> None:
+    with pytest.raises(ValueError, match=r"--model-param must be key=value"):
+        _cli_shared._parse_param_assignment(
+            "season_length",
+            option="--model-param",
+            value_spec="key=value",
+        )
+
+
+def test_parse_param_assignment_reuses_grid_param_error_message() -> None:
+    with pytest.raises(ValueError, match=r"--grid-param must be key=v1,v2,\.\.\."):
+        _cli_shared._parse_param_assignment(
+            "=1,2",
+            option="--grid-param",
+            value_spec="key=v1,v2,...",
+        )
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")
