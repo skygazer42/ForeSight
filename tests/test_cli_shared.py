@@ -95,9 +95,10 @@ def test_emit_table_formats_prints_and_writes(
 def test_write_lines_joins_with_trailing_newline(tmp_path: Path) -> None:
     out = tmp_path / "lines.txt"
 
-    _cli_shared._write_lines(
+    text = _cli_shared._write_lines(
         ["first", "second"],
         output=str(out),
     )
 
+    assert text == "first\nsecond"
     assert out.read_text(encoding="utf-8") == "first\nsecond\n"

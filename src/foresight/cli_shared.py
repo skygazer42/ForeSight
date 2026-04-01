@@ -131,8 +131,14 @@ def _write_output(text: str, *, output: str) -> None:
     out_path.write_text(payload, encoding="utf-8")  # NOSONAR
 
 
-def _write_lines(lines: list[str], *, output: str) -> None:
-    _write_output("\n".join(str(line) for line in lines), output=output)
+def _write_lines(lines: list[str], *, output: str) -> str:
+    text = _lines_text(lines)
+    _write_output(text, output=output)
+    return text
+
+
+def _lines_text(lines: list[str]) -> str:
+    return "\n".join(str(line) for line in lines)
 
 
 def _print_and_write(text: str, *, output: str) -> str:
