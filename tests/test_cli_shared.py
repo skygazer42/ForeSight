@@ -65,3 +65,28 @@ def test_write_table_formats_and_writes_without_printing(
     assert captured.out == ""
     assert text == '{"ok": true}'
     assert out.read_text(encoding="utf-8") == '{"ok": true}\n'
+
+
+def test_emit_table_formats_prints_and_writes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = tmp_path / "table.md"
+
+    monkeypatch.setattr(
+        _cli_shared,
+        "_format_table",
+        lambda rows, *, columns, fmt: "| ok |",
+    )
+
+    _cli_shared._emit_table(
+        [{"a": 1}],
+        columns=["a"],
+        output=str(out),
+        fmt="md",
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == "| ok |\n"
+    assert out.read_text(encoding="utf-8") == "| ok |\n"
