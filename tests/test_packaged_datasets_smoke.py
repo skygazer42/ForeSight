@@ -328,20 +328,15 @@ def test_benchmark_main_writes_summary_output_with_shared_cli_helper(
             "conformal_levels": [],
         }
 
-    def _fake_write_output(text: str, *, output: str) -> None:
-        writes.append((output, text))
-
     class _FakeCliShared:
         @staticmethod
-        def _format_table(rows: list[dict[str, Any]], *, columns: list[str], fmt: str) -> str:
+        def _emit_table(
+            rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str
+        ) -> None:
             assert rows == _fake_run_benchmark_suite()["summary"]
             assert fmt == "csv"
             assert columns[:3] == ["model", "task_group", "backend_family"]
-            return "formatted-summary"
-
-        @staticmethod
-        def _write_output(text: str, *, output: str) -> None:
-            _fake_write_output(text, output=output)
+            writes.append((output, "formatted-summary"))
 
     monkeypatch.setattr(mod, "run_benchmark_suite", _fake_run_benchmark_suite)
     monkeypatch.setattr(mod, "_get_cli_shared_module", lambda: _FakeCliShared())

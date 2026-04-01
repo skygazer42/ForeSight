@@ -936,19 +936,15 @@ def main(argv: list[str] | None = None) -> int:
         progress=bool(args.progress),
         budget_mode=str(args.budget_mode),
     )
-    text = cli_shared._format_table(
+    cli_shared._emit_table(
         payload["summary"],
         columns=_summary_columns(
             list(payload["conformal_levels"]),
             include_profile=bool(payload.get("profiling", False)),
         ),
+        output=str(args.output),
         fmt=str(args.format),
     )
-    print(text)
-
-    output = str(args.output).strip()
-    if output:
-        cli_shared._write_output(text, output=output)
     task_reports_output = str(args.task_reports_output).strip()
     if task_reports_output:
         from foresight.batch_execution import write_task_reports
