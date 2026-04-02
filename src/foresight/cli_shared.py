@@ -56,11 +56,15 @@ def _parse_requires_filter(raw: str) -> tuple[set[str], bool]:
     Returns: (requires_set, include_core_flag)
     """
 
-    items = [p.strip().lower() for p in str(raw).split(",") if p.strip()]
+    items = [item.lower() for item in _split_csv_items(raw)]
     tokens = set(items)
     include_core = bool(tokens.intersection(_CORE_REQUIRES_ALIASES))
     tokens.difference_update(_CORE_REQUIRES_ALIASES)
     return (tokens, include_core)
+
+
+def _split_csv_items(raw: object) -> list[str]:
+    return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
 def _coerce_model_param_value(raw: str) -> Any:
@@ -73,7 +77,7 @@ def _coerce_model_param_value(raw: str) -> Any:
         return None
 
     if "," in s:
-        parts = [p.strip() for p in s.split(",") if p.strip()]
+        parts = _split_csv_items(s)
         return tuple(_coerce_model_param_value(p) for p in parts)
 
     try:

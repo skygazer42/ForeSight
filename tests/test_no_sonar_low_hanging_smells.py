@@ -2188,6 +2188,22 @@ def test_cli_shared_source_extracts_row_values_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_split_csv_items_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _split_csv_items(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_parse_requires_filter",
+        "_split_csv_items",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_coerce_model_param_value",
+        "_split_csv_items",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 

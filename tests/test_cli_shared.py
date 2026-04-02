@@ -230,6 +230,12 @@ def test_row_values_preserves_column_order_and_fills_missing_values() -> None:
     assert values == [1, "", 2]
 
 
+def test_split_csv_items_strips_and_discards_empty_parts() -> None:
+    items = _cli_shared._split_csv_items(" a, ,b ,, c ")
+
+    assert items == ["a", "b", "c"]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")
