@@ -67,6 +67,124 @@ def _split_csv_items(raw: object) -> list[str]:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
+def _string_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = "",
+) -> str:
+    return str(getattr(args, name, default))
+
+
+def _list_arg_values(
+    args: object,
+    name: str,
+    *,
+    default: object = (),
+) -> list[object]:
+    raw = getattr(args, name, default)
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return list(raw)
+    if isinstance(raw, tuple):
+        return list(raw)
+    return [raw]
+
+
+def _int_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = 0,
+) -> int:
+    return int(getattr(args, name, default))
+
+
+def _float_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = 0.0,
+) -> float:
+    return float(getattr(args, name, default))
+
+
+def _bool_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = False,
+) -> bool:
+    return bool(getattr(args, name, default))
+
+
+def _stripped_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = "",
+) -> str:
+    return _string_arg_value(args, name, default=default).strip()
+
+
+def _optional_stripped_arg_value(
+    args: object,
+    name: str,
+    *,
+    default: object = "",
+) -> str | None:
+    value = _stripped_arg_value(args, name, default=default)
+    return value or None
+
+
+def _parse_cols_arg(
+    args: object,
+    name: str,
+    *,
+    default: object = "",
+) -> tuple[str, ...]:
+    from .io import parse_cols
+
+    return parse_cols(getattr(args, name, default))
+
+
+def _parse_id_cols_arg(
+    args: object,
+    name: str = "id_cols",
+    *,
+    default: object = "",
+) -> tuple[str, ...]:
+    from .io import parse_id_cols
+
+    return parse_id_cols(getattr(args, name, default))
+
+
+def _parse_requires_arg(
+    args: object,
+    name: str = "requires",
+    *,
+    default: object = "",
+) -> tuple[set[str], bool]:
+    return _parse_requires_filter(_string_arg_value(args, name, default=default))
+
+
+def _output_arg_value(args: object) -> str:
+    return _string_arg_value(args, "output")
+
+
+def _format_arg_value(
+    args: object,
+    *,
+    default: str = "",
+    markdown_alias: bool = False,
+) -> str:
+    value = _string_arg_value(args, "format", default=default)
+    if markdown_alias and value == "markdown":
+        return "md"
+    return value
+
+
 def _coerce_model_param_value(raw: str) -> Any:
     s = str(raw).strip()
     lower = s.lower()

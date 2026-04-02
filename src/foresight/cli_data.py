@@ -514,7 +514,10 @@ def _cmd_datasets_list(args: argparse.Namespace) -> int:
     for key in list_datasets():
         if args.with_path:
             try:
-                path = resolve_dataset_path(key, data_dir=str(args.data_dir))
+                path = resolve_dataset_path(
+                    key,
+                    data_dir=_cli_shared._string_arg_value(args, "data_dir"),
+                )
                 path_s = path.as_posix()
             except FileNotFoundError:
                 path_s = get_dataset_spec(key).rel_path.as_posix()
@@ -527,7 +530,11 @@ def _cmd_datasets_list(args: argparse.Namespace) -> int:
 def _cmd_datasets_preview(args: argparse.Namespace) -> int:
     from .datasets.loaders import load_dataset
 
-    df = load_dataset(args.key, nrows=int(args.nrows), data_dir=str(args.data_dir))
+    df = load_dataset(
+        _cli_shared._string_arg_value(args, "key"),
+        nrows=int(args.nrows),
+        data_dir=_cli_shared._string_arg_value(args, "data_dir"),
+    )
     print(df.head(int(args.nrows)).to_string(index=False))
     return 0
 
@@ -535,7 +542,10 @@ def _cmd_datasets_preview(args: argparse.Namespace) -> int:
 def _cmd_datasets_path(args: argparse.Namespace) -> int:
     from .datasets.registry import resolve_dataset_path
 
-    path = resolve_dataset_path(str(args.key), data_dir=str(args.data_dir))
+    path = resolve_dataset_path(
+        _cli_shared._string_arg_value(args, "key"),
+        data_dir=_cli_shared._string_arg_value(args, "data_dir"),
+    )
     print(path.as_posix())
     return 0
 
@@ -577,12 +587,17 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
     from .datasets.registry import get_dataset_spec, list_datasets
 
     nrows = int(args.nrows)
-    keys = [str(args.dataset)] if str(args.dataset) else list_datasets()
+    dataset = _cli_shared._string_arg_value(args, "dataset")
+    keys = [dataset] if dataset else list_datasets()
     failures = 0
     for key in keys:
         try:
             spec = get_dataset_spec(key)
-            df = load_dataset(key, nrows=nrows, data_dir=str(args.data_dir))
+            df = load_dataset(
+                key,
+                nrows=nrows,
+                data_dir=_cli_shared._string_arg_value(args, "data_dir"),
+            )
             _validate_dataset_frame(df, expected_columns=set(spec.expected_columns))
             _validate_dataset_parse_dates(df, parse_dates=tuple(spec.parse_dates))
             if bool(args.check_time):
@@ -597,111 +612,127 @@ def _cmd_datasets_validate(args: argparse.Namespace) -> int:
 
 def _cmd_data_to_long(args: argparse.Namespace) -> int:
     from .data.format import to_long
-    from .io import ensure_datetime, load_csv, parse_cols, parse_id_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
     if bool(args.parse_dates):
-        ensure_datetime(df, str(args.time_col))
+        ensure_datetime(df, _cli_shared._string_arg_value(args, "time_col"))
 
-    id_cols = parse_id_cols(str(args.id_cols))
-    x_cols = parse_cols(str(args.x_cols))
-    historic_x_cols = parse_cols(str(args.historic_x_cols))
-    future_x_cols = parse_cols(str(args.future_x_cols))
+    id_cols = _cli_shared._parse_id_cols_arg(args)
+    x_cols = _cli_shared._parse_cols_arg(args, "x_cols")
+    historic_x_cols = _cli_shared._parse_cols_arg(args, "historic_x_cols")
+    future_x_cols = _cli_shared._parse_cols_arg(args, "future_x_cols")
 
-    freq = str(getattr(args, "freq", "")).strip() or None
-    historic_x_missing = str(getattr(args, "historic_x_missing", "")).strip() or None
-    future_x_missing = str(getattr(args, "future_x_missing", "")).strip() or None
+    freq = _cli_shared._optional_stripped_arg_value(args, "freq")
+    historic_x_missing = _cli_shared._optional_stripped_arg_value(args, "historic_x_missing")
+    future_x_missing = _cli_shared._optional_stripped_arg_value(args, "future_x_missing")
 
     out = to_long(
         df,
-        time_col=str(args.time_col),
-        y_col=str(args.y_col),
+        time_col=_cli_shared._string_arg_value(args, "time_col"),
+        y_col=_cli_shared._string_arg_value(args, "y_col"),
         id_cols=id_cols,
         x_cols=x_cols,
         historic_x_cols=historic_x_cols,
         future_x_cols=future_x_cols,
-        dropna=not bool(getattr(args, "keepna", False)),
-        prepare=bool(getattr(args, "prepare", False)),
+        dropna=not _cli_shared._bool_arg_value(args, "keepna"),
+        prepare=_cli_shared._bool_arg_value(args, "prepare"),
         freq=freq,
-        strict_freq=bool(getattr(args, "strict_freq", False)),
-        y_missing=str(getattr(args, "y_missing", "error")),
-        x_missing=str(getattr(args, "x_missing", "error")),
+        strict_freq=_cli_shared._bool_arg_value(args, "strict_freq"),
+        y_missing=_cli_shared._string_arg_value(args, "y_missing", default="error"),
+        x_missing=_cli_shared._string_arg_value(args, "x_missing", default="error"),
         historic_x_missing=historic_x_missing,
         future_x_missing=future_x_missing,
     )
 
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_data_prepare_long(args: argparse.Namespace) -> int:
     from .data.prep import prepare_long_df
-    from .io import ensure_datetime, load_csv, parse_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
     if bool(args.parse_dates):
         ensure_datetime(df, "ds")
 
-    freq = str(getattr(args, "freq", "")).strip() or None
-    historic_x_missing = str(getattr(args, "historic_x_missing", "")).strip() or None
-    future_x_missing = str(getattr(args, "future_x_missing", "")).strip() or None
+    freq = _cli_shared._optional_stripped_arg_value(args, "freq")
+    historic_x_missing = _cli_shared._optional_stripped_arg_value(args, "historic_x_missing")
+    future_x_missing = _cli_shared._optional_stripped_arg_value(args, "future_x_missing")
 
-    historic_x_cols = parse_cols(str(getattr(args, "historic_x_cols", "")))
-    future_x_cols = parse_cols(str(getattr(args, "future_x_cols", "")))
+    historic_x_cols = _cli_shared._parse_cols_arg(args, "historic_x_cols")
+    future_x_cols = _cli_shared._parse_cols_arg(args, "future_x_cols")
 
     out = prepare_long_df(
         df,
         freq=freq,
-        strict_freq=bool(getattr(args, "strict_freq", False)),
-        y_missing=str(getattr(args, "y_missing", "error")),
-        x_missing=str(getattr(args, "x_missing", "error")),
+        strict_freq=_cli_shared._bool_arg_value(args, "strict_freq"),
+        y_missing=_cli_shared._string_arg_value(args, "y_missing", default="error"),
+        x_missing=_cli_shared._string_arg_value(args, "x_missing", default="error"),
         historic_x_cols=tuple(historic_x_cols),
         future_x_cols=tuple(future_x_cols),
         historic_x_missing=historic_x_missing,
         future_x_missing=future_x_missing,
     )
 
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_data_align_long(args: argparse.Namespace) -> int:
     from .data.workflows import align_long_df
-    from .io import ensure_datetime, load_csv, parse_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
     if bool(args.parse_dates):
         ensure_datetime(df, "ds")
 
-    freq = str(getattr(args, "freq", "")).strip() or None
-    columns = parse_cols(str(getattr(args, "columns", ""))) or None
+    freq = _cli_shared._optional_stripped_arg_value(args, "freq")
+    columns = _cli_shared._parse_cols_arg(args, "columns") or None
     out = align_long_df(
         df,
         freq=freq,
-        agg=str(getattr(args, "agg", "last")),
+        agg=_cli_shared._string_arg_value(args, "agg", default="last"),
         columns=columns,
-        strict_freq=bool(getattr(args, "strict_freq", False)),
+        strict_freq=_cli_shared._bool_arg_value(args, "strict_freq"),
     )
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_data_clip_outliers(args: argparse.Namespace) -> int:
     from .data.workflows import clip_long_df_outliers
-    from .io import ensure_datetime, load_csv, parse_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
     if bool(args.parse_dates):
         ensure_datetime(df, "ds")
 
     out = clip_long_df_outliers(
         df,
-        method=str(getattr(args, "method", "iqr")),
-        columns=parse_cols(str(getattr(args, "columns", "y"))),
-        iqr_k=float(getattr(args, "iqr_k", 1.5)),
-        zmax=float(getattr(args, "zmax", 3.0)),
+        method=_cli_shared._string_arg_value(args, "method", default="iqr"),
+        columns=_cli_shared._parse_cols_arg(args, "columns", default="y"),
+        iqr_k=_cli_shared._float_arg_value(args, "iqr_k", default=1.5),
+        zmax=_cli_shared._float_arg_value(args, "zmax", default=3.0),
     )
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
@@ -709,21 +740,28 @@ def _cmd_data_calendar_features(args: argparse.Namespace) -> int:
     from .data.workflows import enrich_long_df_calendar
     from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
     if bool(args.parse_dates):
         ensure_datetime(df, "ds")
 
-    out = enrich_long_df_calendar(df, prefix=str(getattr(args, "prefix", "cal_")))
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    out = enrich_long_df_calendar(
+        df,
+        prefix=_cli_shared._string_arg_value(args, "prefix", default="cal_"),
+    )
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_data_make_supervised(args: argparse.Namespace) -> int:
     from .data.workflows import make_supervised_frame
-    from .io import ensure_datetime, load_csv, parse_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
-    ds_col = str(getattr(args, "ds_col", "ds"))
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
+    ds_col = _cli_shared._string_arg_value(args, "ds_col", default="ds")
     if bool(args.parse_dates):
         if "ds" in df.columns:
             ensure_datetime(df, "ds")
@@ -732,35 +770,39 @@ def _cmd_data_make_supervised(args: argparse.Namespace) -> int:
 
     out = make_supervised_frame(
         df,
-        input_format=str(getattr(args, "input_format", "auto")),
+        input_format=_cli_shared._string_arg_value(args, "input_format", default="auto"),
         ds_col=ds_col,
-        target_cols=parse_cols(str(getattr(args, "target_cols", ""))),
-        lags=str(getattr(args, "lags", "5")),
-        horizon=int(getattr(args, "horizon", 1)),
-        x_cols=parse_cols(str(getattr(args, "x_cols", ""))),
-        roll_windows=str(getattr(args, "roll_windows", "")),
-        roll_stats=str(getattr(args, "roll_stats", "")),
-        diff_lags=str(getattr(args, "diff_lags", "")),
-        seasonal_lags=str(getattr(args, "seasonal_lags", "")),
-        seasonal_diff_lags=str(getattr(args, "seasonal_diff_lags", "")),
-        fourier_periods=str(getattr(args, "fourier_periods", "")),
-        fourier_orders=str(getattr(args, "fourier_orders", "2")),
-        add_time_features=bool(getattr(args, "add_time_features", False)),
+        target_cols=_cli_shared._parse_cols_arg(args, "target_cols"),
+        lags=_cli_shared._string_arg_value(args, "lags", default="5"),
+        horizon=_cli_shared._int_arg_value(args, "horizon", default=1),
+        x_cols=_cli_shared._parse_cols_arg(args, "x_cols"),
+        roll_windows=_cli_shared._string_arg_value(args, "roll_windows"),
+        roll_stats=_cli_shared._string_arg_value(args, "roll_stats"),
+        diff_lags=_cli_shared._string_arg_value(args, "diff_lags"),
+        seasonal_lags=_cli_shared._string_arg_value(args, "seasonal_lags"),
+        seasonal_diff_lags=_cli_shared._string_arg_value(args, "seasonal_diff_lags"),
+        fourier_periods=_cli_shared._string_arg_value(args, "fourier_periods"),
+        fourier_orders=_cli_shared._string_arg_value(args, "fourier_orders", default="2"),
+        add_time_features=_cli_shared._bool_arg_value(args, "add_time_features"),
     )
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_data_infer_freq(args: argparse.Namespace) -> int:
     from .data.prep import infer_series_frequency
-    from .io import ensure_datetime, load_csv, parse_id_cols
+    from .io import ensure_datetime, load_csv
 
-    df = load_csv(str(args.path))
-    time_col = str(args.time_col)
+    df = load_csv(_cli_shared._string_arg_value(args, "path"))
+    time_col = _cli_shared._string_arg_value(args, "time_col")
     if bool(args.parse_dates):
         ensure_datetime(df, time_col)
 
-    id_cols = parse_id_cols(str(getattr(args, "id_cols", "")))
+    id_cols = _cli_shared._parse_id_cols_arg(args)
 
     if not id_cols:
         uid = pd.Series(["series=0"] * len(df), index=df.index, dtype="string")
@@ -774,7 +816,7 @@ def _cmd_data_infer_freq(args: argparse.Namespace) -> int:
         for part in parts[1:]:
             uid = uid + "|" + part
 
-    strict = bool(getattr(args, "strict", False))
+    strict = _cli_shared._bool_arg_value(args, "strict")
     df2 = df.copy()
     df2["unique_id"] = uid.astype("string")
 
@@ -803,7 +845,11 @@ def _cmd_data_infer_freq(args: argparse.Namespace) -> int:
         )
 
     out = pd.DataFrame(rows)
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
@@ -831,5 +877,9 @@ def _cmd_data_splits_rolling_origin(args: argparse.Namespace) -> int:
         )
 
     out = pd.DataFrame(rows)
-    _cli_shared._emit_dataframe(out, output=str(getattr(args, "output", "")), fmt=str(args.format))
+    _cli_shared._emit_dataframe(
+        out,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0

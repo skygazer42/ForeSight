@@ -788,16 +788,16 @@ def _models_search_tsv_lines(rows: list[dict[str, Any]]) -> list[str]:
 def _cmd_models_list(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
-    interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
-    stability_filter = str(getattr(args, "stability", "any")).strip().lower() or "any"
-    capability_filters = _parse_capability_filters(list(getattr(args, "capability", [])))
-    req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
-    exc_set, exclude_core = _cli_shared._parse_requires_filter(
-        str(getattr(args, "exclude_requires", ""))
+    interface_filter = _validated_model_interface_filter(
+        _cli_shared._string_arg_value(args, "interface", default="any")
     )
+    stability_filter = _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    capability_filters = _parse_capability_filters(_cli_shared._list_arg_values(args, "capability"))
+    req_set, include_core = _cli_shared._parse_requires_arg(args, "requires")
+    exc_set, exclude_core = _cli_shared._parse_requires_arg(args, "exclude_requires")
 
     rows: list[dict[str, Any]] = []
-    prefix = str(args.prefix).strip()
+    prefix = _cli_shared._stripped_arg_value(args, "prefix")
     for key in list_models():
         spec = get_model_spec(key)
         if _model_spec_matches_filters(
@@ -813,8 +813,8 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
         ):
             rows.append(_catalog_model_row_from_spec(spec))
 
-    sort = str(args.sort).strip() or "key"
-    descending = bool(getattr(args, "desc", False))
+    sort = _cli_shared._stripped_arg_value(args, "sort") or "key"
+    descending = _cli_shared._bool_arg_value(args, "desc")
     if sort.startswith("-"):
         descending = True
         sort = sort[1:]
@@ -828,30 +828,30 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     if limit:
         rows = rows[: min(limit, 100000)]
 
-    fmt = str(args.format)
+    fmt = _cli_shared._format_arg_value(args)
     if fmt == "json":
-        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=_cli_shared._output_arg_value(args), fmt="json")
         return 0
 
-    columns_raw = str(getattr(args, "columns", "")).strip()
+    columns_raw = _cli_shared._stripped_arg_value(args, "columns")
     if columns_raw:
-        columns = [c.strip() for c in columns_raw.split(",") if c.strip()]
+        columns = _cli_shared._split_csv_items(columns_raw)
     else:
         columns = ["key", "requires", "description"]
 
     lines = _models_list_tsv_lines(
         rows,
         columns=columns,
-        include_header=bool(getattr(args, "header", False)),
+        include_header=_cli_shared._bool_arg_value(args, "header"),
     )
-    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=_cli_shared._output_arg_value(args))
     return 0
 
 
 def _cmd_models_info(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec
 
-    spec = get_model_spec(str(args.key))
+    spec = get_model_spec(_cli_shared._string_arg_value(args, "key"))
     payload = {
         "key": spec.key,
         "interface": str(spec.interface),
@@ -873,28 +873,32 @@ def _cmd_models_info(args: argparse.Namespace) -> int:
         wrapper = _paper_payload_for_paper_id(wrapper_pid)
         if wrapper:
             payload["wrapper_paper"] = wrapper
-    _cli_shared._emit(payload, output=str(args.output), fmt=str(args.format))
+    _cli_shared._emit(
+        payload,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
 def _cmd_models_search(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
-    q = str(args.query).strip()
+    q = _cli_shared._stripped_arg_value(args, "query")
     if not q:
         raise ValueError("query must be non-empty")
 
     tokens = [t.strip().lower() for t in q.split() if t.strip()]
     any_mode = bool(args.any)
-    prefix = str(args.prefix).strip()
+    prefix = _cli_shared._stripped_arg_value(args, "prefix")
 
-    interface_filter = _validated_model_interface_filter(getattr(args, "interface", "any"))
-    stability_filter = str(getattr(args, "stability", "any")).strip().lower() or "any"
-    capability_filters = _parse_capability_filters(list(getattr(args, "capability", [])))
-    req_set, include_core = _cli_shared._parse_requires_filter(str(getattr(args, "requires", "")))
-    exc_set, exclude_core = _cli_shared._parse_requires_filter(
-        str(getattr(args, "exclude_requires", ""))
+    interface_filter = _validated_model_interface_filter(
+        _cli_shared._string_arg_value(args, "interface", default="any")
     )
+    stability_filter = _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    capability_filters = _parse_capability_filters(_cli_shared._list_arg_values(args, "capability"))
+    req_set, include_core = _cli_shared._parse_requires_arg(args, "requires")
+    exc_set, exclude_core = _cli_shared._parse_requires_arg(args, "exclude_requires")
 
     limit = int(args.limit)
     if limit <= 0:
@@ -952,42 +956,32 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     rows.sort(key=lambda r: (-int(r.get("score", 0)), str(r.get("key", ""))))
     rows = rows[:limit]
 
-    fmt = str(args.format)
+    fmt = _cli_shared._format_arg_value(args)
     if fmt == "json":
-        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=_cli_shared._output_arg_value(args), fmt="json")
         return 0
 
     lines = _models_search_tsv_lines(rows)
-    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=_cli_shared._output_arg_value(args))
     return 0
 
 
 def _cmd_papers_list(args: argparse.Namespace) -> int:
     meta = _load_rnn_paper_metadata()
-    query = str(args.query).strip().lower()
+    query = _cli_shared._stripped_arg_value(args, "query").lower()
 
     rows: list[dict[str, Any]] = []
     for paper_id in sorted(meta):
-        entry = meta.get(paper_id, {}) if isinstance(meta.get(paper_id, {}), dict) else {}
-        title = str(entry.get("title", "")).strip()
+        payload = _paper_payload_for_paper_id(str(paper_id))
+        title = str(payload.get("title", "")).strip() if payload is not None else ""
         if query and query not in str(paper_id).lower() and query not in title.lower():
             continue
-        year_raw = entry.get("year", None)
-        year = int(year_raw) if isinstance(year_raw, int) else None
-        rows.append(
-            {
-                "paper_id": str(paper_id),
-                "title": title,
-                "year": year,
-                "doi": str(entry.get("doi", "")).strip(),
-                "arxiv_id": str(entry.get("arxiv_id", "")).strip(),
-                "url": str(entry.get("url", "")).strip(),
-            }
-        )
+        if payload is not None:
+            rows.append(payload)
 
-    fmt = str(args.format)
+    fmt = _cli_shared._format_arg_value(args)
     if fmt == "json":
-        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=_cli_shared._output_arg_value(args), fmt="json")
         return 0
 
     lines = [
@@ -1001,39 +995,12 @@ def _cmd_papers_list(args: argparse.Namespace) -> int:
         )
         for r in rows
     ]
-    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=_cli_shared._output_arg_value(args))
     return 0
 
 
 def _cmd_papers_info(args: argparse.Namespace) -> int:
-    pid = str(args.paper_id).strip()
-    if not pid:
-        raise ValueError("paper_id must be non-empty")
-
-    meta = _load_rnn_paper_metadata()
-    entry = meta.get(pid, None)
-    if not isinstance(entry, dict):
-        raise ValueError(f"Unknown paper_id: {pid!r}")
-
-    title = str(entry.get("title", "")).strip()
-    year_raw = entry.get("year", None)
-    year = int(year_raw) if isinstance(year_raw, int) else None
-    payload = {
-        "paper_id": pid,
-        "title": title,
-        "year": year,
-        "doi": str(entry.get("doi", "")).strip(),
-        "arxiv_id": str(entry.get("arxiv_id", "")).strip(),
-        "url": str(entry.get("url", "")).strip(),
-    }
-    _cli_shared._emit(payload, output=str(args.output), fmt="json")
-    return 0
-
-
-def _cmd_papers_models(args: argparse.Namespace) -> int:
-    from .models.registry import get_model_spec, list_models
-
-    pid = str(args.paper_id).strip()
+    pid = _cli_shared._stripped_arg_value(args, "paper_id")
     if not pid:
         raise ValueError("paper_id must be non-empty")
 
@@ -1041,8 +1008,26 @@ def _cmd_papers_models(args: argparse.Namespace) -> int:
     if pid not in meta:
         raise ValueError(f"Unknown paper_id: {pid!r}")
 
-    prefix = str(args.prefix).strip()
-    role = str(args.role).strip().lower()
+    payload = _paper_payload_for_paper_id(pid)
+    if payload is None:
+        raise ValueError(f"Unknown paper_id: {pid!r}")
+    _cli_shared._emit(payload, output=_cli_shared._output_arg_value(args), fmt="json")
+    return 0
+
+
+def _cmd_papers_models(args: argparse.Namespace) -> int:
+    from .models.registry import get_model_spec, list_models
+
+    pid = _cli_shared._stripped_arg_value(args, "paper_id")
+    if not pid:
+        raise ValueError("paper_id must be non-empty")
+
+    meta = _load_rnn_paper_metadata()
+    if pid not in meta:
+        raise ValueError(f"Unknown paper_id: {pid!r}")
+
+    prefix = _cli_shared._stripped_arg_value(args, "prefix")
+    role = _cli_shared._stripped_arg_value(args, "role").lower()
     if role not in {"any", "base", "wrapper"}:
         raise ValueError("--role must be one of: any, base, wrapper")
 
@@ -1059,9 +1044,9 @@ def _cmd_papers_models(args: argparse.Namespace) -> int:
 
     rows.sort(key=lambda r: (str(r.get("role", "")), str(r.get("key", ""))))
 
-    fmt = str(args.format)
+    fmt = _cli_shared._format_arg_value(args)
     if fmt == "json":
-        _cli_shared._emit(rows, output=str(args.output), fmt="json")
+        _cli_shared._emit(rows, output=_cli_shared._output_arg_value(args), fmt="json")
         return 0
 
     lines = [
@@ -1075,14 +1060,14 @@ def _cmd_papers_models(args: argparse.Namespace) -> int:
         )
         for r in rows
     ]
-    _cli_shared._emit_text("\n".join(lines), output=str(args.output))
+    _cli_shared._emit_text("\n".join(lines), output=_cli_shared._output_arg_value(args))
     return 0
 
 
 def _cmd_docs_rnn(args: argparse.Namespace) -> int:
     from .docsgen.rnn import render_rnn_paper_zoo_doc, render_rnn_zoo_doc, write_rnn_docs
 
-    out_dir = Path(str(args.output_dir)).expanduser().resolve()
+    out_dir = Path(_cli_shared._string_arg_value(args, "output_dir")).expanduser().resolve()
 
     if bool(args.check):
         expected_paper = render_rnn_paper_zoo_doc()

@@ -1,13 +1,60 @@
 import foresight.eval_predictions as eval_predictions_mod
+import numpy as np
 import pytest
 from foresight.cv import cross_validation_predictions
 from foresight.eval_predictions import (
+    _mean_by_step_from_inverse,
+    _validated_interval_arrays,
+    _interval_score_vector,
+    _step_group_inverse_counts,
     _vectorized_interval_metrics,
     _vectorized_pinball_summary,
     _weighted_interval_score_by_step,
     evaluate_predictions,
     evaluate_quantile_predictions,
 )
+
+
+def test_step_group_inverse_counts_returns_sorted_steps_inverse_and_counts() -> None:
+    steps, inverse, counts = _step_group_inverse_counts([2, 1, 2, 3, 1])
+
+    assert steps == [1, 2, 3]
+    assert inverse.tolist() == [1, 0, 1, 2, 0]
+    assert counts.tolist() == [2.0, 2.0, 1.0]
+
+
+def test_interval_score_vector_returns_width_penalty_sum() -> None:
+    score = _interval_score_vector(
+        y=[0.0, 1.0, 2.0, 3.0],
+        lo=[-1.0, 0.0, 1.0, 4.0],
+        hi=[1.0, 2.0, 3.0, 5.0],
+        alpha=0.2,
+    )
+
+    assert score.tolist() == pytest.approx([2.0, 2.0, 2.0, 11.0])
+
+
+def test_validated_interval_arrays_returns_float_arrays() -> None:
+    y, lo, hi = _validated_interval_arrays(
+        y=[0, 1],
+        lo=[-1, 0],
+        hi=[1, 2],
+    )
+
+    assert y.dtype == float
+    assert lo.dtype == float
+    assert hi.dtype == float
+    assert y.tolist() == [0.0, 1.0]
+
+
+def test_mean_by_step_from_inverse_aggregates_weighted_values() -> None:
+    values = np.array([2.0, 4.0, 6.0, 8.0], dtype=float)
+    inverse = np.array([0, 1, 0, 1], dtype=int)
+    counts = np.array([2.0, 2.0], dtype=float)
+
+    out = _mean_by_step_from_inverse(values, inverse=inverse, counts=counts, n_steps=2)
+
+    assert out.tolist() == pytest.approx([4.0, 6.0])
 
 
 def test_evaluate_predictions_includes_by_step_metrics():

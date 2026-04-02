@@ -27,6 +27,42 @@ def _all_zero(x: np.ndarray) -> bool:
     return not np.any(x)
 
 
+def _zero_forecast(horizon: int) -> np.ndarray:
+    return np.zeros((int(horizon),), dtype=float)
+
+
+def _validated_alpha_beta(alpha: float, beta: float) -> tuple[float, float]:
+    return (_require_01("alpha", alpha), _require_01("beta", beta))
+
+
+def _validated_intermittent_input(
+    train: Any,
+    *,
+    horizon: int,
+    subject: str,
+) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if horizon <= 0:
+        raise ValueError(HORIZON_MIN_ERROR)
+    if x.size == 0:
+        raise ValueError(f"{subject} requires at least 1 training point")
+    return x
+
+
+def _first_nonzero_index(x: np.ndarray) -> int | None:
+    nz_idx = np.flatnonzero(x > 0.0)
+    if nz_idx.size == 0:
+        return None
+    return int(nz_idx[0])
+
+
+def _croston_initial_state(x: np.ndarray) -> tuple[int, float, float, float] | None:
+    first = _first_nonzero_index(x)
+    if first is None:
+        return None
+    return (first, float(x[first]), float(first + 1), 1.0)
+
+
 def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.ndarray:
     """
     Croston's classic method for intermittent demand.
@@ -37,26 +73,22 @@ def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) ->
 
     Forecast is constant: z / p.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if x.size == 0:
-        raise ValueError("croston_classic_forecast requires at least 1 training point")
+    x = _validated_intermittent_input(
+        train,
+        horizon=horizon,
+        subject="croston_classic_forecast",
+    )
     a = _require_01("alpha", alpha)
 
     # If all demands are zero, forecast zeros.
     if _all_zero(x):
-        return np.zeros((int(horizon),), dtype=float)
+        return _zero_forecast(horizon)
 
     # Initialize with first non-zero demand.
-    nz_idx = np.flatnonzero(x > 0.0)
-    if nz_idx.size == 0:
-        return np.zeros((int(horizon),), dtype=float)
-
-    first = int(nz_idx[0])
-    z = float(x[first])
-    p = float(first + 1)  # interval length in periods (>=1)
-    q = 1.0  # time since last demand (in periods)
+    state = _croston_initial_state(x)
+    if state is None:
+        return _zero_forecast(horizon)
+    first, z, p, q = state
 
     for t in range(first + 1, x.size):
         xt = float(x[t])
@@ -99,14 +131,10 @@ def _croston_sse(x: np.ndarray, *, alpha: float) -> float:
     if x.size < 2 or _all_zero(x):
         return 0.0
 
-    nz_idx = np.flatnonzero(x > 0.0)
-    if nz_idx.size == 0:
+    state = _croston_initial_state(x)
+    if state is None:
         return 0.0
-
-    first = int(nz_idx[0])
-    z = float(x[first])
-    p = float(first + 1)
-    q = 1.0
+    first, z, p, q = state
     sse = 0.0
 
     for t in range(first + 1, x.size):
@@ -134,16 +162,16 @@ def croston_optimized_forecast(
     """
     Croston classic with alpha selected by a simple in-sample SSE grid search.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if x.size == 0:
-        raise ValueError("croston_optimized_forecast requires at least 1 training point")
+    x = _validated_intermittent_input(
+        train,
+        horizon=horizon,
+        subject="croston_optimized_forecast",
+    )
     if grid_size <= 1:
         raise ValueError("grid_size must be >= 2")
 
     if _all_zero(x):
-        return np.zeros((int(horizon),), dtype=float)
+        return _zero_forecast(horizon)
 
     grid = np.linspace(0.05, 0.95, int(grid_size), dtype=float)
     best_alpha = float(grid[0])
@@ -197,23 +225,19 @@ def les_forecast(
 
     When demand is zero, forecasts decay linearly towards 0 (clamped at 0).
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if x.size == 0:
-        raise ValueError("les_forecast requires at least 1 training point")
-
-    a = _require_01("alpha", alpha)
-    b = _require_01("beta", beta)
+    x = _validated_intermittent_input(
+        train,
+        horizon=horizon,
+        subject="les_forecast",
+    )
+    a, b = _validated_alpha_beta(alpha, beta)
 
     if _all_zero(x):
-        return np.zeros((int(horizon),), dtype=float)
+        return _zero_forecast(horizon)
 
-    nz_idx = np.flatnonzero(x > 0.0)
-    if nz_idx.size == 0:
-        return np.zeros((int(horizon),), dtype=float)
-
-    first = int(nz_idx[0])
+    first = _first_nonzero_index(x)
+    if first is None:
+        return _zero_forecast(horizon)
     y_hat = float(x[first])
     tau = float(first + 1)  # interval length from start to first demand (>=1)
     tau_hat = float(tau)
@@ -255,17 +279,15 @@ def tsb_forecast(
 
     Forecast is constant: p * z.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if x.size == 0:
-        raise ValueError("tsb_forecast requires at least 1 training point")
-
-    a = _require_01("alpha", alpha)
-    b = _require_01("beta", beta)
+    x = _validated_intermittent_input(
+        train,
+        horizon=horizon,
+        subject="tsb_forecast",
+    )
+    a, b = _validated_alpha_beta(alpha, beta)
 
     if _all_zero(x):
-        return np.zeros((int(horizon),), dtype=float)
+        return _zero_forecast(horizon)
 
     # Initialize
     z = float(np.mean(x[x > 0.0])) if np.any(x > 0.0) else 0.0
@@ -296,16 +318,16 @@ def adida_forecast(
     2) Forecast the aggregated series using a simple base method.
     3) Disaggregate the forecast by dividing evenly across `agg_period`.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
+    x = _validated_intermittent_input(
+        train,
+        horizon=horizon,
+        subject="adida_forecast",
+    )
     if agg_period <= 0:
         raise ValueError("agg_period must be >= 1")
-    if x.size == 0:
-        raise ValueError("adida_forecast requires at least 1 training point")
 
     if _all_zero(x):
-        return np.zeros((int(horizon),), dtype=float)
+        return _zero_forecast(horizon)
 
     m = int(agg_period)
     n_full = (x.size // m) * m

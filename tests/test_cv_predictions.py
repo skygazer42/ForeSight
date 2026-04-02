@@ -405,6 +405,38 @@ def test_cross_validation_predictions_long_df_supports_local_future_x_cols(monke
     assert np.allclose(out["y"].to_numpy(dtype=float), out["yhat"].to_numpy(dtype=float))
 
 
+def test_cross_validation_predictions_long_df_preserves_datetime_ds_for_local_models(
+    monkeypatch,
+) -> None:
+    key = _install_dummy_local_xreg_model(
+        monkeypatch=monkeypatch,
+        key="__test-local-xreg-cv-datetime__",
+    )
+
+    promo = ([0.0, 1.0] * 15)[:30]
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0"] * 30,
+            "ds": pd.date_range("2020-01-01", periods=30, freq="D"),
+            "y": promo,
+            "promo": promo,
+        }
+    )
+
+    out = cv_mod.cross_validation_predictions_long_df(
+        model=key,
+        long_df=long_df,
+        horizon=3,
+        step_size=3,
+        min_train_size=12,
+        model_params={"future_x_cols": ("promo",)},
+    )
+
+    assert pd.api.types.is_datetime64_any_dtype(out["ds"])
+    assert out["ds"].iloc[0] == pd.Timestamp("2020-01-13")
+    assert out["ds"].iloc[-1] == pd.Timestamp("2020-01-30")
+
+
 def test_cross_validation_predictions_long_df_rejects_local_historic_x_cols(monkeypatch) -> None:
     key = _install_dummy_local_xreg_model(
         monkeypatch=monkeypatch,

@@ -55,6 +55,29 @@ def _make_lagged_xy_multivariate(
     return X, Y
 
 
+def _latest_multivariate_window(x: np.ndarray, *, lag_count: int) -> np.ndarray:
+    n_nodes = int(x.shape[1])
+    return x[-int(lag_count) :, :].astype(float, copy=False).reshape(1, int(lag_count), n_nodes)
+
+
+def _validated_torch_multivariate_model_dims(
+    *,
+    d_model: int,
+    num_blocks: int,
+    dropout: float,
+) -> tuple[int, int, float]:
+    d = int(d_model)
+    blocks = int(num_blocks)
+    drop = float(dropout)
+    if d <= 0:
+        raise ValueError(D_MODEL_MIN_ERROR)
+    if blocks <= 0:
+        raise ValueError(NUM_BLOCKS_MIN_ERROR)
+    if not (0.0 <= drop < 1.0):
+        raise ValueError(DROPOUT_RANGE_ERROR)
+    return d, blocks, drop
+
+
 def var_forecast(
     train: Any,
     horizon: int,
@@ -176,30 +199,18 @@ def torch_stid_forecast(
     x = _as_2d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
-    d = int(d_model)
-    blocks = int(num_blocks)
-    drop = float(dropout)
-    if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
-    if blocks <= 0:
-        raise ValueError(NUM_BLOCKS_MIN_ERROR)
-    if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
+    d, blocks, drop = _validated_torch_multivariate_model_dims(
+        d_model=d_model,
+        num_blocks=num_blocks,
+        dropout=dropout,
+    )
 
-    x_work = x.astype(float, copy=False)
-    mean = np.zeros((int(x.shape[1]),), dtype=float)
-    std = np.ones((int(x.shape[1]),), dtype=float)
-    if bool(normalize):
-        cols: list[np.ndarray] = []
-        for j in range(int(x.shape[1])):
-            col_scaled, mean_j, std_j = _normalize_series(x_work[:, j])
-            cols.append(col_scaled)
-            mean[j] = mean_j
-            std[j] = std_j
-        x_work = np.stack(cols, axis=1)
-
-    X, Y = _make_lagged_xy_multivariate(x_work, lags=lag_count, horizon=h)
-    c = int(x.shape[1])
+    x_work, mean, std, X, Y, c = _prepare_torch_multivariate_training_data(
+        x,
+        lags=lag_count,
+        horizon=h,
+        normalize=bool(normalize),
+    )
 
     class _STIDBlock(nn.Module):
         def __init__(self) -> None:
@@ -289,15 +300,17 @@ def torch_stid_forecast(
     )
     model = _train_loop(_STIDDirect(), X, Y, cfg=cfg, device=str(device))
 
-    feat = x_work[-lag_count:, :].astype(float, copy=False).reshape(1, lag_count, c)
+    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
     with torch.no_grad():
         feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
         yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, c)
 
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std.reshape(1, c) + mean.reshape(1, c)
-    return np.asarray(yhat, dtype=float)
+    return _maybe_denormalize_multivariate_forecast(
+        yhat_t.astype(float, copy=False),
+        mean=mean,
+        std=std,
+        normalize=bool(normalize),
+    )
 
 
 def _row_normalize_adj(adj: np.ndarray) -> np.ndarray:
@@ -417,6 +430,46 @@ def _normalize_multivariate_matrix(x: np.ndarray) -> tuple[np.ndarray, np.ndarra
     return (np.stack(cols, axis=1), mean, std)
 
 
+def _maybe_normalize_multivariate_matrix(
+    x: np.ndarray,
+    *,
+    normalize: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if not bool(normalize):
+        return (
+            x.astype(float, copy=False),
+            np.zeros((int(x.shape[1]),), dtype=float),
+            np.ones((int(x.shape[1]),), dtype=float),
+        )
+    return _normalize_multivariate_matrix(x)
+
+
+def _maybe_denormalize_multivariate_forecast(
+    yhat: np.ndarray,
+    *,
+    mean: np.ndarray,
+    std: np.ndarray,
+    normalize: bool,
+) -> np.ndarray:
+    out = np.asarray(yhat, dtype=float)
+    if not bool(normalize):
+        return out
+    n_nodes = int(mean.shape[0])
+    return out * std.reshape(1, n_nodes) + mean.reshape(1, n_nodes)
+
+
+def _prepare_torch_multivariate_training_data(
+    x: np.ndarray,
+    *,
+    lags: int,
+    horizon: int,
+    normalize: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
+    x_work, mean, std = _maybe_normalize_multivariate_matrix(x, normalize=bool(normalize))
+    X, Y = _make_lagged_xy_multivariate(x_work, lags=int(lags), horizon=int(horizon))
+    return x_work, mean, std, X, Y, int(x.shape[1])
+
+
 def torch_stgcn_forecast(
     train: Any,
     horizon: int,
@@ -499,31 +552,25 @@ def torch_stgcn_forecast(
     x = _as_2d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
-    d = int(d_model)
-    blocks = int(num_blocks)
     k = int(kernel_size)
-    drop = float(dropout)
+    d, blocks, drop = _validated_torch_multivariate_model_dims(
+        d_model=d_model,
+        num_blocks=num_blocks,
+        dropout=dropout,
+    )
     if h <= 0:
         raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
-    if blocks <= 0:
-        raise ValueError(NUM_BLOCKS_MIN_ERROR)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
-    if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
 
-    x_work = x
-    mean = np.zeros((int(x.shape[1]),), dtype=float)
-    std = np.ones((int(x.shape[1]),), dtype=float)
-    if bool(normalize):
-        x_work, mean, std = _normalize_multivariate_matrix(x_work)
-
-    X, Y = _make_lagged_xy_multivariate(x_work, lags=lag_count, horizon=h)
-    n_nodes = int(x.shape[1])
+    x_work, mean, std, X, Y, n_nodes = _prepare_torch_multivariate_training_data(
+        x,
+        lags=lag_count,
+        horizon=h,
+        normalize=bool(normalize),
+    )
     adj_mat = _resolve_adj_matrix(
         adj=adj,
         adj_path=str(adj_path),
@@ -628,15 +675,17 @@ def torch_stgcn_forecast(
     )
     model = _train_loop(_STGCN(), X, Y, cfg=cfg, device=str(device))
 
-    feat = x_work[-lag_count:, :].astype(float, copy=False).reshape(1, lag_count, n_nodes)
+    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
     with torch.no_grad():
         feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
         yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, n_nodes)
 
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std.reshape(1, n_nodes) + mean.reshape(1, n_nodes)
-    return np.asarray(yhat, dtype=float)
+    return _maybe_denormalize_multivariate_forecast(
+        yhat_t.astype(float, copy=False),
+        mean=mean,
+        std=std,
+        normalize=bool(normalize),
+    )
 
 
 def torch_graphwavenet_forecast(
@@ -721,36 +770,30 @@ def torch_graphwavenet_forecast(
     x = _as_2d_float_array(train)
     h = int(horizon)
     lag_count = int(lags)
-    d = int(d_model)
-    blocks = int(num_blocks)
     k = int(kernel_size)
     base = int(dilation_base)
-    drop = float(dropout)
+    d, blocks, drop = _validated_torch_multivariate_model_dims(
+        d_model=d_model,
+        num_blocks=num_blocks,
+        dropout=dropout,
+    )
     if h <= 0:
         raise ValueError(HORIZON_MIN_ERROR)
     if lag_count <= 0:
         raise ValueError(LAGS_MIN_ERROR)
-    if d <= 0:
-        raise ValueError(D_MODEL_MIN_ERROR)
-    if blocks <= 0:
-        raise ValueError(NUM_BLOCKS_MIN_ERROR)
     if k <= 0:
         raise ValueError("kernel_size must be >= 1")
     if base <= 0:
         raise ValueError("dilation_base must be >= 1")
     if int(adj_emb_dim) <= 0:
         raise ValueError("adj_emb_dim must be >= 1")
-    if not (0.0 <= drop < 1.0):
-        raise ValueError(DROPOUT_RANGE_ERROR)
 
-    x_work = x
-    mean = np.zeros((int(x.shape[1]),), dtype=float)
-    std = np.ones((int(x.shape[1]),), dtype=float)
-    if bool(normalize):
-        x_work, mean, std = _normalize_multivariate_matrix(x_work)
-
-    X, Y = _make_lagged_xy_multivariate(x_work, lags=lag_count, horizon=h)
-    n_nodes = int(x.shape[1])
+    x_work, mean, std, X, Y, n_nodes = _prepare_torch_multivariate_training_data(
+        x,
+        lags=lag_count,
+        horizon=h,
+        normalize=bool(normalize),
+    )
     static_adj = _resolve_adj_matrix(
         adj=adj,
         adj_path=str(adj_path),
@@ -888,12 +931,14 @@ def torch_graphwavenet_forecast(
     )
     model = _train_loop(_GraphWaveNet(), X, Y, cfg=cfg, device=str(device))
 
-    feat = x_work[-lag_count:, :].astype(float, copy=False).reshape(1, lag_count, n_nodes)
+    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
     with torch.no_grad():
         feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
         yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, n_nodes)
 
-    yhat = yhat_t.astype(float, copy=False)
-    if bool(normalize):
-        yhat = yhat * std.reshape(1, n_nodes) + mean.reshape(1, n_nodes)
-    return np.asarray(yhat, dtype=float)
+    return _maybe_denormalize_multivariate_forecast(
+        yhat_t.astype(float, copy=False),
+        mean=mean,
+        std=std,
+        normalize=bool(normalize),
+    )

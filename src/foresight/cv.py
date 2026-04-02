@@ -55,12 +55,16 @@ def _append_prediction_rows(
 ) -> None:
     horizon = int(y_true.shape[0])
     columns["unique_id"].extend([str(uid)] * horizon)
-    columns["ds"].extend(ds_true.tolist())
+    columns["ds"].extend(_index_values_list(ds_true))
     columns["cutoff"].extend([cutoff] * horizon)
     columns["step"].extend(range(1, horizon + 1))
     columns["y"].extend(np.asarray(y_true, dtype=float).tolist())
     columns["yhat"].extend(np.asarray(yhat, dtype=float).tolist())
     columns["model"].extend([str(model)] * horizon)
+
+
+def _index_values_list(values: Any) -> list[Any]:
+    return pd.Index(values).tolist()
 
 
 def _prediction_frame_from_columns(
@@ -541,7 +545,7 @@ def _prepared_global_cv_columns(
     row_count = int(np.count_nonzero(row_keep))
     kept = row_keep.tolist()
     columns["unique_id"].extend(uid_sorted[kept].tolist())
-    columns["ds"].extend(ds_sorted[kept].tolist())
+    columns["ds"].extend(_index_values_list(ds_sorted[kept]))
     columns["cutoff"].extend([cutoff] * row_count)
     columns["step"].extend(steps[kept].tolist())
     columns["y"].extend(y_sorted[kept].tolist())

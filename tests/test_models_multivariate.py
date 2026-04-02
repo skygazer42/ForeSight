@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import foresight.models.multivariate as multivariate_mod
 from foresight.models.registry import get_model_spec
 
 
@@ -24,6 +25,76 @@ def test_torch_graph_models_are_registered_as_multivariate_torch_optional():
         spec = get_model_spec(key)
         assert spec.interface == "multivariate"
         assert "torch" in spec.requires
+
+
+def test_validated_torch_multivariate_model_dims_returns_normalized_values() -> None:
+    d, blocks, drop = multivariate_mod._validated_torch_multivariate_model_dims(  # type: ignore[attr-defined]
+        d_model=16,
+        num_blocks=2,
+        dropout=0.1,
+    )
+
+    assert d == 16
+    assert blocks == 2
+    assert drop == pytest.approx(0.1)
+
+
+def test_maybe_normalize_multivariate_matrix_returns_identity_when_disabled() -> None:
+    x = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float)
+
+    x_work, mean, std = multivariate_mod._maybe_normalize_multivariate_matrix(  # type: ignore[attr-defined]
+        x,
+        normalize=False,
+    )
+
+    np.testing.assert_allclose(x_work, x)
+    np.testing.assert_allclose(mean, np.zeros((2,), dtype=float))
+    np.testing.assert_allclose(std, np.ones((2,), dtype=float))
+
+
+def test_denormalize_multivariate_forecast_restores_original_scale() -> None:
+    yhat = np.array([[0.0, 1.0]], dtype=float)
+    mean = np.array([10.0, 100.0], dtype=float)
+    std = np.array([2.0, 5.0], dtype=float)
+
+    restored = multivariate_mod._maybe_denormalize_multivariate_forecast(  # type: ignore[attr-defined]
+        yhat,
+        mean=mean,
+        std=std,
+        normalize=True,
+    )
+
+    np.testing.assert_allclose(restored, np.array([[10.0, 105.0]], dtype=float))
+
+
+def test_latest_multivariate_window_reshapes_tail_for_single_batch() -> None:
+    x = np.arange(12.0, dtype=float).reshape(6, 2)
+
+    feat = multivariate_mod._latest_multivariate_window(  # type: ignore[attr-defined]
+        x,
+        lag_count=3,
+    )
+
+    assert feat.shape == (1, 3, 2)
+    np.testing.assert_allclose(feat[0], x[-3:, :])
+
+
+def test_prepare_torch_multivariate_training_data_returns_normalized_windows_and_metadata() -> None:
+    x = np.arange(12.0, dtype=float).reshape(6, 2)
+
+    x_work, mean, std, X, Y, n_nodes = multivariate_mod._prepare_torch_multivariate_training_data(  # type: ignore[attr-defined]
+        x,
+        lags=2,
+        horizon=2,
+        normalize=False,
+    )
+
+    np.testing.assert_allclose(x_work, x)
+    np.testing.assert_allclose(mean, np.zeros((2,), dtype=float))
+    np.testing.assert_allclose(std, np.ones((2,), dtype=float))
+    assert X.shape == (3, 2, 2)
+    assert Y.shape == (3, 2, 2)
+    assert n_nodes == 2
 
 
 @pytest.mark.skipif(

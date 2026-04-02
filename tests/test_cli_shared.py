@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import csv
 import pytest
@@ -234,6 +235,172 @@ def test_split_csv_items_strips_and_discards_empty_parts() -> None:
     items = _cli_shared._split_csv_items(" a, ,b ,, c ")
 
     assert items == ["a", "b", "c"]
+
+
+def test_output_arg_value_coerces_output_attr_to_string() -> None:
+    value = _cli_shared._output_arg_value(SimpleNamespace(output=Path("nested") / "report.json"))
+
+    assert value == "nested/report.json"
+
+
+def test_output_arg_value_defaults_to_empty_string_when_missing() -> None:
+    value = _cli_shared._output_arg_value(SimpleNamespace())
+
+    assert value == ""
+
+
+def test_stripped_arg_value_trims_named_string_argument() -> None:
+    value = _cli_shared._stripped_arg_value(
+        SimpleNamespace(path_prefix=" /tracking "),
+        "path_prefix",
+    )
+
+    assert value == "/tracking"
+
+
+def test_optional_stripped_arg_value_returns_none_for_blank_input() -> None:
+    value = _cli_shared._optional_stripped_arg_value(
+        SimpleNamespace(path_prefix="   "),
+        "path_prefix",
+    )
+
+    assert value is None
+
+
+def test_optional_stripped_arg_value_uses_default_then_trims_it() -> None:
+    value = _cli_shared._optional_stripped_arg_value(
+        SimpleNamespace(),
+        "summary_format",
+        default=" json ",
+    )
+
+    assert value == "json"
+
+
+def test_string_arg_value_coerces_named_argument_to_string() -> None:
+    value = _cli_shared._string_arg_value(
+        SimpleNamespace(horizon=12),
+        "horizon",
+    )
+
+    assert value == "12"
+
+
+def test_string_arg_value_uses_default_when_missing() -> None:
+    value = _cli_shared._string_arg_value(
+        SimpleNamespace(),
+        "lags",
+        default="5",
+    )
+
+    assert value == "5"
+
+
+def test_parse_cols_arg_uses_named_argument_value() -> None:
+    value = _cli_shared._parse_cols_arg(
+        SimpleNamespace(columns=" ds , promo "),
+        "columns",
+    )
+
+    assert value == ("ds", "promo")
+
+
+def test_parse_cols_arg_uses_default_when_missing() -> None:
+    value = _cli_shared._parse_cols_arg(
+        SimpleNamespace(),
+        "columns",
+        default="y",
+    )
+
+    assert value == ("y",)
+
+
+def test_parse_id_cols_arg_uses_named_argument_value() -> None:
+    value = _cli_shared._parse_id_cols_arg(
+        SimpleNamespace(id_cols="store, dept"),
+    )
+
+    assert value == ("store", "dept")
+
+
+def test_parse_requires_arg_uses_named_argument_value() -> None:
+    value = _cli_shared._parse_requires_arg(
+        SimpleNamespace(requires="torch,core"),
+    )
+
+    assert value == ({"torch"}, True)
+
+
+def test_list_arg_values_returns_list_copy_for_existing_sequence() -> None:
+    raw = ["alpha", "beta"]
+
+    value = _cli_shared._list_arg_values(
+        SimpleNamespace(model_param=raw),
+        "model_param",
+    )
+
+    assert value == ["alpha", "beta"]
+    assert value is not raw
+
+
+def test_list_arg_values_wraps_scalar_values() -> None:
+    value = _cli_shared._list_arg_values(
+        SimpleNamespace(model_param="lags=5"),
+        "model_param",
+    )
+
+    assert value == ["lags=5"]
+
+
+def test_list_arg_values_defaults_to_empty_list_when_missing() -> None:
+    value = _cli_shared._list_arg_values(
+        SimpleNamespace(),
+        "model_param",
+    )
+
+    assert value == []
+
+
+def test_int_arg_value_coerces_named_argument_to_int() -> None:
+    value = _cli_shared._int_arg_value(
+        SimpleNamespace(horizon="12"),
+        "horizon",
+    )
+
+    assert value == 12
+
+
+def test_float_arg_value_coerces_named_argument_to_float() -> None:
+    value = _cli_shared._float_arg_value(
+        SimpleNamespace(iqr_k="1.5"),
+        "iqr_k",
+    )
+
+    assert value == 1.5
+
+
+def test_bool_arg_value_coerces_named_argument_to_bool() -> None:
+    value = _cli_shared._bool_arg_value(
+        SimpleNamespace(parse_dates=1),
+        "parse_dates",
+    )
+
+    assert value is True
+
+
+def test_format_arg_value_coerces_format_attr_to_string() -> None:
+    value = _cli_shared._format_arg_value(SimpleNamespace(format="json"))
+
+    assert value == "json"
+
+
+def test_format_arg_value_normalizes_markdown_alias_when_requested() -> None:
+    value = _cli_shared._format_arg_value(
+        SimpleNamespace(format="markdown"),
+        markdown_alias=True,
+    )
+
+    assert value == "md"
 
 
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:

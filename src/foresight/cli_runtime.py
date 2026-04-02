@@ -17,6 +17,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from . import cli_shared as _cli_shared
+
 try:
     from rich.console import Console
     from rich.text import Text
@@ -258,10 +260,10 @@ class _CliRuntimeLogger:
 
 def _config_from_args(args: Any) -> CliLogConfig:
     return CliLogConfig(
-        style=str(getattr(args, "log_style", "auto")),
-        level=str(getattr(args, "log_level", "info")),
-        log_file=str(getattr(args, "log_file", "")),
-        no_progress=bool(getattr(args, "no_progress", False)),
+        style=_cli_shared._string_arg_value(args, "log_style", default="auto"),
+        level=_cli_shared._string_arg_value(args, "log_level", default="info"),
+        log_file=_cli_shared._string_arg_value(args, "log_file"),
+        no_progress=_cli_shared._bool_arg_value(args, "no_progress"),
     )
 
 

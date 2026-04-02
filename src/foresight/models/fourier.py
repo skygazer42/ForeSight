@@ -12,6 +12,36 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _fourier_design_matrix(
+    t: np.ndarray,
+    *,
+    periods: tuple[int, ...],
+    orders: tuple[int, ...],
+    include_trend: bool,
+) -> np.ndarray:
+    n = int(t.shape[0])
+    cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
+    if bool(include_trend):
+        cols.append(t)
+
+    for period, order in zip(periods, orders, strict=True):
+        w = 2.0 * np.pi / float(period)
+        for k in range(1, int(order) + 1):
+            cols.append(np.sin(w * float(k) * t))
+            cols.append(np.cos(w * float(k) * t))
+
+    return np.stack(cols, axis=1)
+
+
+def _linear_design_forecast(
+    X: np.ndarray,
+    y: np.ndarray,
+    X_future: np.ndarray,
+) -> np.ndarray:
+    coef, *_ = np.linalg.lstsq(X, y, rcond=None)
+    return np.asarray(X_future @ coef, dtype=float)
+
+
 def fourier_regression_forecast(
     train: Any,
     horizon: int,
@@ -37,30 +67,21 @@ def fourier_regression_forecast(
 
     n = int(x.size)
     t = np.arange(n, dtype=float)
-
-    cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
-    if include_trend:
-        cols.append(t)
-
-    w = 2.0 * np.pi / float(period)
-    for k in range(1, int(order) + 1):
-        cols.append(np.sin(w * float(k) * t))
-        cols.append(np.cos(w * float(k) * t))
-
-    X = np.stack(cols, axis=1)
-    coef, *_ = np.linalg.lstsq(X, x, rcond=None)
+    X = _fourier_design_matrix(
+        t,
+        periods=(int(period),),
+        orders=(int(order),),
+        include_trend=bool(include_trend),
+    )
 
     tf = np.arange(n, n + int(horizon), dtype=float)
-    cols_f: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
-    if include_trend:
-        cols_f.append(tf)
-    for k in range(1, int(order) + 1):
-        cols_f.append(np.sin(w * float(k) * tf))
-        cols_f.append(np.cos(w * float(k) * tf))
-
-    x_future = np.stack(cols_f, axis=1)
-    yhat = x_future @ coef
-    return np.asarray(yhat, dtype=float)
+    x_future = _fourier_design_matrix(
+        tf,
+        periods=(int(period),),
+        orders=(int(order),),
+        include_trend=bool(include_trend),
+    )
+    return _linear_design_forecast(X, x, x_future)
 
 
 def _normalize_periods(periods: Any) -> tuple[int, ...]:
@@ -145,31 +166,18 @@ def fourier_multi_regression_forecast(
 
     n = int(x.size)
     t = np.arange(n, dtype=float)
-
-    cols: list[np.ndarray] = [np.ones((n,), dtype=float)]
-    if bool(include_trend):
-        cols.append(t)
-
-    for period, order in zip(periods_tup, orders_tup, strict=True):
-        w = 2.0 * np.pi / float(period)
-        for k in range(1, int(order) + 1):
-            cols.append(np.sin(w * float(k) * t))
-            cols.append(np.cos(w * float(k) * t))
-
-    X = np.stack(cols, axis=1)
-    coef, *_ = np.linalg.lstsq(X, x, rcond=None)
+    X = _fourier_design_matrix(
+        t,
+        periods=periods_tup,
+        orders=orders_tup,
+        include_trend=bool(include_trend),
+    )
 
     tf = np.arange(n, n + int(horizon), dtype=float)
-    cols_f: list[np.ndarray] = [np.ones((int(horizon),), dtype=float)]
-    if bool(include_trend):
-        cols_f.append(tf)
-
-    for period, order in zip(periods_tup, orders_tup, strict=True):
-        w = 2.0 * np.pi / float(period)
-        for k in range(1, int(order) + 1):
-            cols_f.append(np.sin(w * float(k) * tf))
-            cols_f.append(np.cos(w * float(k) * tf))
-
-    x_future = np.stack(cols_f, axis=1)
-    yhat = x_future @ coef
-    return np.asarray(yhat, dtype=float)
+    x_future = _fourier_design_matrix(
+        tf,
+        periods=periods_tup,
+        orders=orders_tup,
+        include_trend=bool(include_trend),
+    )
+    return _linear_design_forecast(X, x, x_future)

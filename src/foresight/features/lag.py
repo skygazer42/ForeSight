@@ -7,6 +7,32 @@ import numpy as np
 from .tabular import normalize_int_tuple, normalize_lag_steps
 
 
+def _lagged_feature_matrix(
+    arr: np.ndarray,
+    *,
+    lag_steps: tuple[int, ...],
+    t0: int,
+    rows: int,
+) -> np.ndarray:
+    X = np.empty((int(rows), len(lag_steps)), dtype=float)
+    for i in range(int(rows)):
+        t = int(i + t0)
+        X[i, :] = np.asarray([arr[t - lag] for lag in lag_steps], dtype=float)
+    return X
+
+
+def _validated_lag_steps_and_start_index(
+    *,
+    lags: Any,
+    start_t: int | None,
+) -> tuple[tuple[int, ...], int]:
+    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="lags")
+    if not lag_steps:
+        raise ValueError("lags must be >= 1")
+    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
+    return lag_steps, t0
+
+
 def make_lagged_xy(
     y: Any, *, lags: Any, start_t: int | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -20,21 +46,16 @@ def make_lagged_xy(
     arr = np.asarray(y, dtype=float)
     if arr.ndim != 1:
         raise ValueError(f"make_lagged_xy expects 1D input, got shape {arr.shape}")
-    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="lags")
-    if not lag_steps:
-        raise ValueError("lags must be >= 1")
-
-    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
+    lag_steps, t0 = _validated_lag_steps_and_start_index(lags=lags, start_t=start_t)
     if arr.size <= t0:
         raise ValueError(f"Need > start_t points (start_t={t0}), got {arr.size}")
 
     n = int(arr.size)
     rows = n - t0
-    X = np.empty((rows, len(lag_steps)), dtype=float)
+    X = _lagged_feature_matrix(arr, lag_steps=lag_steps, t0=t0, rows=rows)
     yt = np.empty((rows,), dtype=float)
     for i in range(rows):
         t = i + t0
-        X[i, :] = np.asarray([arr[t - lag] for lag in lag_steps], dtype=float)
         yt[i] = arr[t]
     return X, yt
 
@@ -66,11 +87,7 @@ def make_lagged_xy_multi(
     if h <= 0:
         raise ValueError("horizon must be >= 1")
 
-    lag_steps = normalize_lag_steps(lags, allow_zero=False, name="lags")
-    if not lag_steps:
-        raise ValueError("lags must be >= 1")
-
-    t0 = int(max(lag_steps)) if start_t is None else max(int(max(lag_steps)), int(start_t))
+    lag_steps, t0 = _validated_lag_steps_and_start_index(lags=lags, start_t=start_t)
     if arr.size < (t0 + h):
         raise ValueError(f"Need >= start_t+horizon points (start_t={t0}, horizon={h}), got {arr.size}")
 
@@ -80,12 +97,11 @@ def make_lagged_xy_multi(
     if rows <= 0:
         raise ValueError("Not enough points to build lagged multi-horizon dataset")
 
-    X = np.empty((rows, len(lag_steps)), dtype=float)
+    X = _lagged_feature_matrix(arr, lag_steps=lag_steps, t0=t0, rows=rows)
     Y = np.empty((rows, h), dtype=float)
     t_index = np.empty((rows,), dtype=int)
     for i in range(rows):
         t = i + t0
-        X[i, :] = np.asarray([arr[t - lag] for lag in lag_steps], dtype=float)
         Y[i, :] = arr[t : t + h]
         t_index[i] = int(t)
     return X, Y, t_index

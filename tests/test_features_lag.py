@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import foresight.features.lag as lag_mod
 from foresight.features.lag import make_lagged_xy, make_lagged_xy_multi
 from foresight.features.tabular import build_column_lag_features
 
@@ -25,6 +26,33 @@ def test_make_lagged_xy_supports_explicit_target_lags() -> None:
         [1.0, 3.0, 5.0],
         [2.0, 4.0, 6.0],
     ]
+
+
+def test_lagged_feature_matrix_builds_rows_for_target_windows() -> None:
+    arr = np.arange(8, dtype=float)
+
+    X = lag_mod._lagged_feature_matrix(  # type: ignore[attr-defined]
+        arr,
+        lag_steps=(1, 3, 5),
+        t0=5,
+        rows=3,
+    )
+
+    assert X.tolist() == [
+        [4.0, 2.0, 0.0],
+        [5.0, 3.0, 1.0],
+        [6.0, 4.0, 2.0],
+    ]
+
+
+def test_validated_lag_steps_and_start_index_uses_max_lag_or_explicit_start() -> None:
+    lag_steps, t0 = lag_mod._validated_lag_steps_and_start_index(  # type: ignore[attr-defined]
+        lags=(1, 3, 5),
+        start_t=4,
+    )
+
+    assert lag_steps == (5, 3, 1)
+    assert t0 == 5
 
 
 def test_build_column_lag_features_supports_historic_and_future_roles() -> None:

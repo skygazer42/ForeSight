@@ -92,7 +92,7 @@ def _leaderboard_has_requested_quantiles(model_params: dict[str, Any]) -> bool:
     if raw is None:
         return False
     if isinstance(raw, str):
-        return bool([part.strip() for part in raw.split(",") if part.strip()])
+        return bool(_cli_shared._split_csv_items(raw))
     if isinstance(raw, list | tuple):
         return bool(raw)
     return True
@@ -540,26 +540,30 @@ def _cmd_leaderboard_naive(args: argparse.Namespace) -> int:
 
     rows = [
         eval_naive_last(
-            dataset=str(args.dataset),
-            y_col=str(args.y_col),
+            dataset=_cli_shared._string_arg_value(args, "dataset"),
+            y_col=_cli_shared._string_arg_value(args, "y_col"),
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             max_windows=args.max_windows,
-            data_dir=str(args.data_dir),
+            data_dir=_cli_shared._string_arg_value(args, "data_dir"),
         ),
         eval_seasonal_naive(
-            dataset=str(args.dataset),
-            y_col=str(args.y_col),
+            dataset=_cli_shared._string_arg_value(args, "dataset"),
+            y_col=_cli_shared._string_arg_value(args, "y_col"),
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             season_length=int(args.season_length),
             max_windows=args.max_windows,
-            data_dir=str(args.data_dir),
+            data_dir=_cli_shared._string_arg_value(args, "data_dir"),
         ),
     ]
-    _cli_shared._emit(rows, output=args.output, fmt=str(args.format))
+    _cli_shared._emit(
+        rows,
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
+    )
     return 0
 
 
@@ -568,17 +572,22 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
     from .models.registry import get_model_spec, list_models
 
     def _run() -> int:
-        with _cli_runtime.phase_scope("params", payload=_log_payload(dataset=str(args.dataset))):
-            y_col = str(args.y_col).strip() or None
-            model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
+        dataset_key = _cli_shared._string_arg_value(args, "dataset")
+        data_dir_s = _cli_shared._string_arg_value(args, "data_dir")
+        raw_models = _cli_shared._string_arg_value(args, "models")
+        with _cli_runtime.phase_scope("params", payload=_log_payload(dataset=dataset_key)):
+            y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
+            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
 
-            if str(args.models).strip():
-                keys = [k.strip() for k in str(args.models).split(",") if k.strip()]
+            if raw_models:
+                keys = _cli_shared._split_csv_items(raw_models)
             else:
                 keys = [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
 
             rows: list[dict[str, Any]] = []
-            task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+            task_group_filter = _normalize_task_group_filter(
+                _cli_shared._string_arg_value(args, "task_group", default="all")
+            )
             filtered_keys: list[str] = []
             for key in keys:
                 task_group, _backend_family = _leaderboard_model_metadata(
@@ -590,24 +599,25 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
                 filtered_keys.append(str(key))
 
         if not filtered_keys:
-            with _cli_runtime.phase_scope("emit", payload=_log_payload(rows=0, format=str(args.format))):
-                _cli_shared._emit(rows, output=str(args.output), fmt=str(args.format))
+            fmt = _cli_shared._format_arg_value(args)
+            with _cli_runtime.phase_scope("emit", payload=_log_payload(rows=0, format=fmt)):
+                _cli_shared._emit(rows, output=_cli_shared._output_arg_value(args), fmt=fmt)
             return 0
 
         with _cli_runtime.phase_scope(
             "prepare",
-            payload=_log_payload(dataset=str(args.dataset), models=len(filtered_keys)),
+            payload=_log_payload(dataset=dataset_key, models=len(filtered_keys)),
         ):
             long_df, y_col_final = _get_or_build_leaderboard_long_df(
-                dataset=str(args.dataset),
+                dataset=dataset_key,
                 y_col=y_col,
-                data_dir=str(args.data_dir),
+                data_dir=data_dir_s,
                 model_params=model_params,
             )
 
         with _cli_runtime.phase_scope(
             "evaluate",
-            payload=_log_payload(dataset=str(args.dataset), models=len(filtered_keys)),
+            payload=_log_payload(dataset=dataset_key, models=len(filtered_keys)),
         ):
             for key in filtered_keys:
                 task_group, backend_family = _leaderboard_model_metadata(
@@ -629,13 +639,13 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
                     rows.append(
                         _leaderboard_skip_row(
                             model_key=str(key),
-                            dataset_key=str(args.dataset),
+                            dataset_key=dataset_key,
                             y_col_final=y_col_final,
                             horizon=int(args.horizon),
                             step=int(args.step),
                             min_train_size=int(args.min_train_size),
                             max_windows=args.max_windows,
-                            data_dir_s=str(args.data_dir),
+                            data_dir_s=data_dir_s,
                             model_params=model_params,
                             task_group=task_group,
                             backend_family=backend_family,
@@ -647,9 +657,9 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
                 rows.append(
                     _leaderboard_finalize_ok_row(
                         payload,
-                        dataset_key=str(args.dataset),
+                        dataset_key=dataset_key,
                         y_col_final=y_col_final,
-                        data_dir_s=str(args.data_dir),
+                        data_dir_s=data_dir_s,
                         model_params=model_params,
                         task_group=task_group,
                         backend_family=backend_family,
@@ -665,21 +675,25 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
         )
         with _cli_runtime.phase_scope(
             "emit",
-            payload=_log_payload(rows=len(rows), format=str(args.format)),
+            payload=_log_payload(rows=len(rows), format=_cli_shared._format_arg_value(args)),
         ):
-            _cli_shared._emit(rows, output=str(args.output), fmt=str(args.format))
+            _cli_shared._emit(
+                rows,
+                output=_cli_shared._output_arg_value(args),
+                fmt=_cli_shared._format_arg_value(args),
+            )
         return 0
 
     return _run_logged_command(
         args,
         command="leaderboard models",
         payload=_log_payload(
-            dataset=str(args.dataset),
+            dataset=_cli_shared._string_arg_value(args, "dataset"),
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             max_windows=args.max_windows,
-            task_group=str(getattr(args, "task_group", "all")),
+            task_group=_cli_shared._string_arg_value(args, "task_group", default="all"),
         ),
         action=_run,
     )
@@ -765,8 +779,9 @@ def _leaderboard_sweep_worker(
 def _resolve_leaderboard_sweep_model_keys(args: argparse.Namespace) -> list[str]:
     from .models.registry import get_model_spec, list_models
 
-    if str(args.models).strip():
-        return [k.strip() for k in str(args.models).split(",") if k.strip()]
+    raw_models = _cli_shared._string_arg_value(args, "models")
+    if raw_models.strip():
+        return _cli_shared._split_csv_items(raw_models)
 
     return [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
 
@@ -1042,21 +1057,27 @@ def _leaderboard_sweep_mae_key(v: object) -> float:
         return float("inf")
 
 
+def _leaderboard_sweep_row_key(row: dict[str, Any]) -> tuple[str, str] | None:
+    ds = str(row.get("dataset", "")).strip()
+    model = str(row.get("model", "")).strip()
+    if not ds or not model:
+        return None
+    return (ds, model)
+
+
 def _merge_leaderboard_sweep_rows(
     resume_rows: list[dict[str, Any]],
     rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     for row in resume_rows:
-        ds = str(row.get("dataset", "")).strip()
-        model = str(row.get("model", "")).strip()
-        if ds and model:
-            merged[(ds, model)] = row
+        key = _leaderboard_sweep_row_key(row)
+        if key is not None:
+            merged[key] = row
     for row in rows:
-        ds = str(row.get("dataset", "")).strip()
-        model = str(row.get("model", "")).strip()
-        if ds and model:
-            merged[(ds, model)] = row
+        key = _leaderboard_sweep_row_key(row)
+        if key is not None:
+            merged[key] = row
 
     final_rows = list(merged.values()) if merged else rows
     final_rows.sort(
@@ -1074,14 +1095,14 @@ def _write_leaderboard_sweep_summary(
     args: argparse.Namespace,
     final_rows: list[dict[str, Any]],
 ) -> None:
-    summary_output = str(getattr(args, "summary_output", "")).strip()
+    summary_output = _cli_shared._optional_stripped_arg_value(args, "summary_output")
     if not summary_output:
         return
 
-    summary_format = str(getattr(args, "summary_format", "json")).strip()
-    summary_sort = str(getattr(args, "summary_sort", "mae_rank_mean"))
-    summary_limit = int(getattr(args, "summary_limit", 0))
-    summary_min_datasets = int(getattr(args, "summary_min_datasets", 0))
+    summary_format = _cli_shared._stripped_arg_value(args, "summary_format", default="json")
+    summary_sort = _cli_shared._string_arg_value(args, "summary_sort", default="mae_rank_mean")
+    summary_limit = _cli_shared._int_arg_value(args, "summary_limit", default=0)
+    summary_min_datasets = _cli_shared._int_arg_value(args, "summary_min_datasets", default=0)
 
     summary_rows = (
         []
@@ -1105,14 +1126,14 @@ def _write_leaderboard_sweep_task_reports(
     args: argparse.Namespace,
     task_stats: list[Any],
 ) -> None:
-    task_reports_output = str(getattr(args, "task_reports_output", "")).strip()
+    task_reports_output = _cli_shared._optional_stripped_arg_value(args, "task_reports_output")
     if not task_reports_output:
         return
 
-    task_reports_format = str(getattr(args, "task_reports_format", "json")).strip()
+    task_reports_format = _cli_shared._stripped_arg_value(args, "task_reports_format", default="json")
     _get_batch_execution_module().emit_task_reports(
         task_stats,
-        backend=str(args.backend),
+        backend=_cli_shared._string_arg_value(args, "backend"),
         jobs=int(args.jobs),
         fmt=task_reports_format,
         output=task_reports_output,
@@ -1121,31 +1142,36 @@ def _write_leaderboard_sweep_task_reports(
 
 def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
     def _run() -> int:
+        datasets_raw = _cli_shared._string_arg_value(args, "datasets")
+        data_dir_s = _cli_shared._string_arg_value(args, "data_dir")
+        backend = _cli_shared._string_arg_value(args, "backend")
         with _cli_runtime.phase_scope(
             "params",
-            payload=_log_payload(datasets=str(args.datasets), jobs=int(args.jobs)),
+            payload=_log_payload(datasets=datasets_raw, jobs=int(args.jobs)),
         ):
-            datasets = [d.strip() for d in str(args.datasets).split(",") if d.strip()]
+            datasets = _cli_shared._split_csv_items(datasets_raw)
             if not datasets:
                 raise ValueError("--datasets must contain at least one dataset key")
 
-            y_col = str(args.y_col).strip() or None
+            y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
             keys = _resolve_leaderboard_sweep_model_keys(args)
 
             jobs = int(args.jobs)
             if jobs <= 0:
                 raise ValueError("--jobs must be >= 1")
 
-            chunk_size = str(getattr(args, "chunk_size", "1"))
+            chunk_size = _cli_shared._string_arg_value(args, "chunk_size", default="1")
             _resolve_leaderboard_chunk_size(
                 chunk_size,
                 dataset_count=len(datasets),
                 model_count=len(keys),
                 jobs=jobs,
             )
-            strict = bool(getattr(args, "strict", False))
-            model_params = _cli_shared._parse_model_params(list(getattr(args, "model_param", [])))
-            task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+            strict = _cli_shared._bool_arg_value(args, "strict")
+            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            task_group_filter = _normalize_task_group_filter(
+                _cli_shared._string_arg_value(args, "task_group", default="all")
+            )
             if task_group_filter is not None:
                 keys = [
                     key
@@ -1153,7 +1179,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                     if _leaderboard_model_metadata(str(key), model_params=model_params)[0]
                     == task_group_filter
                 ]
-            resume_path = str(getattr(args, "resume", "")).strip()
+            resume_path = _cli_shared._optional_stripped_arg_value(args, "resume") or ""
 
         with _cli_runtime.phase_scope("resume", payload=_log_payload(resume=resume_path or None)):
             resume_rows, done_pairs = _load_leaderboard_sweep_resume_state(
@@ -1165,7 +1191,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 step=int(args.step),
                 min_train_size=int(args.min_train_size),
                 max_windows=None if args.max_windows is None else int(args.max_windows),
-                data_dir=str(args.data_dir).strip(),
+                data_dir=data_dir_s,
                 model_params=model_params,
                 progress=bool(args.progress),
             )
@@ -1182,12 +1208,12 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
         task_stats: list[Any] = []
         with _cli_runtime.phase_scope(
             "evaluate",
-            payload=_log_payload(tasks=len(tasks), jobs=jobs, backend=str(args.backend)),
+            payload=_log_payload(tasks=len(tasks), jobs=jobs, backend=backend),
         ):
             rows, _failures = _run_parallel_tasks(
                 tasks,
                 jobs=jobs,
-                backend=str(args.backend),
+                backend=backend,
                 progress=bool(args.progress),
                 strict=strict,
                 worker=_leaderboard_sweep_worker,
@@ -1197,7 +1223,7 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                     int(args.step),
                     int(args.min_train_size),
                     args.max_windows,
-                    str(args.data_dir),
+                    data_dir_s,
                     strict,
                     model_params,
                 ),
@@ -1209,41 +1235,47 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
 
         with _cli_runtime.phase_scope(
             "emit",
-            payload=_log_payload(rows=len(final_rows), format=str(args.format)),
+            payload=_log_payload(rows=len(final_rows), format=_cli_shared._format_arg_value(args)),
         ):
-            failures_output = str(getattr(args, "failures_output", "")).strip()
+            failures_output = _cli_shared._optional_stripped_arg_value(args, "failures_output")
             if failures_output:
                 _cli_shared._write_lines(failure_lines, output=failures_output)
 
             _write_leaderboard_sweep_summary(args, final_rows)
             _write_leaderboard_sweep_task_reports(args, task_stats)
-            _cli_shared._emit(final_rows, output=str(args.output), fmt=str(args.format))
+            _cli_shared._emit(
+                final_rows,
+                output=_cli_shared._output_arg_value(args),
+                fmt=_cli_shared._format_arg_value(args),
+            )
         return 0
 
     return _run_logged_command(
         args,
         command="leaderboard sweep",
         payload=_log_payload(
-            datasets=str(args.datasets),
+            datasets=_cli_shared._string_arg_value(args, "datasets"),
             horizon=int(args.horizon),
             step=int(args.step),
             min_train_size=int(args.min_train_size),
             max_windows=args.max_windows,
             jobs=int(args.jobs),
-            backend=str(args.backend),
+            backend=_cli_shared._string_arg_value(args, "backend"),
         ),
         action=_run,
     )
 
 
 def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
-    input_path = str(getattr(args, "input", "-")).strip() or "-"
-    input_fmt = str(getattr(args, "input_format", "auto")).strip().lower()
+    input_path = _cli_shared._stripped_arg_value(args, "input", default="-") or "-"
+    input_fmt = _cli_shared._stripped_arg_value(args, "input_format", default="auto").lower()
 
     raw_text = _read_leaderboard_summarize_input_text(input_path)
     fmt = _detect_leaderboard_summarize_input_format(input_path, input_fmt, raw_text)
     rows_raw = _parse_leaderboard_summarize_rows(raw_text, fmt)
-    task_group_filter = _normalize_task_group_filter(getattr(args, "task_group", "all"))
+    task_group_filter = _normalize_task_group_filter(
+        _cli_shared._string_arg_value(args, "task_group", default="all")
+    )
     if task_group_filter is not None:
         rows_raw = [
             row
@@ -1256,15 +1288,15 @@ def _cmd_leaderboard_summarize(args: argparse.Namespace) -> int:
 
     summary = _summarize_leaderboard_rows(
         rows_raw,
-        sort=str(getattr(args, "sort", "mae_mean")),
-        limit=int(getattr(args, "limit", 0)),
-        min_datasets=int(getattr(args, "min_datasets", 0)),
+        sort=_cli_shared._string_arg_value(args, "sort", default="mae_mean"),
+        limit=_cli_shared._int_arg_value(args, "limit", default=0),
+        min_datasets=_cli_shared._int_arg_value(args, "min_datasets", default=0),
     )
     _cli_shared._emit_table(
         summary,
         columns=_leaderboard_summary_columns(),
-        output=str(args.output),
-        fmt=str(args.format),
+        output=_cli_shared._output_arg_value(args),
+        fmt=_cli_shared._format_arg_value(args),
     )
     return 0
 
@@ -1402,9 +1434,9 @@ def _leaderboard_summary_best_by_dataset_metric(
             group_key: [
                 row
                 for row in cleaned
-                if str(row["task_group"]) == group_key[0] and str(row["dataset"]) == group_key[1]
+                if _leaderboard_summary_group_key(row) == group_key
             ]
-            for group_key in sorted({(str(row["task_group"]), str(row["dataset"])) for row in cleaned})
+            for group_key in sorted({_leaderboard_summary_group_key(row) for row in cleaned})
         }
     )
     for task_group, dataset in sorted(grouped):
@@ -1430,16 +1462,18 @@ def _leaderboard_summary_rank_by_dataset_metric_model(
             group_key: [
                 row
                 for row in cleaned
-                if str(row["task_group"]) == group_key[0] and str(row["dataset"]) == group_key[1]
+                if _leaderboard_summary_group_key(row) == group_key
             ]
-            for group_key in sorted({(str(row["task_group"]), str(row["dataset"])) for row in cleaned})
+            for group_key in sorted({_leaderboard_summary_group_key(row) for row in cleaned})
         }
     )
     for task_group, dataset in sorted(grouped):
         rows_ds = grouped[(task_group, dataset)]
         for metric in metrics:
             vals = [
-                (str(row["model"]), row.get(metric)) for row in rows_ds if row.get(metric) is not None
+                (_leaderboard_summary_model_key(row), row.get(metric))
+                for row in rows_ds
+                if row.get(metric) is not None
             ]
             if not vals:
                 continue
@@ -1496,6 +1530,33 @@ def _leaderboard_summary_metric_weighted_pairs(
     ]
 
 
+def _leaderboard_summary_group_key(item: dict[str, Any]) -> tuple[str, str]:
+    return (str(item["task_group"]), str(item["dataset"]))
+
+
+def _leaderboard_summary_model_key(item: dict[str, Any]) -> str:
+    return str(item["model"])
+
+
+def _leaderboard_summary_group_model_key(item: dict[str, Any]) -> tuple[str, str]:
+    task_group, _dataset = _leaderboard_summary_group_key(item)
+    return (task_group, _leaderboard_summary_model_key(item))
+
+
+def _leaderboard_summary_metric_key(item: dict[str, Any], metric: str) -> tuple[str, str, str]:
+    task_group, dataset = _leaderboard_summary_group_key(item)
+    return (task_group, dataset, metric)
+
+
+def _leaderboard_summary_metric_model_key(
+    item: dict[str, Any],
+    metric: str,
+    model: str,
+) -> tuple[str, str, str, str]:
+    task_group, dataset = _leaderboard_summary_group_key(item)
+    return (task_group, dataset, metric, model)
+
+
 def _leaderboard_summary_metric_relative_values(
     items: list[dict[str, Any]],
     metric: str,
@@ -1507,9 +1568,7 @@ def _leaderboard_summary_metric_relative_values(
         v_obj = item.get(metric)
         if v_obj is None:
             continue
-        best = best_by_dataset_metric.get(
-            (str(item["task_group"]), str(item["dataset"]), metric)
-        )
+        best = best_by_dataset_metric.get(_leaderboard_summary_metric_key(item, metric))
         if best is None:
             continue
         rels.append(
@@ -1532,9 +1591,7 @@ def _leaderboard_summary_metric_relative_pairs(
         weight = item.get("n_points")
         if weight is None or int(weight) <= 0:
             continue
-        best = best_by_dataset_metric.get(
-            (str(item["task_group"]), str(item["dataset"]), metric)
-        )
+        best = best_by_dataset_metric.get(_leaderboard_summary_metric_key(item, metric))
         if best is None:
             continue
         rel_pairs.append(
@@ -1554,13 +1611,9 @@ def _leaderboard_summary_metric_ranks(
     rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> list[float]:
     return [
-        float(
-            rank_by_dataset_metric_model[
-                (str(item["task_group"]), str(item["dataset"]), metric, model)
-            ]
-        )
+        float(rank_by_dataset_metric_model[_leaderboard_summary_metric_model_key(item, metric, model)])
         for item in items
-        if (str(item["task_group"]), str(item["dataset"]), metric, model)
+        if _leaderboard_summary_metric_model_key(item, metric, model)
         in rank_by_dataset_metric_model
     ]
 
@@ -1574,15 +1627,11 @@ def _leaderboard_summary_metric_rank_pairs(
 ) -> list[tuple[float, int]]:
     return [
         (
-            float(
-                rank_by_dataset_metric_model[
-                    (str(item["task_group"]), str(item["dataset"]), metric, model)
-                ]
-            ),
+            float(rank_by_dataset_metric_model[_leaderboard_summary_metric_model_key(item, metric, model)]),
             int(item["n_points"]),
         )
         for item in items
-        if (str(item["task_group"]), str(item["dataset"]), metric, model)
+        if _leaderboard_summary_metric_model_key(item, metric, model)
         in rank_by_dataset_metric_model
         and item.get("n_points") is not None
         and int(item["n_points"]) > 0
@@ -1610,8 +1659,7 @@ def _build_leaderboard_metric_contexts(
     }
 
     for item in items:
-        task_group = str(item["task_group"])
-        dataset = str(item["dataset"])
+        task_group, dataset = _leaderboard_summary_group_key(item)
         n_points = item.get("n_points")
         weight = None if n_points is None else int(n_points)
         for metric in metrics:
@@ -1624,14 +1672,16 @@ def _build_leaderboard_metric_contexts(
                 if weight is not None and weight > 0:
                     context["weighted_pairs"].append((value_f, weight))
 
-                best = best_by_dataset_metric.get((task_group, dataset, metric_name))
+                best = best_by_dataset_metric.get(_leaderboard_summary_metric_key(item, metric_name))
                 if best is not None:
                     relative_f = _leaderboard_summary_relative_metric_to_best(value_f, float(best))
                     context["relative_values"].append(relative_f)
                     if weight is not None and weight > 0:
                         context["relative_pairs"].append((relative_f, weight))
 
-            rank = rank_by_dataset_metric_model.get((task_group, dataset, metric_name, model))
+            rank = rank_by_dataset_metric_model.get(
+                _leaderboard_summary_metric_model_key(item, metric_name, model)
+            )
             if rank is not None:
                 rank_f = float(rank)
                 context["rank_values"].append(rank_f)
@@ -1685,7 +1735,7 @@ def _leaderboard_model_summary_row(
     best_by_dataset_metric: dict[tuple[str, str, str], float],
     rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> dict[str, Any]:
-    datasets = {str(item["dataset"]) for item in items}
+    datasets = {_leaderboard_summary_group_key(item)[1] for item in items}
     metric_contexts = _build_leaderboard_metric_contexts(
         items,
         metrics=metrics,
@@ -1810,10 +1860,8 @@ def _summarize_leaderboard_rows(
     by_group_model: dict[tuple[str, str], list[dict[str, Any]]] = {}
     rows_by_dataset: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in cleaned:
-        task_group = str(row["task_group"])
-        model = str(row["model"])
-        dataset = str(row["dataset"])
-        by_group_model.setdefault((task_group, model), []).append(row)
+        task_group, dataset = _leaderboard_summary_group_key(row)
+        by_group_model.setdefault(_leaderboard_summary_group_model_key(row), []).append(row)
         rows_by_dataset.setdefault((task_group, dataset), []).append(row)
 
     n_datasets_total_by_group: dict[str, int] = {}

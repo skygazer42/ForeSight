@@ -38,6 +38,22 @@ def _function_uses_name(path: str, func_name: str, name: str) -> bool:
     raise AssertionError(f"Function {func_name!r} not found in {path}")
 
 
+def _function_uses_attr(path: str, func_name: str, owner_name: str, attr_name: str) -> bool:
+    tree = _parse_repo_file(path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == func_name:
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Attribute)
+                    and isinstance(sub.value, ast.Name)
+                    and sub.value.id == owner_name
+                    and sub.attr == attr_name
+                ):
+                    return True
+            return False
+    raise AssertionError(f"Function {func_name!r} not found in {path}")
+
+
 def _call_matches_method_without_keyword(
     node: ast.AST,
     *,
@@ -1890,10 +1906,21 @@ def test_cli_leaderboard_summarize_source_extracts_input_parsing_helpers() -> No
 def test_cli_catalog_source_extracts_papers_and_docs_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_catalog.py")
 
+    assert "def _paper_payload_for_paper_id(" in source
     assert "def _paper_model_matches_role(" in source
     assert "def _paper_model_rows_for_spec(" in source
     assert "def _paper_matching_rows_for_spec(" in source
     assert "def _rnn_doc_check_failures(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_catalog.py",
+        "_cmd_papers_list",
+        "_paper_payload_for_paper_id",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_catalog.py",
+        "_cmd_papers_info",
+        "_paper_payload_for_paper_id",
+    )
     assert _function_uses_name(
         "src/foresight/cli_catalog.py",
         "_cmd_papers_models",
@@ -2204,6 +2231,329 @@ def test_cli_shared_source_extracts_split_csv_items_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_arg_value_helpers() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _string_arg_value(" in source
+    assert "def _list_arg_values(" in source
+    assert "def _int_arg_value(" in source
+    assert "def _float_arg_value(" in source
+    assert "def _bool_arg_value(" in source
+    assert "def _output_arg_value(" in source
+    assert "def _format_arg_value(" in source
+    assert "def _stripped_arg_value(" in source
+    assert "def _optional_stripped_arg_value(" in source
+    assert "def _parse_cols_arg(" in source
+    assert "def _parse_id_cols_arg(" in source
+    assert "def _parse_requires_arg(" in source
+
+
+def test_cli_modules_route_output_and_format_args_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert "_cli_shared._output_arg_value(" in cli_source
+    assert "_cli_shared._format_arg_value(" in cli_source
+    assert 'output=str(args.output)' not in cli_source
+    assert "output=args.output" not in cli_source
+    assert "str(args.format)" not in cli_source
+
+    assert "_cli_shared._output_arg_value(" in cli_catalog_source
+    assert "_cli_shared._format_arg_value(" in cli_catalog_source
+    assert 'output=str(args.output)' not in cli_catalog_source
+    assert "str(args.format)" not in cli_catalog_source
+
+    assert "_cli_shared._output_arg_value(" in cli_data_source
+    assert "_cli_shared._format_arg_value(" in cli_data_source
+    assert 'str(getattr(args, "output", ""))' not in cli_data_source
+    assert "str(args.format)" not in cli_data_source
+
+    assert "_cli_shared._output_arg_value(" in cli_leaderboard_source
+    assert "_cli_shared._format_arg_value(" in cli_leaderboard_source
+    assert 'output=str(args.output)' not in cli_leaderboard_source
+    assert "output=args.output" not in cli_leaderboard_source
+    assert "str(args.format)" not in cli_leaderboard_source
+
+
+def test_cli_modules_route_stripped_string_args_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert "_cli_shared._stripped_arg_value(" in cli_source
+    assert "_cli_shared._optional_stripped_arg_value(" in cli_source
+    assert 'str(getattr(args, "future_path", "")).strip()' not in cli_source
+    assert 'str(getattr(args, "interval_levels", "")).strip()' not in cli_source
+    assert 'str(getattr(args, "save_artifact", "")).strip()' not in cli_source
+    assert 'str(getattr(args, "path_prefix", "")).strip()' not in cli_source
+
+    assert "_cli_shared._stripped_arg_value(" in cli_catalog_source
+    assert 'str(getattr(args, "stability", "any")).strip()' not in cli_catalog_source
+    assert 'str(getattr(args, "columns", "")).strip()' not in cli_catalog_source
+
+    assert "_cli_shared._optional_stripped_arg_value(" in cli_data_source
+    assert 'str(getattr(args, "freq", "")).strip()' not in cli_data_source
+    assert 'str(getattr(args, "historic_x_missing", "")).strip()' not in cli_data_source
+    assert 'str(getattr(args, "future_x_missing", "")).strip()' not in cli_data_source
+
+    assert "_cli_shared._stripped_arg_value(" in cli_leaderboard_source
+    assert "_cli_shared._optional_stripped_arg_value(" in cli_leaderboard_source
+    assert 'str(getattr(args, "summary_output", "")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "summary_format", "json")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "task_reports_output", "")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "task_reports_format", "json")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "resume", "")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "failures_output", "")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "input", "-")).strip()' not in cli_leaderboard_source
+    assert 'str(getattr(args, "input_format", "auto")).strip()' not in cli_leaderboard_source
+
+
+def test_cli_modules_route_direct_stripped_args_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert 'str(args.y_col).strip()' not in cli_source
+    assert 'str(args.model).strip()' not in cli_source
+    assert 'str(args.score_method).strip()' not in cli_source
+    assert 'str(args.threshold_method).strip()' not in cli_source
+    assert 'str(args.conformal_levels).strip()' not in cli_source
+
+    assert 'str(args.prefix).strip()' not in cli_catalog_source
+    assert 'str(args.sort).strip()' not in cli_catalog_source
+    assert 'str(args.query).strip()' not in cli_catalog_source
+    assert 'str(args.paper_id).strip()' not in cli_catalog_source
+    assert 'str(args.role).strip()' not in cli_catalog_source
+
+    assert 'str(args.y_col).strip()' not in cli_leaderboard_source
+    assert 'str(args.models).strip()' not in cli_leaderboard_source
+    assert 'str(args.data_dir).strip()' not in cli_leaderboard_source
+
+
+def test_cli_modules_route_column_arg_parsing_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+
+    assert "_cli_shared._parse_id_cols_arg(" in cli_source
+    assert 'parse_id_cols(str(args.id_cols))' not in cli_source
+
+    assert "_cli_shared._parse_cols_arg(" in cli_data_source
+    assert "_cli_shared._parse_id_cols_arg(" in cli_data_source
+    assert 'parse_id_cols(str(args.id_cols))' not in cli_data_source
+    assert 'parse_id_cols(str(getattr(args, "id_cols", "")))' not in cli_data_source
+    assert 'parse_cols(str(args.x_cols))' not in cli_data_source
+    assert 'parse_cols(str(args.historic_x_cols))' not in cli_data_source
+    assert 'parse_cols(str(args.future_x_cols))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "historic_x_cols", "")))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "future_x_cols", "")))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "columns", "")))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "columns", "y")))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "target_cols", "")))' not in cli_data_source
+    assert 'parse_cols(str(getattr(args, "x_cols", "")))' not in cli_data_source
+
+
+def test_cli_data_routes_default_string_args_through_cli_shared_helpers() -> None:
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+
+    assert "_cli_shared._string_arg_value(" in cli_data_source
+    assert 'str(getattr(args, "y_missing", "error"))' not in cli_data_source
+    assert 'str(getattr(args, "x_missing", "error"))' not in cli_data_source
+    assert 'str(getattr(args, "agg", "last"))' not in cli_data_source
+    assert 'str(getattr(args, "method", "iqr"))' not in cli_data_source
+    assert 'str(getattr(args, "prefix", "cal_"))' not in cli_data_source
+    assert 'str(getattr(args, "ds_col", "ds"))' not in cli_data_source
+    assert 'str(getattr(args, "input_format", "auto"))' not in cli_data_source
+    assert 'str(getattr(args, "lags", "5"))' not in cli_data_source
+    assert 'str(getattr(args, "roll_windows", ""))' not in cli_data_source
+    assert 'str(getattr(args, "roll_stats", ""))' not in cli_data_source
+    assert 'str(getattr(args, "diff_lags", ""))' not in cli_data_source
+    assert 'str(getattr(args, "seasonal_lags", ""))' not in cli_data_source
+    assert 'str(getattr(args, "seasonal_diff_lags", ""))' not in cli_data_source
+    assert 'str(getattr(args, "fourier_periods", ""))' not in cli_data_source
+    assert 'str(getattr(args, "fourier_orders", "2"))' not in cli_data_source
+
+
+def test_cli_data_routes_required_string_args_through_cli_shared_helpers() -> None:
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+
+    assert "_cli_shared._string_arg_value(" in cli_data_source
+    assert 'str(args.data_dir)' not in cli_data_source
+    assert 'str(args.key)' not in cli_data_source
+    assert 'str(args.dataset)' not in cli_data_source
+    assert 'str(args.path)' not in cli_data_source
+    assert 'str(args.time_col)' not in cli_data_source
+    assert 'str(args.y_col)' not in cli_data_source
+
+
+def test_cli_command_handlers_route_required_string_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli.py"
+
+    assert _function_uses_attr(path, "_cmd_cv_run", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_cv_csv", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_forecast_csv", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_forecast_artifact", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_artifact_info", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_artifact_validate", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_artifact_diff", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_tuning_run", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_detect_run", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_detect_csv", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_eval_naive_last", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_eval_seasonal_naive", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_eval_run", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_eval_csv", "_cli_shared", "_string_arg_value")
+
+
+def test_cli_routes_doctor_and_shortcut_string_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli.py"
+
+    assert _function_uses_attr(path, "_root_shortcut_handler", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_doctor", "_cli_shared", "_string_arg_value")
+
+
+def test_cli_leaderboard_routes_string_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli_leaderboard.py"
+    source = _read_repo_file(path)
+
+    assert _function_uses_attr(path, "_cmd_leaderboard_naive", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_leaderboard_models", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(
+        path,
+        "_resolve_leaderboard_sweep_model_keys",
+        "_cli_shared",
+        "_string_arg_value",
+    )
+    assert _function_uses_attr(
+        path,
+        "_write_leaderboard_sweep_task_reports",
+        "_cli_shared",
+        "_string_arg_value",
+    )
+    assert _function_uses_attr(path, "_cmd_leaderboard_sweep", "_cli_shared", "_string_arg_value")
+
+    assert 'str(args.dataset)' not in source
+    assert 'str(args.y_col)' not in source
+    assert 'str(args.data_dir)' not in source
+    assert 'str(args.datasets)' not in source
+    assert 'str(args.backend)' not in source
+    assert 'str(args.models)' not in source
+
+
+def test_cli_leaderboard_routes_default_string_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli_leaderboard.py"
+    source = _read_repo_file(path)
+
+    assert _function_uses_attr(path, "_cmd_leaderboard_models", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_write_leaderboard_sweep_summary", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_leaderboard_sweep", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_leaderboard_summarize", "_cli_shared", "_string_arg_value")
+
+    assert 'str(getattr(args, "task_group", "all"))' not in source
+    assert 'str(getattr(args, "summary_sort", "mae_rank_mean"))' not in source
+    assert 'str(getattr(args, "chunk_size", "1"))' not in source
+    assert 'str(getattr(args, "sort", "mae_mean"))' not in source
+
+
+def test_cli_catalog_routes_string_and_requires_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli_catalog.py"
+    source = _read_repo_file(path)
+
+    assert _function_uses_attr(path, "_cmd_models_list", "_cli_shared", "_parse_requires_arg")
+    assert _function_uses_attr(path, "_cmd_models_info", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_cmd_models_search", "_cli_shared", "_parse_requires_arg")
+    assert _function_uses_attr(path, "_cmd_docs_rnn", "_cli_shared", "_string_arg_value")
+
+    assert 'str(getattr(args, "requires", ""))' not in source
+    assert 'str(getattr(args, "exclude_requires", ""))' not in source
+    assert 'str(args.key)' not in source
+    assert 'str(args.output_dir)' not in source
+
+
+def test_cli_catalog_and_leaderboard_route_default_filter_args_through_cli_shared_helpers() -> None:
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert 'getattr(args, "interface", "any")' not in cli_catalog_source
+    assert 'getattr(args, "task_group", "all")' not in cli_leaderboard_source
+
+
+def test_cli_catalog_and_leaderboard_route_csv_splitting_through_cli_shared_helper() -> None:
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert "_cli_shared._split_csv_items(" in cli_catalog_source
+    assert "_cli_shared._split_csv_items(" in cli_leaderboard_source
+
+    assert 'columns_raw.split(",")' not in cli_catalog_source
+    assert 'raw_models.split(",")' not in cli_leaderboard_source
+    assert 'raw.split(",")' not in cli_leaderboard_source
+    assert 'datasets_raw.split(",")' not in cli_leaderboard_source
+
+
+def test_cli_runtime_routes_config_args_through_cli_shared_helpers() -> None:
+    path = "src/foresight/cli_runtime.py"
+
+    assert _function_uses_attr(path, "_config_from_args", "_cli_shared", "_string_arg_value")
+    assert _function_uses_attr(path, "_config_from_args", "_cli_shared", "_bool_arg_value")
+
+
+def test_cli_modules_route_list_args_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert "_cli_shared._list_arg_values(" in cli_source
+    assert 'list(getattr(args, "require_extra", []))' not in cli_source
+    assert "list(args.model_param)" not in cli_source
+    assert "list(args.grid_param)" not in cli_source
+
+    assert "_cli_shared._list_arg_values(" in cli_catalog_source
+    assert 'list(getattr(args, "capability", []))' not in cli_catalog_source
+
+    assert "_cli_shared._list_arg_values(" in cli_leaderboard_source
+    assert 'list(getattr(args, "model_param", []))' not in cli_leaderboard_source
+
+
+def test_cli_modules_route_numeric_and_bool_args_through_cli_shared_helpers() -> None:
+    cli_source = _read_repo_file("src/foresight/cli.py")
+    cli_data_source = _read_repo_file("src/foresight/cli_data.py")
+    cli_catalog_source = _read_repo_file("src/foresight/cli_catalog.py")
+    cli_leaderboard_source = _read_repo_file("src/foresight/cli_leaderboard.py")
+
+    assert "_cli_shared._bool_arg_value(" in cli_source
+    assert "_cli_shared._int_arg_value(" in cli_source
+    assert 'bool(getattr(args, "strict", False))' not in cli_source
+    assert 'int(getattr(args, "interval_samples", 1000))' not in cli_source
+    assert 'bool(getattr(args, "parse_dates", False))' not in cli_source
+
+    assert "_cli_shared._bool_arg_value(" in cli_data_source
+    assert "_cli_shared._int_arg_value(" in cli_data_source
+    assert "_cli_shared._float_arg_value(" in cli_data_source
+    assert 'bool(getattr(args, "keepna", False))' not in cli_data_source
+    assert 'bool(getattr(args, "prepare", False))' not in cli_data_source
+    assert 'bool(getattr(args, "strict_freq", False))' not in cli_data_source
+    assert 'float(getattr(args, "iqr_k", 1.5))' not in cli_data_source
+    assert 'float(getattr(args, "zmax", 3.0))' not in cli_data_source
+    assert 'int(getattr(args, "horizon", 1))' not in cli_data_source
+    assert 'bool(getattr(args, "add_time_features", False))' not in cli_data_source
+    assert 'bool(getattr(args, "strict", False))' not in cli_data_source
+
+    assert "_cli_shared._bool_arg_value(" in cli_catalog_source
+    assert 'bool(getattr(args, "desc", False))' not in cli_catalog_source
+    assert 'bool(getattr(args, "header", False))' not in cli_catalog_source
+
+    assert "_cli_shared._bool_arg_value(" in cli_leaderboard_source
+    assert "_cli_shared._int_arg_value(" in cli_leaderboard_source
+    assert 'int(getattr(args, "summary_limit", 0))' not in cli_leaderboard_source
+    assert 'int(getattr(args, "summary_min_datasets", 0))' not in cli_leaderboard_source
+    assert 'bool(getattr(args, "strict", False))' not in cli_leaderboard_source
+    assert 'int(getattr(args, "limit", 0))' not in cli_leaderboard_source
+    assert 'int(getattr(args, "min_datasets", 0))' not in cli_leaderboard_source
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 
@@ -2218,11 +2568,17 @@ def test_batch_execution_source_extracts_timed_task_helper() -> None:
 def test_cli_leaderboard_source_extracts_sweep_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_leaderboard.py")
 
+    assert "def _leaderboard_sweep_row_key(" in source
     assert "def _resolve_leaderboard_sweep_model_keys(" in source
     assert "def _load_leaderboard_sweep_resume_state(" in source
     assert "def _build_leaderboard_sweep_tasks(" in source
     assert "def _merge_leaderboard_sweep_rows(" in source
     assert "def _write_leaderboard_sweep_summary(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_merge_leaderboard_sweep_rows",
+        "_leaderboard_sweep_row_key",
+    )
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",
         "_cmd_leaderboard_sweep",
@@ -2253,11 +2609,81 @@ def test_cli_leaderboard_source_extracts_sweep_helpers() -> None:
 def test_cli_leaderboard_source_extracts_summary_helpers() -> None:
     source = _read_repo_file("src/foresight/cli_leaderboard.py")
 
+    assert "def _leaderboard_summary_group_key(" in source
+    assert "def _leaderboard_summary_model_key(" in source
+    assert "def _leaderboard_summary_group_model_key(" in source
+    assert "def _leaderboard_summary_metric_key(" in source
+    assert "def _leaderboard_summary_metric_model_key(" in source
     assert "def _clean_leaderboard_summary_rows(" in source
     assert "def _leaderboard_summary_best_by_dataset_metric(" in source
     assert "def _leaderboard_summary_rank_by_dataset_metric_model(" in source
     assert "def _leaderboard_model_summary_row(" in source
     assert "def _sort_leaderboard_summary_rows(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_best_by_dataset_metric",
+        "_leaderboard_summary_group_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_rank_by_dataset_metric_model",
+        "_leaderboard_summary_group_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_metric_relative_values",
+        "_leaderboard_summary_metric_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_metric_relative_pairs",
+        "_leaderboard_summary_metric_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_metric_ranks",
+        "_leaderboard_summary_metric_model_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_metric_rank_pairs",
+        "_leaderboard_summary_metric_model_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_summary_rank_by_dataset_metric_model",
+        "_leaderboard_summary_model_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_build_leaderboard_metric_contexts",
+        "_leaderboard_summary_group_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_build_leaderboard_metric_contexts",
+        "_leaderboard_summary_metric_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_build_leaderboard_metric_contexts",
+        "_leaderboard_summary_metric_model_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_summarize_leaderboard_rows",
+        "_leaderboard_summary_group_model_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_leaderboard_model_summary_row",
+        "_leaderboard_summary_group_key",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_leaderboard.py",
+        "_summarize_leaderboard_rows",
+        "_leaderboard_summary_group_key",
+    )
     assert _function_uses_name(
         "src/foresight/cli_leaderboard.py",
         "_summarize_leaderboard_rows",
@@ -2704,9 +3130,31 @@ def test_data_prep_source_extracts_regularization_helpers() -> None:
 def test_features_lag_source_extracts_seasonal_feature_helpers() -> None:
     source = _read_repo_file("src/foresight/features/lag.py")
 
+    assert "def _lagged_feature_matrix(" in source
+    assert "def _validated_lag_steps_and_start_index(" in source
     assert "def _validated_target_indices(" in source
     assert "def _seasonal_lag_feature_columns(" in source
     assert "def _seasonal_diff_feature_columns(" in source
+    assert _function_uses_name(
+        "src/foresight/features/lag.py",
+        "make_lagged_xy",
+        "_validated_lag_steps_and_start_index",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/lag.py",
+        "make_lagged_xy_multi",
+        "_validated_lag_steps_and_start_index",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/lag.py",
+        "make_lagged_xy",
+        "_lagged_feature_matrix",
+    )
+    assert _function_uses_name(
+        "src/foresight/features/lag.py",
+        "make_lagged_xy_multi",
+        "_lagged_feature_matrix",
+    )
     assert _function_uses_name(
         "src/foresight/features/lag.py",
         "build_seasonal_lag_features",
@@ -2824,9 +3272,31 @@ def test_analog_source_extracts_neighbor_selection_helpers() -> None:
 def test_fourier_source_extracts_order_normalization_helpers() -> None:
     source = _read_repo_file("src/foresight/models/fourier.py")
 
+    assert "def _fourier_design_matrix(" in source
+    assert "def _linear_design_forecast(" in source
     assert "def _default_order_tuple(" in source
     assert "def _coerce_order_parts(" in source
     assert "def _normalize_order_parts(" in source
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "fourier_regression_forecast",
+        "_fourier_design_matrix",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "fourier_regression_forecast",
+        "_linear_design_forecast",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "fourier_multi_regression_forecast",
+        "_fourier_design_matrix",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/fourier.py",
+        "fourier_multi_regression_forecast",
+        "_linear_design_forecast",
+    )
     assert _function_uses_name(
         "src/foresight/models/fourier.py",
         "_normalize_orders",
@@ -2847,10 +3317,64 @@ def test_fourier_source_extracts_order_normalization_helpers() -> None:
 def test_eval_predictions_source_extracts_quantile_interval_helpers() -> None:
     source = _read_repo_file("src/foresight/eval_predictions.py")
 
+    assert "def _step_group_inverse_counts(" in source
+    assert "def _validated_interval_arrays(" in source
+    assert "def _mean_by_step_from_inverse(" in source
+    assert "def _interval_score_vector(" in source
     assert "def _quantile_column_map(" in source
     assert "def _symmetric_interval_levels(" in source
     assert "def _per_step_interval_metrics(" in source
     assert "def _weighted_interval_score_by_step(" in source
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_interval_metrics",
+        "_mean_by_step_from_inverse",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_weighted_interval_score_by_step",
+        "_mean_by_step_from_inverse",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_point_metrics",
+        "_mean_by_step_from_inverse",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_interval_metrics",
+        "_validated_interval_arrays",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_weighted_interval_score_by_step",
+        "_validated_interval_arrays",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_interval_metrics",
+        "_interval_score_vector",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_weighted_interval_score_by_step",
+        "_interval_score_vector",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_interval_metrics",
+        "_step_group_inverse_counts",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_weighted_interval_score_by_step",
+        "_step_group_inverse_counts",
+    )
+    assert _function_uses_name(
+        "src/foresight/eval_predictions.py",
+        "_vectorized_point_metrics",
+        "_step_group_inverse_counts",
+    )
     assert _function_uses_name(
         "src/foresight/eval_predictions.py",
         "evaluate_quantile_predictions",
@@ -2877,8 +3401,29 @@ def test_intermittent_source_extracts_les_helpers() -> None:
     path = "src/foresight/models/intermittent.py"
     source = _read_repo_file(path)
 
+    assert "def _zero_forecast(" in source
+    assert "def _validated_intermittent_input(" in source
+    assert "def _validated_alpha_beta(" in source
+    assert "def _first_nonzero_index(" in source
+    assert "def _croston_initial_state(" in source
     assert "def _les_decay_value(" in source
     assert "def _les_update_state(" in source
+    assert _function_uses_name(path, "croston_classic_forecast", "_zero_forecast")
+    assert _function_uses_name(path, "croston_optimized_forecast", "_zero_forecast")
+    assert _function_uses_name(path, "les_forecast", "_zero_forecast")
+    assert _function_uses_name(path, "tsb_forecast", "_zero_forecast")
+    assert _function_uses_name(path, "adida_forecast", "_zero_forecast")
+    assert _function_uses_name(path, "croston_classic_forecast", "_validated_intermittent_input")
+    assert _function_uses_name(path, "croston_optimized_forecast", "_validated_intermittent_input")
+    assert _function_uses_name(path, "les_forecast", "_validated_intermittent_input")
+    assert _function_uses_name(path, "tsb_forecast", "_validated_intermittent_input")
+    assert _function_uses_name(path, "adida_forecast", "_validated_intermittent_input")
+    assert _function_uses_name(path, "les_forecast", "_validated_alpha_beta")
+    assert _function_uses_name(path, "tsb_forecast", "_validated_alpha_beta")
+    assert _function_uses_name(path, "_croston_initial_state", "_first_nonzero_index")
+    assert _function_uses_name(path, "croston_classic_forecast", "_croston_initial_state")
+    assert _function_uses_name(path, "_croston_sse", "_croston_initial_state")
+    assert _function_uses_name(path, "les_forecast", "_first_nonzero_index")
     assert _function_uses_name(path, "les_forecast", "_les_update_state")
     assert _function_uses_name(path, "_les_update_state", "_les_decay_value")
 
@@ -2887,9 +3432,59 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     path = "src/foresight/models/multivariate.py"
     source = _read_repo_file(path)
 
+    assert "def _validated_torch_multivariate_model_dims(" in source
+    assert "def _maybe_normalize_multivariate_matrix(" in source
+    assert "def _maybe_denormalize_multivariate_forecast(" in source
+    assert "def _latest_multivariate_window(" in source
+    assert "def _prepare_torch_multivariate_training_data(" in source
     assert "def _load_adj_matrix_from_path(" in source
     assert "def _resolve_builtin_adj_matrix(" in source
     assert "def _corr_topk_adj_matrix(" in source
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_validated_torch_multivariate_model_dims",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_latest_multivariate_window",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_prepare_torch_multivariate_training_data",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
+        "_validated_torch_multivariate_model_dims",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
+        "_latest_multivariate_window",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
+        "_prepare_torch_multivariate_training_data",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
+        "_validated_torch_multivariate_model_dims",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
+        "_latest_multivariate_window",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
+        "_prepare_torch_multivariate_training_data",
+    )
     assert _function_uses_name(path, "_resolve_adj_matrix", "_load_adj_matrix_from_path")
     assert _function_uses_name(path, "_resolve_adj_matrix", "_resolve_builtin_adj_matrix")
     assert _function_uses_name(path, "_resolve_builtin_adj_matrix", "_corr_topk_adj_matrix")

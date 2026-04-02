@@ -16,6 +16,28 @@ def _sorted_unique_steps(step_values: Any) -> list[int]:
     return sorted({int(step) for step in steps.tolist()})
 
 
+def _step_group_inverse_counts(step_values: Any) -> tuple[list[int], np.ndarray, np.ndarray]:
+    steps = np.asarray(step_values)
+    uniq = _sorted_unique_steps(steps)
+    if not uniq:
+        return [], np.empty((0,), dtype=int), np.empty((0,), dtype=float)
+
+    step_index = {int(step): idx for idx, step in enumerate(uniq)}
+    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
+    counts = np.bincount(inverse, minlength=len(uniq)).astype(float, copy=False)
+    return uniq, inverse, counts
+
+
+def _mean_by_step_from_inverse(
+    values: np.ndarray,
+    *,
+    inverse: np.ndarray,
+    counts: np.ndarray,
+    n_steps: int,
+) -> np.ndarray:
+    return np.bincount(inverse, weights=values, minlength=n_steps) / counts
+
+
 def _quantile_column_map(df: pd.DataFrame, *, yhat_prefix: str) -> dict[int, str]:
     q_cols: dict[int, str] = {}
     prefix = str(yhat_prefix)
@@ -43,6 +65,40 @@ def _symmetric_interval_levels(pcts: list[int], q_cols: dict[int, str]) -> list[
     return sorted(set(levels))
 
 
+def _validated_interval_arrays(
+    y: Any,
+    lo: Any,
+    hi: Any,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    y_arr = np.asarray(y, dtype=float)
+    lo_arr = np.asarray(lo, dtype=float)
+    hi_arr = np.asarray(hi, dtype=float)
+    if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
+        raise ValueError(
+            f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
+        )
+    return y_arr, lo_arr, hi_arr
+
+
+def _interval_score_vector(
+    y: Any,
+    lo: Any,
+    hi: Any,
+    *,
+    alpha: float,
+) -> np.ndarray:
+    a = float(alpha)
+    if not (0.0 < a < 1.0):
+        raise ValueError("alpha must be in (0, 1)")
+
+    y_arr, lo_arr, hi_arr = _validated_interval_arrays(y, lo, hi)
+
+    width = hi_arr - lo_arr
+    below = (lo_arr - y_arr) * (y_arr < lo_arr)
+    above = (y_arr - hi_arr) * (y_arr > hi_arr)
+    return width + (2.0 / a) * below + (2.0 / a) * above
+
+
 def _vectorized_interval_metrics(
     y: Any,
     lo: Any,
@@ -51,22 +107,10 @@ def _vectorized_interval_metrics(
     alpha: float,
     step_values: Any | None = None,
 ) -> dict[str, Any]:
-    a = float(alpha)
-    if not (0.0 < a < 1.0):
-        raise ValueError("alpha must be in (0, 1)")
-
-    y_arr = np.asarray(y, dtype=float)
-    lo_arr = np.asarray(lo, dtype=float)
-    hi_arr = np.asarray(hi, dtype=float)
-    if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
-        raise ValueError(
-            f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
-        )
+    y_arr, lo_arr, hi_arr = _validated_interval_arrays(y, lo, hi)
 
     width = hi_arr - lo_arr
-    below = (lo_arr - y_arr) * (y_arr < lo_arr)
-    above = (y_arr - hi_arr) * (y_arr > hi_arr)
-    score = width + (2.0 / a) * below + (2.0 / a) * above
+    score = _interval_score_vector(y_arr, lo_arr, hi_arr, alpha=alpha)
     coverage = ((y_arr >= lo_arr) & (y_arr <= hi_arr)).astype(float)
 
     out: dict[str, Any] = {
@@ -78,29 +122,24 @@ def _vectorized_interval_metrics(
     if step_values is None:
         return out
 
-    steps = np.asarray(step_values)
-    uniq = _sorted_unique_steps(steps)
+    uniq, inverse, counts = _step_group_inverse_counts(step_values)
     if not uniq:
         return out
-
-    step_index = {int(step): idx for idx, step in enumerate(uniq)}
-    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
     n_steps = len(uniq)
-    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
 
     out.update(
         {
-            "coverage_by_step": (
-                np.bincount(inverse, weights=coverage, minlength=n_steps) / counts
+            "coverage_by_step": _mean_by_step_from_inverse(
+                coverage, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
-            "mean_width_by_step": (
-                np.bincount(inverse, weights=width, minlength=n_steps) / counts
+            "mean_width_by_step": _mean_by_step_from_inverse(
+                width, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
-            "interval_score_by_step": (
-                np.bincount(inverse, weights=score, minlength=n_steps) / counts
+            "interval_score_by_step": _mean_by_step_from_inverse(
+                score, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
-            "winkler_score_by_step": (
-                np.bincount(inverse, weights=score, minlength=n_steps) / counts
+            "winkler_score_by_step": _mean_by_step_from_inverse(
+                score, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
         }
     )
@@ -145,37 +184,27 @@ def _weighted_interval_score_by_step(
     if y_arr.shape != median_arr.shape:
         raise ValueError(f"Shape mismatch: y{y_arr.shape} median{median_arr.shape}")
 
-    steps = np.asarray(step_values)
-    uniq = _sorted_unique_steps(step_values)
+    uniq, inverse, counts = _step_group_inverse_counts(step_values)
     if not uniq:
         return []
-
-    step_index = {int(step): idx for idx, step in enumerate(uniq)}
-    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
     n_steps = len(uniq)
-    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
 
-    total = 0.5 * (
-        np.bincount(inverse, weights=np.abs(y_arr - median_arr), minlength=n_steps) / counts
+    total = 0.5 * _mean_by_step_from_inverse(
+        np.abs(y_arr - median_arr),
+        inverse=inverse,
+        counts=counts,
+        n_steps=n_steps,
     )
     k = 0
 
     for lo, hi, alpha in wis_intervals:
-        a = float(alpha)
-        if not (0.0 < a < 1.0):
-            raise ValueError("interval alpha must be in (0, 1)")
-        lo_arr = np.asarray(lo, dtype=float).reshape(-1)
-        hi_arr = np.asarray(hi, dtype=float).reshape(-1)
-        if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
-            raise ValueError(
-                f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
-            )
-        width = hi_arr - lo_arr
-        below = (lo_arr - y_arr) * (y_arr < lo_arr)
-        above = (y_arr - hi_arr) * (y_arr > hi_arr)
-        score = width + (2.0 / a) * below + (2.0 / a) * above
-        total += (a / 2.0) * (
-            np.bincount(inverse, weights=score, minlength=n_steps) / counts
+        _y_arr, lo_arr, hi_arr = _validated_interval_arrays(y_arr, lo, hi)
+        score = _interval_score_vector(y_arr, lo_arr, hi_arr, alpha=alpha)
+        total += (float(alpha) / 2.0) * _mean_by_step_from_inverse(
+            score,
+            inverse=inverse,
+            counts=counts,
+            n_steps=n_steps,
         )
         k += 1
 
@@ -245,30 +274,27 @@ def _vectorized_point_metrics(
     if step_values is None:
         return out
 
-    steps = np.asarray(step_values)
-    uniq = _sorted_unique_steps(steps)
+    uniq, inverse, counts = _step_group_inverse_counts(step_values)
     if not uniq:
         return out
-
-    step_index = {int(step): idx for idx, step in enumerate(uniq)}
-    inverse = np.asarray([step_index[int(step)] for step in steps], dtype=int)
     n_steps = len(uniq)
-    counts = np.bincount(inverse, minlength=n_steps).astype(float, copy=False)
 
     out.update(
         {
             "steps": uniq,
-            "mae_by_step": (
-                np.bincount(inverse, weights=abs_error, minlength=n_steps) / counts
+            "mae_by_step": _mean_by_step_from_inverse(
+                abs_error, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
             "rmse_by_step": np.sqrt(
-                np.bincount(inverse, weights=sq_error, minlength=n_steps) / counts
+                _mean_by_step_from_inverse(
+                    sq_error, inverse=inverse, counts=counts, n_steps=n_steps
+                )
             ).tolist(),
-            "mape_by_step": (
-                np.bincount(inverse, weights=abs_pct_error, minlength=n_steps) / counts
+            "mape_by_step": _mean_by_step_from_inverse(
+                abs_pct_error, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
-            "smape_by_step": (
-                np.bincount(inverse, weights=smape_terms, minlength=n_steps) / counts
+            "smape_by_step": _mean_by_step_from_inverse(
+                smape_terms, inverse=inverse, counts=counts, n_steps=n_steps
             ).tolist(),
         }
     )
