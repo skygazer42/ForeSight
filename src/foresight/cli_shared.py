@@ -222,7 +222,7 @@ def _format_csv(rows: list[dict], *, columns: list[str] | None = None) -> str:
     writer = csv.writer(buf)
     writer.writerow(cols)
     for row in rows:
-        writer.writerow([row.get(column, "") for column in cols])
+        writer.writerow(_row_values(row, columns=cols))
     return buf.getvalue().rstrip("\n")
 
 
@@ -231,10 +231,14 @@ def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> s
     header = "| " + " | ".join(cols) + " |"
     sep = "| " + " | ".join(["---"] * len(cols)) + " |"
     body = [
-        "| " + " | ".join(_markdown_cell_text(row.get(k, "")) for k in cols) + " |"
+        "| " + " | ".join(_markdown_cell_text(value) for value in _row_values(row, columns=cols)) + " |"
         for row in rows
     ]
     return "\n".join([header, sep, *body])
+
+
+def _row_values(row: dict[str, Any], *, columns: list[str]) -> list[object]:
+    return [row.get(column, "") for column in columns]
 
 
 def _markdown_cell_text(value: object) -> str:

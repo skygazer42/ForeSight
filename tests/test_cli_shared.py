@@ -221,6 +221,15 @@ def test_markdown_cell_text_formats_supported_value_types() -> None:
     assert _cli_shared._markdown_cell_text(7) == "7"
 
 
+def test_row_values_preserves_column_order_and_fills_missing_values() -> None:
+    values = _cli_shared._row_values(
+        {"b": 2, "a": 1, "extra": 99},
+        columns=["a", "missing", "b"],
+    )
+
+    assert values == [1, "", 2]
+
+
 def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")

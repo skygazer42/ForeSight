@@ -2172,6 +2172,22 @@ def test_cli_shared_source_extracts_markdown_cell_text_helper() -> None:
     )
 
 
+def test_cli_shared_source_extracts_row_values_helper() -> None:
+    source = _read_repo_file("src/foresight/cli_shared.py")
+
+    assert "def _row_values(" in source
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_csv",
+        "_row_values",
+    )
+    assert _function_uses_name(
+        "src/foresight/cli_shared.py",
+        "_format_markdown",
+        "_row_values",
+    )
+
+
 def test_batch_execution_source_extracts_timed_task_helper() -> None:
     source = _read_repo_file("src/foresight/batch_execution.py")
 
