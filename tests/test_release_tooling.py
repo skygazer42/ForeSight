@@ -316,6 +316,8 @@ def test_mypy_targets_include_public_model_support_surfaces() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
 
+    assert '"src/foresight/cli.py"' in pyproject
+    assert '"src/foresight/cli_catalog.py"' in pyproject
     assert '"src/foresight/models/specs.py"' in pyproject
     assert '"src/foresight/models/resolution.py"' in pyproject
     assert '"src/foresight/models/registry.py"' in pyproject

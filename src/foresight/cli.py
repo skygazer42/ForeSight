@@ -1057,7 +1057,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         }
 
     package_path = Path(__file__).resolve().parent / "__init__.py"
-    payload = {
+    payload: dict[str, Any] = {
         "package": {
             "name": "foresight-ts",
             "version": __version__,
@@ -1216,12 +1216,10 @@ def _render_doctor_text(payload: dict[str, Any], *, findings: list[dict[str, str
         for name in list(summary.get("required_extras", [])):
             extra = dict(extras.get(name, {}))
             state = "OK" if bool(extra.get("available", False)) else "ERROR"
-            line = f"- {name}: {state}"
-            if not bool(extra.get("available", False)):
-                line += (
-                    f" (install with: {extra.get('package_install_command')} or "
-                    f"{extra.get('editable_install_command')})"
-                )
+            line = (
+                f"- {name}: {state} (install with: {extra.get('package_install_command')} or "
+                f"{extra.get('editable_install_command')})"
+            )
             lines.append(line)
     lines.append("")
     lines.append("Datasets")

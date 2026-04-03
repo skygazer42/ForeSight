@@ -111,6 +111,8 @@ files = [
   "benchmarks/run_benchmarks.py",
   "src/foresight/__init__.py",
   "src/foresight/base.py",
+  "src/foresight/cli.py",
+  "src/foresight/cli_catalog.py",
   "src/foresight/datasets/__init__.py",
   "src/foresight/datasets/registry.py",
   "src/foresight/models/specs.py",

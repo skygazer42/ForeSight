@@ -541,8 +541,10 @@ def _catalog_model_row_from_spec(spec: Any) -> dict[str, Any]:
 
 
 def _models_list_sort_value(row: dict[str, Any], sort_key: str) -> object | None:
-    paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
-    wrapper = row.get("wrapper_paper") if isinstance(row.get("wrapper_paper"), dict) else {}
+    paper_value = row.get("paper")
+    wrapper_value = row.get("wrapper_paper")
+    paper: dict[str, Any] = paper_value if isinstance(paper_value, dict) else {}
+    wrapper: dict[str, Any] = wrapper_value if isinstance(wrapper_value, dict) else {}
 
     if sort_key == "key":
         return str(row.get("key", "")).lower()
@@ -578,18 +580,16 @@ def _sort_catalog_model_rows(
     descending: bool,
 ) -> list[dict[str, Any]]:
     if sort_key in {"paper_year", "wrapper_year"}:
-        present = []
+        present: list[tuple[int, dict[str, Any]]] = []
         missing = []
         for row in rows:
-            if _models_list_sort_value(row, sort_key) is None:
+            sort_value = _models_list_sort_value(row, sort_key)
+            if not isinstance(sort_value, int):
                 missing.append(row)
             else:
-                present.append(row)
-        present.sort(
-            key=lambda row: int(_models_list_sort_value(row, sort_key)),
-            reverse=descending,
-        )
-        return present + missing
+                present.append((sort_value, row))
+        present.sort(key=lambda item: item[0], reverse=descending)
+        return [row for _, row in present] + missing
 
     rows.sort(
         key=lambda row: str(_models_list_sort_value(row, sort_key)),
@@ -599,8 +599,10 @@ def _sort_catalog_model_rows(
 
 
 def _models_list_column_value(row: dict[str, Any], col: str) -> object:
-    paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
-    wrapper = row.get("wrapper_paper") if isinstance(row.get("wrapper_paper"), dict) else {}
+    paper_value = row.get("paper")
+    wrapper_value = row.get("wrapper_paper")
+    paper: dict[str, Any] = paper_value if isinstance(paper_value, dict) else {}
+    wrapper: dict[str, Any] = wrapper_value if isinstance(wrapper_value, dict) else {}
 
     if col == "key":
         return row.get("key", "")
@@ -765,7 +767,8 @@ def _model_search_row(
 def _models_search_tsv_lines(rows: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for row in rows:
-        paper = row.get("paper") if isinstance(row.get("paper"), dict) else {}
+        paper_value = row.get("paper")
+        paper: dict[str, Any] = paper_value if isinstance(paper_value, dict) else {}
         pid = str(paper.get("paper_id", "")).strip()
         year = paper.get("year", None)
         year_s = str(year) if isinstance(year, int) else ""
