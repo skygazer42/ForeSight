@@ -69,7 +69,7 @@ class PipelineLocalForecaster(BaseForecaster):
         **base_params: Any,
     ) -> None:
         base_key = base.model_key if isinstance(base, BaseForecaster) else str(base).strip()
-        if base_key == "pipeline":
+        if not isinstance(base, BaseForecaster) and base_key == "pipeline":
             raise ValueError("pipeline base model cannot be 'pipeline'")
         if not base_key:
             raise ValueError("base must be non-empty")
@@ -145,9 +145,15 @@ class EnsembleLocalForecaster(BaseForecaster):
             member.model_key if isinstance(member, BaseForecaster) else str(member).strip()
             for member in member_specs
         ]
-        if agg_key == "mean" and any(key == "ensemble-mean" for key in member_keys):
+        if agg_key == "mean" and any(
+            not isinstance(member, BaseForecaster) and str(member).strip() == "ensemble-mean"
+            for member in member_specs
+        ):
             raise ValueError("ensemble-mean cannot include itself")
-        if agg_key == "median" and any(key == "ensemble-median" for key in member_keys):
+        if agg_key == "median" and any(
+            not isinstance(member, BaseForecaster) and str(member).strip() == "ensemble-median"
+            for member in member_specs
+        ):
             raise ValueError("ensemble-median cannot include itself")
 
         self._member_specs = member_specs
