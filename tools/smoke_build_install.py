@@ -142,6 +142,15 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=root,
                 env=env,
             )
+            _run(
+                [
+                    str(py),
+                    "-c",
+                    "import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])",
+                ],
+                cwd=root,
+                env=env,
+            )
 
             # CLI smoke (module invocation avoids PATH concerns).
             _run([str(py), "-m", "foresight", "--version"], cwd=root, env=env)

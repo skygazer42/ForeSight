@@ -72,16 +72,23 @@ def test_docs_site_navigation_includes_generated_pages() -> None:
 
     mkdocs = (repo_root / "mkdocs.yml").read_text(encoding="utf-8")
     index_doc = (repo_root / "docs" / "index.md").read_text(encoding="utf-8")
+    adapters_doc = (repo_root / "docs" / "adapters.md").read_text(encoding="utf-8")
 
     assert "site_name: ForeSight" in mkdocs
     assert "site_url: https://skygazer42.github.io/ForeSight/" in mkdocs
     assert "Home: index.md" in mkdocs
     assert "Models: models.md" in mkdocs
     assert "API: api.md" in mkdocs
+    assert "Adapters: adapters.md" in mkdocs
     assert "Compatibility: compatibility.md" in mkdocs
     assert "Choosing Models: model-selection.md" in mkdocs
 
+    assert "[Adapters guide](adapters.md)" in index_doc
     assert "[Model capability matrix](models.md)" in index_doc
     assert "[Python API reference](api.md)" in index_doc
     assert "[Compatibility guide](compatibility.md)" in index_doc
     assert "[How to choose a model](model-selection.md)" in index_doc
+    assert "foresight.adapters" in adapters_doc
+    assert "make_sktime_forecaster_adapter" in adapters_doc
+    assert "to_darts_timeseries" in adapters_doc
+    assert "to_gluonts_list_dataset" in adapters_doc

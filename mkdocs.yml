@@ -9,6 +9,7 @@ nav:
   - Home: index.md
   - Models: models.md
   - API: api.md
+  - Adapters: adapters.md
   - Compatibility: compatibility.md
   - Choosing Models: model-selection.md
   - Install: INSTALL.md

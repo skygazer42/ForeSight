@@ -7,6 +7,7 @@ classical, ML, and deep-learning model families.
 ## Start here
 
 - [Artifact workflow](artifacts.md)
+- [Adapters guide](adapters.md)
 - [CLI runtime logging](cli-logging.md)
 - [Compatibility guide](compatibility.md)
 - [How to choose a model](model-selection.md)
