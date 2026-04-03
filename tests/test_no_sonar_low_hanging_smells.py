@@ -670,6 +670,16 @@ def test_ssa_source_extracts_validation_and_recurrent_helpers() -> None:
     assert _function_uses_name(path, "ssa_forecast", "_ssa_recurrent_forecast")
 
 
+def test_smoothing_source_extracts_holt_state_update_helper() -> None:
+    path = "src/foresight/models/smoothing.py"
+    source = _read_repo_file(path)
+
+    assert "def _holt_update_state(" in source
+    assert _function_uses_name(path, "holt_forecast", "_holt_update_state")
+    assert _function_uses_name(path, "holt_damped_forecast", "_holt_update_state")
+    assert _function_uses_name(path, "_holt_sse", "_holt_update_state")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 

@@ -23,6 +23,21 @@ def _require_01(name: str, v: float) -> float:
     return vf
 
 
+def _holt_update_state(
+    level: float,
+    trend: float,
+    y: float,
+    *,
+    alpha: float,
+    beta: float,
+    phi: float = 1.0,
+) -> tuple[float, float]:
+    prev_level = level
+    level = alpha * float(y) + (1.0 - alpha) * (level + float(phi) * trend)
+    trend = beta * (level - prev_level) + (1.0 - beta) * (float(phi) * trend)
+    return level, trend
+
+
 def ses_forecast(train: Any, horizon: int, *, alpha: float) -> np.ndarray:
     """
     Simple Exponential Smoothing (SES) point forecast.
@@ -93,9 +108,7 @@ def holt_forecast(train: Any, horizon: int, *, alpha: float, beta: float) -> np.
     trend = float(x[1] - x[0])
 
     for t in range(1, x.size):
-        prev_level = level
-        level = a * float(x[t]) + (1.0 - a) * (level + trend)
-        trend = b * (level - prev_level) + (1.0 - b) * trend
+        level, trend = _holt_update_state(level, trend, float(x[t]), alpha=a, beta=b)
 
     steps = np.arange(1, horizon + 1, dtype=float)
     return level + trend * steps
@@ -129,9 +142,14 @@ def holt_damped_forecast(
     trend = float(x[1] - x[0])
 
     for t in range(1, x.size):
-        prev_level = level
-        level = a * float(x[t]) + (1.0 - a) * (level + phi_f * trend)
-        trend = b * (level - prev_level) + (1.0 - b) * (phi_f * trend)
+        level, trend = _holt_update_state(
+            level,
+            trend,
+            float(x[t]),
+            alpha=a,
+            beta=b,
+            phi=phi_f,
+        )
 
     steps = np.arange(1, horizon + 1, dtype=float)
     if abs(1.0 - phi_f) < 1e-12:
@@ -155,9 +173,7 @@ def _holt_sse(x: np.ndarray, *, alpha: float, beta: float) -> float:
         err = float(x[t]) - yhat
         sse += err * err
 
-        prev_level = level
-        level = a * float(x[t]) + (1.0 - a) * (level + trend)
-        trend = b * (level - prev_level) + (1.0 - b) * trend
+        level, trend = _holt_update_state(level, trend, float(x[t]), alpha=a, beta=b)
 
     return float(sse)
 

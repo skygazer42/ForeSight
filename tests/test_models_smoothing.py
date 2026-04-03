@@ -1,12 +1,27 @@
 import numpy as np
 import pytest
 
+import foresight.models.smoothing as smoothing_mod
 from foresight.models.smoothing import (
     holt_forecast,
     holt_winters_additive_forecast,
     holt_winters_multiplicative_forecast,
     ses_forecast,
 )
+
+
+def test_holt_update_state_respects_phi_when_updating_level_and_trend() -> None:
+    level, trend = smoothing_mod._holt_update_state(  # type: ignore[attr-defined]
+        10.0,
+        1.5,
+        13.0,
+        alpha=0.2,
+        beta=0.3,
+        phi=0.5,
+    )
+
+    assert level == pytest.approx(11.2)
+    assert trend == pytest.approx(0.885)
 
 
 def test_ses_alpha_1_matches_naive_last():
