@@ -31,17 +31,26 @@ def _as_2d_float_array(train: Any) -> np.ndarray:
     return arr
 
 
+def _validated_multivariate_horizon_lags(
+    *,
+    horizon: int,
+    lags: int,
+) -> tuple[int, int]:
+    h = int(horizon)
+    lag_count = int(lags)
+    if h <= 0:
+        raise ValueError(HORIZON_MIN_ERROR)
+    if lag_count <= 0:
+        raise ValueError(LAGS_MIN_ERROR)
+    return h, lag_count
+
+
 def _make_lagged_xy_multivariate(
     x: np.ndarray, *, lags: int, horizon: int
 ) -> tuple[np.ndarray, np.ndarray]:
     n = int(x.shape[0])
     c = int(x.shape[1])
-    lag_count = int(lags)
-    h = int(horizon)
-    if h <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if lag_count <= 0:
-        raise ValueError(LAGS_MIN_ERROR)
+    h, lag_count = _validated_multivariate_horizon_lags(horizon=horizon, lags=lags)
     if n < lag_count + h:
         raise ValueError(f"Need >= lags+horizon rows (lags={lag_count}, horizon={h}), got {n}")
 
@@ -76,6 +85,13 @@ def _validated_torch_multivariate_model_dims(
     if not (0.0 <= drop < 1.0):
         raise ValueError(DROPOUT_RANGE_ERROR)
     return d, blocks, drop
+
+
+def _validated_graph_kernel_size(kernel_size: int) -> int:
+    k = int(kernel_size)
+    if k <= 0:
+        raise ValueError("kernel_size must be >= 1")
+    return k
 
 
 def var_forecast(
@@ -197,8 +213,7 @@ def torch_stid_forecast(
     nn = torch.nn
 
     x = _as_2d_float_array(train)
-    h = int(horizon)
-    lag_count = int(lags)
+    h, lag_count = _validated_multivariate_horizon_lags(horizon=horizon, lags=lags)
     d, blocks, drop = _validated_torch_multivariate_model_dims(
         d_model=d_model,
         num_blocks=num_blocks,
@@ -242,71 +257,74 @@ def torch_stid_forecast(
             yhat = self.head(z).transpose(1, 2)  # (B, h, C)
             return yhat
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        scheduler_restart_period=int(scheduler_restart_period),
-        scheduler_restart_mult=int(scheduler_restart_mult),
-        scheduler_pct_start=float(scheduler_pct_start),
-        restore_best=bool(restore_best),
-        min_epochs=int(min_epochs),
-        amp=bool(amp),
-        amp_dtype=str(amp_dtype),
-        warmup_epochs=int(warmup_epochs),
-        min_lr=float(min_lr),
-        grad_accum_steps=int(grad_accum_steps),
-        monitor=str(monitor),
-        monitor_mode=str(monitor_mode),
-        min_delta=float(min_delta),
-        num_workers=int(num_workers),
-        pin_memory=bool(pin_memory),
-        persistent_workers=bool(persistent_workers),
-        scheduler_patience=int(scheduler_patience),
-        grad_clip_mode=str(grad_clip_mode),
-        grad_clip_value=float(grad_clip_value),
-        scheduler_plateau_factor=float(scheduler_plateau_factor),
-        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
-        ema_decay=float(ema_decay),
-        ema_warmup_epochs=int(ema_warmup_epochs),
-        swa_start_epoch=int(swa_start_epoch),
-        lookahead_steps=int(lookahead_steps),
-        lookahead_alpha=float(lookahead_alpha),
-        sam_rho=float(sam_rho),
-        sam_adaptive=bool(sam_adaptive),
-        horizon_loss_decay=float(horizon_loss_decay),
-        input_dropout=float(input_dropout),
-        temporal_dropout=float(temporal_dropout),
-        grad_noise_std=float(grad_noise_std),
-        gc_mode=str(gc_mode),
-        agc_clip_factor=float(agc_clip_factor),
-        agc_eps=float(agc_eps),
-        checkpoint_dir=str(checkpoint_dir),
-        save_best_checkpoint=bool(save_best_checkpoint),
-        save_last_checkpoint=bool(save_last_checkpoint),
-        resume_checkpoint_path=str(resume_checkpoint_path),
-        resume_checkpoint_strict=bool(resume_checkpoint_strict),
+    cfg = _build_torch_multivariate_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        scheduler_restart_period=scheduler_restart_period,
+        scheduler_restart_mult=scheduler_restart_mult,
+        scheduler_pct_start=scheduler_pct_start,
+        restore_best=restore_best,
+        min_epochs=min_epochs,
+        amp=amp,
+        amp_dtype=amp_dtype,
+        warmup_epochs=warmup_epochs,
+        min_lr=min_lr,
+        grad_accum_steps=grad_accum_steps,
+        monitor=monitor,
+        monitor_mode=monitor_mode,
+        min_delta=min_delta,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        scheduler_patience=scheduler_patience,
+        grad_clip_mode=grad_clip_mode,
+        grad_clip_value=grad_clip_value,
+        scheduler_plateau_factor=scheduler_plateau_factor,
+        scheduler_plateau_threshold=scheduler_plateau_threshold,
+        ema_decay=ema_decay,
+        ema_warmup_epochs=ema_warmup_epochs,
+        swa_start_epoch=swa_start_epoch,
+        lookahead_steps=lookahead_steps,
+        lookahead_alpha=lookahead_alpha,
+        sam_rho=sam_rho,
+        sam_adaptive=sam_adaptive,
+        horizon_loss_decay=horizon_loss_decay,
+        input_dropout=input_dropout,
+        temporal_dropout=temporal_dropout,
+        grad_noise_std=grad_noise_std,
+        gc_mode=gc_mode,
+        agc_clip_factor=agc_clip_factor,
+        agc_eps=agc_eps,
+        checkpoint_dir=checkpoint_dir,
+        save_best_checkpoint=save_best_checkpoint,
+        save_last_checkpoint=save_last_checkpoint,
+        resume_checkpoint_path=resume_checkpoint_path,
+        resume_checkpoint_strict=resume_checkpoint_strict,
     )
     model = _train_loop(_STIDDirect(), X, Y, cfg=cfg, device=str(device))
 
-    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, c)
-
     return _maybe_denormalize_multivariate_forecast(
-        yhat_t.astype(float, copy=False),
+        _predict_torch_multivariate_forecast(
+            model,
+            torch_mod=torch,
+            x_work=x_work,
+            lag_count=lag_count,
+            horizon=h,
+            n_nodes=c,
+            device=str(device),
+        ),
         mean=mean,
         std=std,
         normalize=bool(normalize),
@@ -465,9 +483,146 @@ def _prepare_torch_multivariate_training_data(
     horizon: int,
     normalize: bool,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
+    h, lag_count = _validated_multivariate_horizon_lags(horizon=horizon, lags=lags)
     x_work, mean, std = _maybe_normalize_multivariate_matrix(x, normalize=bool(normalize))
-    X, Y = _make_lagged_xy_multivariate(x_work, lags=int(lags), horizon=int(horizon))
+    X, Y = _make_lagged_xy_multivariate(x_work, lags=lag_count, horizon=h)
     return x_work, mean, std, X, Y, int(x.shape[1])
+
+
+def _predict_torch_multivariate_forecast(
+    model: Any,
+    *,
+    torch_mod: Any,
+    x_work: np.ndarray,
+    lag_count: int,
+    horizon: int,
+    n_nodes: int,
+    device: str,
+) -> np.ndarray:
+    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
+    with torch_mod.no_grad():
+        feat_t = torch_mod.tensor(
+            feat,
+            dtype=torch_mod.float32,
+            device=torch_mod.device(str(device)),
+        )
+        yhat_t = model(feat_t).detach().cpu().numpy().reshape(int(horizon), int(n_nodes))
+    return np.asarray(yhat_t, dtype=float)
+
+
+def _build_torch_multivariate_train_config(
+    *,
+    epochs: int,
+    lr: float,
+    weight_decay: float,
+    batch_size: int,
+    seed: int,
+    patience: int,
+    loss: str,
+    val_split: float,
+    grad_clip_norm: float,
+    optimizer: str,
+    momentum: float,
+    scheduler: str,
+    scheduler_step_size: int,
+    scheduler_gamma: float,
+    scheduler_restart_period: int,
+    scheduler_restart_mult: int,
+    scheduler_pct_start: float,
+    restore_best: bool,
+    min_epochs: int,
+    amp: bool,
+    amp_dtype: str,
+    warmup_epochs: int,
+    min_lr: float,
+    grad_accum_steps: int,
+    monitor: str,
+    monitor_mode: str,
+    min_delta: float,
+    num_workers: int,
+    pin_memory: bool,
+    persistent_workers: bool,
+    scheduler_patience: int,
+    grad_clip_mode: str,
+    grad_clip_value: float,
+    scheduler_plateau_factor: float,
+    scheduler_plateau_threshold: float,
+    ema_decay: float,
+    ema_warmup_epochs: int,
+    swa_start_epoch: int,
+    lookahead_steps: int,
+    lookahead_alpha: float,
+    sam_rho: float,
+    sam_adaptive: bool,
+    horizon_loss_decay: float,
+    input_dropout: float,
+    temporal_dropout: float,
+    grad_noise_std: float,
+    gc_mode: str,
+    agc_clip_factor: float,
+    agc_eps: float,
+    checkpoint_dir: str,
+    save_best_checkpoint: bool,
+    save_last_checkpoint: bool,
+    resume_checkpoint_path: str,
+    resume_checkpoint_strict: bool,
+) -> TorchTrainConfig:
+    return TorchTrainConfig(
+        epochs=int(epochs),
+        lr=float(lr),
+        weight_decay=float(weight_decay),
+        batch_size=int(batch_size),
+        seed=int(seed),
+        patience=int(patience),
+        loss=str(loss),
+        val_split=float(val_split),
+        grad_clip_norm=float(grad_clip_norm),
+        optimizer=str(optimizer),
+        momentum=float(momentum),
+        scheduler=str(scheduler),
+        scheduler_step_size=int(scheduler_step_size),
+        scheduler_gamma=float(scheduler_gamma),
+        scheduler_restart_period=int(scheduler_restart_period),
+        scheduler_restart_mult=int(scheduler_restart_mult),
+        scheduler_pct_start=float(scheduler_pct_start),
+        restore_best=bool(restore_best),
+        min_epochs=int(min_epochs),
+        amp=bool(amp),
+        amp_dtype=str(amp_dtype),
+        warmup_epochs=int(warmup_epochs),
+        min_lr=float(min_lr),
+        grad_accum_steps=int(grad_accum_steps),
+        monitor=str(monitor),
+        monitor_mode=str(monitor_mode),
+        min_delta=float(min_delta),
+        num_workers=int(num_workers),
+        pin_memory=bool(pin_memory),
+        persistent_workers=bool(persistent_workers),
+        scheduler_patience=int(scheduler_patience),
+        grad_clip_mode=str(grad_clip_mode),
+        grad_clip_value=float(grad_clip_value),
+        scheduler_plateau_factor=float(scheduler_plateau_factor),
+        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
+        ema_decay=float(ema_decay),
+        ema_warmup_epochs=int(ema_warmup_epochs),
+        swa_start_epoch=int(swa_start_epoch),
+        lookahead_steps=int(lookahead_steps),
+        lookahead_alpha=float(lookahead_alpha),
+        sam_rho=float(sam_rho),
+        sam_adaptive=bool(sam_adaptive),
+        horizon_loss_decay=float(horizon_loss_decay),
+        input_dropout=float(input_dropout),
+        temporal_dropout=float(temporal_dropout),
+        grad_noise_std=float(grad_noise_std),
+        gc_mode=str(gc_mode),
+        agc_clip_factor=float(agc_clip_factor),
+        agc_eps=float(agc_eps),
+        checkpoint_dir=str(checkpoint_dir),
+        save_best_checkpoint=bool(save_best_checkpoint),
+        save_last_checkpoint=bool(save_last_checkpoint),
+        resume_checkpoint_path=str(resume_checkpoint_path),
+        resume_checkpoint_strict=bool(resume_checkpoint_strict),
+    )
 
 
 def torch_stgcn_forecast(
@@ -550,20 +705,13 @@ def torch_stgcn_forecast(
     F = torch.nn.functional
 
     x = _as_2d_float_array(train)
-    h = int(horizon)
-    lag_count = int(lags)
-    k = int(kernel_size)
+    h, lag_count = _validated_multivariate_horizon_lags(horizon=horizon, lags=lags)
+    k = _validated_graph_kernel_size(kernel_size)
     d, blocks, drop = _validated_torch_multivariate_model_dims(
         d_model=d_model,
         num_blocks=num_blocks,
         dropout=dropout,
     )
-    if h <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if lag_count <= 0:
-        raise ValueError(LAGS_MIN_ERROR)
-    if k <= 0:
-        raise ValueError("kernel_size must be >= 1")
 
     x_work, mean, std, X, Y, n_nodes = _prepare_torch_multivariate_training_data(
         x,
@@ -617,71 +765,74 @@ def torch_stgcn_forecast(
             yhat = self.head(z[:, -1, :, :]).transpose(1, 2)  # (B, h, N)
             return yhat
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        scheduler_restart_period=int(scheduler_restart_period),
-        scheduler_restart_mult=int(scheduler_restart_mult),
-        scheduler_pct_start=float(scheduler_pct_start),
-        restore_best=bool(restore_best),
-        min_epochs=int(min_epochs),
-        amp=bool(amp),
-        amp_dtype=str(amp_dtype),
-        warmup_epochs=int(warmup_epochs),
-        min_lr=float(min_lr),
-        grad_accum_steps=int(grad_accum_steps),
-        monitor=str(monitor),
-        monitor_mode=str(monitor_mode),
-        min_delta=float(min_delta),
-        num_workers=int(num_workers),
-        pin_memory=bool(pin_memory),
-        persistent_workers=bool(persistent_workers),
-        scheduler_patience=int(scheduler_patience),
-        grad_clip_mode=str(grad_clip_mode),
-        grad_clip_value=float(grad_clip_value),
-        scheduler_plateau_factor=float(scheduler_plateau_factor),
-        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
-        ema_decay=float(ema_decay),
-        ema_warmup_epochs=int(ema_warmup_epochs),
-        swa_start_epoch=int(swa_start_epoch),
-        lookahead_steps=int(lookahead_steps),
-        lookahead_alpha=float(lookahead_alpha),
-        sam_rho=float(sam_rho),
-        sam_adaptive=bool(sam_adaptive),
-        horizon_loss_decay=float(horizon_loss_decay),
-        input_dropout=float(input_dropout),
-        temporal_dropout=float(temporal_dropout),
-        grad_noise_std=float(grad_noise_std),
-        gc_mode=str(gc_mode),
-        agc_clip_factor=float(agc_clip_factor),
-        agc_eps=float(agc_eps),
-        checkpoint_dir=str(checkpoint_dir),
-        save_best_checkpoint=bool(save_best_checkpoint),
-        save_last_checkpoint=bool(save_last_checkpoint),
-        resume_checkpoint_path=str(resume_checkpoint_path),
-        resume_checkpoint_strict=bool(resume_checkpoint_strict),
+    cfg = _build_torch_multivariate_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        scheduler_restart_period=scheduler_restart_period,
+        scheduler_restart_mult=scheduler_restart_mult,
+        scheduler_pct_start=scheduler_pct_start,
+        restore_best=restore_best,
+        min_epochs=min_epochs,
+        amp=amp,
+        amp_dtype=amp_dtype,
+        warmup_epochs=warmup_epochs,
+        min_lr=min_lr,
+        grad_accum_steps=grad_accum_steps,
+        monitor=monitor,
+        monitor_mode=monitor_mode,
+        min_delta=min_delta,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        scheduler_patience=scheduler_patience,
+        grad_clip_mode=grad_clip_mode,
+        grad_clip_value=grad_clip_value,
+        scheduler_plateau_factor=scheduler_plateau_factor,
+        scheduler_plateau_threshold=scheduler_plateau_threshold,
+        ema_decay=ema_decay,
+        ema_warmup_epochs=ema_warmup_epochs,
+        swa_start_epoch=swa_start_epoch,
+        lookahead_steps=lookahead_steps,
+        lookahead_alpha=lookahead_alpha,
+        sam_rho=sam_rho,
+        sam_adaptive=sam_adaptive,
+        horizon_loss_decay=horizon_loss_decay,
+        input_dropout=input_dropout,
+        temporal_dropout=temporal_dropout,
+        grad_noise_std=grad_noise_std,
+        gc_mode=gc_mode,
+        agc_clip_factor=agc_clip_factor,
+        agc_eps=agc_eps,
+        checkpoint_dir=checkpoint_dir,
+        save_best_checkpoint=save_best_checkpoint,
+        save_last_checkpoint=save_last_checkpoint,
+        resume_checkpoint_path=resume_checkpoint_path,
+        resume_checkpoint_strict=resume_checkpoint_strict,
     )
     model = _train_loop(_STGCN(), X, Y, cfg=cfg, device=str(device))
 
-    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, n_nodes)
-
     return _maybe_denormalize_multivariate_forecast(
-        yhat_t.astype(float, copy=False),
+        _predict_torch_multivariate_forecast(
+            model,
+            torch_mod=torch,
+            x_work=x_work,
+            lag_count=lag_count,
+            horizon=h,
+            n_nodes=n_nodes,
+            device=str(device),
+        ),
         mean=mean,
         std=std,
         normalize=bool(normalize),
@@ -768,21 +919,14 @@ def torch_graphwavenet_forecast(
     F = torch.nn.functional
 
     x = _as_2d_float_array(train)
-    h = int(horizon)
-    lag_count = int(lags)
-    k = int(kernel_size)
+    h, lag_count = _validated_multivariate_horizon_lags(horizon=horizon, lags=lags)
+    k = _validated_graph_kernel_size(kernel_size)
     base = int(dilation_base)
     d, blocks, drop = _validated_torch_multivariate_model_dims(
         d_model=d_model,
         num_blocks=num_blocks,
         dropout=dropout,
     )
-    if h <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if lag_count <= 0:
-        raise ValueError(LAGS_MIN_ERROR)
-    if k <= 0:
-        raise ValueError("kernel_size must be >= 1")
     if base <= 0:
         raise ValueError("dilation_base must be >= 1")
     if int(adj_emb_dim) <= 0:
@@ -873,71 +1017,74 @@ def torch_graphwavenet_forecast(
             yhat = self.head(last).transpose(1, 2)  # (B, h, N)
             return yhat
 
-    cfg = TorchTrainConfig(
-        epochs=int(epochs),
-        lr=float(lr),
-        weight_decay=float(weight_decay),
-        batch_size=int(batch_size),
-        seed=int(seed),
-        patience=int(patience),
-        loss=str(loss),
-        val_split=float(val_split),
-        grad_clip_norm=float(grad_clip_norm),
-        optimizer=str(optimizer),
-        momentum=float(momentum),
-        scheduler=str(scheduler),
-        scheduler_step_size=int(scheduler_step_size),
-        scheduler_gamma=float(scheduler_gamma),
-        scheduler_restart_period=int(scheduler_restart_period),
-        scheduler_restart_mult=int(scheduler_restart_mult),
-        scheduler_pct_start=float(scheduler_pct_start),
-        restore_best=bool(restore_best),
-        min_epochs=int(min_epochs),
-        amp=bool(amp),
-        amp_dtype=str(amp_dtype),
-        warmup_epochs=int(warmup_epochs),
-        min_lr=float(min_lr),
-        grad_accum_steps=int(grad_accum_steps),
-        monitor=str(monitor),
-        monitor_mode=str(monitor_mode),
-        min_delta=float(min_delta),
-        num_workers=int(num_workers),
-        pin_memory=bool(pin_memory),
-        persistent_workers=bool(persistent_workers),
-        scheduler_patience=int(scheduler_patience),
-        grad_clip_mode=str(grad_clip_mode),
-        grad_clip_value=float(grad_clip_value),
-        scheduler_plateau_factor=float(scheduler_plateau_factor),
-        scheduler_plateau_threshold=float(scheduler_plateau_threshold),
-        ema_decay=float(ema_decay),
-        ema_warmup_epochs=int(ema_warmup_epochs),
-        swa_start_epoch=int(swa_start_epoch),
-        lookahead_steps=int(lookahead_steps),
-        lookahead_alpha=float(lookahead_alpha),
-        sam_rho=float(sam_rho),
-        sam_adaptive=bool(sam_adaptive),
-        horizon_loss_decay=float(horizon_loss_decay),
-        input_dropout=float(input_dropout),
-        temporal_dropout=float(temporal_dropout),
-        grad_noise_std=float(grad_noise_std),
-        gc_mode=str(gc_mode),
-        agc_clip_factor=float(agc_clip_factor),
-        agc_eps=float(agc_eps),
-        checkpoint_dir=str(checkpoint_dir),
-        save_best_checkpoint=bool(save_best_checkpoint),
-        save_last_checkpoint=bool(save_last_checkpoint),
-        resume_checkpoint_path=str(resume_checkpoint_path),
-        resume_checkpoint_strict=bool(resume_checkpoint_strict),
+    cfg = _build_torch_multivariate_train_config(
+        epochs=epochs,
+        lr=lr,
+        weight_decay=weight_decay,
+        batch_size=batch_size,
+        seed=seed,
+        patience=patience,
+        loss=loss,
+        val_split=val_split,
+        grad_clip_norm=grad_clip_norm,
+        optimizer=optimizer,
+        momentum=momentum,
+        scheduler=scheduler,
+        scheduler_step_size=scheduler_step_size,
+        scheduler_gamma=scheduler_gamma,
+        scheduler_restart_period=scheduler_restart_period,
+        scheduler_restart_mult=scheduler_restart_mult,
+        scheduler_pct_start=scheduler_pct_start,
+        restore_best=restore_best,
+        min_epochs=min_epochs,
+        amp=amp,
+        amp_dtype=amp_dtype,
+        warmup_epochs=warmup_epochs,
+        min_lr=min_lr,
+        grad_accum_steps=grad_accum_steps,
+        monitor=monitor,
+        monitor_mode=monitor_mode,
+        min_delta=min_delta,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        scheduler_patience=scheduler_patience,
+        grad_clip_mode=grad_clip_mode,
+        grad_clip_value=grad_clip_value,
+        scheduler_plateau_factor=scheduler_plateau_factor,
+        scheduler_plateau_threshold=scheduler_plateau_threshold,
+        ema_decay=ema_decay,
+        ema_warmup_epochs=ema_warmup_epochs,
+        swa_start_epoch=swa_start_epoch,
+        lookahead_steps=lookahead_steps,
+        lookahead_alpha=lookahead_alpha,
+        sam_rho=sam_rho,
+        sam_adaptive=sam_adaptive,
+        horizon_loss_decay=horizon_loss_decay,
+        input_dropout=input_dropout,
+        temporal_dropout=temporal_dropout,
+        grad_noise_std=grad_noise_std,
+        gc_mode=gc_mode,
+        agc_clip_factor=agc_clip_factor,
+        agc_eps=agc_eps,
+        checkpoint_dir=checkpoint_dir,
+        save_best_checkpoint=save_best_checkpoint,
+        save_last_checkpoint=save_last_checkpoint,
+        resume_checkpoint_path=resume_checkpoint_path,
+        resume_checkpoint_strict=resume_checkpoint_strict,
     )
     model = _train_loop(_GraphWaveNet(), X, Y, cfg=cfg, device=str(device))
 
-    feat = _latest_multivariate_window(x_work, lag_count=lag_count)
-    with torch.no_grad():
-        feat_t = torch.tensor(feat, dtype=torch.float32, device=torch.device(str(device)))
-        yhat_t = model(feat_t).detach().cpu().numpy().reshape(h, n_nodes)
-
     return _maybe_denormalize_multivariate_forecast(
-        yhat_t.astype(float, copy=False),
+        _predict_torch_multivariate_forecast(
+            model,
+            torch_mod=torch,
+            x_work=x_work,
+            lag_count=lag_count,
+            horizon=h,
+            n_nodes=n_nodes,
+            device=str(device),
+        ),
         mean=mean,
         std=std,
         normalize=bool(normalize),

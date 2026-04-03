@@ -1,11 +1,22 @@
 import numpy as np
+import pytest
 
+import foresight.models.intermittent as intermittent_mod
 from foresight.models.intermittent import (
     croston_optimized_forecast,
     croston_sba_forecast,
     croston_sbj_forecast,
     les_forecast,
 )
+
+
+def test_croston_bias_corrected_forecast_applies_scalar_correction() -> None:
+    yhat = intermittent_mod._croston_bias_corrected_forecast(  # type: ignore[attr-defined]
+        np.array([2.0, 2.0], dtype=float),
+        correction=0.5,
+    )
+
+    assert yhat.tolist() == pytest.approx([1.0, 1.0])
 
 
 def test_croston_sba_all_zero_returns_zero():

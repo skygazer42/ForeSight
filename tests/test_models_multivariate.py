@@ -97,6 +97,153 @@ def test_prepare_torch_multivariate_training_data_returns_normalized_windows_and
     assert n_nodes == 2
 
 
+def test_validated_multivariate_horizon_lags_returns_normalized_ints() -> None:
+    h, lag_count = multivariate_mod._validated_multivariate_horizon_lags(  # type: ignore[attr-defined]
+        horizon=3.0,
+        lags=2.0,
+    )
+
+    assert h == 3
+    assert lag_count == 2
+
+
+def test_validated_graph_kernel_size_returns_normalized_int() -> None:
+    k = multivariate_mod._validated_graph_kernel_size(3.0)  # type: ignore[attr-defined]
+
+    assert k == 3
+
+
+def test_predict_torch_multivariate_forecast_uses_latest_window_and_reshapes_output() -> None:
+    calls: list[object] = []
+
+    class _FakeNoGrad:
+        def __enter__(self):
+            calls.append("enter")
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            calls.append("exit")
+            return False
+
+    class _FakeTensor:
+        def __init__(self, arr: np.ndarray) -> None:
+            self._arr = arr
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self._arr
+
+    class _FakeTorch:
+        float32 = "float32"
+
+        def no_grad(self):
+            return _FakeNoGrad()
+
+        def device(self, raw: str):
+            calls.append(("device", raw))
+            return f"device:{raw}"
+
+        def tensor(self, data, *, dtype, device):
+            arr = np.asarray(data, dtype=float)
+            calls.append(("tensor", dtype, device, arr.shape))
+            return arr
+
+    class _FakeModel:
+        def __call__(self, feat):
+            arr = np.asarray(feat, dtype=float)
+            calls.append(("model", arr.shape))
+            return _FakeTensor(np.arange(6.0, dtype=float))
+
+    yhat = multivariate_mod._predict_torch_multivariate_forecast(  # type: ignore[attr-defined]
+        _FakeModel(),
+        torch_mod=_FakeTorch(),
+        x_work=np.arange(12.0, dtype=float).reshape(6, 2),
+        lag_count=3,
+        horizon=3,
+        n_nodes=2,
+        device="cpu",
+    )
+
+    assert yhat.shape == (3, 2)
+    np.testing.assert_allclose(yhat, np.arange(6.0, dtype=float).reshape(3, 2))
+    assert calls == [
+        "enter",
+        ("device", "cpu"),
+        ("tensor", "float32", "device:cpu", (1, 3, 2)),
+        ("model", (1, 3, 2)),
+        "exit",
+    ]
+
+
+def test_build_torch_multivariate_train_config_returns_torch_train_config() -> None:
+    cfg = multivariate_mod._build_torch_multivariate_train_config(  # type: ignore[attr-defined]
+        epochs=2,
+        lr=1e-3,
+        weight_decay=0.0,
+        batch_size=16,
+        seed=0,
+        patience=2,
+        loss="mse",
+        val_split=0.0,
+        grad_clip_norm=0.0,
+        optimizer="adam",
+        momentum=0.9,
+        scheduler="none",
+        scheduler_step_size=10,
+        scheduler_gamma=0.1,
+        scheduler_restart_period=10,
+        scheduler_restart_mult=1,
+        scheduler_pct_start=0.3,
+        restore_best=True,
+        min_epochs=1,
+        amp=False,
+        amp_dtype="auto",
+        warmup_epochs=0,
+        min_lr=0.0,
+        grad_accum_steps=1,
+        monitor="auto",
+        monitor_mode="min",
+        min_delta=0.0,
+        num_workers=0,
+        pin_memory=False,
+        persistent_workers=False,
+        scheduler_patience=5,
+        grad_clip_mode="norm",
+        grad_clip_value=0.0,
+        scheduler_plateau_factor=0.1,
+        scheduler_plateau_threshold=1e-4,
+        ema_decay=0.0,
+        ema_warmup_epochs=0,
+        swa_start_epoch=-1,
+        lookahead_steps=0,
+        lookahead_alpha=0.5,
+        sam_rho=0.0,
+        sam_adaptive=False,
+        horizon_loss_decay=1.0,
+        input_dropout=0.0,
+        temporal_dropout=0.0,
+        grad_noise_std=0.0,
+        gc_mode="off",
+        agc_clip_factor=0.0,
+        agc_eps=1e-3,
+        checkpoint_dir="",
+        save_best_checkpoint=False,
+        save_last_checkpoint=False,
+        resume_checkpoint_path="",
+        resume_checkpoint_strict=True,
+    )
+
+    assert cfg.epochs == 2
+    assert cfg.batch_size == 16
+    assert cfg.optimizer == "adam"
+    assert cfg.resume_checkpoint_strict is True
+
+
 @pytest.mark.skipif(
     importlib.util.find_spec("statsmodels") is None,
     reason="statsmodels not installed",

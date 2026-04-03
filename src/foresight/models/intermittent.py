@@ -31,8 +31,12 @@ def _zero_forecast(horizon: int) -> np.ndarray:
     return np.zeros((int(horizon),), dtype=float)
 
 
+def _validated_alpha(alpha: float) -> float:
+    return _require_01("alpha", alpha)
+
+
 def _validated_alpha_beta(alpha: float, beta: float) -> tuple[float, float]:
-    return (_require_01("alpha", alpha), _require_01("beta", beta))
+    return (_validated_alpha(alpha), _require_01("beta", beta))
 
 
 def _validated_intermittent_input(
@@ -63,6 +67,23 @@ def _croston_initial_state(x: np.ndarray) -> tuple[int, float, float, float] | N
     return (first, float(x[first]), float(first + 1), 1.0)
 
 
+def _croston_update_state(
+    z: float,
+    p: float,
+    q: float,
+    xt: float,
+    *,
+    alpha: float,
+) -> tuple[float, float, float]:
+    if xt > 0.0:
+        z = alpha * xt + (1.0 - alpha) * z
+        p = alpha * q + (1.0 - alpha) * p
+        q = 1.0
+    else:
+        q += 1.0
+    return z, p, q
+
+
 def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.ndarray:
     """
     Croston's classic method for intermittent demand.
@@ -78,7 +99,7 @@ def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) ->
         horizon=horizon,
         subject="croston_classic_forecast",
     )
-    a = _require_01("alpha", alpha)
+    a = _validated_alpha(alpha)
 
     # If all demands are zero, forecast zeros.
     if _all_zero(x):
@@ -92,15 +113,18 @@ def croston_classic_forecast(train: Any, horizon: int, *, alpha: float = 0.1) ->
 
     for t in range(first + 1, x.size):
         xt = float(x[t])
-        if xt > 0.0:
-            z = a * xt + (1.0 - a) * z
-            p = a * q + (1.0 - a) * p
-            q = 1.0
-        else:
-            q += 1.0
+        z, p, q = _croston_update_state(z, p, q, xt, alpha=a)
 
     fc = 0.0 if p <= 0.0 else z / p
     return np.full((int(horizon),), float(fc), dtype=float)
+
+
+def _croston_bias_corrected_forecast(
+    fc: np.ndarray,
+    *,
+    correction: float,
+) -> np.ndarray:
+    return np.asarray(fc * float(correction), dtype=float)
 
 
 def croston_sba_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.ndarray:
@@ -109,9 +133,9 @@ def croston_sba_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.
 
     Bias correction: multiply Croston's classic forecast by (1 - alpha/2).
     """
-    a = _require_01("alpha", alpha)
+    a = _validated_alpha(alpha)
     fc = croston_classic_forecast(train, horizon, alpha=a)
-    return np.asarray(fc * (1.0 - a / 2.0), dtype=float)
+    return _croston_bias_corrected_forecast(fc, correction=(1.0 - a / 2.0))
 
 
 def croston_sbj_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.ndarray:
@@ -120,14 +144,14 @@ def croston_sbj_forecast(train: Any, horizon: int, *, alpha: float = 0.1) -> np.
 
     Bias correction: multiply Croston's classic forecast by (1 - alpha/(2 - alpha)).
     """
-    a = _require_01("alpha", alpha)
+    a = _validated_alpha(alpha)
     fc = croston_classic_forecast(train, horizon, alpha=a)
     corr = 1.0 - (a / (2.0 - a))
-    return np.asarray(fc * corr, dtype=float)
+    return _croston_bias_corrected_forecast(fc, correction=corr)
 
 
 def _croston_sse(x: np.ndarray, *, alpha: float) -> float:
-    a = _require_01("alpha", alpha)
+    a = _validated_alpha(alpha)
     if x.size < 2 or _all_zero(x):
         return 0.0
 
@@ -143,12 +167,7 @@ def _croston_sse(x: np.ndarray, *, alpha: float) -> float:
         sse += err * err
 
         xt = float(x[t])
-        if xt > 0.0:
-            z = a * xt + (1.0 - a) * z
-            p = a * q + (1.0 - a) * p
-            q = 1.0
-        else:
-            q += 1.0
+        z, p, q = _croston_update_state(z, p, q, xt, alpha=a)
 
     return float(sse)
 

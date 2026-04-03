@@ -3401,13 +3401,24 @@ def test_intermittent_source_extracts_les_helpers() -> None:
     path = "src/foresight/models/intermittent.py"
     source = _read_repo_file(path)
 
+    assert "def _croston_bias_corrected_forecast(" in source
+    assert "def _croston_update_state(" in source
     assert "def _zero_forecast(" in source
+    assert "def _validated_alpha(" in source
     assert "def _validated_intermittent_input(" in source
     assert "def _validated_alpha_beta(" in source
     assert "def _first_nonzero_index(" in source
     assert "def _croston_initial_state(" in source
     assert "def _les_decay_value(" in source
     assert "def _les_update_state(" in source
+    assert _function_uses_name(path, "croston_classic_forecast", "_validated_alpha")
+    assert _function_uses_name(path, "croston_sba_forecast", "_croston_bias_corrected_forecast")
+    assert _function_uses_name(path, "croston_sbj_forecast", "_croston_bias_corrected_forecast")
+    assert _function_uses_name(path, "croston_sba_forecast", "_validated_alpha")
+    assert _function_uses_name(path, "croston_sbj_forecast", "_validated_alpha")
+    assert _function_uses_name(path, "_croston_sse", "_validated_alpha")
+    assert _function_uses_name(path, "croston_classic_forecast", "_croston_update_state")
+    assert _function_uses_name(path, "_croston_sse", "_croston_update_state")
     assert _function_uses_name(path, "croston_classic_forecast", "_zero_forecast")
     assert _function_uses_name(path, "croston_optimized_forecast", "_zero_forecast")
     assert _function_uses_name(path, "les_forecast", "_zero_forecast")
@@ -3432,23 +3443,62 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     path = "src/foresight/models/multivariate.py"
     source = _read_repo_file(path)
 
+    assert "def _validated_multivariate_horizon_lags(" in source
+    assert "def _validated_graph_kernel_size(" in source
     assert "def _validated_torch_multivariate_model_dims(" in source
     assert "def _maybe_normalize_multivariate_matrix(" in source
     assert "def _maybe_denormalize_multivariate_forecast(" in source
     assert "def _latest_multivariate_window(" in source
     assert "def _prepare_torch_multivariate_training_data(" in source
+    assert "def _predict_torch_multivariate_forecast(" in source
+    assert "def _build_torch_multivariate_train_config(" in source
     assert "def _load_adj_matrix_from_path(" in source
     assert "def _resolve_builtin_adj_matrix(" in source
     assert "def _corr_topk_adj_matrix(" in source
     assert _function_uses_name(
         path,
         "torch_stid_forecast",
-        "_validated_torch_multivariate_model_dims",
+        "_build_torch_multivariate_train_config",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
+        "_build_torch_multivariate_train_config",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
+        "_build_torch_multivariate_train_config",
     )
     assert _function_uses_name(
         path,
         "torch_stid_forecast",
+        "_validated_torch_multivariate_model_dims",
+    )
+    assert _function_uses_name(
+        path,
+        "_make_lagged_xy_multivariate",
+        "_validated_multivariate_horizon_lags",
+    )
+    assert _function_uses_name(
+        path,
+        "_prepare_torch_multivariate_training_data",
+        "_validated_multivariate_horizon_lags",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_validated_multivariate_horizon_lags",
+    )
+    assert _function_uses_name(
+        path,
+        "_predict_torch_multivariate_forecast",
         "_latest_multivariate_window",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_predict_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,
@@ -3458,12 +3508,27 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     assert _function_uses_name(
         path,
         "torch_stgcn_forecast",
+        "_validated_multivariate_horizon_lags",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
+        "_validated_graph_kernel_size",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
+        "_validated_graph_kernel_size",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stgcn_forecast",
         "_validated_torch_multivariate_model_dims",
     )
     assert _function_uses_name(
         path,
         "torch_stgcn_forecast",
-        "_latest_multivariate_window",
+        "_predict_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,
@@ -3473,12 +3538,17 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     assert _function_uses_name(
         path,
         "torch_graphwavenet_forecast",
+        "_validated_multivariate_horizon_lags",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_graphwavenet_forecast",
         "_validated_torch_multivariate_model_dims",
     )
     assert _function_uses_name(
         path,
         "torch_graphwavenet_forecast",
-        "_latest_multivariate_window",
+        "_predict_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,

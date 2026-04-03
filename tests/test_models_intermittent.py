@@ -49,6 +49,26 @@ def test_validated_alpha_beta_returns_both_parameters_in_range() -> None:
     assert b == pytest.approx(0.3)
 
 
+def test_validated_alpha_returns_parameter_in_range() -> None:
+    a = intermittent_mod._validated_alpha(0.2)  # type: ignore[attr-defined]
+
+    assert a == pytest.approx(0.2)
+
+
+def test_croston_update_state_updates_size_interval_and_elapsed_periods() -> None:
+    z, p, q = intermittent_mod._croston_update_state(  # type: ignore[attr-defined]
+        5.0,
+        3.0,
+        2.0,
+        7.0,
+        alpha=0.2,
+    )
+
+    assert z == pytest.approx(5.4)
+    assert p == pytest.approx(2.8)
+    assert q == pytest.approx(1.0)
+
+
 def test_croston_classic_all_zero_returns_zero():
     yhat = croston_classic_forecast([0, 0, 0, 0], 3, alpha=0.1)
     assert yhat.shape == (3,)
