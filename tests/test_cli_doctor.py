@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import foresight.optional_deps as optional_deps
 
 
@@ -115,6 +117,16 @@ def test_doctor_require_extra_returns_one_when_requested_extra_is_missing() -> N
             item["scope"] == "extra" and item["key"] == "torch" and item["severity"] == "error"
             for item in payload["findings"]
         )
+
+
+@pytest.mark.parametrize("extra_name", ["sktime", "darts", "gluonts"])
+def test_doctor_require_extra_accepts_integration_extras(extra_name: str) -> None:
+    proc = _run_cli("doctor", "--require-extra", extra_name)
+
+    payload = json.loads(proc.stdout)
+    expected = 1 if not optional_deps.get_extra_status(extra_name).available else 0
+    assert proc.returncode == expected
+    assert extra_name in payload["summary"]["required_extras"]
 
 
 def test_doctor_require_extra_text_mentions_missing_extra() -> None:

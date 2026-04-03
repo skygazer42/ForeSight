@@ -96,7 +96,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-extra",
         action="append",
         default=[],
-        choices=["core", "ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "all"],
+        choices=[
+            "core",
+            "ml",
+            "xgb",
+            "lgbm",
+            "catboost",
+            "stats",
+            "torch",
+            "transformers",
+            "sktime",
+            "darts",
+            "gluonts",
+            "all",
+        ],
         help="Require an extra to be available; repeat to require multiple extras.",
     )
     doctor.set_defaults(_handler=_cmd_doctor)
@@ -1030,8 +1043,32 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     from .datasets.registry import list_datasets, list_packaged_datasets, preview_dataset_path_info
     from .optional_deps import get_dependency_status, get_extra_status
 
-    dependency_keys = ["ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"]
-    extra_keys = ["core", "ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "all"]
+    dependency_keys = [
+        "ml",
+        "xgb",
+        "lgbm",
+        "catboost",
+        "stats",
+        "torch",
+        "transformers",
+        "sktime",
+        "darts",
+        "gluonts",
+    ]
+    extra_keys = [
+        "core",
+        "ml",
+        "xgb",
+        "lgbm",
+        "catboost",
+        "stats",
+        "torch",
+        "transformers",
+        "sktime",
+        "darts",
+        "gluonts",
+        "all",
+    ]
     data_dir = _cli_shared._string_arg_value(args, "data_dir")
     required_extras = [
         str(item).strip().lower()

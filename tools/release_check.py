@@ -16,6 +16,15 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _prepare_storage_env(*, env: dict[str, str]) -> dict[str, str]:
+    tools_dir = Path(__file__).resolve().parent
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from storage_paths import prepare_storage_env
+
+    return prepare_storage_env(env=env)
+
+
 def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
     print(f"+ {' '.join(cmd)}", flush=True)
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
@@ -61,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 
     root = _repo_root()
 
-    env = dict(os.environ)
+    env = _prepare_storage_env(env=dict(os.environ))
     env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
 
     quality_cmds = _quality_commands()
@@ -85,7 +94,11 @@ def main(argv: list[str] | None = None) -> int:
             _run(cmd, cwd=root, env=env)
 
         # Build in a clean temp dir (avoids `rm -rf dist/` patterns).
-        with tempfile.TemporaryDirectory(prefix="foresight_release_build_") as tmp:
+        tmp_root = Path(str(env["TMPDIR"])).expanduser() if env.get("TMPDIR") else None
+        with tempfile.TemporaryDirectory(
+            prefix="foresight_release_build_",
+            dir=str(tmp_root) if tmp_root is not None else None,
+        ) as tmp:
             dist_dir = Path(tmp) / "dist"
             _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root, env=env)
 

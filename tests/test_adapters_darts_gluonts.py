@@ -110,6 +110,25 @@ def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
     ]
 
 
+def test_gluonts_adapter_normalizes_two_point_daily_frequency_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Pandas3DailyOffset:
+        freqstr = "24h"
+
+    monkeypatch.setattr(
+        gluonts_adapter_mod.pd.tseries.frequencies,
+        "to_offset",
+        lambda _delta: _Pandas3DailyOffset(),
+    )
+
+    freq = gluonts_adapter_mod._infer_series_frequency(
+        pd.Series(pd.to_datetime(["2024-01-01", "2024-01-02"]))
+    )
+
+    assert freq == "D"
+
+
 def test_darts_adapter_missing_dependency_uses_darts_install_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -29,7 +29,13 @@ def _infer_series_frequency(ds: pd.Series) -> str:
         if inferred is not None:
             return str(inferred)
 
-    offset = pd.tseries.frequencies.to_offset(values.iloc[1] - values.iloc[0])
+    delta = values.iloc[1] - values.iloc[0]
+    synthetic = pd.DatetimeIndex([values.iloc[0], values.iloc[1], values.iloc[1] + delta])
+    inferred = pd.infer_freq(synthetic)
+    if inferred is not None:
+        return str(inferred)
+
+    offset = pd.tseries.frequencies.to_offset(delta)
     if offset is None:
         raise ValueError("Could not infer a regular frequency; provide freq explicitly")
     return str(offset.freqstr)

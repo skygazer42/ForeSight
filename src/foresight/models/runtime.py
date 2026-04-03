@@ -11851,8 +11851,10 @@ def _factory_ensemble_mean(
     **_p: Any,
 ) -> ForecasterFn:
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return make_ensemble_object(members=members, agg="mean", weights=weights).fit(train).predict(
-            int(horizon)
+        return (
+            make_ensemble_object(members=members, agg="mean", weights=weights)
+            .fit(train)
+            .predict(int(horizon))
         )
 
     return _f

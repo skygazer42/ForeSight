@@ -83,6 +83,19 @@ def _load_smoke_build_install_module():
     return module
 
 
+def _load_storage_paths_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "storage_paths_for_test",
+        repo_root / "tools" / "storage_paths.py",
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     env = dict(os.environ)
@@ -406,3 +419,55 @@ def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
         f"foresight_ts-{current_version}-py3-none-any.whl",
         f"foresight_ts-{current_version}.tar.gz",
     ]
+
+
+def test_storage_paths_prepare_storage_env_sets_large_storage_defaults(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = _load_storage_paths_module()
+    root = tmp_path / "storage-root"
+
+    monkeypatch.setenv("USER", "alice")
+    env: dict[str, str] = {}
+    resolved = module.prepare_storage_env(env=env, candidate_roots=[root])
+
+    assert resolved["TMPDIR"] == str(root / "tmp")
+    assert resolved["TEMP"] == str(root / "tmp")
+    assert resolved["TMP"] == str(root / "tmp")
+    assert resolved["PIP_CACHE_DIR"] == str(root / "cache" / "pip")
+    assert resolved["UV_CACHE_DIR"] == str(root / "cache" / "uv")
+    assert (root / "tmp").is_dir()
+    assert (root / "cache" / "pip").is_dir()
+    assert (root / "cache" / "uv").is_dir()
+
+
+def test_storage_paths_prepare_storage_env_preserves_explicit_overrides(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = _load_storage_paths_module()
+    root = tmp_path / "storage-root"
+
+    monkeypatch.setenv("USER", "alice")
+    env = {
+        "TMPDIR": "/custom/tmp",
+        "PIP_CACHE_DIR": "/custom/pip-cache",
+        "UV_CACHE_DIR": "/custom/uv-cache",
+    }
+    resolved = module.prepare_storage_env(env=env, candidate_roots=[root])
+
+    assert resolved["TMPDIR"] == "/custom/tmp"
+    assert resolved["TEMP"] == "/custom/tmp"
+    assert resolved["TMP"] == "/custom/tmp"
+    assert resolved["PIP_CACHE_DIR"] == "/custom/pip-cache"
+    assert resolved["UV_CACHE_DIR"] == "/custom/uv-cache"
+
+
+def test_release_and_smoke_tooling_use_storage_paths_helper() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    release_script = (repo_root / "tools" / "release_check.py").read_text(encoding="utf-8")
+    smoke_script = (repo_root / "tools" / "smoke_build_install.py").read_text(encoding="utf-8")
+
+    assert "prepare_storage_env" in release_script
+    assert "prepare_storage_env" in smoke_script
