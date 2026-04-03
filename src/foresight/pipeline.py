@@ -51,9 +51,7 @@ def _normalize_member_specs(members: Any) -> tuple[str | BaseForecaster, ...]:
             raise ValueError("members must be non-empty")
         return tuple(string_parts)
     if isinstance(members, list | tuple):
-        parts: list[str | BaseForecaster] = [
-            member for member in members if str(member).strip()
-        ]
+        parts: list[str | BaseForecaster] = [member for member in members if str(member).strip()]
         if not parts:
             raise ValueError("members must be non-empty")
         return tuple(parts)
@@ -175,7 +173,8 @@ class EnsembleLocalForecaster(BaseForecaster):
         if not self.is_fitted or not self._member_forecasters:
             raise RuntimeError("fit must be called before predict")
         preds = [
-            np.asarray(member.predict(int(horizon)), dtype=float) for member in self._member_forecasters
+            np.asarray(member.predict(int(horizon)), dtype=float)
+            for member in self._member_forecasters
         ]
         arr = np.stack(preds, axis=0)
         if self._agg == "mean":

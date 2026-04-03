@@ -11810,11 +11810,15 @@ def _factory_pipeline(
     **base_params: Any,
 ) -> ForecasterFn:
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return make_pipeline_object(
-            base=str(base),
-            transforms=transforms,
-            **base_params,
-        ).fit(train).predict(int(horizon))
+        return (
+            make_pipeline_object(
+                base=str(base),
+                transforms=transforms,
+                **base_params,
+            )
+            .fit(train)
+            .predict(int(horizon))
+        )
 
     return _f
 
@@ -11853,9 +11857,7 @@ def _factory_ensemble_median(
     *, members: Any = ("naive-last", "seasonal-naive", "theta"), **_p: Any
 ) -> ForecasterFn:
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return make_ensemble_object(members=members, agg="median").fit(train).predict(
-            int(horizon)
-        )
+        return make_ensemble_object(members=members, agg="median").fit(train).predict(int(horizon))
 
     return _f
 

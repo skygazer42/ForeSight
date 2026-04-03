@@ -83,7 +83,13 @@ def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
         lambda: type(
             "_FakeGluonTSModule",
             (),
-            {"dataset": type("_Dataset", (), {"common": type("_Common", (), {"ListDataset": _FakeListDataset})})},
+            {
+                "dataset": type(
+                    "_Dataset",
+                    (),
+                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
+                )
+            },
         )(),
     )
     long_df = pd.DataFrame(
@@ -112,7 +118,7 @@ def test_darts_adapter_missing_dependency_uses_darts_install_hint(
         "_require_darts",
         lambda: (_ for _ in ()).throw(
             ImportError(
-                'darts adapter requires darts. Install with: '
+                "darts adapter requires darts. Install with: "
                 'pip install "foresight-ts[darts]" or pip install -e ".[darts]"'
             )
         ),
@@ -130,7 +136,7 @@ def test_gluonts_adapter_missing_dependency_uses_gluonts_install_hint(
         "_require_gluonts",
         lambda: (_ for _ in ()).throw(
             ImportError(
-                'gluonts adapter requires gluonts. Install with: '
+                "gluonts adapter requires gluonts. Install with: "
                 'pip install "foresight-ts[gluonts]" or pip install -e ".[gluonts]"'
             )
         ),

@@ -53,7 +53,7 @@ def test_sktime_adapter_missing_dependency_uses_sktime_install_hint(
         "_require_sktime",
         lambda: (_ for _ in ()).throw(
             ImportError(
-                'sktime adapter requires sktime. Install with: '
+                "sktime adapter requires sktime. Install with: "
                 'pip install "foresight-ts[sktime]" or pip install -e ".[sktime]"'
             )
         ),

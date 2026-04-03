@@ -44,7 +44,9 @@ def _normalize_sktime_fh(fh: Any) -> tuple[int, ...]:
 
     is_relative = getattr(fh, "is_relative", None)
     if is_relative is False:
-        raise ValueError("SktimeForecasterAdapter only supports relative forecasting horizons in v1")
+        raise ValueError(
+            "SktimeForecasterAdapter only supports relative forecasting horizons in v1"
+        )
 
     if hasattr(fh, "to_numpy"):
         raw = np.asarray(fh.to_numpy(), dtype=int)
@@ -108,7 +110,9 @@ class SktimeForecasterAdapter:
 
         from ..models.registry import make_forecaster_object
 
-        return make_forecaster_object(str(self._forecaster_spec).strip(), **dict(self._model_params))
+        return make_forecaster_object(
+            str(self._forecaster_spec).strip(), **dict(self._model_params)
+        )
 
     def fit(self, y: Any, X: Any = None, fh: Any = None) -> SktimeForecasterAdapter:
         if X is not None:
