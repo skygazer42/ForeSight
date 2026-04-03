@@ -3359,6 +3359,7 @@ def test_analog_source_extracts_neighbor_selection_helpers() -> None:
 
     assert "def _validate_analog_forecast_inputs(" in source
     assert "def _maybe_normalize_window_bank(" in source
+    assert "def _analog_window_distances(" in source
     assert "def _analog_neighbor_prediction(" in source
     assert _function_uses_name(
         "src/foresight/models/analog.py",
@@ -3369,6 +3370,11 @@ def test_analog_source_extracts_neighbor_selection_helpers() -> None:
         "src/foresight/models/analog.py",
         "analog_knn_forecast",
         "_maybe_normalize_window_bank",
+    )
+    assert _function_uses_name(
+        "src/foresight/models/analog.py",
+        "analog_knn_forecast",
+        "_analog_window_distances",
     )
     assert _function_uses_name(
         "src/foresight/models/analog.py",

@@ -45,6 +45,20 @@ def _maybe_normalize_window_bank(windows: np.ndarray, *, normalize: bool) -> np.
     return (windows - means) / stds
 
 
+def _analog_window_distances(
+    window_bank: np.ndarray,
+    query_window: np.ndarray,
+    *,
+    normalize: bool,
+) -> np.ndarray:
+    query = np.asarray(query_window, dtype=float)
+    if bool(normalize):
+        query_mean = float(query.mean())
+        query_std = float(query.std()) + 1e-8
+        query = (query - query_mean) / query_std
+    return np.sum((window_bank - query) ** 2, axis=1)
+
+
 def _analog_neighbor_prediction(
     y_next: np.ndarray,
     distances: np.ndarray,
@@ -112,13 +126,11 @@ def analog_knn_forecast(
     for h in range(horizon_count):
         end = n + h
         w = hist[end - lag_count : end]
-        if normalized:
-            wm = float(w.mean())
-            ws = float(w.std()) + 1e-8
-            w_work = (w - wm) / ws
-            distances = np.sum((x_work - w_work) ** 2, axis=1)
-        else:
-            distances = np.sum((x_work - w) ** 2, axis=1)
+        distances = _analog_window_distances(
+            x_work,
+            w,
+            normalize=normalized,
+        )
 
         pred = _analog_neighbor_prediction(
             y_next,
