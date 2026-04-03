@@ -315,16 +315,14 @@ def torch_stid_forecast(
     )
     model = _train_loop(_STIDDirect(), X, Y, cfg=cfg, device=str(device))
 
-    return _maybe_denormalize_multivariate_forecast(
-        _predict_torch_multivariate_forecast(
-            model,
-            torch_mod=torch,
-            x_work=x_work,
-            lag_count=lag_count,
-            horizon=h,
-            n_nodes=c,
-            device=str(device),
-        ),
+    return _finalize_torch_multivariate_forecast(
+        model,
+        torch_mod=torch,
+        x_work=x_work,
+        lag_count=lag_count,
+        horizon=h,
+        n_nodes=c,
+        device=str(device),
         mean=mean,
         std=std,
         normalize=bool(normalize),
@@ -508,6 +506,35 @@ def _predict_torch_multivariate_forecast(
         )
         yhat_t = model(feat_t).detach().cpu().numpy().reshape(int(horizon), int(n_nodes))
     return np.asarray(yhat_t, dtype=float)
+
+
+def _finalize_torch_multivariate_forecast(
+    model: Any,
+    *,
+    torch_mod: Any,
+    x_work: np.ndarray,
+    lag_count: int,
+    horizon: int,
+    n_nodes: int,
+    device: str,
+    mean: np.ndarray,
+    std: np.ndarray,
+    normalize: bool,
+) -> np.ndarray:
+    return _maybe_denormalize_multivariate_forecast(
+        _predict_torch_multivariate_forecast(
+            model,
+            torch_mod=torch_mod,
+            x_work=x_work,
+            lag_count=lag_count,
+            horizon=horizon,
+            n_nodes=n_nodes,
+            device=device,
+        ),
+        mean=mean,
+        std=std,
+        normalize=bool(normalize),
+    )
 
 
 def _build_torch_multivariate_train_config(
@@ -823,16 +850,14 @@ def torch_stgcn_forecast(
     )
     model = _train_loop(_STGCN(), X, Y, cfg=cfg, device=str(device))
 
-    return _maybe_denormalize_multivariate_forecast(
-        _predict_torch_multivariate_forecast(
-            model,
-            torch_mod=torch,
-            x_work=x_work,
-            lag_count=lag_count,
-            horizon=h,
-            n_nodes=n_nodes,
-            device=str(device),
-        ),
+    return _finalize_torch_multivariate_forecast(
+        model,
+        torch_mod=torch,
+        x_work=x_work,
+        lag_count=lag_count,
+        horizon=h,
+        n_nodes=n_nodes,
+        device=str(device),
         mean=mean,
         std=std,
         normalize=bool(normalize),
@@ -1075,16 +1100,14 @@ def torch_graphwavenet_forecast(
     )
     model = _train_loop(_GraphWaveNet(), X, Y, cfg=cfg, device=str(device))
 
-    return _maybe_denormalize_multivariate_forecast(
-        _predict_torch_multivariate_forecast(
-            model,
-            torch_mod=torch,
-            x_work=x_work,
-            lag_count=lag_count,
-            horizon=h,
-            n_nodes=n_nodes,
-            device=str(device),
-        ),
+    return _finalize_torch_multivariate_forecast(
+        model,
+        torch_mod=torch,
+        x_work=x_work,
+        lag_count=lag_count,
+        horizon=h,
+        n_nodes=n_nodes,
+        device=str(device),
         mean=mean,
         std=std,
         normalize=bool(normalize),

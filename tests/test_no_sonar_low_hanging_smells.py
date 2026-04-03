@@ -3451,6 +3451,7 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     assert "def _latest_multivariate_window(" in source
     assert "def _prepare_torch_multivariate_training_data(" in source
     assert "def _predict_torch_multivariate_forecast(" in source
+    assert "def _finalize_torch_multivariate_forecast(" in source
     assert "def _build_torch_multivariate_train_config(" in source
     assert "def _load_adj_matrix_from_path(" in source
     assert "def _resolve_builtin_adj_matrix(" in source
@@ -3497,8 +3498,18 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     )
     assert _function_uses_name(
         path,
-        "torch_stid_forecast",
+        "_finalize_torch_multivariate_forecast",
         "_predict_torch_multivariate_forecast",
+    )
+    assert _function_uses_name(
+        path,
+        "_finalize_torch_multivariate_forecast",
+        "_maybe_denormalize_multivariate_forecast",
+    )
+    assert _function_uses_name(
+        path,
+        "torch_stid_forecast",
+        "_finalize_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,
@@ -3528,7 +3539,7 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     assert _function_uses_name(
         path,
         "torch_stgcn_forecast",
-        "_predict_torch_multivariate_forecast",
+        "_finalize_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,
@@ -3548,7 +3559,7 @@ def test_multivariate_source_extracts_adj_resolution_helpers() -> None:
     assert _function_uses_name(
         path,
         "torch_graphwavenet_forecast",
-        "_predict_torch_multivariate_forecast",
+        "_finalize_torch_multivariate_forecast",
     )
     assert _function_uses_name(
         path,

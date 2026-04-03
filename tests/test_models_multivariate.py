@@ -180,6 +180,63 @@ def test_predict_torch_multivariate_forecast_uses_latest_window_and_reshapes_out
     ]
 
 
+def test_finalize_torch_multivariate_forecast_denormalizes_predicted_output() -> None:
+    class _FakeNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeTensor:
+        def __init__(self, arr: np.ndarray) -> None:
+            self._arr = arr
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self._arr
+
+    class _FakeTorch:
+        float32 = "float32"
+
+        def no_grad(self):
+            return _FakeNoGrad()
+
+        def device(self, raw: str):
+            return raw
+
+        def tensor(self, data, *, dtype, device):
+            return np.asarray(data, dtype=float)
+
+    class _FakeModel:
+        def __call__(self, feat):
+            _ = feat
+            return _FakeTensor(np.array([0.0, 1.0, 2.0, 3.0], dtype=float))
+
+    yhat = multivariate_mod._finalize_torch_multivariate_forecast(  # type: ignore[attr-defined]
+        _FakeModel(),
+        torch_mod=_FakeTorch(),
+        x_work=np.arange(12.0, dtype=float).reshape(6, 2),
+        lag_count=3,
+        horizon=2,
+        n_nodes=2,
+        device="cpu",
+        mean=np.array([10.0, 100.0], dtype=float),
+        std=np.array([2.0, 5.0], dtype=float),
+        normalize=True,
+    )
+
+    np.testing.assert_allclose(
+        yhat,
+        np.array([[10.0, 105.0], [14.0, 115.0]], dtype=float),
+    )
+
+
 def test_build_torch_multivariate_train_config_returns_torch_train_config() -> None:
     cfg = multivariate_mod._build_torch_multivariate_train_config(  # type: ignore[attr-defined]
         epochs=2,
