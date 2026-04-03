@@ -180,3 +180,9 @@ def test_support_contract_docs_define_public_surface_and_ci_matrix() -> None:
     assert "stable public surface" in readme.lower()
     assert "## Beta Adapters" in readme
     assert "foresight.adapters" in readme
+
+
+def test_compatibility_docs_list_all_beta_integration_extras() -> None:
+    compatibility = (_repo_root() / "docs" / "compatibility.md").read_text(encoding="utf-8")
+
+    assert "- Integration extras: `sktime`, `darts`, `gluonts`" in compatibility

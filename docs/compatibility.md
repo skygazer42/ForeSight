@@ -5,7 +5,7 @@
 - Python: `>=3.10`
 - Core install: `numpy` + `pandas`
 - Optional extras: `ml`, `xgb`, `lgbm`, `catboost`, `stats`, `torch`, `transformers`
-- Integration extras: `sktime`
+- Integration extras: `sktime`, `darts`, `gluonts`
 - Default expectation: CPU-only workflows must remain usable without any heavy optional backend installed
 
 ## Supported Public Surface
