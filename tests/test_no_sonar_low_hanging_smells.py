@@ -680,6 +680,17 @@ def test_smoothing_source_extracts_holt_state_update_helper() -> None:
     assert _function_uses_name(path, "_holt_sse", "_holt_update_state")
 
 
+def test_theta_source_extracts_validation_helpers() -> None:
+    path = "src/foresight/models/theta.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_theta_input(" in source
+    assert "def _validated_theta_grid_size(" in source
+    assert _function_uses_name(path, "theta_forecast", "_validated_theta_input")
+    assert _function_uses_name(path, "theta_auto_forecast", "_validated_theta_input")
+    assert _function_uses_name(path, "theta_auto_forecast", "_validated_theta_grid_size")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 

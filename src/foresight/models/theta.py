@@ -19,6 +19,28 @@ def _require_01(name: str, v: float) -> float:
     return vf
 
 
+def _validated_theta_input(
+    train: Any,
+    *,
+    horizon: int,
+    subject: str,
+    min_train_size: int,
+) -> np.ndarray:
+    x = _as_1d_float_array(train)
+    if int(horizon) <= 0:
+        raise ValueError("horizon must be >= 1")
+    if x.size < int(min_train_size):
+        raise ValueError(f"{subject} requires at least {int(min_train_size)} training points")
+    return x
+
+
+def _validated_theta_grid_size(grid_size: int) -> int:
+    grid = int(grid_size)
+    if grid <= 1:
+        raise ValueError("grid_size must be >= 2")
+    return grid
+
+
 def _ses_level(x: np.ndarray, *, alpha: float) -> float:
     level = float(x[0])
     for t in range(1, x.size):
@@ -49,11 +71,12 @@ def theta_forecast(train: Any, horizon: int, *, alpha: float = 0.2) -> np.ndarra
     - compute a linear OLS slope
     - add drift = 0.5 * slope per step
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if x.size < 2:
-        raise ValueError("theta_forecast requires at least 2 training points")
+    x = _validated_theta_input(
+        train,
+        horizon=horizon,
+        subject="theta_forecast",
+        min_train_size=2,
+    )
     a = _require_01("alpha", alpha)
 
     level = _ses_level(x, alpha=a)
@@ -105,15 +128,15 @@ def theta_auto_forecast(train: Any, horizon: int, *, grid_size: int = 19) -> np.
     """
     Auto-tuned Theta-style baseline via a simple grid search over alpha.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if x.size < 3:
-        raise ValueError("theta_auto_forecast requires at least 3 training points")
-    if grid_size <= 1:
-        raise ValueError("grid_size must be >= 2")
+    x = _validated_theta_input(
+        train,
+        horizon=horizon,
+        subject="theta_auto_forecast",
+        min_train_size=3,
+    )
+    grid_n = _validated_theta_grid_size(grid_size)
 
-    grid = np.linspace(0.05, 0.95, int(grid_size), dtype=float)
+    grid = np.linspace(0.05, 0.95, grid_n, dtype=float)
     best_alpha = float(grid[0])
     best_sse = float("inf")
     for a in grid:
