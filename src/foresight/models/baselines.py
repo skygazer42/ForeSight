@@ -16,6 +16,29 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _constant_forecast(value: float, *, horizon: int) -> np.ndarray:
+    return np.full(shape=(int(horizon),), fill_value=float(value), dtype=float)
+
+
+def _validated_windowed_baseline_input(
+    train: Any,
+    *,
+    horizon: int,
+    window: int,
+    subject: str,
+) -> tuple[np.ndarray, int, int]:
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError(HORIZON_MIN_ERROR)
+    w = int(window)
+    if w <= 0:
+        raise ValueError(WINDOW_MIN_ERROR)
+    if x.size < w:
+        raise ValueError(f"{subject} requires at least {w} points, got {x.size}")
+    return x, h, w
+
+
 def mean_forecast(train: Any, horizon: int) -> np.ndarray:
     x = _as_1d_float_array(train)
     if horizon <= 0:
@@ -23,7 +46,7 @@ def mean_forecast(train: Any, horizon: int) -> np.ndarray:
     if x.size == 0:
         raise ValueError("mean_forecast requires at least 1 training point")
     m = float(np.mean(x))
-    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+    return _constant_forecast(m, horizon=horizon)
 
 
 def median_forecast(train: Any, horizon: int) -> np.ndarray:
@@ -33,7 +56,7 @@ def median_forecast(train: Any, horizon: int) -> np.ndarray:
     if x.size == 0:
         raise ValueError("median_forecast requires at least 1 training point")
     m = float(np.median(x))
-    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+    return _constant_forecast(m, horizon=horizon)
 
 
 def drift_forecast(train: Any, horizon: int) -> np.ndarray:
@@ -54,45 +77,40 @@ def drift_forecast(train: Any, horizon: int) -> np.ndarray:
 
 
 def moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if window <= 0:
-        raise ValueError(WINDOW_MIN_ERROR)
-    if x.size < window:
-        raise ValueError(f"moving_average_forecast requires at least {window} points, got {x.size}")
+    x, h, w = _validated_windowed_baseline_input(
+        train,
+        horizon=horizon,
+        window=window,
+        subject="moving_average_forecast",
+    )
 
-    m = float(np.mean(x[-window:]))
-    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+    m = float(np.mean(x[-w:]))
+    return _constant_forecast(m, horizon=h)
 
 
 def weighted_moving_average_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if window <= 0:
-        raise ValueError(WINDOW_MIN_ERROR)
-    if x.size < window:
-        raise ValueError(
-            f"weighted_moving_average_forecast requires at least {window} points, got {x.size}"
-        )
+    x, h, w = _validated_windowed_baseline_input(
+        train,
+        horizon=horizon,
+        window=window,
+        subject="weighted_moving_average_forecast",
+    )
 
-    weights = np.arange(1, int(window) + 1, dtype=float)
-    m = float(np.dot(x[-window:], weights) / np.sum(weights))
-    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+    weights = np.arange(1, w + 1, dtype=float)
+    m = float(np.dot(x[-w:], weights) / np.sum(weights))
+    return _constant_forecast(m, horizon=h)
 
 
 def moving_median_forecast(train: Any, horizon: int, *, window: int) -> np.ndarray:
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
-    if window <= 0:
-        raise ValueError(WINDOW_MIN_ERROR)
-    if x.size < window:
-        raise ValueError(f"moving_median_forecast requires at least {window} points, got {x.size}")
+    x, h, w = _validated_windowed_baseline_input(
+        train,
+        horizon=horizon,
+        window=window,
+        subject="moving_median_forecast",
+    )
 
-    m = float(np.median(x[-window:]))
-    return np.full(shape=(horizon,), fill_value=m, dtype=float)
+    m = float(np.median(x[-w:]))
+    return _constant_forecast(m, horizon=h)
 
 
 def seasonal_mean_forecast(train: Any, horizon: int, *, season_length: int) -> np.ndarray:

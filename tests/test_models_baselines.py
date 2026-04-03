@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import foresight.models.baselines as baselines_mod
 from foresight.models.baselines import (
     drift_forecast,
     mean_forecast,
@@ -40,6 +41,31 @@ def test_moving_average_forecast_uses_last_window():
 def test_baselines_validate_horizon():
     with pytest.raises(ValueError):
         mean_forecast([1.0], horizon=0)
+
+
+def test_constant_forecast_repeats_value_for_horizon() -> None:
+    pred = baselines_mod._constant_forecast(3.5, horizon=4)  # type: ignore[attr-defined]
+
+    assert pred.shape == (4,)
+    assert pred.tolist() == [3.5, 3.5, 3.5, 3.5]
+
+
+def test_validated_windowed_baseline_input_checks_window_and_history() -> None:
+    with pytest.raises(ValueError, match="window must be >= 1"):
+        baselines_mod._validated_windowed_baseline_input(  # type: ignore[attr-defined]
+            [1.0, 2.0],
+            horizon=1,
+            window=0,
+            subject="moving_average_forecast",
+        )
+
+    with pytest.raises(ValueError, match="moving_average_forecast requires at least 3 points, got 2"):
+        baselines_mod._validated_windowed_baseline_input(  # type: ignore[attr-defined]
+            [1.0, 2.0],
+            horizon=1,
+            window=3,
+            subject="moving_average_forecast",
+        )
 
 
 def _predict_registered_model(

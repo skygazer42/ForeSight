@@ -637,6 +637,26 @@ def test_cli_catalog_source_extracts_reused_help_literals() -> None:
     assert source.count('"rnn_paper_metadata.json"') == 1
 
 
+def test_baselines_source_extracts_repeated_window_and_fill_helpers() -> None:
+    path = "src/foresight/models/baselines.py"
+    source = _read_repo_file(path)
+
+    assert "def _constant_forecast(" in source
+    assert "def _validated_windowed_baseline_input(" in source
+    assert _function_uses_name(path, "mean_forecast", "_constant_forecast")
+    assert _function_uses_name(path, "median_forecast", "_constant_forecast")
+    assert _function_uses_name(path, "moving_average_forecast", "_constant_forecast")
+    assert _function_uses_name(path, "weighted_moving_average_forecast", "_constant_forecast")
+    assert _function_uses_name(path, "moving_median_forecast", "_constant_forecast")
+    assert _function_uses_name(path, "moving_average_forecast", "_validated_windowed_baseline_input")
+    assert _function_uses_name(
+        path,
+        "weighted_moving_average_forecast",
+        "_validated_windowed_baseline_input",
+    )
+    assert _function_uses_name(path, "moving_median_forecast", "_validated_windowed_baseline_input")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 
