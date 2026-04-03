@@ -120,9 +120,7 @@ def _resolve_long_covariate_columns(
     if all_x_cols:
         return historic_cols, future_cols, all_x_cols
 
-    inferred_future_cols = tuple(
-        col for col in df.columns if col not in {"unique_id", "ds", "y"}
-    )
+    inferred_future_cols = tuple(col for col in df.columns if col not in {"unique_id", "ds", "y"})
     return (), inferred_future_cols, inferred_future_cols
 
 
@@ -161,9 +159,7 @@ def _frequency_by_unique_id(
 ) -> dict[str, str | None]:
     if freq is not None:
         base_freq = str(to_offset(freq).freqstr)
-        return {
-            str(uid): base_freq for uid in df["unique_id"].astype(str).unique().tolist()
-        }
+        return {str(uid): base_freq for uid in df["unique_id"].astype(str).unique().tolist()}
 
     freq_by_uid: dict[str, str | None] = {}
     for uid, group in df.groupby("unique_id", sort=False):
@@ -194,7 +190,11 @@ def _prepare_long_group_frame(
     future_policy: str,
     assume_sorted: bool,
 ) -> pd.DataFrame:
-    out = group.reset_index(drop=True) if assume_sorted else group.sort_values("ds", kind="mergesort").reset_index(drop=True)
+    out = (
+        group.reset_index(drop=True)
+        if assume_sorted
+        else group.sort_values("ds", kind="mergesort").reset_index(drop=True)
+    )
     if out["ds"].duplicated().any():
         raise ValueError(f"ds contains duplicates for unique_id={uid_s!r}")
 

@@ -120,7 +120,9 @@ def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None
         raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
 
 
-def _resolve_to_long_prepare_options(kwargs: dict[str, Any]) -> tuple[bool, bool, str | None, str | None]:
+def _resolve_to_long_prepare_options(
+    kwargs: dict[str, Any],
+) -> tuple[bool, bool, str | None, str | None]:
     prepare = bool(_pop_keyword(kwargs, name="prepare", default=False))
     strict_freq = bool(_pop_keyword(kwargs, name="strict_freq", default=False))
     historic_x_missing = _pop_keyword(kwargs, name="historic_x_missing", default=None)

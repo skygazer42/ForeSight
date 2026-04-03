@@ -20,104 +20,104 @@ def build_multivariate_catalog(context: Any) -> dict[str, Any]:
     _factory_torch_stid_multivariate = context._factory_torch_stid_multivariate
     _factory_var = context._factory_var
     return {
-    "var": model_spec(
-        key="var",
-        description="Vector autoregression via statsmodels on a multivariate target matrix. Optional dependency.",
-        factory=_factory_var,
-        default_params={"maxlags": 1, "trend": "c", "ic": None},
-        param_help={
-            "maxlags": "Maximum autoregressive lag order",
-            "trend": "Deterministic trend: n, c, ct, ctt",
-            "ic": "Optional lag-order selection criterion: aic, bic, hqic, fpe, or none",
-        },
-        requires=("stats",),
-        interface="multivariate",
-    ),
-    "torch-stid-multivariate": model_spec(
-        key="torch-stid-multivariate",
-        description="Torch STID-style multivariate baseline (lite) on a wide target matrix. Requires PyTorch.",
-        factory=_factory_torch_stid_multivariate,
-        default_params={
-            "lags": 24,
-            "d_model": 64,
-            "num_blocks": 2,
-            "dropout": 0.1,
-            **_TORCH_COMMON_DEFAULTS,
-        },
-        param_help={
-            "lags": LAG_WINDOW_PARAM_HELP,
-            "d_model": "Node embedding / hidden dimension",
-            "num_blocks": "Number of identity-style mixing blocks",
-            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
-            **_TORCH_COMMON_PARAM_HELP,
-        },
-        requires=("torch",),
-        interface="multivariate",
-    ),
-    "torch-stgcn-multivariate": model_spec(
-        key="torch-stgcn-multivariate",
-        description="Torch STGCN-style spatiotemporal baseline (lite) on a wide target matrix. Requires PyTorch.",
-        factory=_factory_torch_stgcn_multivariate,
-        default_params={
-            "lags": 24,
-            "d_model": 64,
-            "num_blocks": 2,
-            "kernel_size": 3,
-            "dropout": 0.1,
-            "adj": "corr",
-            "adj_path": "",
-            "adj_top_k": 8,
-            **_TORCH_COMMON_DEFAULTS,
-        },
-        param_help={
-            "lags": LAG_WINDOW_PARAM_HELP,
-            "d_model": "Hidden dimension",
-            "num_blocks": "Number of spatiotemporal blocks",
-            "kernel_size": "Temporal convolution kernel size (>=1)",
-            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
-            "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
-            "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
-            "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
-            **_TORCH_COMMON_PARAM_HELP,
-        },
-        requires=("torch",),
-        interface="multivariate",
-    ),
-    "torch-graphwavenet-multivariate": model_spec(
-        key="torch-graphwavenet-multivariate",
-        description="Torch Graph WaveNet-style baseline (lite) on a wide target matrix. Requires PyTorch.",
-        factory=_factory_torch_graphwavenet_multivariate,
-        default_params={
-            "lags": 24,
-            "d_model": 64,
-            "num_blocks": 4,
-            "kernel_size": 2,
-            "dilation_base": 2,
-            "dropout": 0.1,
-            "adj": "corr",
-            "adj_path": "",
-            "adj_top_k": 8,
-            "adaptive_adj": True,
-            "adj_emb_dim": 8,
-            **_TORCH_COMMON_DEFAULTS,
-        },
-        param_help={
-            "lags": LAG_WINDOW_PARAM_HELP,
-            "d_model": "Hidden dimension",
-            "num_blocks": "Number of dilated temporal graph blocks",
-            "kernel_size": "Temporal convolution kernel size (>=1)",
-            "dilation_base": "Dilation growth base (>=1). Each block uses dilation=base**i",
-            "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
-            "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
-            "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
-            "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
-            "adaptive_adj": "Learn an additional adaptive adjacency (true/false)",
-            "adj_emb_dim": "Adaptive adjacency embedding dimension (>=1)",
-            **_TORCH_COMMON_PARAM_HELP,
-        },
-        requires=("torch",),
-        interface="multivariate",
-    ),
+        "var": model_spec(
+            key="var",
+            description="Vector autoregression via statsmodels on a multivariate target matrix. Optional dependency.",
+            factory=_factory_var,
+            default_params={"maxlags": 1, "trend": "c", "ic": None},
+            param_help={
+                "maxlags": "Maximum autoregressive lag order",
+                "trend": "Deterministic trend: n, c, ct, ctt",
+                "ic": "Optional lag-order selection criterion: aic, bic, hqic, fpe, or none",
+            },
+            requires=("stats",),
+            interface="multivariate",
+        ),
+        "torch-stid-multivariate": model_spec(
+            key="torch-stid-multivariate",
+            description="Torch STID-style multivariate baseline (lite) on a wide target matrix. Requires PyTorch.",
+            factory=_factory_torch_stid_multivariate,
+            default_params={
+                "lags": 24,
+                "d_model": 64,
+                "num_blocks": 2,
+                "dropout": 0.1,
+                **_TORCH_COMMON_DEFAULTS,
+            },
+            param_help={
+                "lags": LAG_WINDOW_PARAM_HELP,
+                "d_model": "Node embedding / hidden dimension",
+                "num_blocks": "Number of identity-style mixing blocks",
+                "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
+                **_TORCH_COMMON_PARAM_HELP,
+            },
+            requires=("torch",),
+            interface="multivariate",
+        ),
+        "torch-stgcn-multivariate": model_spec(
+            key="torch-stgcn-multivariate",
+            description="Torch STGCN-style spatiotemporal baseline (lite) on a wide target matrix. Requires PyTorch.",
+            factory=_factory_torch_stgcn_multivariate,
+            default_params={
+                "lags": 24,
+                "d_model": 64,
+                "num_blocks": 2,
+                "kernel_size": 3,
+                "dropout": 0.1,
+                "adj": "corr",
+                "adj_path": "",
+                "adj_top_k": 8,
+                **_TORCH_COMMON_DEFAULTS,
+            },
+            param_help={
+                "lags": LAG_WINDOW_PARAM_HELP,
+                "d_model": "Hidden dimension",
+                "num_blocks": "Number of spatiotemporal blocks",
+                "kernel_size": "Temporal convolution kernel size (>=1)",
+                "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
+                "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
+                "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
+                "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
+                **_TORCH_COMMON_PARAM_HELP,
+            },
+            requires=("torch",),
+            interface="multivariate",
+        ),
+        "torch-graphwavenet-multivariate": model_spec(
+            key="torch-graphwavenet-multivariate",
+            description="Torch Graph WaveNet-style baseline (lite) on a wide target matrix. Requires PyTorch.",
+            factory=_factory_torch_graphwavenet_multivariate,
+            default_params={
+                "lags": 24,
+                "d_model": 64,
+                "num_blocks": 4,
+                "kernel_size": 2,
+                "dilation_base": 2,
+                "dropout": 0.1,
+                "adj": "corr",
+                "adj_path": "",
+                "adj_top_k": 8,
+                "adaptive_adj": True,
+                "adj_emb_dim": 8,
+                **_TORCH_COMMON_DEFAULTS,
+            },
+            param_help={
+                "lags": LAG_WINDOW_PARAM_HELP,
+                "d_model": "Hidden dimension",
+                "num_blocks": "Number of dilated temporal graph blocks",
+                "kernel_size": "Temporal convolution kernel size (>=1)",
+                "dilation_base": "Dilation growth base (>=1). Each block uses dilation=base**i",
+                "dropout": DROPOUT_PROBABILITY_PARAM_HELP,
+                "adj": "Adjacency spec: identity, ring, fully-connected, corr, or a numeric matrix",
+                "adj_path": "Optional adjacency matrix path (.npy or .csv/.txt)",
+                "adj_top_k": "If adj=corr, keep top-k neighbors per node (0 disables)",
+                "adaptive_adj": "Learn an additional adaptive adjacency (true/false)",
+                "adj_emb_dim": "Adaptive adjacency embedding dimension (>=1)",
+                **_TORCH_COMMON_PARAM_HELP,
+            },
+            requires=("torch",),
+            interface="multivariate",
+        ),
     }
 
 
@@ -606,9 +606,7 @@ def _make_wave1_graph_spectral_specs(context: Any) -> dict[str, ModelSpec]:
     return extra
 
 
-def _make_wave50_training_strategy_presets(
-    context: Any, catalog: dict[str, Any]
-) -> dict[str, Any]:
+def _make_wave50_training_strategy_presets(context: Any, catalog: dict[str, Any]) -> dict[str, Any]:
     model_spec = context.ModelSpec
     extra: dict[str, Any] = {}
 
@@ -719,6 +717,7 @@ def _make_wave50_training_strategy_presets(
         )
 
     return extra
+
 
 _build_multivariate_catalog_base = build_multivariate_catalog
 

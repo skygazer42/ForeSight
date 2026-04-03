@@ -447,7 +447,9 @@ def _validate_global_forecast_group_x_cols(
     x_cols: tuple[str, ...],
 ) -> None:
     if len(future) < int(horizon):
-        raise ValueError("Global forecast with x_cols requires at least horizon future rows per series")
+        raise ValueError(
+            "Global forecast with x_cols requires at least horizon future rows per series"
+        )
 
     future_slice = future.iloc[: int(horizon)]
     missing_future_x = [col for col in x_cols if future_slice[col].isna().any()]
@@ -569,9 +571,15 @@ def _forecast_step_index(pred: pd.DataFrame) -> np.ndarray:
     uid_arr = pred["unique_id"].astype("string").to_numpy(copy=False)
     if uid_arr.size == 0:
         return np.array([], dtype=int)
-    boundaries = np.flatnonzero(uid_arr[1:] != uid_arr[:-1]) + 1 if uid_arr.size > 1 else np.array([], dtype=int)
+    boundaries = (
+        np.flatnonzero(uid_arr[1:] != uid_arr[:-1]) + 1
+        if uid_arr.size > 1
+        else np.array([], dtype=int)
+    )
     starts = np.concatenate((np.array([0], dtype=int), boundaries.astype(int, copy=False)))
-    stops = np.concatenate((boundaries.astype(int, copy=False), np.array([uid_arr.size], dtype=int)))
+    stops = np.concatenate(
+        (boundaries.astype(int, copy=False), np.array([uid_arr.size], dtype=int))
+    )
     steps = np.empty(uid_arr.size, dtype=int)
     for start, stop in zip(starts.tolist(), stops.tolist(), strict=True):
         steps[start:stop] = np.arange(1, int(stop - start) + 1, dtype=int)
@@ -726,7 +734,10 @@ def _forecast_local_xreg_long_df(
                 model_params=local_xreg_params,
             )
 
-        interval_data = {col: np.asarray(pred_payload.get(col, np.repeat(np.nan, h)), dtype=float) for col in interval_cols}
+        interval_data = {
+            col: np.asarray(pred_payload.get(col, np.repeat(np.nan, h)), dtype=float)
+            for col in interval_cols
+        }
         _append_forecast_prediction_rows(
             columns,
             uid=uid,
@@ -771,7 +782,9 @@ def _forecast_local_univariate_long_df(
             future_ds = _infer_future_ds(g["ds"], h)
             train_y = g["y"].to_numpy(dtype=float, copy=False)
 
-        forecaster = _model_execution.make_local_forecaster_object_runner(model, params).fit(train_y)
+        forecaster = _model_execution.make_local_forecaster_object_runner(model, params).fit(
+            train_y
+        )
         yhat = np.asarray(forecaster.predict(h), dtype=float)
         if yhat.shape != (h,):
             raise ValueError(f"forecaster must return shape ({h},), got {yhat.shape}")
@@ -814,7 +827,9 @@ def _forecast_global_long_df(
     if x_cols and not bool(capabilities.get("supports_x_cols", False)):
         raise ValueError(f"Model {model!r} does not support x_cols in forecast_model_long_df")
     if levels and not bool(capabilities.get("supports_interval_forecast", False)):
-        raise ValueError(f"Model {model!r} does not support interval_levels in forecast_model_long_df")
+        raise ValueError(
+            f"Model {model!r} does not support interval_levels in forecast_model_long_df"
+        )
 
     h = int(horizon)
     params_final = dict(params)
@@ -873,7 +888,9 @@ def forecast_model_long_df(
                 raise ValueError(
                     f"Model {model_name!r} does not support static_cols in forecast_model_long_df"
                 )
-            raise ValueError("static_cols are not yet supported for local models in forecast_model_long_df")
+            raise ValueError(
+                "static_cols are not yet supported for local models in forecast_model_long_df"
+            )
         _require_x_cols_if_needed(
             model=model_name,
             capabilities=capabilities,
@@ -908,7 +925,9 @@ def forecast_model_long_df(
         if historic_x_cols:
             raise ValueError("historic_x_cols are not yet supported in forecast_model_long_df")
         if static_cols and not bool(capabilities.get("supports_static_cols", False)):
-            raise ValueError(f"Model {model_name!r} does not support static_cols in forecast_model_long_df")
+            raise ValueError(
+                f"Model {model_name!r} does not support static_cols in forecast_model_long_df"
+            )
         _require_x_cols_if_needed(
             model=model_name,
             capabilities=capabilities,

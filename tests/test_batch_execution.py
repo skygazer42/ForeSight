@@ -18,13 +18,17 @@ def test_run_batch_tasks_sequentially_returns_rows_in_completion_order() -> None
     mod = _load_batch_execution_module(repo_root)
     calls: list[tuple[str, tuple[str, ...], str]] = []
 
-    def _worker(dataset: str, model_keys: tuple[str, ...], suffix: str) -> tuple[list[dict[str, Any]], list[str]]:
+    def _worker(
+        dataset: str, model_keys: tuple[str, ...], suffix: str
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         calls.append((dataset, model_keys, suffix))
         return ([{"label": f"{dataset}:{','.join(model_keys)}:{suffix}"}], [])
 
     tasks = [
         mod.BatchTask(label="catfish/[2 models]", task_args=("catfish", ("naive-last", "mean"))),
-        mod.BatchTask(label="ice_cream_interest/naive-last", task_args=("ice_cream_interest", ("naive-last",))),
+        mod.BatchTask(
+            label="ice_cream_interest/naive-last", task_args=("ice_cream_interest", ("naive-last",))
+        ),
     ]
 
     rows, failures = mod.run_batch_tasks(
@@ -53,7 +57,9 @@ def test_run_batch_tasks_non_strict_collects_worker_exceptions() -> None:
     mod = _load_batch_execution_module(repo_root)
     errors_out: list[str] = []
 
-    def _worker(dataset: str, model_keys: tuple[str, ...]) -> tuple[list[dict[str, Any]], list[str]]:
+    def _worker(
+        dataset: str, model_keys: tuple[str, ...]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         if dataset == "broken":
             raise ValueError("boom")
         return ([{"dataset": dataset, "models": list(model_keys)}], [f"WARN {dataset}"])
@@ -85,7 +91,9 @@ def test_run_batch_tasks_strict_raises_labeled_runtime_error() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mod = _load_batch_execution_module(repo_root)
 
-    def _worker(dataset: str, model_keys: tuple[str, ...]) -> tuple[list[dict[str, Any]], list[str]]:
+    def _worker(
+        dataset: str, model_keys: tuple[str, ...]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         raise KeyError(f"Unknown dataset {dataset} for {model_keys!r}")
 
     tasks = [
@@ -108,7 +116,9 @@ def test_run_batch_tasks_can_collect_task_stats() -> None:
     mod = _load_batch_execution_module(repo_root)
     stats_out: list[object] = []
 
-    def _worker(dataset: str, model_keys: tuple[str, ...]) -> tuple[list[dict[str, Any]], list[str]]:
+    def _worker(
+        dataset: str, model_keys: tuple[str, ...]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         return (
             [{"dataset": dataset, "model": key} for key in model_keys],
             [f"WARN {dataset}"] if dataset == "catfish" else [],
@@ -260,7 +270,7 @@ def test_task_report_rows_add_command_level_metadata() -> None:
             "elapsed_seconds": 0.5,
             "row_count": 2,
             "failure_count": 0,
-        }
+        },
     ]
 
 
@@ -389,7 +399,9 @@ def test_write_task_reports_uses_shared_cli_output_helper(monkeypatch: pytest.Mo
             return "formatted-json"
 
         @staticmethod
-        def _write_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> str:
+        def _write_table(
+            rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str
+        ) -> str:
             writes.append((output, "formatted-json"))
             return "formatted-json"
 

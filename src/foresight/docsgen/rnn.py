@@ -348,9 +348,7 @@ def _rnnzoo_model_index_row(
         if not wrapper_url:
             wrapper_url = _semanticscholar_search_url(variant_descriptions[spec.variant])
 
-    return (
-        f"| `{spec.key}` | `{spec.base}` | `{spec.variant}` | {base_url} | {wrapper_url} |"
-    )
+    return f"| `{spec.key}` | `{spec.base}` | `{spec.variant}` | {base_url} | {wrapper_url} |"
 
 
 def render_rnn_paper_zoo_doc() -> str:
@@ -483,7 +481,9 @@ def render_rnn_zoo_doc() -> str:
     )
     lines.append(RNN_DOC_TABLE_RULE)
     for base, desc in _BASE_DESCRIPTIONS.items():
-        lines.append(_rnnzoo_base_index_row(base, desc, meta.get(_rnnzoo_base_to_paper_id(base), {})))
+        lines.append(
+            _rnnzoo_base_index_row(base, desc, meta.get(_rnnzoo_base_to_paper_id(base), {}))
+        )
     lines.append("")
     lines.append("## Variant Index (5)")
     lines.append("")

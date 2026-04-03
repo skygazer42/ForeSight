@@ -621,7 +621,9 @@ def test_cli_artifact_diff_can_emit_grouped_markdown_report(tmp_path: Path) -> N
     assert "## Tracking Summary" in proc.stdout
     assert "| backend | left | right |" in proc.stdout
     assert "| mlflow | foresight-exp / run-left | foresight-exp / run-right |" in proc.stdout
-    assert "| tensorboard | run-left @ /tmp/runs-left | run-right @ /tmp/runs-right |" in proc.stdout
+    assert (
+        "| tensorboard | run-left @ /tmp/runs-left | run-right @ /tmp/runs-right |" in proc.stdout
+    )
     assert "## Tracking Details" in proc.stdout
     assert "| tensorboard.run_name | run-left | run-right |" in proc.stdout
     assert "## Metadata" in proc.stdout
@@ -981,7 +983,9 @@ def test_cli_artifact_info_exposes_structured_torch_runtime_metadata(tmp_path: P
     assert runtime["prediction"]["mode"] == "point"
 
 
-def test_flatten_artifact_summary_rows_uses_iterative_traversal(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_flatten_artifact_summary_rows_uses_iterative_traversal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     original = workflows_mod._flatten_artifact_summary_rows
     calls = {"count": 0}
 

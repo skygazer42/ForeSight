@@ -148,7 +148,9 @@ def _validate_seq2seq_direct_config(
     tf0, tf1 = _validate_seq2seq_teacher_forcing(
         teacher_forcing_start=float(teacher_forcing),
         teacher_forcing_final=(
-            float(teacher_forcing) if teacher_forcing_final is None else float(teacher_forcing_final)
+            float(teacher_forcing)
+            if teacher_forcing_final is None
+            else float(teacher_forcing_final)
         ),
     )
     return h, lag_count, cell_s, attn_s, hidden, layers, drop, tf0, tf1

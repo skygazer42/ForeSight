@@ -16,7 +16,9 @@ GLOBAL_NONSTATIONARY_TRANSFORMER_STRATEGY_PRESET_KEYS = (
 )
 
 
-def test_wave83_global_nonstationary_transformer_strategy_presets_raise_importerror_when_torch_missing() -> None:
+def test_wave83_global_nonstationary_transformer_strategy_presets_raise_importerror_when_torch_missing() -> (
+    None
+):
     if importlib.util.find_spec("torch") is not None:
         pytest.skip("torch installed; this test targets the missing-dep path")
 

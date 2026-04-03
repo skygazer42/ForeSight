@@ -310,8 +310,7 @@ def test_omp_step_lag_global_smoke() -> None:
 
     messages = [str(item.message) for item in caught]
     assert not any(
-        "Orthogonal matching pursuit ended prematurely due to linear dependence"
-        in message
+        "Orthogonal matching pursuit ended prematurely due to linear dependence" in message
         for message in messages
     )
 

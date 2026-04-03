@@ -19,9 +19,7 @@ from foresight.models.registry import make_global_forecaster
         ("torch-seq2seq-attn-lstm-lookahead-global", {"warmup_epochs": 1}),
     ),
 )
-def test_wave54_global_seq2seq_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave54_global_seq2seq_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     rng = np.random.default_rng(0)
     ds = pd.date_range("2020-01-01", periods=72, freq="D")
     rows = []

@@ -31,16 +31,22 @@ def test_doctor_json_reports_environment_and_dependency_status() -> None:
     assert payload["package"]["module_path"]
     assert payload["python"]["version"]
     assert payload["python"]["executable"]
-    assert payload["dependencies"]["torch"]["available"] is optional_deps.get_dependency_status(
-        "torch"
-    ).available
+    assert (
+        payload["dependencies"]["torch"]["available"]
+        is optional_deps.get_dependency_status("torch").available
+    )
     assert payload["dependencies"]["torch"]["recommended_extra"] == "torch"
-    assert payload["dependencies"]["torch"]["package_install_command"] == 'pip install "foresight-ts[torch]"'
+    assert (
+        payload["dependencies"]["torch"]["package_install_command"]
+        == 'pip install "foresight-ts[torch]"'
+    )
     assert payload["datasets"]["store_sales"]["available"] in {True, False}
     assert payload["datasets"]["store_sales"]["packaged"] is False
     assert payload["datasets"]["catfish"]["source"] in {"package", "repo", "env", "data_dir"}
     assert isinstance(payload["findings"], list)
-    assert all("severity" in item and "scope" in item and "message" in item for item in payload["findings"])
+    assert all(
+        "severity" in item and "scope" in item and "message" in item for item in payload["findings"]
+    )
     assert payload["summary"]["status"] in {"ok", "warn", "error"}
     assert isinstance(payload["summary"]["warning_count"], int)
     assert isinstance(payload["summary"]["error_count"], int)
@@ -121,7 +127,9 @@ def test_doctor_require_extra_text_mentions_missing_extra() -> None:
 
 
 def test_doctor_require_extra_text_reports_status_and_install_hint() -> None:
-    proc = _run_cli("doctor", "--format", "text", "--require-extra", "core", "--require-extra", "torch")
+    proc = _run_cli(
+        "doctor", "--format", "text", "--require-extra", "core", "--require-extra", "torch"
+    )
 
     assert "Required Extras" in proc.stdout
     assert "- core: OK" in proc.stdout

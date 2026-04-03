@@ -353,7 +353,9 @@ def _format_markdown(rows: list[dict], *, columns: list[str] | None = None) -> s
     header = "| " + " | ".join(cols) + " |"
     sep = "| " + " | ".join(["---"] * len(cols)) + " |"
     body = [
-        "| " + " | ".join(_markdown_cell_text(value) for value in _row_values(row, columns=cols)) + " |"
+        "| "
+        + " | ".join(_markdown_cell_text(value) for value in _row_values(row, columns=cols))
+        + " |"
         for row in rows
     ]
     return "\n".join([header, sep, *body])

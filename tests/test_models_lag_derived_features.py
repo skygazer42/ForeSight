@@ -80,11 +80,7 @@ def test_local_count_lag_models_smoke_when_sklearn_installed() -> None:
     if not _has_module("sklearn"):
         pytest.skip("scikit-learn not installed; this test targets the installed path")
 
-    y = (
-        2.0
-        + 0.02 * np.arange(80, dtype=float)
-        + 0.15 * np.sin(np.arange(80, dtype=float) / 5.0)
-    )
+    y = 2.0 + 0.02 * np.arange(80, dtype=float) + 0.15 * np.sin(np.arange(80, dtype=float) / 5.0)
     configs = [
         ("poisson-lag", {"lags": 8, "alpha": 0.1, "max_iter": 200}),
         ("gamma-lag", {"lags": 8, "alpha": 0.1, "max_iter": 200}),

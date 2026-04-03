@@ -65,7 +65,9 @@ def _repo_version(root: Path) -> str:
     init_py = (root / "src" / "foresight" / "__init__.py").read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*"([^"]+)"\s*$', init_py, re.MULTILINE)
     if match is None:
-        raise RuntimeError(f"Could not determine package version from {root / 'src' / 'foresight' / '__init__.py'}")
+        raise RuntimeError(
+            f"Could not determine package version from {root / 'src' / 'foresight' / '__init__.py'}"
+        )
     return match.group(1)
 
 
@@ -84,7 +86,9 @@ def _select_artifact(*, dist_dir: Path, glob_pattern: str, version: str, label: 
         return versioned[0]
 
     available = ", ".join(artifact.name for artifact in artifacts)
-    raise RuntimeError(f"No {label} for version {version} found in {dist_dir}; available: {available}")
+    raise RuntimeError(
+        f"No {label} for version {version} found in {dist_dir}; available: {available}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -111,7 +115,9 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory(prefix="foresight_pkg_smoke_") as tmp:
         tmp_path = Path(tmp)
         dist_dir_arg = str(args.dist_dir).strip()
-        dist_dir = (Path(dist_dir_arg).expanduser().resolve() if dist_dir_arg else (tmp_path / "dist"))
+        dist_dir = (
+            Path(dist_dir_arg).expanduser().resolve() if dist_dir_arg else (tmp_path / "dist")
+        )
         venv_wheel_dir = tmp_path / "venv_wheel"
 
         if not dist_dir_arg:
@@ -246,7 +252,9 @@ def main(argv: list[str] | None = None) -> int:
                 env=env,
             )
 
-        wheel = _select_artifact(dist_dir=dist_dir, glob_pattern="*.whl", version=version, label="wheel")
+        wheel = _select_artifact(
+            dist_dir=dist_dir, glob_pattern="*.whl", version=version, label="wheel"
+        )
 
         # Create a clean venv and install the wheel.
         _create_venv(venv_dir=venv_wheel_dir, cwd=root, env=env)

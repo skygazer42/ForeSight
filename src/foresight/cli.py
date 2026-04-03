@@ -72,7 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
     _cli_catalog.register_catalog_subparsers(sub)
 
-    doctor = sub.add_parser("doctor", help="Inspect environment, datasets, and optional dependencies")
+    doctor = sub.add_parser(
+        "doctor", help="Inspect environment, datasets, and optional dependencies"
+    )
     doctor.add_argument(
         "--format",
         choices=["json", "text"],
@@ -203,9 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
     forecast_sub = forecast_p.add_subparsers(dest="forecast_command", required=True)
 
     forecast_csv = forecast_sub.add_parser("csv", help="Forecast a model on an arbitrary CSV file")
-    forecast_csv.add_argument(
-        "--model", required=True, help=_MODEL_KEY_HELP
-    )
+    forecast_csv.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     forecast_csv.add_argument("--path", required=True, help="Path to a CSV file")
     forecast_csv.add_argument(
         "--future-path",
@@ -434,9 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
     tuning_sub = tuning.add_subparsers(dest="tuning_command", required=True)
 
     tuning_run = tuning_sub.add_parser("run", help="Run deterministic grid search on a dataset")
-    tuning_run.add_argument(
-        "--model", required=True, help=_MODEL_KEY_HELP
-    )
+    tuning_run.add_argument("--model", required=True, help=_MODEL_KEY_HELP)
     tuning_run.add_argument("--dataset", required=True, help=_DATASET_KEY_HELP)
     tuning_run.add_argument(
         "--y-col",
@@ -711,9 +709,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_naive_last = eval_sub.add_parser("naive-last", help="Evaluate naive-last baseline")
     eval_naive_last.add_argument("--dataset", required=True, help=_DATASET_KEY_HELP)
     eval_naive_last.add_argument("--y-col", required=True, help=_TARGET_COLUMN_HELP)
-    eval_naive_last.add_argument(
-        "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
-    )
+    eval_naive_last.add_argument("--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP)
     eval_naive_last.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     eval_naive_last.add_argument(
         "--min-train-size",
@@ -750,9 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_seasonal_naive.add_argument(
         "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
     )
-    eval_seasonal_naive.add_argument(
-        "--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP
-    )
+    eval_seasonal_naive.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     eval_seasonal_naive.add_argument(
         "--min-train-size",
         type=int,
@@ -1094,7 +1088,9 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return int(summary["exit_code"])
 
 
-def _doctor_findings(payload: dict[str, Any], *, required_extras: list[str]) -> list[dict[str, str]]:
+def _doctor_findings(
+    payload: dict[str, Any], *, required_extras: list[str]
+) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
     for name, dep in sorted(dict(payload.get("dependencies", {})).items()):
@@ -1231,7 +1227,9 @@ def _render_doctor_text(payload: dict[str, Any], *, findings: list[dict[str, str
         )
     if findings:
         lines.append("")
-        lines.append("Warnings" if not any(item["severity"] == "error" for item in findings) else "Findings")
+        lines.append(
+            "Warnings" if not any(item["severity"] == "error" for item in findings) else "Findings"
+        )
         for item in findings:
             lines.append(
                 f"- {str(item.get('severity', 'warning')).upper()} {item.get('scope')} {item.get('key')}: {item.get('message')}"
@@ -1262,7 +1260,9 @@ def _cmd_cv_run(args: argparse.Namespace) -> int:
             "params",
             payload=_log_payload(model=_cli_shared._string_arg_value(args, "model")),
         ):
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
         with _cli_runtime.phase_scope(
             "cv",
@@ -1311,7 +1311,9 @@ def _cmd_cv_csv(args: argparse.Namespace) -> int:
             "params",
             payload=_log_payload(model=_cli_shared._string_arg_value(args, "model")),
         ):
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             id_cols = _cli_shared._parse_id_cols_arg(args)
         with _cli_runtime.phase_scope(
             "cv",
@@ -1362,7 +1364,9 @@ def _cmd_forecast_csv(args: argparse.Namespace) -> int:
             "params",
             payload=_log_payload(model=_cli_shared._string_arg_value(args, "model")),
         ):
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             id_cols = _cli_shared._parse_id_cols_arg(args)
         with _cli_runtime.phase_scope(
             "forecast",
@@ -1470,7 +1474,9 @@ def _cmd_artifact_validate(args: argparse.Namespace) -> int:
     from .services.cli_workflows import artifact_validate_workflow
 
     def _run() -> int:
-        payload = artifact_validate_workflow(artifact=_cli_shared._string_arg_value(args, "artifact"))
+        payload = artifact_validate_workflow(
+            artifact=_cli_shared._string_arg_value(args, "artifact")
+        )
         _cli_shared._emit(
             payload,
             output=_cli_shared._output_arg_value(args),
@@ -1544,8 +1550,12 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
     from .tuning import tune_model
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
-        grid_params = _cli_shared._parse_grid_params(_cli_shared._list_arg_values(args, "grid_param"))
+        model_params = _cli_shared._parse_model_params(
+            _cli_shared._list_arg_values(args, "model_param")
+        )
+        grid_params = _cli_shared._parse_grid_params(
+            _cli_shared._list_arg_values(args, "grid_param")
+        )
         y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
 
         payload = tune_model(
@@ -1581,7 +1591,9 @@ def _cmd_tuning_run(args: argparse.Namespace) -> int:
                 "max_train_size": payload["max_train_size"],
                 "n_trials": payload["n_trials"],
                 "best_score": payload["best_score"],
-                "best_params": json.dumps(payload["best_params"], ensure_ascii=False, sort_keys=True),
+                "best_params": json.dumps(
+                    payload["best_params"], ensure_ascii=False, sort_keys=True
+                ),
             }
             _cli_shared._emit_table(
                 [row],
@@ -1623,7 +1635,9 @@ def _cmd_detect_run(args: argparse.Namespace) -> int:
     from .detect import detect_anomalies
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+        model_params = _cli_shared._parse_model_params(
+            _cli_shared._list_arg_values(args, "model_param")
+        )
         y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
         pred = detect_anomalies(
             dataset=_cli_shared._string_arg_value(args, "dataset"),
@@ -1666,7 +1680,9 @@ def _cmd_detect_csv(args: argparse.Namespace) -> int:
     from .services.cli_workflows import detect_csv_workflow
 
     def _run() -> int:
-        model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+        model_params = _cli_shared._parse_model_params(
+            _cli_shared._list_arg_values(args, "model_param")
+        )
         id_cols = _cli_shared._parse_id_cols_arg(args)
         pred = detect_csv_workflow(
             path=_cli_shared._string_arg_value(args, "path"),
@@ -1785,7 +1801,9 @@ def _cmd_eval_run(args: argparse.Namespace) -> int:
             "params",
             payload=_log_payload(model=_cli_shared._string_arg_value(args, "model")),
         ):
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
         with _cli_runtime.phase_scope(
             "eval",
@@ -1836,7 +1854,9 @@ def _cmd_eval_csv(args: argparse.Namespace) -> int:
             "params",
             payload=_log_payload(model=_cli_shared._string_arg_value(args, "model")),
         ):
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             id_cols = _cli_shared._parse_id_cols_arg(args)
         with _cli_runtime.phase_scope(
             "eval",

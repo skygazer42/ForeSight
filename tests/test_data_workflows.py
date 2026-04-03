@@ -90,7 +90,9 @@ def test_enrich_long_df_calendar_appends_prefixed_time_features() -> None:
 
     assert len(out) == 3
     assert {"cal_time_idx", "cal_dow_sin", "cal_dow_cos"} <= set(out.columns)
-    assert np.all(np.isfinite(out.loc[:, ["cal_time_idx", "cal_dow_sin", "cal_dow_cos"]].to_numpy()))
+    assert np.all(
+        np.isfinite(out.loc[:, ["cal_time_idx", "cal_dow_sin", "cal_dow_cos"]].to_numpy())
+    )
 
 
 def test_make_supervised_frame_long_single_step_schema_and_values() -> None:
@@ -265,7 +267,9 @@ def test_balanced_workflow_smoke_from_prepare_to_supervised() -> None:
 
     assert not frame.empty
     assert {"feat_x_cal_time_idx", "feat_x_cal_dow_sin", "y_t+1", "y_t+2"} <= set(frame.columns)
-    assert np.all(np.isfinite(frame.loc[:, ["feat_x_cal_time_idx", "feat_x_cal_dow_sin"]].to_numpy()))
+    assert np.all(
+        np.isfinite(frame.loc[:, ["feat_x_cal_time_idx", "feat_x_cal_dow_sin"]].to_numpy())
+    )
 
 
 def test_split_supervised_arrays_respects_per_series_order() -> None:
@@ -284,29 +288,20 @@ def test_split_supervised_arrays_respects_per_series_order() -> None:
     assert parts["train"]["X"].shape[0] == 8
     assert parts["valid"]["X"].shape[0] == 2
     assert parts["test"]["X"].shape[0] == 2
-    assert (
-        parts["train"]["index"]
-        .loc[parts["train"]["index"]["unique_id"] == "s0", "ds"]
-        .tolist()
-        == [
-            pd.Timestamp("2020-01-03"),
-            pd.Timestamp("2020-01-04"),
-            pd.Timestamp("2020-01-05"),
-            pd.Timestamp("2020-01-06"),
-        ]
-    )
-    assert (
-        parts["valid"]["index"]
-        .loc[parts["valid"]["index"]["unique_id"] == "s0", "ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-07")]
-    )
-    assert (
-        parts["test"]["index"]
-        .loc[parts["test"]["index"]["unique_id"] == "s0", "ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-08")]
-    )
+    assert parts["train"]["index"].loc[
+        parts["train"]["index"]["unique_id"] == "s0", "ds"
+    ].tolist() == [
+        pd.Timestamp("2020-01-03"),
+        pd.Timestamp("2020-01-04"),
+        pd.Timestamp("2020-01-05"),
+        pd.Timestamp("2020-01-06"),
+    ]
+    assert parts["valid"]["index"].loc[
+        parts["valid"]["index"]["unique_id"] == "s0", "ds"
+    ].tolist() == [pd.Timestamp("2020-01-07")]
+    assert parts["test"]["index"].loc[
+        parts["test"]["index"]["unique_id"] == "s0", "ds"
+    ].tolist() == [pd.Timestamp("2020-01-08")]
     assert parts["train"]["metadata"]["n_rows"] == 8
     assert parts["valid"]["metadata"]["n_rows"] == 2
     assert parts["test"]["metadata"]["n_rows"] == 2
@@ -362,7 +357,11 @@ def test_split_supervised_frame_matches_array_partitions() -> None:
         expected = frame_parts[name].reset_index(drop=True)
         actual = array_parts[name]
         feature_cols = tuple(expected.columns[3:-1])
-        assert actual["index"].reset_index(drop=True).equals(expected.loc[:, ["unique_id", "ds", "target_t"]])
+        assert (
+            actual["index"]
+            .reset_index(drop=True)
+            .equals(expected.loc[:, ["unique_id", "ds", "target_t"]])
+        )
         assert np.allclose(actual["X"], expected.loc[:, list(feature_cols)].to_numpy(dtype=float))
         assert np.allclose(actual["y"], expected["y_target"].to_numpy(dtype=float))
 
@@ -405,7 +404,9 @@ def test_make_supervised_predict_frame_matches_training_features_at_cutoff() -> 
         add_time_features=True,
     )
 
-    expected = train_frame.loc[train_frame["ds"] == pd.Timestamp("2020-01-07")].reset_index(drop=True)
+    expected = train_frame.loc[train_frame["ds"] == pd.Timestamp("2020-01-07")].reset_index(
+        drop=True
+    )
     target_cols = {"y_t+1", "y_t+2"}
     feature_cols = tuple(
         col
@@ -413,7 +414,12 @@ def test_make_supervised_predict_frame_matches_training_features_at_cutoff() -> 
         if col not in {"unique_id", "ds", "target_t"} and col not in target_cols
     )
 
-    assert list(pred_frame.columns[:4]) == ["unique_id", "cutoff_ds", "target_start_ds", "target_end_ds"]
+    assert list(pred_frame.columns[:4]) == [
+        "unique_id",
+        "cutoff_ds",
+        "target_start_ds",
+        "target_end_ds",
+    ]
     assert pred_frame["unique_id"].tolist() == ["s0", "s1"]
     assert pred_frame["cutoff_ds"].tolist() == [pd.Timestamp("2020-01-06")] * 2
     assert pred_frame["target_start_ds"].tolist() == [pd.Timestamp("2020-01-07")] * 2
@@ -736,9 +742,15 @@ def test_make_local_xreg_eval_bundle_max_train_size_rolls_train_window() -> None
     )
 
     assert bundle["metadata"]["n_windows"] == 3
-    assert bundle["windows"][0]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-01", periods=4, freq="D"))
-    assert bundle["windows"][1]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-03", periods=4, freq="D"))
-    assert bundle["windows"][2]["train_index"]["ds"].tolist() == list(pd.date_range("2020-01-05", periods=4, freq="D"))
+    assert bundle["windows"][0]["train_index"]["ds"].tolist() == list(
+        pd.date_range("2020-01-01", periods=4, freq="D")
+    )
+    assert bundle["windows"][1]["train_index"]["ds"].tolist() == list(
+        pd.date_range("2020-01-03", periods=4, freq="D")
+    )
+    assert bundle["windows"][2]["train_index"]["ds"].tolist() == list(
+        pd.date_range("2020-01-05", periods=4, freq="D")
+    )
 
 
 def test_make_local_xreg_eval_bundle_supports_future_x_cols_alias() -> None:
@@ -830,13 +842,17 @@ def test_per_series_scaler_round_trip_restores_original_values() -> None:
         }
     )
 
-    scaler = fit_long_df_scaler(long_df, method="standard", scope="per_series", columns=("y", "promo"))
+    scaler = fit_long_df_scaler(
+        long_df, method="standard", scope="per_series", columns=("y", "promo")
+    )
     scaled = transform_long_df_with_scaler(long_df, scaler, columns=("y", "promo"))
     restored = inverse_transform_long_df_with_scaler(scaled, scaler, columns=("y", "promo"))
 
     assert {"scope", "unique_id", "column", "method", "center", "scale"} <= set(scaler.columns)
     assert np.allclose(restored["y"].to_numpy(dtype=float), long_df["y"].to_numpy(dtype=float))
-    assert np.allclose(restored["promo"].to_numpy(dtype=float), long_df["promo"].to_numpy(dtype=float))
+    assert np.allclose(
+        restored["promo"].to_numpy(dtype=float), long_df["promo"].to_numpy(dtype=float)
+    )
 
 
 def test_global_scaler_uses_single_stats_row_per_column() -> None:
@@ -1000,31 +1016,19 @@ def test_split_panel_window_frame_respects_per_series_window_order() -> None:
     assert len(parts["train"]) == 12
     assert len(parts["valid"]) == 4
     assert len(parts["test"]) == 4
-    assert (
-        parts["train"]
-        .loc[parts["train"]["unique_id"] == "s0", "cutoff_ds"]
-        .drop_duplicates()
-        .tolist()
-        == [
-            pd.Timestamp("2020-01-02"),
-            pd.Timestamp("2020-01-03"),
-            pd.Timestamp("2020-01-04"),
-        ]
-    )
-    assert (
-        parts["valid"]
-        .loc[parts["valid"]["unique_id"] == "s0", "cutoff_ds"]
-        .drop_duplicates()
-        .tolist()
-        == [pd.Timestamp("2020-01-05")]
-    )
-    assert (
-        parts["test"]
-        .loc[parts["test"]["unique_id"] == "s0", "cutoff_ds"]
-        .drop_duplicates()
-        .tolist()
-        == [pd.Timestamp("2020-01-06")]
-    )
+    assert parts["train"].loc[
+        parts["train"]["unique_id"] == "s0", "cutoff_ds"
+    ].drop_duplicates().tolist() == [
+        pd.Timestamp("2020-01-02"),
+        pd.Timestamp("2020-01-03"),
+        pd.Timestamp("2020-01-04"),
+    ]
+    assert parts["valid"].loc[
+        parts["valid"]["unique_id"] == "s0", "cutoff_ds"
+    ].drop_duplicates().tolist() == [pd.Timestamp("2020-01-05")]
+    assert parts["test"].loc[
+        parts["test"]["unique_id"] == "s0", "cutoff_ds"
+    ].drop_duplicates().tolist() == [pd.Timestamp("2020-01-06")]
     assert parts["test"].groupby(["unique_id", "cutoff_ds"]).size().tolist() == [2, 2]
 
 
@@ -1063,8 +1067,14 @@ def test_split_panel_window_arrays_matches_frame_partitions() -> None:
         assert actual["X"].shape == (len(expected), len(expected.columns) - 5)
         assert actual["y"].shape == (len(expected),)
         assert tuple(actual["feature_names"]) == tuple(expected.columns[5:])
-        assert actual["index"].reset_index(drop=True).equals(
-            expected.loc[:, ["unique_id", "cutoff_ds", "target_ds", "step"]].reset_index(drop=True)
+        assert (
+            actual["index"]
+            .reset_index(drop=True)
+            .equals(
+                expected.loc[:, ["unique_id", "cutoff_ds", "target_ds", "step"]].reset_index(
+                    drop=True
+                )
+            )
         )
         assert np.allclose(actual["X"], expected.loc[:, expected.columns[5:]].to_numpy(dtype=float))
         assert np.allclose(actual["y"], expected["y"].to_numpy(dtype=float))
@@ -1368,24 +1378,15 @@ def test_split_panel_sequence_tensors_respects_per_series_order() -> None:
     assert parts["train"]["X"].shape[0] == 4
     assert parts["valid"]["X"].shape[0] == 2
     assert parts["test"]["X"].shape[0] == 2
-    assert (
-        parts["train"]["window_index"]
-        .loc[parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
-    )
-    assert (
-        parts["valid"]["window_index"]
-        .loc[parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-05")]
-    )
-    assert (
-        parts["test"]["window_index"]
-        .loc[parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-06")]
-    )
+    assert parts["train"]["window_index"].loc[
+        parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
+    assert parts["valid"]["window_index"].loc[
+        parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-05")]
+    assert parts["test"]["window_index"].loc[
+        parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-06")]
 
 
 def test_make_panel_sequence_tensors_rejects_duplicate_timestamps() -> None:
@@ -1531,21 +1532,12 @@ def test_split_panel_sequence_blocks_respects_per_series_order() -> None:
     assert parts["train"]["past_y"].shape == (4, 3, 1)
     assert parts["valid"]["past_y"].shape == (2, 3, 1)
     assert parts["test"]["past_y"].shape == (2, 3, 1)
-    assert (
-        parts["train"]["window_index"]
-        .loc[parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
-    )
-    assert (
-        parts["valid"]["window_index"]
-        .loc[parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-05")]
-    )
-    assert (
-        parts["test"]["window_index"]
-        .loc[parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"]
-        .tolist()
-        == [pd.Timestamp("2020-01-06")]
-    )
+    assert parts["train"]["window_index"].loc[
+        parts["train"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-03"), pd.Timestamp("2020-01-04")]
+    assert parts["valid"]["window_index"].loc[
+        parts["valid"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-05")]
+    assert parts["test"]["window_index"].loc[
+        parts["test"]["window_index"]["unique_id"] == "s0", "cutoff_ds"
+    ].tolist() == [pd.Timestamp("2020-01-06")]

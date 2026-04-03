@@ -9,11 +9,7 @@ def _load_adjustment_namespace() -> dict[str, object]:
     path = root / "transformer time series" / "Time-Series" / "utils" / "tools.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     keep = {"_starts_detected_anomaly_run", "_mark_anomaly_run", "adjustment"}
-    body = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name in keep
-    ]
+    body = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in keep]
     module = ast.Module(body=body, type_ignores=[])
     namespace: dict[str, object] = {}
     exec(compile(module, str(path), "exec"), namespace)

@@ -106,7 +106,9 @@ def _resolve_numeric_columns(
     return selected
 
 
-def _aggregate_group_rows(group: pd.DataFrame, *, value_cols: tuple[str, ...], agg: str) -> pd.DataFrame:
+def _aggregate_group_rows(
+    group: pd.DataFrame, *, value_cols: tuple[str, ...], agg: str
+) -> pd.DataFrame:
     ordered = group.loc[:, ["ds", *value_cols]].sort_values("ds", kind="mergesort")
     aggregated = ordered.groupby("ds", sort=True, as_index=False).agg(agg)
     return aggregated.loc[:, ["ds", *value_cols]]
@@ -159,12 +161,7 @@ def align_long_df(
         if group_freq is None:
             aligned = aggregated.copy()
         else:
-            aligned = (
-                aggregated.set_index("ds")
-                .resample(group_freq)
-                .agg(agg_name)
-                .reset_index()
-            )
+            aligned = aggregated.set_index("ds").resample(group_freq).agg(agg_name).reset_index()
         aligned["unique_id"] = unique_id
         frames.append(aligned.loc[:, ["unique_id", "ds", *value_cols]])
 
@@ -544,7 +541,9 @@ def _base_lag_feature_frame(x_base: np.ndarray, lag_steps: tuple[int, ...]) -> p
     return pd.DataFrame(x_base, columns=names)
 
 
-def _group_x_feature_frame(group: pd.DataFrame, *, t_index: np.ndarray, x_cols: tuple[str, ...]) -> pd.DataFrame:
+def _group_x_feature_frame(
+    group: pd.DataFrame, *, t_index: np.ndarray, x_cols: tuple[str, ...]
+) -> pd.DataFrame:
     if not x_cols:
         return pd.DataFrame(index=range(int(t_index.size)))
     values = group.iloc[t_index].loc[:, list(x_cols)].to_numpy(dtype=float, copy=False)
@@ -554,7 +553,9 @@ def _group_x_feature_frame(group: pd.DataFrame, *, t_index: np.ndarray, x_cols: 
     return pd.DataFrame(values, columns=names)
 
 
-def _group_time_feature_frame(group: pd.DataFrame, *, t_index: np.ndarray, add_time_features: bool) -> pd.DataFrame:
+def _group_time_feature_frame(
+    group: pd.DataFrame, *, t_index: np.ndarray, add_time_features: bool
+) -> pd.DataFrame:
     if not add_time_features:
         return pd.DataFrame(index=range(int(t_index.size)))
     matrix, names = build_time_features(group.iloc[t_index]["ds"])
@@ -622,7 +623,9 @@ def _group_supervised_frame(
             "target_t": t_index.astype(int, copy=False),
         }
     )
-    target_names = ["y_target"] if int(horizon) == 1 else [f"y_t+{i}" for i in range(1, int(horizon) + 1)]
+    target_names = (
+        ["y_target"] if int(horizon) == 1 else [f"y_t+{i}" for i in range(1, int(horizon) + 1)]
+    )
     target_df = pd.DataFrame(y_target_matrix, columns=target_names)
     if not np.all(np.isfinite(target_df.to_numpy(dtype=float, copy=False))):
         raise ValueError("target window contains non-finite values")
@@ -810,7 +813,9 @@ def _validate_supervised_arrays_bundle(
 
     index_out = index.copy()
     index_out["ds"] = pd.to_datetime(index_out["ds"], errors="raise")
-    order = index_out.sort_values(["unique_id", "ds", "target_t"], kind="mergesort").index.to_numpy()
+    order = index_out.sort_values(
+        ["unique_id", "ds", "target_t"], kind="mergesort"
+    ).index.to_numpy()
     return (
         X[order].copy(),
         y[order].copy(),
@@ -974,10 +979,7 @@ def split_supervised_frame(
         min_train_size=int(min_train_size),
         error_prefix="supervised frame split",
     )
-    return {
-        name: frame_df.iloc[take].reset_index(drop=True)
-        for name, take in positions.items()
-    }
+    return {name: frame_df.iloc[take].reset_index(drop=True) for name, take in positions.items()}
 
 
 def split_supervised_arrays(
@@ -1051,7 +1053,9 @@ def _group_supervised_predict_frame(
 
     history_y = group.iloc[:pred_start]["y"].to_numpy(dtype=float, copy=False)
     if not np.all(np.isfinite(history_y)):
-        raise ValueError("y must contain finite history through cutoff to build supervised predictions")
+        raise ValueError(
+            "y must contain finite history through cutoff to build supervised predictions"
+        )
 
     t_index = np.asarray([pred_start], dtype=int)
     lag_matrix = np.asarray(
@@ -1155,7 +1159,9 @@ def make_supervised_predict_frame(
             frames.append(frame)
 
     if not frames:
-        raise ValueError("No series had enough history or future rows to build supervised prediction rows")
+        raise ValueError(
+            "No series had enough history or future rows to build supervised prediction rows"
+        )
     return pd.concat(frames, axis=0, ignore_index=True, sort=False)
 
 
@@ -1235,7 +1241,9 @@ def _coerce_forecast_future_df(future_df: Any) -> pd.DataFrame:
     return out
 
 
-def _merge_forecast_long_and_future_df(long_df: pd.DataFrame, future_df: pd.DataFrame) -> pd.DataFrame:
+def _merge_forecast_long_and_future_df(
+    long_df: pd.DataFrame, future_df: pd.DataFrame
+) -> pd.DataFrame:
     overlap = (
         long_df.loc[:, ["unique_id", "ds"]]
         .merge(future_df.loc[:, ["unique_id", "ds"]], on=["unique_id", "ds"], how="inner")
@@ -1302,16 +1310,22 @@ def _prepare_local_xreg_bundle_group(
     observed = g.iloc[:observed_count].copy()
     future = g.iloc[observed_count:].copy()
     if len(future) < horizon_int:
-        raise ValueError("Local forecast with x_cols requires at least horizon future rows per series")
+        raise ValueError(
+            "Local forecast with x_cols requires at least horizon future rows per series"
+        )
     future = future.iloc[:horizon_int].copy()
 
     missing_observed_x = [col for col in x_cols if observed[col].isna().any()]
     if missing_observed_x:
-        raise ValueError(f"Local forecast observed rows are missing required x_cols: {missing_observed_x}")
+        raise ValueError(
+            f"Local forecast observed rows are missing required x_cols: {missing_observed_x}"
+        )
 
     missing_future_x = [col for col in x_cols if future[col].isna().any()]
     if missing_future_x:
-        raise ValueError(f"Local forecast future rows are missing required x_cols: {missing_future_x}")
+        raise ValueError(
+            f"Local forecast future rows are missing required x_cols: {missing_future_x}"
+        )
 
     cutoff = observed["ds"].iloc[-1]
     return observed, future, cutoff
@@ -1363,8 +1377,12 @@ def make_local_xreg_forecast_bundle(
                 "cutoff_ds": cutoff,
                 "x_cols": future_cols,
                 "train_y": observed["y"].to_numpy(dtype=dtype, copy=False).copy(),
-                "train_exog": observed.loc[:, list(future_cols)].to_numpy(dtype=dtype, copy=False).copy(),
-                "future_exog": future.loc[:, list(future_cols)].to_numpy(dtype=dtype, copy=False).copy(),
+                "train_exog": observed.loc[:, list(future_cols)]
+                .to_numpy(dtype=dtype, copy=False)
+                .copy(),
+                "future_exog": future.loc[:, list(future_cols)]
+                .to_numpy(dtype=dtype, copy=False)
+                .copy(),
                 "train_index": observed.loc[:, ["unique_id", "ds"]].reset_index(drop=True),
                 "future_index": future.loc[:, ["unique_id", "ds"]]
                 .assign(step=np.arange(1, len(future) + 1, dtype=int))
@@ -1454,7 +1472,9 @@ def make_local_xreg_eval_bundle(
             min_train_size=int(min_train_size),
             max_train_size=max_train_size,
         ):
-            train_index = series_df.iloc[split.train_start : split.train_end].loc[:, ["unique_id", "ds"]]
+            train_index = series_df.iloc[split.train_start : split.train_end].loc[
+                :, ["unique_id", "ds"]
+            ]
             test_index = (
                 series_df.iloc[split.test_start : split.test_end]
                 .loc[:, ["unique_id", "ds"]]
@@ -1752,7 +1772,9 @@ def _validate_panel_window_prediction_inputs(
         seasonal_lags=seasonal_lags,
     )
     if required_y_idx.size and not np.all(np.isfinite(y[required_y_idx])):
-        raise ValueError("y must contain finite history through cutoff to build panel window predictions")
+        raise ValueError(
+            "y must contain finite history through cutoff to build panel window predictions"
+        )
 
     if exog is None:
         return
@@ -2110,7 +2132,9 @@ def make_panel_window_predict_frame(
             frames.append(frame)
 
     if not frames:
-        raise ValueError("No series had enough history or future rows to build panel prediction windows")
+        raise ValueError(
+            "No series had enough history or future rows to build panel prediction windows"
+        )
     return pd.concat(frames, axis=0, ignore_index=True, sort=False)
 
 
@@ -2187,7 +2211,9 @@ def _validate_panel_window_frame_for_split(frame: Any) -> pd.DataFrame:
     out = frame.copy()
     out["cutoff_ds"] = pd.to_datetime(out["cutoff_ds"], errors="raise")
     out["target_ds"] = pd.to_datetime(out["target_ds"], errors="raise")
-    return out.sort_values(["unique_id", "cutoff_ds", "target_ds", "step"], kind="mergesort").reset_index(drop=True)
+    return out.sort_values(
+        ["unique_id", "cutoff_ds", "target_ds", "step"], kind="mergesort"
+    ).reset_index(drop=True)
 
 
 def _panel_window_origin_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -2285,7 +2311,9 @@ def split_panel_window_frame(
     }
 
 
-def _validate_panel_window_arrays_bundle(bundle: Any) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], pd.DataFrame, dict[str, Any]]:
+def _validate_panel_window_arrays_bundle(
+    bundle: Any,
+) -> tuple[np.ndarray, np.ndarray, tuple[str, ...], pd.DataFrame, dict[str, Any]]:
     if not isinstance(bundle, dict):
         raise TypeError("bundle must be a dict returned by make_panel_window_arrays")
     required = {"X", "y", "feature_names", "index", "metadata"}
@@ -2767,7 +2795,9 @@ def make_panel_sequence_tensors(
     }
 
 
-def _validate_panel_sequence_bundle(bundle: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def _validate_panel_sequence_bundle(
+    bundle: Any,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if not isinstance(bundle, dict):
         raise TypeError("bundle must be a dict returned by make_panel_sequence_tensors")
     if "train" not in bundle or "predict" not in bundle or "metadata" not in bundle:
@@ -2775,7 +2805,11 @@ def _validate_panel_sequence_bundle(bundle: Any) -> tuple[dict[str, Any], dict[s
     train = bundle["train"]
     predict = bundle["predict"]
     metadata = bundle["metadata"]
-    if not isinstance(train, dict) or not isinstance(predict, dict) or not isinstance(metadata, dict):
+    if (
+        not isinstance(train, dict)
+        or not isinstance(predict, dict)
+        or not isinstance(metadata, dict)
+    ):
         raise TypeError("bundle sections must be dicts")
     required_train = {"X", "y", "series_id", "window_index"}
     missing_train = required_train.difference(train)
@@ -2830,7 +2864,9 @@ def split_panel_sequence_tensors(
     y = np.asarray(train["y"])
     series_id = np.asarray(train["series_id"])
     window_index = train["window_index"].copy()
-    order = window_index.sort_values(["unique_id", "cutoff_ds", "target_start_ds"], kind="mergesort").index
+    order = window_index.sort_values(
+        ["unique_id", "cutoff_ds", "target_start_ds"], kind="mergesort"
+    ).index
     x_sorted = x[order]
     y_sorted = y[order]
     series_id_sorted = series_id[order]
@@ -2996,7 +3032,11 @@ def _validate_panel_sequence_blocks_bundle(
     train = bundle["train"]
     predict = bundle["predict"]
     metadata = bundle["metadata"]
-    if not isinstance(train, dict) or not isinstance(predict, dict) or not isinstance(metadata, dict):
+    if (
+        not isinstance(train, dict)
+        or not isinstance(predict, dict)
+        or not isinstance(metadata, dict)
+    ):
         raise TypeError("bundle sections must be dicts")
     required_train = {
         "past_y",
@@ -3130,7 +3170,9 @@ def _resolved_partition_size(
         raise ValueError(f"{name} and {name.replace('size', 'frac')} cannot both be set")
     if size is not None:
         return _normalize_split_size(size, name=name)
-    return int(np.floor(_normalize_split_frac(frac, name=name.replace("size", "frac")) * float(n_rows)))
+    return int(
+        np.floor(_normalize_split_frac(frac, name=name.replace("size", "frac")) * float(n_rows))
+    )
 
 
 def split_long_df(
@@ -3247,7 +3289,9 @@ def fit_long_df_scaler(
             values = group[col].to_numpy(dtype=float, copy=False)
             finite = values[np.isfinite(values)]
             if finite.size == 0:
-                raise ValueError(f"cannot fit scaler for column={col!r}, unique_id={unique_id!r} with no finite values")
+                raise ValueError(
+                    f"cannot fit scaler for column={col!r}, unique_id={unique_id!r} with no finite values"
+                )
             center, scale, data_min, data_max = _scaler_stats(
                 finite,
                 method_name=method_name,
@@ -3268,7 +3312,16 @@ def fit_long_df_scaler(
 
     return pd.DataFrame(
         rows,
-        columns=["scope", "unique_id", "column", "method", "center", "scale", "data_min", "data_max"],
+        columns=[
+            "scope",
+            "unique_id",
+            "column",
+            "method",
+            "center",
+            "scale",
+            "data_min",
+            "data_max",
+        ],
     )
 
 
@@ -3284,7 +3337,9 @@ def _validate_scaler_df(scaler_df: Any) -> pd.DataFrame:
     return scaler_df.copy()
 
 
-def _apply_scale_values(values: np.ndarray, *, center: float, scale: float, inverse: bool) -> np.ndarray:
+def _apply_scale_values(
+    values: np.ndarray, *, center: float, scale: float, inverse: bool
+) -> np.ndarray:
     out = values.astype(float, copy=True)
     mask = ~np.isnan(out)
     if not np.all(np.isfinite(out[mask])):
@@ -3296,7 +3351,9 @@ def _apply_scale_values(values: np.ndarray, *, center: float, scale: float, inve
     return out
 
 
-def _scaler_row_lookup(scaler_df: pd.DataFrame, *, scope: str, unique_id: str, column: str) -> pd.Series:
+def _scaler_row_lookup(
+    scaler_df: pd.DataFrame, *, scope: str, unique_id: str, column: str
+) -> pd.Series:
     lookup_uid = "__global__" if scope == "global" else str(unique_id)
     matches = scaler_df.loc[
         (scaler_df["scope"] == scope)

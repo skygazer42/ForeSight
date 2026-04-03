@@ -59,7 +59,9 @@ def test_validated_windowed_baseline_input_checks_window_and_history() -> None:
             subject="moving_average_forecast",
         )
 
-    with pytest.raises(ValueError, match="moving_average_forecast requires at least 3 points, got 2"):
+    with pytest.raises(
+        ValueError, match="moving_average_forecast requires at least 3 points, got 2"
+    ):
         baselines_mod._validated_windowed_baseline_input(  # type: ignore[attr-defined]
             [1.0, 2.0],
             horizon=1,

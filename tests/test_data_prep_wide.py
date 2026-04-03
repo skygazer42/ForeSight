@@ -30,4 +30,3 @@ def test_prepare_wide_df_strict_freq_rejects_irregular() -> None:
 
     with pytest.raises(ValueError, match="regular frequency"):
         prepare_wide_df(wide_df, ds_col="ds", strict_freq=True)
-

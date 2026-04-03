@@ -56,7 +56,10 @@ def test_model_capability_docs_are_up_to_date() -> None:
     assert "`supports_interval_forecast`" in actual_models
     assert "| stability |" in actual_models
     assert "`xgb-step-lag-global`" in actual_models
-    assert "foresight models list --columns key,required_extra,package_install_command --header" in actual_models
+    assert (
+        "foresight models list --columns key,required_extra,package_install_command --header"
+        in actual_models
+    )
 
     assert actual_api == expected_api
     assert "`forecast_model`" in actual_api

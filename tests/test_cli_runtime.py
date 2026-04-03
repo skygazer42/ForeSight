@@ -11,10 +11,12 @@ def test_config_from_args_uses_shared_arg_helpers(monkeypatch: pytest.MonkeyPatc
     calls: list[tuple[str, str, object]] = []
 
     shared = SimpleNamespace(
-        _string_arg_value=lambda args, name, default="": calls.append(("str", name, default))
-        or f"{name}:{default}",
-        _bool_arg_value=lambda args, name, default=False: calls.append(("bool", name, default))
-        or True,
+        _string_arg_value=lambda args, name, default="": (
+            calls.append(("str", name, default)) or f"{name}:{default}"
+        ),
+        _bool_arg_value=lambda args, name, default=False: (
+            calls.append(("bool", name, default)) or True
+        ),
     )
     monkeypatch.setattr(runtime_mod, "_cli_shared", shared)
 

@@ -15,9 +15,7 @@ MAINSTREAM_LOCAL_STRATEGY_PRESET_KEYS = (
 )
 
 
-def test_wave102_mainstream_local_strategy_presets_raise_importerror_when_torch_missing() -> (
-    None
-):
+def test_wave102_mainstream_local_strategy_presets_raise_importerror_when_torch_missing() -> None:
     if importlib.util.find_spec("torch") is not None:
         pytest.skip("torch installed; this test targets the missing-dep path")
 

@@ -35,7 +35,10 @@ def test_transformers_models_raise_importerror_when_transformers_missing() -> No
 
 
 def test_hf_timeseries_transformer_smoke_when_installed() -> None:
-    if importlib.util.find_spec("transformers") is None or importlib.util.find_spec("torch") is None:
+    if (
+        importlib.util.find_spec("transformers") is None
+        or importlib.util.find_spec("torch") is None
+    ):
         pytest.skip("requires transformers + torch")
 
     y = np.sin(np.arange(80, dtype=float) / 5.0) + 0.01 * np.arange(80, dtype=float)

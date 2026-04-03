@@ -19,9 +19,7 @@ from foresight.models.registry import make_global_forecaster
         ("torch-nbeats-lookahead-global", {"warmup_epochs": 1}),
     ),
 )
-def test_wave73_global_nbeats_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave73_global_nbeats_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     rng = np.random.default_rng(0)
     ds = pd.date_range("2020-01-01", periods=72, freq="D")
     rows = []

@@ -615,9 +615,7 @@ def _direct_multioutput_sklearn_forecast(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message=(
-                "Orthogonal matching pursuit ended prematurely due to linear dependence.*"
-            ),
+            message=("Orthogonal matching pursuit ended prematurely due to linear dependence.*"),
             category=RuntimeWarning,
         )
         model.fit(X, Y)

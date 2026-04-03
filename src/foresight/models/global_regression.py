@@ -912,9 +912,7 @@ def ridge_step_lag_global_forecaster(
     try:
         from sklearn.linear_model import Ridge  # type: ignore
     except Exception as e:  # noqa: BLE001
-        raise ImportError(
-            missing_dependency_message("ml", subject="ridge-step-lag-global")
-        ) from e
+        raise ImportError(missing_dependency_message("ml", subject="ridge-step-lag-global")) from e
 
     alpha_f = float(alpha)
     x_cols_tup = _normalize_x_cols(x_cols)

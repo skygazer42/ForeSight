@@ -163,7 +163,10 @@ def test_ci_workflow_includes_sonar_analysis_job() -> None:
 
     assert checkout["with"]["fetch-depth"] == 0
     assert "pip install -e .[dev,torch,stats]" in install_step["run"]
-    assert test_step["run"].strip() == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
+    assert (
+        test_step["run"].strip()
+        == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
+    )
     scan_args = str(scan_step["with"]["args"])
     assert "-Dsonar.sources=src,tools,.github/workflows" in scan_args
     assert "-Dsonar.tests=tests" in scan_args
@@ -204,7 +207,7 @@ def test_ci_workflow_runs_public_contract_suite() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert 'name: Contract tests' in workflow
+    assert "name: Contract tests" in workflow
     assert "python -m pytest -q tests/test_public_contract.py" in workflow
 
 
@@ -356,7 +359,7 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     script = (repo_root / "tools" / "smoke_build_install.py").read_text(encoding="utf-8")
 
-    assert '--dist-dir' in script
+    assert "--dist-dir" in script
     assert '"import foresight; print(foresight.__version__)"' in script
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
     assert '"foresight", "doctor"' in script

@@ -171,9 +171,7 @@ def test_cli_facade_does_not_bind_leaderboard_cli_helpers() -> None:
 
 def test_source_extracts_top_level_binding_helpers() -> None:
     tree = ast.parse(_self_source(), filename=__file__)
-    function_names = {
-        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-    }
+    function_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
 
     assert "_bound_names_from_import_aliases" in function_names
     assert "_bound_names_from_import_from_aliases" in function_names

@@ -189,7 +189,11 @@ def test_xgb_models_smoke_when_installed() -> None:
             {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
             y_pos,
         ),
-        ("xgb-mimo-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
+        (
+            "xgb-mimo-lag",
+            {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3},
+            y_pos,
+        ),
         ("xgb-lag", {"lags": 12, "n_estimators": 10, "learning_rate": 0.1, "max_depth": 3}, y_pos),
         (
             "xgb-lag-recursive",

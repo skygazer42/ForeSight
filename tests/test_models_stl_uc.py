@@ -6,7 +6,9 @@ import pytest
 from foresight.models.registry import make_forecaster
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_stl_uc_tracks_trend_plus_seasonality() -> None:
     t = np.arange(120, dtype=float)
     y = 10.0 + 0.2 * t + 2.0 * np.sin(2.0 * np.pi * t / 12.0)

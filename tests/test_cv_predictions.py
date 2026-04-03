@@ -322,16 +322,13 @@ def test_prepared_global_cv_frame_avoids_set_index_and_groupby(monkeypatch):
             "yhat_p10": [0.5, 1.5, 2.5, 3.5],
         }
     )
-    y_lookup = (
-        pd.DataFrame(
-            {
-                "unique_id": ["s1", "s1", "s2", "s2"],
-                "ds": pd.to_datetime(["2020-01-05", "2020-01-06", "2020-01-05", "2020-01-06"]),
-                "y": [10.0, 11.0, 12.0, 13.0],
-            }
-        )
-        .set_index(["unique_id", "ds"])["y"]
-    )
+    y_lookup = pd.DataFrame(
+        {
+            "unique_id": ["s1", "s1", "s2", "s2"],
+            "ds": pd.to_datetime(["2020-01-05", "2020-01-06", "2020-01-05", "2020-01-06"]),
+            "y": [10.0, 11.0, 12.0, 13.0],
+        }
+    ).set_index(["unique_id", "ds"])["y"]
 
     original_set_index = pd.DataFrame.set_index
     original_groupby = pd.DataFrame.groupby
@@ -366,7 +363,16 @@ def test_prepared_global_cv_frame_avoids_set_index_and_groupby(monkeypatch):
     assert frame is not None
     assert skipped_here == 0
     assert pred_cols == ("yhat", "yhat_p10")
-    assert list(frame.columns) == ["unique_id", "ds", "cutoff", "step", "y", "yhat", "yhat_p10", "model"]
+    assert list(frame.columns) == [
+        "unique_id",
+        "ds",
+        "cutoff",
+        "step",
+        "y",
+        "yhat",
+        "yhat_p10",
+        "model",
+    ]
     assert frame["step"].tolist() == [1, 2, 1, 2]
     assert calls["set_index"] == 0
     assert calls["groupby"] == 0

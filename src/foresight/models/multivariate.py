@@ -1007,9 +1007,7 @@ def torch_graphwavenet_forecast(
             super().__init__()
             self.in_proj = nn.Linear(1, d)
             self.register_buffer("static_adj", torch.tensor(static_adj, dtype=torch.float32))
-            self.blocks = nn.ModuleList(
-                [_GWBlock(dilation=(base**i)) for i in range(int(blocks))]
-            )
+            self.blocks = nn.ModuleList([_GWBlock(dilation=(base**i)) for i in range(int(blocks))])
             self.adaptive_adj = bool(adaptive_adj)
             self.head = nn.Linear(d, h)
             if self.adaptive_adj:

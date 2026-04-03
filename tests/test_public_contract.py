@@ -35,7 +35,11 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_root_public_surface_contract_matches_documented_exports() -> None:
     proc = subprocess.run(
-        [sys.executable, "-c", "import json; import foresight; print(json.dumps(sorted(foresight.__all__)))"],
+        [
+            sys.executable,
+            "-c",
+            "import json; import foresight; print(json.dumps(sorted(foresight.__all__)))",
+        ],
         capture_output=True,
         text=True,
         env=_cli_env(),

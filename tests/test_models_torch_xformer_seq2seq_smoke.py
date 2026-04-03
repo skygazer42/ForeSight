@@ -913,7 +913,9 @@ def test_extended_torch_local_models_forward_shared_training_validation(
     message: str,
 ):
     y = np.sin(np.arange(128, dtype=float) / 10.0) + 0.02 * np.arange(128, dtype=float)
-    f = make_forecaster(key, **params, patience=2, device="cpu", seed=0, **{param_name: param_value})
+    f = make_forecaster(
+        key, **params, patience=2, device="cpu", seed=0, **{param_name: param_value}
+    )
     with pytest.raises(ValueError, match=re.escape(message)):
         f(y, 5)
 

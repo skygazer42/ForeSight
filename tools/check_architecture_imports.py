@@ -65,9 +65,7 @@ def _append_import_from_entries(
         return
     imports.append((node.lineno, base))
     imports.extend(
-        (node.lineno, f"{base}.{alias.name}")
-        for alias in node.names
-        if alias.name != "*"
+        (node.lineno, f"{base}.{alias.name}") for alias in node.names if alias.name != "*"
     )
 
 

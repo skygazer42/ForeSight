@@ -405,11 +405,7 @@ def _wrap_runtime_torch_callable(func: Any) -> Any:
             for key, value in dict(kwargs).items()
             if str(key) not in _DEFERRED_TORCH_RUNTIME_PARAM_KEYS
         }
-        ctx = (
-            torch_train_config_override(deferred)
-            if deferred
-            else nullcontext()
-        )
+        ctx = torch_train_config_override(deferred) if deferred else nullcontext()
         with ctx:
             return func(*args, **direct_kwargs)
 
@@ -4835,7 +4831,6 @@ def _factory_torch_mlp_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -4920,7 +4915,6 @@ def _factory_torch_lstm_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5005,7 +4999,6 @@ def _factory_torch_gru_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5089,7 +5082,6 @@ def _factory_torch_tcn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5177,7 +5169,6 @@ def _factory_torch_nbeats_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5253,7 +5244,6 @@ def _factory_torch_nlinear_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5332,7 +5322,6 @@ def _factory_torch_dlinear_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5423,7 +5412,6 @@ def _factory_torch_transformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5514,7 +5502,6 @@ def _factory_torch_informer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5608,7 +5595,6 @@ def _factory_torch_autoformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5699,7 +5685,6 @@ def _factory_torch_nonstationary_transformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5793,7 +5778,6 @@ def _factory_torch_fedformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5884,7 +5868,6 @@ def _factory_torch_itransformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -5972,7 +5955,6 @@ def _factory_torch_timesnet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6060,7 +6042,6 @@ def _factory_torch_tft_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6153,7 +6134,6 @@ def _factory_torch_timemixer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6328,7 +6308,6 @@ def _factory_torch_sparsetsf_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6413,7 +6392,6 @@ def _factory_torch_lightts_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6501,7 +6479,6 @@ def _factory_torch_frets_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6592,7 +6569,6 @@ def _factory_torch_film_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6682,7 +6658,6 @@ def _factory_torch_micn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6773,7 +6748,6 @@ def _factory_torch_koopa_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6861,7 +6835,6 @@ def _factory_torch_samformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -6952,7 +6925,6 @@ def _factory_torch_retnet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7043,7 +7015,6 @@ def _factory_torch_retnet_recursive(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7140,7 +7111,6 @@ def _factory_torch_timexer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
             train_exog=train_exog,
             future_exog=future_exog,
@@ -7317,7 +7287,6 @@ def _factory_torch_lmu_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7402,7 +7371,6 @@ def _factory_torch_ltc_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7490,7 +7458,6 @@ def _factory_torch_cfc_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7578,7 +7545,6 @@ def _factory_torch_xlstm_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7666,7 +7632,6 @@ def _factory_torch_griffin_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7754,7 +7719,6 @@ def _factory_torch_hawk_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7839,7 +7803,6 @@ def _factory_torch_s4d_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -7927,7 +7890,6 @@ def _factory_torch_mamba2_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8015,7 +7977,6 @@ def _factory_torch_s4_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8106,7 +8067,6 @@ def _factory_torch_s5_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8174,7 +8134,6 @@ def _factory_torch_timexer_global(
         scheduler_restart_mult=int(scheduler_restart_mult),
         scheduler_pct_start=float(scheduler_pct_start),
         restore_best=bool(restore_best),
-
         **_coerce_torch_extra_train_params(_params),
         device=str(device),
         d_model=int(d_model),
@@ -8266,7 +8225,6 @@ def _factory_torch_mamba_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8354,7 +8312,6 @@ def _factory_torch_rwkv_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8445,7 +8402,6 @@ def _factory_torch_hyena_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8536,7 +8492,6 @@ def _factory_torch_dilated_rnn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8630,7 +8585,6 @@ def _factory_torch_kan_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8721,7 +8675,6 @@ def _factory_torch_scinet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8818,7 +8771,6 @@ def _factory_torch_etsformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -8912,7 +8864,6 @@ def _factory_torch_esrnn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9009,7 +8960,6 @@ def _factory_torch_patchtst_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9109,7 +9059,6 @@ def _factory_torch_crossformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9209,7 +9158,6 @@ def _factory_torch_pyraformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9303,7 +9251,6 @@ def _factory_torch_perceiver_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9394,7 +9341,6 @@ def _factory_torch_tsmixer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9481,7 +9427,6 @@ def _factory_torch_cnn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9572,7 +9517,6 @@ def _factory_torch_resnet1d_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9660,7 +9604,6 @@ def _factory_torch_wavenet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9745,7 +9688,6 @@ def _factory_torch_bilstm_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9830,7 +9772,6 @@ def _factory_torch_bigru_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -9915,7 +9856,6 @@ def _factory_torch_attn_gru_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10006,7 +9946,6 @@ def _factory_torch_segrnn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10100,7 +10039,6 @@ def _factory_torch_moderntcn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10197,7 +10135,6 @@ def _factory_torch_basisformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10291,7 +10228,6 @@ def _factory_torch_witran_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10379,7 +10315,6 @@ def _factory_torch_crossgnn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10469,7 +10404,6 @@ def _factory_torch_pathformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10560,7 +10494,6 @@ def _factory_torch_timesmamba_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10648,7 +10581,6 @@ def _factory_torch_fnet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10736,7 +10668,6 @@ def _factory_torch_gmlp_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10826,7 +10757,6 @@ def _factory_torch_nhits_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10911,7 +10841,6 @@ def _factory_torch_tide_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -10995,7 +10924,6 @@ def _factory_torch_deepar_recursive(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11082,7 +11010,6 @@ def _factory_torch_qrnn_recursive(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11224,7 +11151,6 @@ def _factory_torch_xformer_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11323,7 +11249,6 @@ def _factory_torch_seq2seq_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11417,7 +11342,6 @@ def _factory_torch_lstnet_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11505,7 +11429,6 @@ def _factory_torch_linear_attn_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -11598,7 +11521,6 @@ def _factory_torch_inception_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -13091,7 +13013,6 @@ def _factory_torch_stid_multivariate(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -13188,7 +13109,6 @@ def _factory_torch_stgcn_multivariate(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -13294,7 +13214,6 @@ def _factory_torch_graphwavenet_multivariate(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -13473,7 +13392,6 @@ def _factory_torch_rnnzoo_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 
@@ -13586,7 +13504,6 @@ def _factory_torch_rnnpaper_direct(
             scheduler_restart_mult=int(scheduler_restart_mult),
             scheduler_pct_start=float(scheduler_pct_start),
             restore_best=restore_best_bool,
-
             **_coerce_torch_extra_train_params(_params),
         )
 

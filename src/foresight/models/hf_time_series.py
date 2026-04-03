@@ -150,7 +150,9 @@ def hf_timeseries_transformer_direct_forecast(
     nt = int(num_time_features)
     if nt > 0:
         age_past = np.linspace(0.0, 1.0, past_length, dtype=float).reshape(1, past_length, 1)
-        age_future = np.linspace(1.0, 1.0 + (h / max(1, past_length)), h, dtype=float).reshape(1, h, 1)
+        age_future = np.linspace(1.0, 1.0 + (h / max(1, past_length)), h, dtype=float).reshape(
+            1, h, 1
+        )
         past_tf = np.repeat(age_past, nt, axis=2)
         fut_tf = np.repeat(age_future, nt, axis=2)
         past_time_features = torch.tensor(past_tf, dtype=torch.float32, device=dev)

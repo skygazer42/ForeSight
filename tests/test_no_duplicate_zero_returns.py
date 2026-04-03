@@ -60,9 +60,7 @@ def test_convert_ipynb_main_has_single_zero_exit_path() -> None:
 
 def test_source_extracts_zero_return_helpers() -> None:
     tree = ast.parse(_self_source(), filename=__file__)
-    function_names = {
-        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-    }
+    function_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
 
     assert "_function_def_nodes" in function_names
     assert "_is_literal_zero_return" in function_names

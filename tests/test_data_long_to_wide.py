@@ -36,4 +36,3 @@ def test_long_to_wide_can_fill_missing_values_with_zero() -> None:
     assert out["ds"].tolist() == list(pd.date_range("2020-01-01", periods=3, freq="D"))
     assert out["a"].tolist() == [1.0, 2.0, 3.0]
     assert out["b"].tolist() == [10.0, 0.0, 30.0]
-

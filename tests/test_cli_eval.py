@@ -122,7 +122,10 @@ def test_examples_use_root_package_for_high_level_workflow_helpers():
     assert "from foresight.eval_forecast import eval_model" not in quickstart
     assert "from foresight.forecast import forecast_model" not in quickstart
     assert "from foresight import eval_model, forecast_model" in quickstart
-    assert "from foresight.models.registry import make_forecaster, make_global_forecaster" not in quickstart
+    assert (
+        "from foresight.models.registry import make_forecaster, make_global_forecaster"
+        not in quickstart
+    )
 
     assert "from foresight.eval_forecast import eval_model" not in leaderboard
     assert "from foresight import eval_model" in leaderboard
@@ -134,7 +137,9 @@ def test_examples_use_root_package_for_high_level_workflow_helpers():
     assert "hier_payload = eval_hierarchical_forecast_df(" in readme
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_eval_csv_supports_local_sarimax_with_x_cols(tmp_path: Path):
     csv_path = tmp_path / "sarimax_eval.csv"
     rows = ["ds,y,promo"]
@@ -182,7 +187,9 @@ def test_eval_csv_supports_local_sarimax_with_x_cols(tmp_path: Path):
     assert payload["mae"] < 1e-3
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_eval_csv_supports_local_auto_arima_with_x_cols(tmp_path: Path):
     csv_path = tmp_path / "auto_arima_eval.csv"
     rows = ["ds,y,promo"]

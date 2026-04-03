@@ -7,7 +7,9 @@ import numpy as np
 import pandas as pd
 
 
-def _normalize_hierarchy(hierarchy: Mapping[str, Sequence[str]] | dict[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:
+def _normalize_hierarchy(
+    hierarchy: Mapping[str, Sequence[str]] | dict[str, Sequence[str]],
+) -> dict[str, tuple[str, ...]]:
     if not isinstance(hierarchy, Mapping):
         raise TypeError("hierarchy must be a mapping of parent -> children")
 
@@ -95,7 +97,9 @@ def _pivot_values(df: pd.DataFrame, *, value_col: str) -> pd.DataFrame:
     return out
 
 
-def _historical_totals(history_df: pd.DataFrame, hierarchy: dict[str, tuple[str, ...]]) -> dict[str, float]:
+def _historical_totals(
+    history_df: pd.DataFrame, hierarchy: dict[str, tuple[str, ...]]
+) -> dict[str, float]:
     pivot = _pivot_values(history_df, value_col="y")
     totals: dict[str, float] = {}
 
@@ -187,9 +191,7 @@ def _extra_node_series_from_pivot(
 ) -> dict[str, pd.Series]:
     node_set = {str(node) for node in nodes}
     return {
-        str(node): pivot[node].astype(float)
-        for node in pivot.columns
-        if str(node) not in node_set
+        str(node): pivot[node].astype(float) for node in pivot.columns if str(node) not in node_set
     }
 
 
@@ -285,7 +287,9 @@ def _top_down_allocated_series(
 
         denom = float(sum(totals[child] for child in children))
         if abs(denom) < 1e-12:
-            raise ValueError(f"Cannot compute top_down proportions for parent {node!r}: zero history")
+            raise ValueError(
+                f"Cannot compute top_down proportions for parent {node!r}: zero history"
+            )
 
         for child in children:
             share = float(totals[child]) / denom

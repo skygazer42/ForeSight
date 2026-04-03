@@ -6,7 +6,9 @@ import pytest
 from foresight.models.registry import make_forecaster
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_mstl_sarimax_tracks_multi_seasonal_trend_signal() -> None:
     t = np.arange(360, dtype=float)
     y = (

@@ -188,7 +188,11 @@ def test_weighted_interval_score_by_step_uses_vectorized_aggregation(monkeypatch
         y,
         median,
         wis_intervals=[
-            (eval_predictions_mod.np.asarray(lo, dtype=float), eval_predictions_mod.np.asarray(hi, dtype=float), alpha)
+            (
+                eval_predictions_mod.np.asarray(lo, dtype=float),
+                eval_predictions_mod.np.asarray(hi, dtype=float),
+                alpha,
+            )
             for lo, hi, alpha in intervals
         ],
         step_values=[1, 2, 1, 2],

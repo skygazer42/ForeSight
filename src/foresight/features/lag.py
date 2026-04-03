@@ -89,7 +89,9 @@ def make_lagged_xy_multi(
 
     lag_steps, t0 = _validated_lag_steps_and_start_index(lags=lags, start_t=start_t)
     if arr.size < (t0 + h):
-        raise ValueError(f"Need >= start_t+horizon points (start_t={t0}, horizon={h}), got {arr.size}")
+        raise ValueError(
+            f"Need >= start_t+horizon points (start_t={t0}, horizon={h}), got {arr.size}"
+        )
 
     n = int(arr.size)
     last_t = n - h

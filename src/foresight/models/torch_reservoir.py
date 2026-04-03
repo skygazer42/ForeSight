@@ -66,8 +66,7 @@ def torch_reservoir_direct_forecast(
         paper_id = _VARIANT_TO_PAPER[variant_s]
     except KeyError as e:
         raise ValueError(
-            f"Unknown reservoir variant {variant!r}. "
-            f"Expected one of: {sorted(_VARIANT_TO_PAPER)}"
+            f"Unknown reservoir variant {variant!r}. Expected one of: {sorted(_VARIANT_TO_PAPER)}"
         ) from e
 
     return torch_rnnpaper_direct_forecast(

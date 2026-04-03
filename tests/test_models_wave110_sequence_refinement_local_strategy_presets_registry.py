@@ -16,9 +16,7 @@ def test_wave110_sequence_refinement_local_strategy_presets_are_registered() -> 
         assert key in keys
 
 
-def test_wave110_sequence_refinement_local_strategy_presets_are_local_torch_optional() -> (
-    None
-):
+def test_wave110_sequence_refinement_local_strategy_presets_are_local_torch_optional() -> None:
     for key in SEQUENCE_REFINEMENT_LOCAL_STRATEGY_PRESET_KEYS:
         spec = get_model_spec(key)
         assert spec.interface == "local"

@@ -3,7 +3,15 @@ import importlib.util
 import numpy as np
 import pytest
 
-from foresight.models import baselines, multivariate, naive, regression, smoothing, torch_ct_rnn, torch_ssm
+from foresight.models import (
+    baselines,
+    multivariate,
+    naive,
+    regression,
+    smoothing,
+    torch_ct_rnn,
+    torch_ssm,
+)
 
 SERIES = np.arange(20.0, dtype=float)
 POSITIVE_SERIES = np.arange(1.0, 21.0, dtype=float)
@@ -19,9 +27,27 @@ def _assert_value_error(fn, /, *args, message: str, **kwargs) -> None:
 
 
 PURE_VALIDATION_CASES = [
-    ("mean horizon", baselines.mean_forecast, ([1.0],), {"horizon": 0}, baselines.HORIZON_MIN_ERROR),
-    ("median horizon", baselines.median_forecast, ([1.0],), {"horizon": 0}, baselines.HORIZON_MIN_ERROR),
-    ("drift horizon", baselines.drift_forecast, ([1.0, 2.0],), {"horizon": 0}, baselines.HORIZON_MIN_ERROR),
+    (
+        "mean horizon",
+        baselines.mean_forecast,
+        ([1.0],),
+        {"horizon": 0},
+        baselines.HORIZON_MIN_ERROR,
+    ),
+    (
+        "median horizon",
+        baselines.median_forecast,
+        ([1.0],),
+        {"horizon": 0},
+        baselines.HORIZON_MIN_ERROR,
+    ),
+    (
+        "drift horizon",
+        baselines.drift_forecast,
+        ([1.0, 2.0],),
+        {"horizon": 0},
+        baselines.HORIZON_MIN_ERROR,
+    ),
     (
         "moving average horizon",
         baselines.moving_average_forecast,

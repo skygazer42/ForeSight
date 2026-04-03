@@ -65,7 +65,9 @@ def _grid_trials(
         ),
     )
     trials: list[dict[str, Any]] = []
-    for trial_idx, values in enumerate(itertools.product(*(search_space[k] for k in keys)), start=1):
+    for trial_idx, values in enumerate(
+        itertools.product(*(search_space[k] for k in keys)), start=1
+    ):
         params = dict(base_params)
         params.update(dict(zip(keys, values, strict=True)))
         payload = evaluator(params)

@@ -41,31 +41,44 @@ def _function_source(path: str, func_name: str) -> str:
 
 
 def test_augment_lag_feat_row_has_no_mergeable_nested_ifs() -> None:
-    assert _mergeable_nested_if_lines("src/foresight/models/regression.py", "_augment_lag_feat_row") == []
+    assert (
+        _mergeable_nested_if_lines("src/foresight/models/regression.py", "_augment_lag_feat_row")
+        == []
+    )
 
 
 def test_xgb_lag_direct_forecast_has_no_mergeable_nested_ifs() -> None:
-    assert _mergeable_nested_if_lines(
-        "src/foresight/models/regression.py", "_xgb_lag_direct_forecast"
-    ) == []
+    assert (
+        _mergeable_nested_if_lines("src/foresight/models/regression.py", "_xgb_lag_direct_forecast")
+        == []
+    )
 
 
 def test_xgb_lag_recursive_forecast_has_no_mergeable_nested_ifs() -> None:
-    assert _mergeable_nested_if_lines(
-        "src/foresight/models/regression.py", "_xgb_lag_recursive_forecast"
-    ) == []
+    assert (
+        _mergeable_nested_if_lines(
+            "src/foresight/models/regression.py", "_xgb_lag_recursive_forecast"
+        )
+        == []
+    )
 
 
 def test_xgb_objective_label_validation_has_no_mergeable_nested_ifs() -> None:
-    assert _mergeable_nested_if_lines(
-        "src/foresight/models/regression.py", "_xgb_validate_objective_label_constraints"
-    ) == []
+    assert (
+        _mergeable_nested_if_lines(
+            "src/foresight/models/regression.py", "_xgb_validate_objective_label_constraints"
+        )
+        == []
+    )
 
 
 def test_xgb_common_regressor_param_validation_has_no_mergeable_nested_ifs() -> None:
-    assert _mergeable_nested_if_lines(
-        "src/foresight/models/regression.py", "_xgb_validate_common_regressor_params"
-    ) == []
+    assert (
+        _mergeable_nested_if_lines(
+            "src/foresight/models/regression.py", "_xgb_validate_common_regressor_params"
+        )
+        == []
+    )
 
 
 def test_xgb_common_regressor_param_validation_avoids_nested_bound_checks() -> None:
@@ -74,7 +87,9 @@ def test_xgb_common_regressor_param_validation_avoids_nested_bound_checks() -> N
     )
 
     assert 'if "subsample" in params and params["subsample"] is not None:' not in source
-    assert 'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
+    assert (
+        'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
+    )
 
 
 def test_lgbm_common_regressor_param_validation_avoids_nested_bound_checks() -> None:
@@ -83,4 +98,6 @@ def test_lgbm_common_regressor_param_validation_avoids_nested_bound_checks() -> 
     )
 
     assert 'if "subsample" in params and params["subsample"] is not None:' not in source
-    assert 'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
+    assert (
+        'if "colsample_bytree" in params and params["colsample_bytree"] is not None:' not in source
+    )

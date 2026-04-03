@@ -337,7 +337,9 @@ def _benchmark_model_case_chunks(
         return ()
     if chunk_size == 0:
         return (tuple(model_cases),)
-    return tuple(tuple(model_cases[i : i + chunk_size]) for i in range(0, len(model_cases), chunk_size))
+    return tuple(
+        tuple(model_cases[i : i + chunk_size]) for i in range(0, len(model_cases), chunk_size)
+    )
 
 
 def _resolve_benchmark_chunk_size(
@@ -421,13 +423,15 @@ def _benchmark_rows_for_task(
         use_count = int(frame_use_counts.get(frame_key, 0))
         frame_use_counts[frame_key] = use_count + 1
         effective_frame_bundle = (
-            frame_bundle
-            if use_count == 0
-            else _benchmark_reused_frame_bundle(frame_bundle)
+            frame_bundle if use_count == 0 else _benchmark_reused_frame_bundle(frame_bundle)
         )
         try:
             spec = get_model_spec(model_key)
-            requires = tuple(str(item).strip().lower() for item in getattr(spec, "requires", ()) if str(item).strip())
+            requires = tuple(
+                str(item).strip().lower()
+                for item in getattr(spec, "requires", ())
+                if str(item).strip()
+            )
             backend_family = "core" if not requires else str(requires[0])
         except Exception:  # noqa: BLE001
             backend_family = "unknown"
@@ -449,9 +453,7 @@ def _benchmark_rows_for_task(
             )
         )
     task_elapsed = float(time.perf_counter() - task_started)
-    accounted_seconds = float(
-        sum(float(row.get("cv_seconds", 0.0) or 0.0) for row in rows)
-    )
+    accounted_seconds = float(sum(float(row.get("cv_seconds", 0.0) or 0.0) for row in rows))
     dispatch_seconds = max(0.0, task_elapsed - accounted_seconds)
     dispatch_per_row = 0.0 if not rows else dispatch_seconds / float(len(rows))
     for row in rows:
@@ -765,16 +767,12 @@ def run_benchmark_suite(
         profiling = bool(profile)
     backend_s = str(backend).strip().lower() or "process"
     if backend_s not in _BENCHMARK_BACKENDS:
-        raise ValueError(
-            f"--backend must be one of: {', '.join(sorted(_BENCHMARK_BACKENDS))}"
-        )
+        raise ValueError(f"--backend must be one of: {', '.join(sorted(_BENCHMARK_BACKENDS))}")
     if int(jobs) <= 0:
         raise ValueError("--jobs must be >= 1")
     budget_mode_s = str(budget_mode).strip().lower() or "warn"
     if budget_mode_s not in _BUDGET_MODES:
-        raise ValueError(
-            f"--budget-mode must be one of: {', '.join(sorted(_BUDGET_MODES))}"
-        )
+        raise ValueError(f"--budget-mode must be one of: {', '.join(sorted(_BUDGET_MODES))}")
     dataset_fields_list = [_benchmark_dataset_case_fields(case) for case in datasets]
     resolved_chunk_size = _resolve_benchmark_chunk_size(
         chunk_size,
@@ -849,6 +847,9 @@ def run_benchmark_suite(
 
 
 def main(argv: list[str] | None = None) -> int:
+    root = _repo_root()
+    _ensure_src_on_path(root)
+
     parser = argparse.ArgumentParser(
         description="Run a small reproducible benchmark sweep on packaged ForeSight datasets."
     )

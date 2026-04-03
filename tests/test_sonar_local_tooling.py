@@ -31,7 +31,9 @@ def _load_module(path: Path, name: str):
 
 
 def test_ci_sonar_job_uses_shared_sonar_test_suite_and_current_scan_action() -> None:
-    workflow = yaml.safe_load((_repo_root() / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    workflow = yaml.safe_load(
+        (_repo_root() / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    )
     sonar_job = workflow["jobs"]["sonar"]
     steps = sonar_job["steps"]
 
@@ -42,7 +44,10 @@ def test_ci_sonar_job_uses_shared_sonar_test_suite_and_current_scan_action() -> 
         if str(step.get("uses", "")).startswith("SonarSource/sonarqube-scan-action@")
     )
 
-    assert test_step["run"].strip() == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
+    assert (
+        test_step["run"].strip()
+        == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
+    )
     assert scan_step["uses"] == f"SonarSource/sonarqube-scan-action@{_SONAR_SCAN_ACTION_SHA}"
 
 
@@ -58,7 +63,9 @@ def test_sonar_test_dockerfile_installs_required_runtime() -> None:
 
 
 def test_run_sonar_test_suite_module_builds_pytest_command() -> None:
-    module = _load_module(_repo_root() / "tools" / "run_sonar_test_suite.py", "run_sonar_test_suite")
+    module = _load_module(
+        _repo_root() / "tools" / "run_sonar_test_suite.py", "run_sonar_test_suite"
+    )
 
     cmd = module._sonar_pytest_command("coverage.xml")  # type: ignore[attr-defined]
 

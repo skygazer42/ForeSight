@@ -10,49 +10,49 @@ def build_foundation_catalog(context: Any) -> dict[str, Any]:
     model_spec = context.ModelSpec
     _factory_hf_timeseries_transformer_direct = context._factory_hf_timeseries_transformer_direct
     return {
-    "hf-timeseries-transformer-direct": model_spec(
-        key="hf-timeseries-transformer-direct",
-        description="Hugging Face TimeSeriesTransformer wrapper (lite) (direct local). Requires transformers + PyTorch.",
-        factory=_factory_hf_timeseries_transformer_direct,
-        default_params={
-            "context_length": 48,
-            "lags_sequence": (1, 2, 3, 4, 5, 6, 7),
-            "d_model": 64,
-            "nhead": 2,
-            "encoder_layers": 2,
-            "decoder_layers": 2,
-            "ffn_dim": 128,
-            "dropout": 0.1,
-            "num_time_features": 0,
-            "num_samples": 100,
-            "pretrained_model": "",
-            "local_files_only": True,
-            "normalize": True,
-            "device": "cpu",
-            "seed": 0,
-            "epochs": 0,
-        },
-        param_help={
-            "context_length": "Context length used by the model",
-            "lags_sequence": "Comma-separated lags sequence (default: 1,2,3,4,5,6,7)",
-            "d_model": "Transformer model dimension (ignored for pretrained_model)",
-            "nhead": "Attention heads (ignored for pretrained_model)",
-            "encoder_layers": "Encoder layers (ignored for pretrained_model)",
-            "decoder_layers": "Decoder layers (ignored for pretrained_model)",
-            "ffn_dim": "FFN hidden width (ignored for pretrained_model)",
-            "dropout": "Dropout probability in [0,1) (ignored for pretrained_model)",
-            "num_time_features": "Number of provided time features (0 disables time features)",
-            "num_samples": "Number of parallel samples to generate; output is sample-mean",
-            "pretrained_model": "Optional Hugging Face model name/path to load via from_pretrained()",
-            "local_files_only": "If true, disallow downloads in from_pretrained() (true/false)",
-            "normalize": "Z-score normalize the series before inference (true/false)",
-            "device": "Torch device (cpu or cuda)",
-            "seed": "Random seed (controls sampling)",
-            "epochs": "Ignored (reserved for future fine-tuning support)",
-        },
-        requires=("transformers", "torch"),
-        interface="local",
-    ),
+        "hf-timeseries-transformer-direct": model_spec(
+            key="hf-timeseries-transformer-direct",
+            description="Hugging Face TimeSeriesTransformer wrapper (lite) (direct local). Requires transformers + PyTorch.",
+            factory=_factory_hf_timeseries_transformer_direct,
+            default_params={
+                "context_length": 48,
+                "lags_sequence": (1, 2, 3, 4, 5, 6, 7),
+                "d_model": 64,
+                "nhead": 2,
+                "encoder_layers": 2,
+                "decoder_layers": 2,
+                "ffn_dim": 128,
+                "dropout": 0.1,
+                "num_time_features": 0,
+                "num_samples": 100,
+                "pretrained_model": "",
+                "local_files_only": True,
+                "normalize": True,
+                "device": "cpu",
+                "seed": 0,
+                "epochs": 0,
+            },
+            param_help={
+                "context_length": "Context length used by the model",
+                "lags_sequence": "Comma-separated lags sequence (default: 1,2,3,4,5,6,7)",
+                "d_model": "Transformer model dimension (ignored for pretrained_model)",
+                "nhead": "Attention heads (ignored for pretrained_model)",
+                "encoder_layers": "Encoder layers (ignored for pretrained_model)",
+                "decoder_layers": "Decoder layers (ignored for pretrained_model)",
+                "ffn_dim": "FFN hidden width (ignored for pretrained_model)",
+                "dropout": "Dropout probability in [0,1) (ignored for pretrained_model)",
+                "num_time_features": "Number of provided time features (0 disables time features)",
+                "num_samples": "Number of parallel samples to generate; output is sample-mean",
+                "pretrained_model": "Optional Hugging Face model name/path to load via from_pretrained()",
+                "local_files_only": "If true, disallow downloads in from_pretrained() (true/false)",
+                "normalize": "Z-score normalize the series before inference (true/false)",
+                "device": "Torch device (cpu or cuda)",
+                "seed": "Random seed (controls sampling)",
+                "epochs": "Ignored (reserved for future fine-tuning support)",
+            },
+            requires=("transformers", "torch"),
+            interface="local",
+        ),
     }
 
 
@@ -262,6 +262,7 @@ def _make_wave1_foundation_wrapper_b_specs(context: Any) -> dict[str, ModelSpec]
         )
 
     return extra
+
 
 _build_foundation_catalog_base = build_foundation_catalog
 

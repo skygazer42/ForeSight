@@ -7,7 +7,9 @@ import pytest
 from foresight.models import torch_global
 
 
-def _make_panel_long_df(*, missing_future_static: bool = False) -> tuple[pd.DataFrame, pd.Timestamp]:
+def _make_panel_long_df(
+    *, missing_future_static: bool = False
+) -> tuple[pd.DataFrame, pd.Timestamp]:
     ds = pd.date_range("2020-01-01", periods=14, freq="D")
     cutoff = ds[-4]
     rows: list[dict[str, object]] = []

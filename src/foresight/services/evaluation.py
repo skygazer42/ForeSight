@@ -608,7 +608,9 @@ def _validated_eval_long_df_request(
         if not bool(capabilities.get("supports_static_cols", False)):
             raise ValueError(f"Model {model!r} does not support static_cols in eval_model_long_df")
         if interface != "global":
-            raise ValueError("static_cols are not yet supported for local models in eval_model_long_df")
+            raise ValueError(
+                "static_cols are not yet supported for local models in eval_model_long_df"
+            )
     if interface == "multivariate":
         raise ValueError(
             f"Model {model!r} is multivariate and cannot be evaluated with `eval_model_long_df()`. "
@@ -817,7 +819,9 @@ def _eval_local_univariate_model_long_df(
             train = y[split.train_start : split.train_end]
             pred = np.asarray(forecaster(train, int(horizon)), dtype=float)
             if pred.shape != (int(horizon),):
-                raise ValueError(f"forecaster must return shape ({int(horizon)},), got {pred.shape}")
+                raise ValueError(
+                    f"forecaster must return shape ({int(horizon)},), got {pred.shape}"
+                )
             y_true_arr[idx, :] = y[split.test_start : split.test_end]
             y_pred_arr[idx, :] = pred
             results["n_windows"] += 1

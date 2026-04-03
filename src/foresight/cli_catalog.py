@@ -794,7 +794,9 @@ def _cmd_models_list(args: argparse.Namespace) -> int:
     interface_filter = _validated_model_interface_filter(
         _cli_shared._string_arg_value(args, "interface", default="any")
     )
-    stability_filter = _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    stability_filter = (
+        _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    )
     capability_filters = _parse_capability_filters(_cli_shared._list_arg_values(args, "capability"))
     req_set, include_core = _cli_shared._parse_requires_arg(args, "requires")
     exc_set, exclude_core = _cli_shared._parse_requires_arg(args, "exclude_requires")
@@ -898,7 +900,9 @@ def _cmd_models_search(args: argparse.Namespace) -> int:
     interface_filter = _validated_model_interface_filter(
         _cli_shared._string_arg_value(args, "interface", default="any")
     )
-    stability_filter = _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    stability_filter = (
+        _cli_shared._stripped_arg_value(args, "stability", default="any").lower() or "any"
+    )
     capability_filters = _parse_capability_filters(_cli_shared._list_arg_values(args, "capability"))
     req_set, include_core = _cli_shared._parse_requires_arg(args, "requires")
     exc_set, exclude_core = _cli_shared._parse_requires_arg(args, "exclude_requires")

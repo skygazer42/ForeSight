@@ -208,7 +208,9 @@ def test_make_forecaster_tweedie_lag_coerces_string_params(
         captured["seasonal_orders"] = float(kwargs["fourier_orders"])
         return np.zeros(int(horizon), dtype=float)
 
-    monkeypatch.setattr(runtime_mod, "tweedie_lag_direct_forecast", _fake_tweedie_lag_direct_forecast)
+    monkeypatch.setattr(
+        runtime_mod, "tweedie_lag_direct_forecast", _fake_tweedie_lag_direct_forecast
+    )
 
     yhat = make_forecaster(
         "tweedie-lag",

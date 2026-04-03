@@ -393,7 +393,9 @@ def _render_models_doc() -> str:
     lines.append("")
     lines.append("```bash")
     lines.append("foresight models list --format json")
-    lines.append("foresight models list --columns key,required_extra,package_install_command --header")
+    lines.append(
+        "foresight models list --columns key,required_extra,package_install_command --header"
+    )
     lines.append("foresight models info xgb-step-lag-global")
     lines.append("foresight doctor")
     lines.append("```")

@@ -137,8 +137,7 @@ def _scaled_absolute_score(
     abs_residual = residual.abs()
     scale_positive = scale > float(_SCORE_EPS)
     score.loc[valid_mask & scale_positive] = (
-        abs_residual.loc[valid_mask & scale_positive]
-        / scale.loc[valid_mask & scale_positive]
+        abs_residual.loc[valid_mask & scale_positive] / scale.loc[valid_mask & scale_positive]
     ).astype(float)
     zero_scale = valid_mask & ~scale_positive
     score.loc[zero_scale & (abs_residual <= float(_SCORE_EPS))] = 0.0
@@ -231,7 +230,9 @@ def _series_threshold_value(
     threshold_k: float,
     threshold_quantile: float,
 ) -> float:
-    finite = score[np.isfinite(score.to_numpy(dtype=float, copy=False))].to_numpy(dtype=float, copy=False)
+    finite = score[np.isfinite(score.to_numpy(dtype=float, copy=False))].to_numpy(
+        dtype=float, copy=False
+    )
     if finite.size == 0:
         return float("inf")
 
@@ -264,8 +265,8 @@ def _apply_thresholds(
         )
         scored = group.copy()
         scored["threshold"] = float(threshold)
-        scored["is_anomaly"] = (
-            scored["score"].notna() & (scored["score"].astype(float) > float(threshold))
+        scored["is_anomaly"] = scored["score"].notna() & (
+            scored["score"].astype(float) > float(threshold)
         )
         scored["score_method"] = str(score_method)
         scored["threshold_method"] = str(threshold_method)

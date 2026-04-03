@@ -74,9 +74,7 @@ def _validated_interval_arrays(
     lo_arr = np.asarray(lo, dtype=float)
     hi_arr = np.asarray(hi, dtype=float)
     if y_arr.shape != lo_arr.shape or y_arr.shape != hi_arr.shape:
-        raise ValueError(
-            f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}"
-        )
+        raise ValueError(f"Shape mismatch: y{y_arr.shape} lo{lo_arr.shape} hi{hi_arr.shape}")
     return y_arr, lo_arr, hi_arr
 
 
@@ -225,9 +223,7 @@ def _vectorized_pinball_summary(
             f"Row mismatch: y has {y_arr.size} rows but quantile_forecasts has shape {qhat.shape}"
         )
     if qhat.shape[1] != len(pcts):
-        raise ValueError(
-            f"Column mismatch: expected {len(pcts)} quantiles, got shape {qhat.shape}"
-        )
+        raise ValueError(f"Column mismatch: expected {len(pcts)} quantiles, got shape {qhat.shape}")
 
     qs = np.asarray([float(pct) / 100.0 for pct in pcts], dtype=float)
     residual = y_arr[:, None] - qhat
@@ -256,7 +252,7 @@ def _vectorized_point_metrics(
 
     error = y_arr - yhat_arr
     abs_error = np.abs(error)
-    sq_error = error ** 2
+    sq_error = error**2
     mape_denom = np.where(np.abs(y_arr) < eps, eps, np.abs(y_arr))
     abs_pct_error = abs_error / mape_denom
     smape_denom = np.abs(y_arr) + np.abs(yhat_arr)

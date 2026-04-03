@@ -184,8 +184,12 @@ def test_architecture_checker_flags_registry_resolution_runtime_helpers(
         "    return None\n",
         encoding="utf-8",
     )
-    (models_root / "resolution.py").write_text("def get_model_spec():\n    return None\n", encoding="utf-8")
-    (models_root / "runtime.py").write_text("def make_forecaster():\n    return None\n", encoding="utf-8")
+    (models_root / "resolution.py").write_text(
+        "def get_model_spec():\n    return None\n", encoding="utf-8"
+    )
+    (models_root / "runtime.py").write_text(
+        "def make_forecaster():\n    return None\n", encoding="utf-8"
+    )
     (src_root / "base.py").write_text("", encoding="utf-8")
     (src_root / "cli.py").write_text("", encoding="utf-8")
 

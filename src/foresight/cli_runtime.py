@@ -189,7 +189,8 @@ class _CliRuntimeLogger:
             return
 
         normalized_payload = {
-            str(key): _normalize_log_value(value) for key, value in compact_log_payload(payload).items()
+            str(key): _normalize_log_value(value)
+            for key, value in compact_log_payload(payload).items()
         }
         now = datetime.now().astimezone()
         record = _CliRuntimeRecord(

@@ -103,7 +103,9 @@ def test_models_list_filter_interface_global() -> None:
 
 
 def test_models_list_json_includes_capabilities() -> None:
-    proc = _run_cli("models", "list", "--format", "json", "--prefix", "xgb-step-lag-global", "--limit", "1")
+    proc = _run_cli(
+        "models", "list", "--format", "json", "--prefix", "xgb-step-lag-global", "--limit", "1"
+    )
     assert proc.returncode == 0
     rows = json.loads(proc.stdout)
     assert rows[0]["key"] == "xgb-step-lag-global"

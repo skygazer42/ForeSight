@@ -18,9 +18,7 @@ from foresight.models.registry import make_forecaster
         ("torch-timesmamba-longhorizon-direct", {"warmup_epochs": 1}),
     ),
 )
-def test_wave96_advanced_local_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave96_advanced_local_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     y = np.sin(np.arange(128, dtype=float) / 5.0) + 0.03 * np.arange(128, dtype=float)
     forecaster = make_forecaster(
         key,

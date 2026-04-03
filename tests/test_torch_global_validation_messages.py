@@ -636,7 +636,12 @@ GLOBAL_VALIDATION_CASES = [
         {"dim_feedforward": 0},
         "dim_feedforward must be >= 1",
     ),
-    ("crossformer dropout", "torch-crossformer-global", {"dropout": 1.0}, "dropout must be in [0,1)"),
+    (
+        "crossformer dropout",
+        "torch-crossformer-global",
+        {"dropout": 1.0},
+        "dropout must be in [0,1)",
+    ),
     (
         "pyraformer d_model",
         "torch-pyraformer-global",
@@ -679,7 +684,12 @@ GLOBAL_VALIDATION_CASES = [
     ),
     ("tsmixer dropout", "torch-tsmixer-global", {"dropout": 1.0}, "dropout must be in [0,1)"),
     ("fedformer d_model", "torch-fedformer-global", {"d_model": 0}, "d_model must be >= 1"),
-    ("fedformer num_layers", "torch-fedformer-global", {"num_layers": 0}, "num_layers must be >= 1"),
+    (
+        "fedformer num_layers",
+        "torch-fedformer-global",
+        {"num_layers": 0},
+        "num_layers must be >= 1",
+    ),
     ("fedformer ffn_dim", "torch-fedformer-global", {"ffn_dim": 0}, "ffn_dim must be >= 1"),
     ("fedformer modes", "torch-fedformer-global", {"modes": 0}, "modes must be >= 1"),
     ("fedformer ma_window", "torch-fedformer-global", {"ma_window": 0}, "ma_window must be >= 1"),
@@ -787,7 +797,12 @@ GLOBAL_VALIDATION_CASES = [
     ("resnet dropout", "torch-resnet1d-global", {"dropout": 1.0}, "dropout must be in [0,1)"),
     ("fnet d_model", "torch-fnet-global", {"d_model": 0}, "d_model must be >= 1"),
     ("fnet num_layers", "torch-fnet-global", {"num_layers": 0}, "num_layers must be >= 1"),
-    ("fnet dim_feedforward", "torch-fnet-global", {"dim_feedforward": 0}, "dim_feedforward must be >= 1"),
+    (
+        "fnet dim_feedforward",
+        "torch-fnet-global",
+        {"dim_feedforward": 0},
+        "dim_feedforward must be >= 1",
+    ),
     ("fnet dropout", "torch-fnet-global", {"dropout": 1.0}, "dropout must be in [0,1)"),
 ]
 

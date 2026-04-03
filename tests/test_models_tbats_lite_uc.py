@@ -6,15 +6,12 @@ import pytest
 from foresight.models.registry import make_forecaster
 
 
-@pytest.mark.skipif(importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("statsmodels") is None, reason="statsmodels not installed"
+)
 def test_tbats_lite_uc_tracks_multi_season_fourier_signal() -> None:
     t = np.arange(120, dtype=float)
-    y = (
-        5.0
-        + 0.3 * t
-        + 1.5 * np.sin(2.0 * np.pi * t / 7.0)
-        + 0.75 * np.cos(2.0 * np.pi * t / 30.0)
-    )
+    y = 5.0 + 0.3 * t + 1.5 * np.sin(2.0 * np.pi * t / 7.0) + 0.75 * np.cos(2.0 * np.pi * t / 30.0)
 
     f = make_forecaster(
         "tbats-lite-uc",

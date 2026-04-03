@@ -832,9 +832,7 @@ def _validate_torch_train_config(cfg: TorchTrainConfig) -> None:
 
 def _validate_torch_train_config_kwargs(params: Mapping[str, Any]) -> None:
     cfg_kwargs = {
-        field.name: params[field.name]
-        for field in fields(TorchTrainConfig)
-        if field.name in params
+        field.name: params[field.name] for field in fields(TorchTrainConfig) if field.name in params
     }
     _validate_torch_train_config(TorchTrainConfig(**cfg_kwargs))
 
@@ -1167,7 +1165,9 @@ def _torch_ema_active_for_epoch(*, cfg: TorchTrainConfig, epoch_idx: int) -> boo
     return float(cfg.ema_decay) > 0.0 and int(epoch_idx) >= int(cfg.ema_warmup_epochs)
 
 
-def _update_torch_ema_model(torch: Any, *, ema_model: Any, model: Any, cfg: TorchTrainConfig) -> None:
+def _update_torch_ema_model(
+    torch: Any, *, ema_model: Any, model: Any, cfg: TorchTrainConfig
+) -> None:
     decay = float(cfg.ema_decay)
     if decay <= 0.0:
         return
@@ -1620,7 +1620,11 @@ def _load_torch_training_state(
 
     state_dict = _extract_torch_checkpoint_state_dict(payload)
     resume_model_state = state_dict
-    if isinstance(payload, dict) and "model_state" in payload and isinstance(payload["model_state"], dict):
+    if (
+        isinstance(payload, dict)
+        and "model_state" in payload
+        and isinstance(payload["model_state"], dict)
+    ):
         resume_model_state = dict(payload["model_state"])
     model.load_state_dict(resume_model_state, strict=resume_strict)
 
@@ -1940,7 +1944,9 @@ def _torch_tracking_numeric_metrics(
     return metrics
 
 
-def _build_torch_tracking_hparams_payload(*, cfg: TorchTrainConfig) -> dict[str, bool | int | float | str]:
+def _build_torch_tracking_hparams_payload(
+    *, cfg: TorchTrainConfig
+) -> dict[str, bool | int | float | str]:
     return {
         str(key): _coerce_torch_tracking_hparam_value(value)
         for key, value in compact_log_payload(vars(cfg)).items()
@@ -2021,9 +2027,15 @@ def _build_torch_tracking_metric_payload(
                 "monitor/final_best": train_completed_payload.get("best"),
                 "train/final_lr": train_completed_payload.get("final_lr"),
                 "time/total_seconds": train_completed_payload.get("total_seconds"),
-                "train/final_loss": (None if epoch_payload is None else epoch_payload.get("train_loss")),
-                "validation/final_loss": (None if epoch_payload is None else epoch_payload.get("val_loss")),
-                "monitor/final_value": (None if epoch_payload is None else epoch_payload.get("monitor")),
+                "train/final_loss": (
+                    None if epoch_payload is None else epoch_payload.get("train_loss")
+                ),
+                "validation/final_loss": (
+                    None if epoch_payload is None else epoch_payload.get("val_loss")
+                ),
+                "monitor/final_value": (
+                    None if epoch_payload is None else epoch_payload.get("monitor")
+                ),
             }
         )
     )
@@ -2174,9 +2186,9 @@ def _torch_tracking_run_name(
         return str(session.run_name)
     if session.backend == "tensorboard" and session.run_dir:
         return Path(str(session.run_dir)).name
-    return str(cfg.mlflow_run_name or cfg.wandb_run_name or cfg.tensorboard_run_name).strip() or str(
-        session.backend
-    )
+    return str(
+        cfg.mlflow_run_name or cfg.wandb_run_name or cfg.tensorboard_run_name
+    ).strip() or str(session.backend)
 
 
 def _torch_tracking_session_add_text(
@@ -2214,8 +2226,12 @@ def _torch_tracking_session_add_text(
             else _normalize_torch_tracking_payload_value(dict(payload))
         )
         if global_step is not None:
-            summary_payload = compact_log_payload(value=summary_payload, global_step=int(global_step))
-        _torch_tracking_summary_assign(getattr(session.handle, "summary", None), key=tag, value=summary_payload)
+            summary_payload = compact_log_payload(
+                value=summary_payload, global_step=int(global_step)
+            )
+        _torch_tracking_summary_assign(
+            getattr(session.handle, "summary", None), key=tag, value=summary_payload
+        )
 
 
 def _torch_tracking_session_add_scalar(
@@ -2431,9 +2447,7 @@ def _log_torch_tracking_epoch_metrics(
     for session in sessions:
         if session.backend == "wandb":
             payload = {
-                str(tag): float(value)
-                for tag, value in scalar_map.items()
-                if value is not None
+                str(tag): float(value) for tag, value in scalar_map.items() if value is not None
             }
             log = getattr(session.handle, "log", None)
             if callable(log) and payload:
@@ -2719,9 +2733,7 @@ def _train_torch_model_with_loaders(
     base_lrs = resume_state.base_lrs or base_lrs
 
     best_monitor_default = (
-        float("-inf")
-        if str(cfg.monitor_mode).lower().strip() == "max"
-        else float("inf")
+        float("-inf") if str(cfg.monitor_mode).lower().strip() == "max" else float("inf")
     )
     best_monitor = (
         best_monitor_default
@@ -2870,10 +2882,14 @@ def _train_torch_model_with_loaders(
                     None if tensorboard_session is None else str(tensorboard_session.run_dir)
                 ),
                 mlflow_run_id=(
-                    None if mlflow_session is None else (mlflow_session.metadata or {}).get("run_id")
+                    None
+                    if mlflow_session is None
+                    else (mlflow_session.metadata or {}).get("run_id")
                 ),
                 wandb_run_path=(
-                    None if wandb_session is None else (wandb_session.metadata or {}).get("run_path")
+                    None
+                    if wandb_session is None
+                    else (wandb_session.metadata or {}).get("run_path")
                 ),
                 **device_payload,
             ),
@@ -2973,13 +2989,19 @@ def _train_torch_model_with_loaders(
                             cfg=cfg,
                             lookahead_step=int(lookahead_step),
                         )
-                    if ema_model is not None and _torch_ema_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
+                    if ema_model is not None and _torch_ema_active_for_epoch(
+                        cfg=cfg, epoch_idx=int(epoch_idx)
+                    ):
                         if not ema_active:
                             ema_model.load_state_dict(model.state_dict())
                             ema_active = True
                         else:
-                            _update_torch_ema_model(torch, ema_model=ema_model, model=model, cfg=cfg)
-                    if swa_model is not None and _torch_swa_active_for_epoch(cfg=cfg, epoch_idx=int(epoch_idx)):
+                            _update_torch_ema_model(
+                                torch, ema_model=ema_model, model=model, cfg=cfg
+                            )
+                    if swa_model is not None and _torch_swa_active_for_epoch(
+                        cfg=cfg, epoch_idx=int(epoch_idx)
+                    ):
                         swa_n_averaged = _update_torch_swa_model(
                             torch,
                             swa_model=swa_model,
@@ -3037,7 +3059,9 @@ def _train_torch_model_with_loaders(
                         v_count += int(yb.shape[0])
                 val_loss = v_total / max(1, v_count)
 
-            monitor = _select_torch_monitor_value(cfg, train_loss=float(train_loss), val_loss=val_loss)
+            monitor = _select_torch_monitor_value(
+                cfg, train_loss=float(train_loss), val_loss=val_loss
+            )
             last_monitor = float(monitor)
             last_epoch = int(epoch_idx) + 1
 
@@ -3075,15 +3099,18 @@ def _train_torch_model_with_loaders(
                 optimizer_steps=int(optimizer_steps),
                 epoch_seconds=float(epoch_seconds),
                 step_seconds=(
-                    None if int(optimizer_steps) <= 0 or float(epoch_seconds) <= 0.0
+                    None
+                    if int(optimizer_steps) <= 0 or float(epoch_seconds) <= 0.0
                     else float(epoch_seconds) / float(optimizer_steps)
                 ),
                 samples_per_second=(
-                    None if int(count) <= 0 or float(epoch_seconds) <= 0.0
+                    None
+                    if int(count) <= 0 or float(epoch_seconds) <= 0.0
                     else float(count) / float(epoch_seconds)
                 ),
                 batches_per_second=(
-                    None if int(num_batches) <= 0 or float(epoch_seconds) <= 0.0
+                    None
+                    if int(num_batches) <= 0 or float(epoch_seconds) <= 0.0
                     else float(num_batches) / float(epoch_seconds)
                 ),
                 **_torch_cuda_memory_payload(torch, dev=dev),
@@ -3100,7 +3127,11 @@ def _train_torch_model_with_loaders(
                 epoch_payload=epoch_payload,
             )
 
-            if not stop_training and sched is not None and not _torch_scheduler_steps_per_batch(sched_name):
+            if (
+                not stop_training
+                and sched is not None
+                and not _torch_scheduler_steps_per_batch(sched_name)
+            ):
                 if int(epoch_idx) + 1 > int(cfg.warmup_epochs):
                     if sched_name == "plateau":
                         sched.step(float(monitor))

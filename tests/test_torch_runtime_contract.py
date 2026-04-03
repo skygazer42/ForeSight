@@ -8,7 +8,10 @@ import pandas as pd
 import pytest
 
 from foresight.models import make_forecaster_object, make_global_forecaster_object
-from foresight.models.neural_runtime import coerce_torch_train_config_params, summarize_model_runtime
+from foresight.models.neural_runtime import (
+    coerce_torch_train_config_params,
+    summarize_model_runtime,
+)
 from foresight.models import torch_global, torch_nn, torch_rnn_paper_zoo, torch_seq2seq
 from foresight.serialization import load_forecaster, load_forecaster_artifact, save_forecaster
 
@@ -337,7 +340,9 @@ def test_generic_torch_trainer_writes_tensorboard_metrics(monkeypatch, tmp_path)
     assert metric_payload["train/epochs_ran"] == 2
     assert metric_payload["monitor/final_best"] > 0.0
     assert run_name == "demo-run"
-    artifact_payload = next(item[2] for item in recorded if item[:2] == ("text", "foresight/artifacts"))
+    artifact_payload = next(
+        item[2] for item in recorded if item[:2] == ("text", "foresight/artifacts")
+    )
     artifact_info = json.loads(artifact_payload)
     assert artifact_info["checkpoint_dir"] == checkpoint_dir.as_posix()
     assert artifact_info["best_checkpoint_path"] == (checkpoint_dir / "best.pt").as_posix()
@@ -546,13 +551,8 @@ def test_generic_torch_trainer_logs_mlflow_and_wandb_tracking(monkeypatch, tmp_p
     pred = model(X[:2])
     assert pred.shape == (2, 2)
 
-    mlflow_metric_keys = {
-        item[1] for item in recorded if item[0] == "mlflow_log_metric"
-    } | {
-        key
-        for item in recorded
-        if item[0] == "mlflow_log_metrics"
-        for key in item[1]
+    mlflow_metric_keys = {item[1] for item in recorded if item[0] == "mlflow_log_metric"} | {
+        key for item in recorded if item[0] == "mlflow_log_metrics" for key in item[1]
     }
     assert ("mlflow_set_experiment", "foresight-exp") in recorded
     assert ("mlflow_start_run", "demo-mlflow") in recorded
@@ -566,23 +566,30 @@ def test_generic_torch_trainer_logs_mlflow_and_wandb_tracking(monkeypatch, tmp_p
         for item in recorded
         if item[0] == "mlflow_log_dict" and "best_checkpoint_path" in item[2]
     )
-    assert mlflow_artifact_manifest["best_checkpoint_path"] == (checkpoint_dir / "best.pt").as_posix()
-    assert mlflow_artifact_manifest["last_checkpoint_path"] == (checkpoint_dir / "last.pt").as_posix()
-    assert {
-        item[1] for item in recorded if item[0] == "mlflow_log_artifact"
-    } >= {"best.pt", "last.pt"}
+    assert (
+        mlflow_artifact_manifest["best_checkpoint_path"] == (checkpoint_dir / "best.pt").as_posix()
+    )
+    assert (
+        mlflow_artifact_manifest["last_checkpoint_path"] == (checkpoint_dir / "last.pt").as_posix()
+    )
+    assert {item[1] for item in recorded if item[0] == "mlflow_log_artifact"} >= {
+        "best.pt",
+        "last.pt",
+    }
     assert ("mlflow_end_run",) in recorded
 
     wandb_run = wandb_run_ref["run"]
-    assert ("wandb_init", "foresight-tests", "core", "demo-wandb", str(tmp_path / "wandb"), "offline") in recorded
+    assert (
+        "wandb_init",
+        "foresight-tests",
+        "core",
+        "demo-wandb",
+        str(tmp_path / "wandb"),
+        "offline",
+    ) in recorded
     assert wandb_run.config["batch_size"] == 4
     assert wandb_run.config["mlflow_experiment_name"] == "foresight-exp"
-    wandb_metric_keys = {
-        key
-        for item in recorded
-        if item[0] == "wandb_log"
-        for key in item[1]
-    }
+    wandb_metric_keys = {key for item in recorded if item[0] == "wandb_log" for key in item[1]}
     assert "train/loss" in wandb_metric_keys
     assert "train/epochs_ran" in wandb_metric_keys
     assert "foresight/device" in wandb_run.summary
@@ -590,9 +597,10 @@ def test_generic_torch_trainer_logs_mlflow_and_wandb_tracking(monkeypatch, tmp_p
     wandb_artifacts = wandb_run.summary["foresight/artifacts"]
     assert wandb_artifacts["best_checkpoint_path"] == (checkpoint_dir / "best.pt").as_posix()
     assert wandb_artifacts["last_checkpoint_path"] == (checkpoint_dir / "last.pt").as_posix()
-    assert {
-        item[1] for item in recorded if item[0] == "wandb_artifact_add_file"
-    } >= {"best.pt", "last.pt"}
+    assert {item[1] for item in recorded if item[0] == "wandb_artifact_add_file"} >= {
+        "best.pt",
+        "last.pt",
+    }
     assert any(item[0] == "wandb_log_artifact" for item in recorded)
     assert ("wandb_finish",) in recorded
 

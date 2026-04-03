@@ -403,7 +403,9 @@ def test_format_arg_value_normalizes_markdown_alias_when_requested() -> None:
     assert value == "md"
 
 
-def test_format_csv_preserves_column_order_without_dictwriter(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_format_csv_preserves_column_order_without_dictwriter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _forbid_dict_writer(*args: object, **kwargs: object) -> object:
         raise AssertionError("csv.DictWriter should not be used")
 

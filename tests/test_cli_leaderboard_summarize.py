@@ -444,8 +444,22 @@ def test_leaderboard_summary_rank_by_dataset_metric_model_accepts_pre_grouped_ro
 
 def test_build_leaderboard_metric_contexts_collects_metric_views() -> None:
     items = [
-        {"task_group": "point", "dataset": "d1", "model": "a", "mae": 2.0, "rmse": 4.0, "n_points": 10},
-        {"task_group": "point", "dataset": "d2", "model": "a", "mae": 1.0, "rmse": 3.0, "n_points": 20},
+        {
+            "task_group": "point",
+            "dataset": "d1",
+            "model": "a",
+            "mae": 2.0,
+            "rmse": 4.0,
+            "n_points": 10,
+        },
+        {
+            "task_group": "point",
+            "dataset": "d2",
+            "model": "a",
+            "mae": 1.0,
+            "rmse": 3.0,
+            "n_points": 20,
+        },
     ]
     best_by_dataset_metric = {
         ("point", "d1", "mae"): 1.0,

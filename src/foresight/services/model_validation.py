@@ -147,14 +147,19 @@ def _limit_series(long_df: pd.DataFrame, *, max_series: int | None) -> pd.DataFr
 
 
 def _requires_label(spec: Any) -> str:
-    requires = tuple(str(item).strip() for item in getattr(spec, "requires", ()) if str(item).strip())
+    requires = tuple(
+        str(item).strip() for item in getattr(spec, "requires", ()) if str(item).strip()
+    )
     if not requires:
         return "core"
     return str(requires[0])
 
 
 def _supported_model_params(spec: Any) -> set[str]:
-    return {str(name) for name in set(getattr(spec, "default_params", {})).union(getattr(spec, "param_help", {}))}
+    return {
+        str(name)
+        for name in set(getattr(spec, "default_params", {})).union(getattr(spec, "param_help", {}))
+    }
 
 
 def prepare_promotion_long_df(
@@ -262,7 +267,9 @@ def _write_foundation_fixture(output_dir: str | Path | None) -> Path:
     base_dir.mkdir(parents=True, exist_ok=True)
     fixture_path = base_dir / "foundation-fixture.json"
     fixture_path.write_text(
-        json.dumps({"bias": 1.5, "scale": 1.0, "use_trend": True}, ensure_ascii=False, sort_keys=True),
+        json.dumps(
+            {"bias": 1.5, "scale": 1.0, "use_trend": True}, ensure_ascii=False, sort_keys=True
+        ),
         encoding="utf-8",
     )
     return fixture_path
@@ -298,6 +305,7 @@ def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str)
 
     if family == "logistic":
         out = long_df.copy()
+
         def _scale(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             max_value = float(values.max(initial=0.0))
@@ -311,6 +319,7 @@ def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str)
 
     if family == "positive_unit_scale":
         out = long_df.copy()
+
         def _positive_unit_scale(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             min_value = float(values.min(initial=0.0))
@@ -326,6 +335,7 @@ def transform_validation_long_df_for_model(long_df: pd.DataFrame, *, model: str)
 
     if family == "catboost":
         out = long_df.copy()
+
         def _jitter(group: pd.Series) -> pd.Series:
             values = group.to_numpy(dtype=float, copy=False)
             eps = 1e-6 * np.arange(values.size, dtype=float)
@@ -367,7 +377,10 @@ def build_model_params(
         "context_length": _LIGHTWEIGHT_CONTEXT_LENGTH,
         "num_samples": _LIGHTWEIGHT_NUM_SAMPLES,
     }
-    if model_key in {"autoreg", "stl-autoreg", "mstl-autoreg", "tbats-lite-autoreg"} and "lags" in supported:
+    if (
+        model_key in {"autoreg", "stl-autoreg", "mstl-autoreg", "tbats-lite-autoreg"}
+        and "lags" in supported
+    ):
         candidates["lags"] = 4
     if "segrnn" in model_key and "segment_len" in supported:
         candidates["segment_len"] = 8
@@ -380,18 +393,25 @@ def build_model_params(
             candidates["orders"] = 1
         if "lags" in supported:
             candidates["lags"] = min(int(candidates.get("lags", 4)), 2)
-    if model_key in {
-        "ets",
-        "stl-ets",
-        "mstl-ets",
-        "tbats-lite-ets",
-        "holt-winters-add",
-        "holt-winters-add-auto",
-        "holt-winters-mul",
-        "holt-winters-mul-auto",
-    } and "season_length" in supported:
+    if (
+        model_key
+        in {
+            "ets",
+            "stl-ets",
+            "mstl-ets",
+            "tbats-lite-ets",
+            "holt-winters-add",
+            "holt-winters-add-auto",
+            "holt-winters-mul",
+            "holt-winters-mul-auto",
+        }
+        and "season_length" in supported
+    ):
         candidates["season_length"] = 4
-    if model_key in {"seasonal-drift", "seasonal-mean", "seasonal-naive", "seasonal-naive-auto"} and "season_length" in supported:
+    if (
+        model_key in {"seasonal-drift", "seasonal-mean", "seasonal-naive", "seasonal-naive-auto"}
+        and "season_length" in supported
+    ):
         candidates["season_length"] = 4
     if "lstnet" in model_key and "highway_window" in supported:
         candidates["highway_window"] = 8
@@ -402,7 +422,10 @@ def build_model_params(
             candidates["periods"] = (4,)
         if "orders" in supported:
             candidates["orders"] = 1
-    if model_key in {"mstl-arima", "mstl-auto-arima", "mstl-sarimax", "mstl-uc"} and "periods" in supported:
+    if (
+        model_key in {"mstl-arima", "mstl-auto-arima", "mstl-sarimax", "mstl-uc"}
+        and "periods" in supported
+    ):
         candidates["periods"] = (4,)
     if "crossformer" in model_key:
         if "segment_len" in supported:
@@ -533,7 +556,9 @@ def _evaluate_model(
             if model_long_df is long_df:
                 model_wide_df, model_target_cols = wide_df, list(target_cols)
             else:
-                model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(model_long_df)
+                model_wide_df, model_target_cols = build_promotion_multivariate_wide_df(
+                    model_long_df
+                )
             payload = eval_multivariate_model_df(
                 model=str(model),
                 df=model_wide_df,

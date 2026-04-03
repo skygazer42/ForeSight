@@ -736,7 +736,9 @@ def test_torch_local_runtime_writes_checkpoint_files(tmp_path) -> None:
             weights_only=True,
         )
     except TypeError:
-        last_payload = torch_nn._require_torch().load(checkpoint_dir / "last.pt", map_location="cpu")
+        last_payload = torch_nn._require_torch().load(
+            checkpoint_dir / "last.pt", map_location="cpu"
+        )
     assert "optimizer_state" in last_payload
     assert "epoch" in last_payload
     assert "best_monitor" in last_payload
@@ -894,7 +896,9 @@ def test_torch_resume_checkpoint_loader_restores_training_state(tmp_path) -> Non
     deploy_state = {key: value.detach().cpu().clone() for key, value in source.state_dict().items()}
     ema_state = {key: value.detach().cpu().clone() for key, value in source.state_dict().items()}
     swa_state = {key: value.detach().cpu().clone() for key, value in source.state_dict().items()}
-    lookahead_state = {key: value.detach().cpu().clone() for key, value in source.state_dict().items()}
+    lookahead_state = {
+        key: value.detach().cpu().clone() for key, value in source.state_dict().items()
+    }
     for key, value in deploy_state.items():
         if getattr(value, "dtype", None) is not None and torch.is_floating_point(value):
             deploy_state[key] = value + 1.0

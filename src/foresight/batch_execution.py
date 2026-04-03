@@ -338,7 +338,8 @@ def run_batch_tasks(
     out: list[dict[str, Any]] = []
     try:
         fut_to_task = {
-            executor.submit(_run_timed_task, worker, task.task_args, worker_args): task for task in tasks
+            executor.submit(_run_timed_task, worker, task.task_args, worker_args): task
+            for task in tasks
         }
         for fut in concurrent.futures.as_completed(fut_to_task):
             task = fut_to_task[fut]

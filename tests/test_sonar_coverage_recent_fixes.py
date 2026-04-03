@@ -1699,7 +1699,10 @@ def test_statsmodels_auto_arima_accepts_lowercase_seasonal_bound_names(
 def test_public_api_signatures_stay_under_sonar_parameter_threshold() -> None:
     assert len(inspect.signature(to_long).parameters) <= 13
     assert len(inspect.signature(statsmodels_wrap_mod.auto_arima_forecast).parameters) <= 13
-    assert len(inspect.signature(statsmodels_wrap_mod.auto_arima_forecast_with_intervals).parameters) <= 13
+    assert (
+        len(inspect.signature(statsmodels_wrap_mod.auto_arima_forecast_with_intervals).parameters)
+        <= 13
+    )
 
 
 def test_to_long_accepts_prepare_options_via_public_keywords() -> None:

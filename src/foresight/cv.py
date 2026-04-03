@@ -193,7 +193,9 @@ def _local_cv_xreg_arrays(
     if np.isnan(y_all).any():
         raise ValueError("cross_validation_predictions_long_df does not support missing y values")
     if np.isnan(x_all).any():
-        raise ValueError("cross_validation_predictions_long_df does not support missing x_cols values")
+        raise ValueError(
+            "cross_validation_predictions_long_df does not support missing x_cols values"
+        )
     return y_all, x_all
 
 
@@ -494,7 +496,9 @@ def _prepared_global_cv_columns(
     model: str,
 ) -> tuple[dict[str, list[Any]] | None, int, tuple[str, ...], int]:
     pred_cols = tuple(str(col) for col in pred.columns if col not in {"unique_id", "ds"})
-    pred_index = pd.MultiIndex.from_frame(pred.loc[:, ["unique_id", "ds"]], names=["unique_id", "ds"])
+    pred_index = pd.MultiIndex.from_frame(
+        pred.loc[:, ["unique_id", "ds"]], names=["unique_id", "ds"]
+    )
     y_values = y_lookup.reindex(pred_index).to_numpy(copy=False)
     ds_values = pred["ds"].to_numpy(copy=False)
     uid_values = pred["unique_id"].astype("string").to_numpy(copy=False)
@@ -510,7 +514,10 @@ def _prepared_global_cv_columns(
     ds_filtered = ds_values[valid_mask]
     y_filtered = np.asarray(y_values[valid_mask], dtype=float)
     pred_filtered = {
-        col: np.asarray(pred_arrays[col][valid_mask], dtype=float if np.issubdtype(np.asarray(pred_arrays[col]).dtype, np.number) else object)
+        col: np.asarray(
+            pred_arrays[col][valid_mask],
+            dtype=float if np.issubdtype(np.asarray(pred_arrays[col]).dtype, np.number) else object,
+        )
         for col in pred_cols
     }
 
@@ -524,9 +531,15 @@ def _prepared_global_cv_columns(
     if uid_sorted.size == 0:
         return None, total_series, pred_cols, 0
 
-    boundaries = np.flatnonzero(uid_sorted[1:] != uid_sorted[:-1]) + 1 if uid_sorted.size > 1 else np.array([], dtype=int)
+    boundaries = (
+        np.flatnonzero(uid_sorted[1:] != uid_sorted[:-1]) + 1
+        if uid_sorted.size > 1
+        else np.array([], dtype=int)
+    )
     starts = np.concatenate((np.array([0], dtype=int), boundaries.astype(int, copy=False)))
-    stops = np.concatenate((boundaries.astype(int, copy=False), np.array([uid_sorted.size], dtype=int)))
+    stops = np.concatenate(
+        (boundaries.astype(int, copy=False), np.array([uid_sorted.size], dtype=int))
+    )
     row_keep = np.zeros(uid_sorted.size, dtype=bool)
     steps = np.zeros(uid_sorted.size, dtype=int)
     valid_series = 0

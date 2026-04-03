@@ -936,8 +936,7 @@ def _print_metadata_coverage(
         paper_defs,
         updated,
         predicate=lambda record: (
-            not str(record.get("doi", "")).strip()
-            and not str(record.get("arxiv_id", "")).strip()
+            not str(record.get("doi", "")).strip() and not str(record.get("arxiv_id", "")).strip()
         ),
     )
     missing_url = _missing_metadata_ids(

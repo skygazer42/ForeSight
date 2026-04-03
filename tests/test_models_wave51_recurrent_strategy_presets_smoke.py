@@ -18,9 +18,7 @@ from foresight.models.registry import make_forecaster
         ("torch-rnnzoo-qrnn-longhorizon-direct", {}),
     ),
 )
-def test_wave51_recurrent_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave51_recurrent_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     y = np.sin(np.arange(80, dtype=float) / 4.0) + 0.03 * np.arange(80, dtype=float)
     forecaster = make_forecaster(
         key,

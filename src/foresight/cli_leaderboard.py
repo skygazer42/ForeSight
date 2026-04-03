@@ -59,7 +59,9 @@ def _normalize_task_group_filter(raw: object) -> str | None:
 
 
 def _leaderboard_backend_family_for_model_spec(spec: Any) -> str:
-    requires = tuple(str(item).strip().lower() for item in getattr(spec, "requires", ()) if str(item).strip())
+    requires = tuple(
+        str(item).strip().lower() for item in getattr(spec, "requires", ()) if str(item).strip()
+    )
     if not requires:
         return "core"
     return str(requires[0])
@@ -100,9 +102,9 @@ def _leaderboard_has_requested_quantiles(model_params: dict[str, Any]) -> bool:
 
 def _leaderboard_task_group_for_model_spec(spec: Any, *, model_params: dict[str, Any]) -> str:
     capabilities = dict(getattr(spec, "capabilities", {}))
-    if bool(capabilities.get("requires_future_covariates", False)) or _leaderboard_has_requested_covariates(
-        model_params
-    ):
+    if bool(
+        capabilities.get("requires_future_covariates", False)
+    ) or _leaderboard_has_requested_covariates(model_params):
         return "covariate"
     if _leaderboard_has_requested_quantiles(model_params):
         return "probabilistic"
@@ -263,9 +265,7 @@ def register_leaderboard_subparsers(sub: Any) -> None:
     leaderboard_models.add_argument(
         "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
     )
-    leaderboard_models.add_argument(
-        "--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP
-    )
+    leaderboard_models.add_argument("--step", type=int, default=1, help=_WALK_FORWARD_STEP_HELP)
     leaderboard_models.add_argument(
         "--min-train-size",
         type=int,
@@ -577,12 +577,18 @@ def _cmd_leaderboard_models(args: argparse.Namespace) -> int:
         raw_models = _cli_shared._string_arg_value(args, "models")
         with _cli_runtime.phase_scope("params", payload=_log_payload(dataset=dataset_key)):
             y_col = _cli_shared._optional_stripped_arg_value(args, "y_col")
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
 
             if raw_models:
                 keys = _cli_shared._split_csv_items(raw_models)
             else:
-                keys = [k for k in list_models() if args.include_optional or not get_model_spec(k).requires]
+                keys = [
+                    k
+                    for k in list_models()
+                    if args.include_optional or not get_model_spec(k).requires
+                ]
 
             rows: list[dict[str, Any]] = []
             task_group_filter = _normalize_task_group_filter(
@@ -818,7 +824,9 @@ def _leaderboard_sweep_dataset_y_cols(
     dataset_y_cols: dict[str, str] = {}
     for dataset in datasets:
         spec = get_dataset_spec(str(dataset))
-        dataset_y_cols[str(dataset)] = str(y_col).strip() if y_col is not None else str(spec.default_y)
+        dataset_y_cols[str(dataset)] = (
+            str(y_col).strip() if y_col is not None else str(spec.default_y)
+        )
     return dataset_y_cols
 
 
@@ -1130,7 +1138,9 @@ def _write_leaderboard_sweep_task_reports(
     if not task_reports_output:
         return
 
-    task_reports_format = _cli_shared._stripped_arg_value(args, "task_reports_format", default="json")
+    task_reports_format = _cli_shared._stripped_arg_value(
+        args, "task_reports_format", default="json"
+    )
     _get_batch_execution_module().emit_task_reports(
         task_stats,
         backend=_cli_shared._string_arg_value(args, "backend"),
@@ -1168,7 +1178,9 @@ def _cmd_leaderboard_sweep(args: argparse.Namespace) -> int:
                 jobs=jobs,
             )
             strict = _cli_shared._bool_arg_value(args, "strict")
-            model_params = _cli_shared._parse_model_params(_cli_shared._list_arg_values(args, "model_param"))
+            model_params = _cli_shared._parse_model_params(
+                _cli_shared._list_arg_values(args, "model_param")
+            )
             task_group_filter = _normalize_task_group_filter(
                 _cli_shared._string_arg_value(args, "task_group", default="all")
             )
@@ -1431,11 +1443,7 @@ def _leaderboard_summary_best_by_dataset_metric(
         rows_by_dataset
         if rows_by_dataset is not None
         else {
-            group_key: [
-                row
-                for row in cleaned
-                if _leaderboard_summary_group_key(row) == group_key
-            ]
+            group_key: [row for row in cleaned if _leaderboard_summary_group_key(row) == group_key]
             for group_key in sorted({_leaderboard_summary_group_key(row) for row in cleaned})
         }
     )
@@ -1459,11 +1467,7 @@ def _leaderboard_summary_rank_by_dataset_metric_model(
         rows_by_dataset
         if rows_by_dataset is not None
         else {
-            group_key: [
-                row
-                for row in cleaned
-                if _leaderboard_summary_group_key(row) == group_key
-            ]
+            group_key: [row for row in cleaned if _leaderboard_summary_group_key(row) == group_key]
             for group_key in sorted({_leaderboard_summary_group_key(row) for row in cleaned})
         }
     )
@@ -1571,9 +1575,7 @@ def _leaderboard_summary_metric_relative_values(
         best = best_by_dataset_metric.get(_leaderboard_summary_metric_key(item, metric))
         if best is None:
             continue
-        rels.append(
-            _leaderboard_summary_relative_metric_to_best(float(v_obj), float(best))
-        )
+        rels.append(_leaderboard_summary_relative_metric_to_best(float(v_obj), float(best)))
     return rels
 
 
@@ -1611,7 +1613,9 @@ def _leaderboard_summary_metric_ranks(
     rank_by_dataset_metric_model: dict[tuple[str, str, str, str], float],
 ) -> list[float]:
     return [
-        float(rank_by_dataset_metric_model[_leaderboard_summary_metric_model_key(item, metric, model)])
+        float(
+            rank_by_dataset_metric_model[_leaderboard_summary_metric_model_key(item, metric, model)]
+        )
         for item in items
         if _leaderboard_summary_metric_model_key(item, metric, model)
         in rank_by_dataset_metric_model
@@ -1627,7 +1631,11 @@ def _leaderboard_summary_metric_rank_pairs(
 ) -> list[tuple[float, int]]:
     return [
         (
-            float(rank_by_dataset_metric_model[_leaderboard_summary_metric_model_key(item, metric, model)]),
+            float(
+                rank_by_dataset_metric_model[
+                    _leaderboard_summary_metric_model_key(item, metric, model)
+                ]
+            ),
             int(item["n_points"]),
         )
         for item in items
@@ -1672,7 +1680,9 @@ def _build_leaderboard_metric_contexts(
                 if weight is not None and weight > 0:
                     context["weighted_pairs"].append((value_f, weight))
 
-                best = best_by_dataset_metric.get(_leaderboard_summary_metric_key(item, metric_name))
+                best = best_by_dataset_metric.get(
+                    _leaderboard_summary_metric_key(item, metric_name)
+                )
                 if best is not None:
                     relative_f = _leaderboard_summary_relative_metric_to_best(value_f, float(best))
                     context["relative_values"].append(relative_f)
@@ -1763,18 +1773,10 @@ def _leaderboard_model_summary_row(
             metric_contexts=metric_contexts,
         )
 
-    row["score_rank_mean"] = _leaderboard_summary_metric_group_average(
-        row, metrics, "rank_mean"
-    )
-    row["score_rank_wmean"] = _leaderboard_summary_metric_group_average(
-        row, metrics, "rank_wmean"
-    )
-    row["score_rel_mean"] = _leaderboard_summary_metric_group_average(
-        row, metrics, "rel_mean"
-    )
-    row["score_rel_wmean"] = _leaderboard_summary_metric_group_average(
-        row, metrics, "rel_wmean"
-    )
+    row["score_rank_mean"] = _leaderboard_summary_metric_group_average(row, metrics, "rank_mean")
+    row["score_rank_wmean"] = _leaderboard_summary_metric_group_average(row, metrics, "rank_wmean")
+    row["score_rel_mean"] = _leaderboard_summary_metric_group_average(row, metrics, "rel_mean")
+    row["score_rel_wmean"] = _leaderboard_summary_metric_group_average(row, metrics, "rel_wmean")
     return row
 
 
@@ -1826,7 +1828,9 @@ def _sort_leaderboard_summary_rows(
             _leaderboard_summary_sort_number(row.get(sort_s)),
             descending=descending,
         )
-        secondary_value = _leaderboard_summary_sort_number(row.get(secondary)) if secondary else None
+        secondary_value = (
+            _leaderboard_summary_sort_number(row.get(secondary)) if secondary else None
+        )
         smissing, sval_key = _leaderboard_summary_sort_value_key(
             secondary_value,
             descending=descending,
@@ -1866,7 +1870,9 @@ def _summarize_leaderboard_rows(
 
     n_datasets_total_by_group: dict[str, int] = {}
     for task_group, _dataset in rows_by_dataset:
-        n_datasets_total_by_group[task_group] = int(n_datasets_total_by_group.get(task_group, 0) + 1)
+        n_datasets_total_by_group[task_group] = int(
+            n_datasets_total_by_group.get(task_group, 0) + 1
+        )
 
     metrics = ["mae", "rmse", "mape", "smape"]
     best_by_dataset_metric = _leaderboard_summary_best_by_dataset_metric(

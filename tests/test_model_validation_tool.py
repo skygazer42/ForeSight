@@ -475,13 +475,13 @@ def test_build_model_params_configures_foundation_wrappers_for_fixture_mode(tmp_
         interface: str = "local"
         requires: tuple[str, ...] = ()
         default_params: dict[str, Any] = field(
-                default_factory=lambda: {
-                    "backend": "auto",
-                    "checkpoint_path": "",
-                    "model_source": "",
-                    "local_files_only": True,
-                    "device": "cpu",
-                    "seed": 123,
+            default_factory=lambda: {
+                "backend": "auto",
+                "checkpoint_path": "",
+                "model_source": "",
+                "local_files_only": True,
+                "device": "cpu",
+                "seed": 123,
                 "context_length": 48,
                 "num_samples": 100,
             }
@@ -534,7 +534,9 @@ def test_transform_validation_long_df_for_poisson_scales_targets_to_stable_posit
     assert float(out["y"].max()) <= 1.0
 
 
-def test_transform_validation_long_df_for_multiplicative_holt_winters_makes_targets_positive() -> None:
+def test_transform_validation_long_df_for_multiplicative_holt_winters_makes_targets_positive() -> (
+    None
+):
     from foresight.services.model_validation import transform_validation_long_df_for_model
 
     long_df = pd.DataFrame(
@@ -565,7 +567,14 @@ def test_transform_validation_long_df_for_logistic_scales_each_series_to_unit_in
     out = transform_validation_long_df_for_model(long_df, model="xgb-logistic-lag")
 
     assert ((out["y"] >= 0.0) & (out["y"] <= 1.0)).all()
-    assert float(out.loc[(out["unique_id"] == "s0") & (out["ds"] == pd.Timestamp("2020-01-08")), "y"].iloc[0]) == 1.0
+    assert (
+        float(
+            out.loc[
+                (out["unique_id"] == "s0") & (out["ds"] == pd.Timestamp("2020-01-08")), "y"
+            ].iloc[0]
+        )
+        == 1.0
+    )
 
 
 def test_transform_validation_long_df_for_catboost_breaks_constant_targets_per_series() -> None:
@@ -1148,7 +1157,9 @@ def test_validate_all_models_parser_accepts_progress_every() -> None:
     assert args.progress_every == 25
 
 
-def test_validate_all_models_main_uses_training_validation_runner(monkeypatch, tmp_path: Path) -> None:
+def test_validate_all_models_main_uses_training_validation_runner(
+    monkeypatch, tmp_path: Path
+) -> None:
     tool_path = Path(__file__).resolve().parents[1] / "tools" / "validate_all_models.py"
     spec = importlib.util.spec_from_file_location("validate_all_models_tool", tool_path)
     assert spec is not None and spec.loader is not None

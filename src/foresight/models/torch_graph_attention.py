@@ -141,12 +141,8 @@ def torch_graph_attention_forecast(
         def __init__(self, *, a: Any) -> None:
             super().__init__()
             self.register_buffer("adj", a)
-            self.temporal_attn = nn.MultiheadAttention(
-                d, heads, dropout=drop, batch_first=True
-            )
-            self.spatial_attn = nn.MultiheadAttention(
-                d, heads, dropout=drop, batch_first=True
-            )
+            self.temporal_attn = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
+            self.spatial_attn = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
             self.temporal_norm = nn.LayerNorm(d)
             self.spatial_norm = nn.LayerNorm(d)
 
@@ -171,12 +167,8 @@ def torch_graph_attention_forecast(
     class _GMANBlock(nn.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.spatial_attn = nn.MultiheadAttention(
-                d, heads, dropout=drop, batch_first=True
-            )
-            self.temporal_attn = nn.MultiheadAttention(
-                d, heads, dropout=drop, batch_first=True
-            )
+            self.spatial_attn = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
+            self.temporal_attn = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
             self.spatial_norm = nn.LayerNorm(d)
             self.temporal_norm = nn.LayerNorm(d)
 

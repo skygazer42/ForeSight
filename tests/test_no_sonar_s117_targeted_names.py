@@ -224,9 +224,7 @@ def test_runtime_targeted_factories_do_not_keep_s117_local_names() -> None:
 
 def test_source_extracts_ast_name_collection_helpers() -> None:
     tree = ast.parse(_self_source(), filename=__file__)
-    function_names = {
-        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-    }
+    function_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
 
     assert "_parse_tree_for_path" in function_names
     assert "_function_def_nodes" in function_names

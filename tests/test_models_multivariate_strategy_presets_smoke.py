@@ -19,9 +19,7 @@ from foresight.models.registry import make_multivariate_forecaster
         ("torch-stemgnn-lookahead-multivariate", {}),
     ),
 )
-def test_multivariate_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_multivariate_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     t = np.arange(96.0)
     train = pd.DataFrame(
         {

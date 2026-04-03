@@ -141,6 +141,45 @@ def test_benchmark_smoke_runner_emits_deterministic_csv_summary() -> None:
     assert all(float(row["cv_seconds_mean"]) >= 0.0 for row in rows)
 
 
+def test_benchmark_main_ensures_src_on_path_before_cli_module_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    mod = _load_run_benchmarks_module(repo_root)
+
+    events: list[str] = []
+
+    def _fake_ensure_src_on_path(root: Path) -> None:
+        assert root == repo_root
+        events.append("ensure")
+
+    class _FakeCliShared:
+        def _emit_table(self, *_args, **_kwargs) -> None:
+            events.append("emit")
+
+    def _fake_get_cli_shared_module():
+        events.append("cli")
+        assert events[:2] == ["ensure", "cli"]
+        return _FakeCliShared()
+
+    monkeypatch.setattr(mod, "_ensure_src_on_path", _fake_ensure_src_on_path)
+    monkeypatch.setattr(mod, "_get_cli_shared_module", _fake_get_cli_shared_module)
+    monkeypatch.setattr(
+        mod,
+        "run_benchmark_suite",
+        lambda **_kwargs: {
+            "summary": [],
+            "conformal_levels": [],
+            "profiling": False,
+        },
+    )
+
+    result = mod.main(["--smoke", "--output", str(tmp_path / "bench.csv")])  # type: ignore[attr-defined]
+
+    assert result == 0
+    assert events[:3] == ["ensure", "cli", "emit"]
+
+
 def test_benchmark_summary_columns_order_stays_stable_for_profile_mode() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mod = _load_run_benchmarks_module(repo_root)
@@ -395,7 +434,9 @@ def test_benchmark_main_writes_task_reports_with_shared_batch_helper(
 
     class _FakeCliShared:
         @staticmethod
-        def _emit_table(rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str) -> None:
+        def _emit_table(
+            rows: list[dict[str, Any]], *, columns: list[str], output: str, fmt: str
+        ) -> None:
             return None
 
     class _FakeBatchExecution:
@@ -487,7 +528,9 @@ def test_run_benchmark_suite_uses_shared_batch_module_for_task_reports(
             )
 
         @staticmethod
-        def task_report_rows(stats: list[object], *, backend: str, jobs: int) -> list[dict[str, Any]]:
+        def task_report_rows(
+            stats: list[object], *, backend: str, jobs: int
+        ) -> list[dict[str, Any]]:
             assert backend == "process"
             assert jobs == 1
             return [{"label": "sentinel"}]
@@ -808,7 +851,9 @@ def test_benchmark_rows_for_task_reuses_frame_bundle_for_shared_prep_signature(
         assert key in {"naive-last", "mean"}
         return _Spec()
 
-    monkeypatch.setattr(dataset_cache_mod, "get_or_build_dataset_long_df", _fake_get_or_build_dataset_long_df)
+    monkeypatch.setattr(
+        dataset_cache_mod, "get_or_build_dataset_long_df", _fake_get_or_build_dataset_long_df
+    )
     monkeypatch.setattr(eval_mod, "eval_model_long_df", _fake_eval_model_long_df)
     monkeypatch.setattr(registry_mod, "get_model_spec", _fake_get_model_spec)
 

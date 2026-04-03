@@ -16,7 +16,9 @@ GLOBAL_SEQ2SEQ_ATTN_LSTM_STRATEGY_PRESET_KEYS = (
 )
 
 
-def test_wave93_global_seq2seq_attn_lstm_strategy_presets_raise_importerror_when_torch_missing() -> None:
+def test_wave93_global_seq2seq_attn_lstm_strategy_presets_raise_importerror_when_torch_missing() -> (
+    None
+):
     if importlib.util.find_spec("torch") is not None:
         pytest.skip("torch installed; this test targets the missing-dep path")
 

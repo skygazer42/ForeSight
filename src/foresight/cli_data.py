@@ -316,9 +316,7 @@ def _register_data_parser(sub: Any) -> None:
     data_calendar_features = data_sub.add_parser(
         "calendar-features", help="Append calendar/time features to a long-format CSV"
     )
-    data_calendar_features.add_argument(
-        "--path", required=True, help=_LONG_CSV_PATH_HELP
-    )
+    data_calendar_features.add_argument("--path", required=True, help=_LONG_CSV_PATH_HELP)
     data_calendar_features.add_argument(
         "--parse-dates",
         action="store_true",
@@ -366,7 +364,9 @@ def _register_data_parser(sub: Any) -> None:
         default="",
         help="Optional comma-separated target columns for wide input",
     )
-    data_make_supervised.add_argument("--lags", type=str, default="5", help="Lag window or lag list")
+    data_make_supervised.add_argument(
+        "--lags", type=str, default="5", help="Lag window or lag list"
+    )
     data_make_supervised.add_argument("--horizon", type=int, default=1, help="Forecast horizon")
     data_make_supervised.add_argument(
         "--x-cols",

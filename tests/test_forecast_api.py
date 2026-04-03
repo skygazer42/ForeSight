@@ -1043,7 +1043,9 @@ def test_prepare_global_forecast_input_avoids_future_frame_builder_for_sorted_un
     )
 
     def _forbid_future_frame_builder(*args, **kwargs):
-        raise AssertionError("sorted univariate global forecast input should avoid future frame DataFrames")
+        raise AssertionError(
+            "sorted univariate global forecast input should avoid future frame DataFrames"
+        )
 
     monkeypatch.setattr(forecasting_mod, "_future_frame_for_group", _forbid_future_frame_builder)
 

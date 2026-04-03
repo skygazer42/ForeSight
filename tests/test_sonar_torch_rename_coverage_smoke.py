@@ -72,9 +72,7 @@ def _load_torch_checkpoint_payload(path: Any) -> dict[str, Any]:
         ),
     ],
 )
-def test_ct_rnn_variants_cover_s117_renamed_training_paths(
-    fn: Any, kwargs: dict[str, Any]
-) -> None:
+def test_ct_rnn_variants_cover_s117_renamed_training_paths(fn: Any, kwargs: dict[str, Any]) -> None:
     out = fn(
         _series(),
         2,

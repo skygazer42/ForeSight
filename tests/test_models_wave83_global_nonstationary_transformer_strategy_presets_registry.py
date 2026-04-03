@@ -16,7 +16,9 @@ def test_wave83_global_nonstationary_transformer_strategy_presets_are_registered
         assert key in keys
 
 
-def test_wave83_global_nonstationary_transformer_strategy_presets_are_global_torch_optional() -> None:
+def test_wave83_global_nonstationary_transformer_strategy_presets_are_global_torch_optional() -> (
+    None
+):
     for key in GLOBAL_NONSTATIONARY_TRANSFORMER_STRATEGY_PRESET_KEYS:
         spec = get_model_spec(key)
         assert spec.interface == "global"

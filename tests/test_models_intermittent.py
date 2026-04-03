@@ -27,7 +27,9 @@ def test_validated_intermittent_input_checks_horizon_and_nonempty_train() -> Non
             subject="croston_classic_forecast",
         )
 
-    with pytest.raises(ValueError, match="croston_classic_forecast requires at least 1 training point"):
+    with pytest.raises(
+        ValueError, match="croston_classic_forecast requires at least 1 training point"
+    ):
         intermittent_mod._validated_intermittent_input(  # type: ignore[attr-defined]
             [],
             horizon=1,

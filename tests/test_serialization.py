@@ -191,7 +191,9 @@ def test_save_forecaster_rejects_unfitted_forecaster(tmp_path) -> None:
         save_forecaster(make_forecaster_object("naive-last"), path)
 
 
-@pytest.mark.skipif(importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("sklearn") is None, reason="scikit-learn not installed"
+)
 def test_save_and_load_global_forecaster_round_trip(tmp_path) -> None:
     long_df = _small_panel_long_df()
     cutoff = pd.Timestamp("2020-01-16")

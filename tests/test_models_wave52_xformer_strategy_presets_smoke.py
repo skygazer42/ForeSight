@@ -19,9 +19,7 @@ from foresight.models.registry import make_forecaster, make_global_forecaster
         ("torch-xformer-longformer-lookahead-direct", {}),
     ),
 )
-def test_wave52_xformer_local_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave52_xformer_local_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     y = np.sin(np.arange(96, dtype=float) / 4.0) + 0.03 * np.arange(96, dtype=float)
     forecaster = make_forecaster(
         key,
@@ -60,9 +58,7 @@ def test_wave52_xformer_local_strategy_presets_smoke(
         ("torch-xformer-longformer-lookahead-global", {"warmup_epochs": 1}),
     ),
 )
-def test_wave52_xformer_global_strategy_presets_smoke(
-    key: str, overrides: dict[str, int]
-) -> None:
+def test_wave52_xformer_global_strategy_presets_smoke(key: str, overrides: dict[str, int]) -> None:
     rng = np.random.default_rng(0)
     ds = pd.date_range("2020-01-01", periods=72, freq="D")
     rows = []

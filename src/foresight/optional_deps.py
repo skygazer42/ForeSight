@@ -138,7 +138,9 @@ def _import_name_for_dependency(name: str) -> str:
     return str(_ALIAS_TO_IMPORT_NAME[normalized])
 
 
-def _status_from_failure(name: str, import_name: str, *, spec_found: bool, reason: str) -> DependencyStatus:
+def _status_from_failure(
+    name: str, import_name: str, *, spec_found: bool, reason: str
+) -> DependencyStatus:
     return DependencyStatus(
         name=name,
         import_name=import_name,
@@ -176,7 +178,7 @@ def dependency_display_name(name: str) -> str:
 def dependency_install_hint(name: str) -> str:
     normalized = _normalize_dependency_name(name)
     extra = preferred_extra_for_dependency(normalized)
-    return f'{package_install_command(extra)} or {editable_install_command(extra)}'
+    return f"{package_install_command(extra)} or {editable_install_command(extra)}"
 
 
 def missing_dependency_message(name: str, *, subject: str | None = None) -> str:

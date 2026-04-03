@@ -36,10 +36,7 @@ def _load_csv_frame(
 
 def _normalize_artifact_info_value(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            str(key): _normalize_artifact_info_value(item)
-            for key, item in value.items()
-        }
+        return {str(key): _normalize_artifact_info_value(item) for key, item in value.items()}
     if isinstance(value, tuple | list):
         return [_normalize_artifact_info_value(item) for item in value]
     if isinstance(value, np.ndarray):
@@ -61,7 +58,9 @@ def _artifact_forecaster_type(forecaster: Any) -> str:
     return type(forecaster).__name__
 
 
-def _extract_artifact_tracking_summary(metadata: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _extract_artifact_tracking_summary(
+    metadata: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     normalized = _normalize_artifact_info_value(dict(metadata))
     tracking: dict[str, Any] = {}
     train_schema = normalized.get("train_schema")
@@ -78,9 +77,7 @@ def _extract_artifact_tracking_summary(metadata: dict[str, Any]) -> tuple[dict[s
 
 def _artifact_tracking_backends(tracking: dict[str, Any]) -> list[str]:
     return sorted(
-        str(name)
-        for name, payload in tracking.items()
-        if isinstance(payload, dict) and payload
+        str(name) for name, payload in tracking.items() if isinstance(payload, dict) and payload
     )
 
 
@@ -144,9 +141,7 @@ def _artifact_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
         extra=extra,
     )
     if future_override_schema is not None:
-        summary["future_override_schema"] = _normalize_artifact_info_value(
-            future_override_schema
-        )
+        summary["future_override_schema"] = _normalize_artifact_info_value(future_override_schema)
     if tracking:
         summary["tracking"] = tracking
         summary["tracking_backends"] = _artifact_tracking_backends(tracking)
@@ -536,7 +531,9 @@ def _build_forecast_long_frames(
     time_col: str,
     y_col: str,
     id_cols: tuple[str, ...],
-) -> tuple[Any, pd.DataFrame, pd.DataFrame | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+) -> tuple[
+    Any, pd.DataFrame, pd.DataFrame | None, tuple[str, ...], tuple[str, ...], tuple[str, ...]
+]:
     df = _load_csv_frame(path, parse_dates=parse_dates, time_col=time_col)
     model_spec = _model_execution.get_model_spec(model_key)
     historic_x_cols, future_x_cols, static_cols = _resolve_forecast_covariates(params)
@@ -998,7 +995,9 @@ def _load_global_artifact_future_override(
             if col in future_raw.columns:
                 future[col] = future_raw[col]
     else:
-        observed_unique_ids = pd.Index(observed_history["unique_id"].dropna().astype("string").unique())
+        observed_unique_ids = pd.Index(
+            observed_history["unique_id"].dropna().astype("string").unique()
+        )
         raw_id_present = [col for col in id_cols if col in future_raw.columns]
         if len(observed_unique_ids) == 1 and not raw_id_present:
             required = [str(time_col), *list(x_cols)]
@@ -1039,9 +1038,7 @@ def _load_global_artifact_future_override(
             future_for_long = future_raw.copy()
             while temp_y_col in future_for_long.columns:
                 temp_y_col = f"_{temp_y_col}"
-            future_for_long[temp_y_col] = (
-                future_raw["y"] if "y" in future_raw.columns else np.nan
-            )
+            future_for_long[temp_y_col] = future_raw["y"] if "y" in future_raw.columns else np.nan
             future = _build_long_frame(
                 future_for_long,
                 time_col=str(time_col),
