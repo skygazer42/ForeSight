@@ -120,18 +120,24 @@ The Python API and CLI have different output contracts:
 | --- | --- | --- |
 | `__version__` | `foresight.__init__` | Installed ForeSight package version. |
 
+## Notable data contracts
+
+- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).
+- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion.
+- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history.
+- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied.
+- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={"promo": "sum", "temp": "mean"}` for bottom-up exogenous aggregation.
+
 ## Beta modules
 
-These modules are intentionally documented as beta integration / composition
-surfaces and are not part of the stable root-package `__all__` contract:
+These modules are intentionally documented as beta integration / composition surfaces and are not part of the stable root-package `__all__` contract:
 
 ### `foresight.pipeline`
 
 - `make_pipeline_object(...)`
 - `make_ensemble_object(...)`
 
-These build local object-level composition wrappers that can still participate
-in the standard forecaster artifact workflow.
+These build local object-level composition wrappers that can still participate in the standard forecaster artifact workflow.
 
 ### `foresight.adapters`
 
@@ -140,16 +146,7 @@ in the standard forecaster artifact workflow.
 - `from_darts_timeseries(...)`
 - `to_gluonts_list_dataset(...)`
 
-These provide interoperability bridges for platform workflows without promoting
-those adapters into the stable root-package surface.
-
-## Notable data contracts
-
-- `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).
-- `prepare_long_df(...)` supports separate `historic_x_missing` / `future_x_missing` policies after role-aware conversion.
-- `forecast_model_long_df(...)` accepts `future_df=...` so known-future covariates can arrive in a separate dataframe from observed history.
-- Lag-based regression models accept either contiguous `lags=n` or explicit `target_lags=(1, 7, 14)`; the sklearn `*-step-lag-global` family also supports `historic_x_lags` / `future_x_lags` when `x_cols` are supplied.
-- `reconcile_hierarchical_forecasts(...)` supports `exog_agg={"promo": "sum", "temp": "mean"}` for bottom-up exogenous aggregation.
+These provide interoperability bridges for platform workflows without promoting those adapters into the stable root-package surface.
 
 ## Root package export list
 

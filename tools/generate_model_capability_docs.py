@@ -534,6 +534,36 @@ def _render_api_doc() -> str:
     )
     lines.append("")
 
+    lines.append("## Beta modules")
+    lines.append("")
+    lines.append(
+        "These modules are intentionally documented as beta integration / composition "
+        "surfaces and are not part of the stable root-package `__all__` contract:"
+    )
+    lines.append("")
+    lines.append("### `foresight.pipeline`")
+    lines.append("")
+    lines.append("- `make_pipeline_object(...)`")
+    lines.append("- `make_ensemble_object(...)`")
+    lines.append("")
+    lines.append(
+        "These build local object-level composition wrappers that can still participate "
+        "in the standard forecaster artifact workflow."
+    )
+    lines.append("")
+    lines.append("### `foresight.adapters`")
+    lines.append("")
+    lines.append("- `make_sktime_forecaster_adapter(...)`")
+    lines.append("- `to_darts_timeseries(...)`")
+    lines.append("- `from_darts_timeseries(...)`")
+    lines.append("- `to_gluonts_list_dataset(...)`")
+    lines.append("")
+    lines.append(
+        "These provide interoperability bridges for platform workflows without promoting "
+        "those adapters into the stable root-package surface."
+    )
+    lines.append("")
+
     lines.append("## Root package export list")
     lines.append("")
     for name in exports:
