@@ -1,25 +1,124 @@
 site_name: ForeSight
-site_description: Stable public docs for the ForeSight time-series forecasting package.
+site_description: ForeSight — 轻量级、功能齐全的 Python 时间序列预测工具包
 site_url: https://skygazer42.github.io/ForeSight/
 repo_url: https://github.com/skygazer42/ForeSight
 repo_name: skygazer42/ForeSight
+
 theme:
-  name: mkdocs
+  name: material
+  language: zh
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到暗色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到亮色模式
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Noto Sans SC
+    code: JetBrains Mono
+  custom_dir: docs/overrides
+
+extra_css:
+  - assets/css/custom.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/skygazer42/ForeSight
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/foresight-ts/
+
 nav:
-  - Home: index.md
-  - Models: models.md
-  - API: api.md
-  - Adapters: adapters.md
-  - Compatibility: compatibility.md
-  - Choosing Models: model-selection.md
-  - Install: INSTALL.md
-  - CLI Logging: cli-logging.md
-  - Source Entrypoints: SOURCE_ENTRYPOINTS.md
-  - Development: DEVELOPMENT.md
-  - Release: RELEASE.md
+  - 首页: index.md
+  - 快速开始:
+    - getting-started/index.md
+    - 安装指南: getting-started/installation.md
+    - 5 分钟上手: getting-started/quickstart.md
+  - 使用指南:
+    - guide/index.md
+    - 数据格式: guide/data-format.md
+    - 预测工作流: guide/forecasting.md
+    - 评估与回测: guide/evaluation.md
+    - 模型选择: guide/models.md
+    - 概率预测: guide/intervals.md
+    - 全局模型: guide/global-models.md
+    - 异常检测: guide/anomaly-detection.md
+    - 模型工件: guide/artifacts.md
+    - 调优与层级预测: guide/tuning.md
+  - CLI 参考: cli/index.md
+  - API 参考: api-reference/index.md
+  - 进阶主题:
+    - 层级预测: advanced/hierarchical.md
+    - 多变量预测: advanced/multivariate.md
+    - 数据工程管道: advanced/data-pipeline.md
+  - 模型矩阵: models.md
   - RNN Paper Zoo: rnn_paper_zoo.md
   - RNN Zoo: rnn_zoo.md
+  - 开发者:
+    - 开发指南: DEVELOPMENT.md
+    - 发布流程: RELEASE.md
+    - 兼容性: compatibility.md
+    - Legacy:
+      - 原始首页: legacy-index.md
+      - API Reference (EN): api.md
+      - Install (EN): INSTALL.md
+      - Model Selection (EN): model-selection.md
+      - CLI Logging (EN): cli-logging.md
+      - Artifacts (EN): artifacts.md
+      - Source Entrypoints: SOURCE_ENTRYPOINTS.md
+  - FAQ: faq.md
+  - 更新日志: changelog.md
+
 markdown_extensions:
   - tables
   - toc:
       permalink: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.mark
+  - pymdownx.critic
+  - pymdownx.keys
+  - attr_list
+  - md_in_html
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg

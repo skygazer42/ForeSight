@@ -1,0 +1,53 @@
+/* ForeSight 文档自定义样式 */
+
+/* 首页 hero 区域 */
+.md-typeset .hero-section {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Grid cards 样式增强 */
+.md-typeset .grid.cards > ul > li {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 首页导航卡片 */
+.md-typeset .nav-cards .grid.cards > ul > li {
+  min-height: 8rem;
+}
+
+/* FAQ 折叠面板样式 */
+.md-typeset details.faq-item {
+  margin-bottom: 0.5rem;
+}
+
+/* API 参考表格 */
+.md-typeset .api-table table {
+  font-size: 0.85rem;
+}
+
+.md-typeset .api-table table th {
+  white-space: nowrap;
+}
+
+/* 参数表格紧凑样式 */
+.md-typeset .param-table table td:first-child {
+  white-space: nowrap;
+  font-family: var(--md-code-font-family);
+  font-size: 0.85em;
+}
+
+/* CLI 命令块 */
+.md-typeset .cli-command {
+  background: var(--md-code-bg-color);
+  border-radius: 0.4rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
