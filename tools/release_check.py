@@ -28,6 +28,7 @@ def _quality_commands() -> list[list[str]]:
         ["ruff", "check", "src", "tests", "tools", "benchmarks"],
         ["ruff", "format", "--check", "src", "tests", "tools", "benchmarks"],
         [sys.executable, "-m", "mypy", "--no-incremental", "--cache-dir=/dev/null"],
+        [sys.executable, "-m", "pytest", "-q", "tests/test_public_contract.py"],
         [sys.executable, "-m", "pytest", "-q"],
         [sys.executable, "benchmarks/run_benchmarks.py", "--smoke"],
         [sys.executable, "tools/smoke_build_install.py", "--sdist"],

@@ -22,10 +22,19 @@ python tools/generate_rnn_docs.py
 ## 3) Run benchmark smoke + docs build locally
 
 ```bash
+python -m pytest -q tests/test_public_contract.py
 python benchmarks/run_benchmarks.py --smoke
 python tools/smoke_build_install.py --sdist
 mkdocs build --strict
 ```
+
+This contract suite is the release gate for the stable public surface:
+
+- root `foresight` exports
+- `models info` support metadata
+- `doctor` machine-readable payload shape
+- artifact schema compatibility
+- support-policy docs
 
 ## 4) Run release checks
 
@@ -89,6 +98,10 @@ Use `doctor --format text` for a human-readable release sanity check, and use
 `doctor --strict` when you want warnings to fail the release checklist with exit
 code `1`. Use `doctor --require-extra <extra>` when the release target must
 include a specific optional backend.
+
+The release checklist should stay aligned with the CI-backed support matrix in
+`docs/compatibility.md`; do not publish a support claim that is not enforced by
+the contract suite, packaging smoke, and docs build.
 
 ## Optional: GitHub Pages docs publish
 

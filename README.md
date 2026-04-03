@@ -103,6 +103,31 @@ tuning, and a full-featured CLI.
 
 ---
 
+## Support Contract
+
+ForeSight exposes a broad model catalog, but the stable public surface is narrower
+than the full implementation footprint.
+
+- The **stable public surface** is the root `foresight` Python API documented in
+  [docs/api.md](docs/api.md), the model registry metadata surfaced by
+  `foresight models list/info`, the artifact schema/load contract, and the
+  documented core CLI workflows such as `doctor`, `models`, `forecast`, `eval`,
+  `leaderboard`, and `artifact`.
+- Default docs, examples, and release checks target the stable public surface
+  first. Beta and experimental model families remain available, but they are not
+  held to the same compatibility promise as the stable core workflows.
+- The current CI-backed support matrix is:
+  Python 3.10 and 3.11 for the core install and contract checks;
+  Python 3.10 for release packaging and artifact smoke;
+  Python 3.10 smoke coverage for the `stats` and `ml` extras.
+- Torch, transformers, foundation wrappers, and frontier paper-zoo style models
+  remain available, but their maturity level is communicated through
+  `stable`, `beta`, and `experimental` rather than a blanket platform guarantee.
+
+See [Compatibility guide](docs/compatibility.md) for the detailed support policy.
+
+---
+
 ## ⚙️ How It Works
 
 <div align="center">

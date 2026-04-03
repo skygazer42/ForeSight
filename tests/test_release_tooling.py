@@ -101,6 +101,7 @@ def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:
     assert proc.returncode == 0, proc.stderr
     assert "python tools/check_capability_docs.py" in proc.stdout
     assert "python tools/generate_model_capability_docs.py --check" in proc.stdout
+    assert "python -m pytest -q tests/test_public_contract.py" in proc.stdout
     assert "ruff format --check src tests tools benchmarks" in proc.stdout
     assert "python benchmarks/run_benchmarks.py --smoke" in proc.stdout
     assert "python tools/smoke_build_install.py --sdist" in proc.stdout
@@ -199,6 +200,14 @@ def test_ci_quality_workflow_formats_full_source_directories() -> None:
     assert "benchmarks/run_benchmarks.py \\" not in workflow
 
 
+def test_ci_workflow_runs_public_contract_suite() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert 'name: Contract tests' in workflow
+    assert "python -m pytest -q tests/test_public_contract.py" in workflow
+
+
 def test_sonar_project_configuration_targets_maintained_code() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     config = (repo_root / "sonar-project.properties").read_text(encoding="utf-8")
@@ -281,6 +290,7 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
 
     assert "python tools/generate_model_capability_docs.py" in release_doc
     assert "python tools/generate_rnn_docs.py" in release_doc
+    assert "python -m pytest -q tests/test_public_contract.py" in release_doc
     assert "python benchmarks/run_benchmarks.py --smoke" in release_doc
     assert "python tools/smoke_build_install.py --sdist" in release_doc
     assert "foresight doctor" in release_doc
@@ -289,6 +299,26 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "doctor --require-extra torch --strict" in release_doc
     assert "mkdocs build --strict" in release_doc
     assert ".github/workflows/docs.yml" in release_doc
+
+
+def test_compatibility_docs_define_public_surface_and_ci_backed_matrix() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    compatibility = (repo_root / "docs" / "compatibility.md").read_text(encoding="utf-8")
+
+    assert "## Supported Public Surface" in compatibility
+    assert "## CI-Backed Support Matrix" in compatibility
+    assert "## Artifact Compatibility Contract" in compatibility
+    assert "3.10" in compatibility
+    assert "3.11" in compatibility
+
+
+def test_mypy_targets_include_public_model_support_surfaces() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"src/foresight/models/specs.py"' in pyproject
+    assert '"src/foresight/models/resolution.py"' in pyproject
+    assert '"src/foresight/models/registry.py"' in pyproject
 
 
 def test_release_docs_warn_about_version_scoped_uploads() -> None:
