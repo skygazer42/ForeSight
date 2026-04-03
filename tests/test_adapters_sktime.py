@@ -36,6 +36,37 @@ def test_sktime_adapter_uses_fit_time_fh_when_predict_omits_it(
     assert yhat.tolist() == pytest.approx([3.0, 3.0])
 
 
+def test_sktime_adapter_supports_absolute_range_horizon(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter("naive-last")
+    y = pd.Series([1.0, 2.0, 3.0], index=pd.RangeIndex(start=0, stop=3))
+
+    yhat = adapter.fit(y).predict(pd.Index([3, 4]))
+
+    assert yhat.index.tolist() == [3, 4]
+    assert yhat.tolist() == pytest.approx([3.0, 3.0])
+
+
+def test_sktime_adapter_supports_absolute_datetime_horizon(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter("naive-last")
+    y = pd.Series(
+        [1.0, 2.0, 3.0],
+        index=pd.date_range("2024-01-01", periods=3, freq="D"),
+    )
+
+    yhat = adapter.fit(y).predict(pd.DatetimeIndex(["2024-01-04", "2024-01-05"]))
+
+    assert list(yhat.index) == list(pd.DatetimeIndex(["2024-01-04", "2024-01-05"]))
+    assert yhat.tolist() == pytest.approx([3.0, 3.0])
+
+
 def test_sktime_adapter_rejects_exogenous_X_in_v1(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
 

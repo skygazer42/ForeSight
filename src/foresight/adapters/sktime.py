@@ -33,7 +33,62 @@ def _coerce_sktime_series(y: Any) -> tuple[np.ndarray, pd.Index | None]:
     return arr, None
 
 
-def _normalize_sktime_fh(fh: Any) -> tuple[int, ...]:
+def _relative_steps_from_absolute_fh(
+    train_index: pd.Index | None,
+    fh: Any,
+) -> tuple[int, ...]:
+    if train_index is None or len(train_index) == 0:
+        raise ValueError("absolute fh requires a pandas training index in v2")
+
+    if hasattr(fh, "to_pandas"):
+        absolute = fh.to_pandas()
+    elif isinstance(fh, pd.Index):
+        absolute = fh
+    else:
+        absolute = pd.Index(list(fh))
+
+    if absolute.empty:
+        raise ValueError("fh must be a non-empty 1D relative or absolute horizon")
+
+    if isinstance(train_index, pd.RangeIndex):
+        step = int(train_index.step or 1)
+        last = int(train_index[-1])
+        steps: list[int] = []
+        for label in absolute.tolist():
+            delta = int(label) - last
+            if delta <= 0 or delta % step != 0:
+                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+            steps.append(delta // step)
+        return tuple(steps)
+
+    if isinstance(train_index, pd.DatetimeIndex):
+        freq = train_index.freq
+        if freq is None:
+            inferred = train_index.inferred_freq
+            freq = None if inferred is None else pd.tseries.frequencies.to_offset(inferred)
+        if freq is None:
+            raise ValueError("absolute fh requires a regular pandas training index in v2")
+
+        absolute_dt = pd.DatetimeIndex(absolute)
+        last = train_index[-1]
+        steps = []
+        for label in absolute_dt:
+            if label <= last:
+                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+            full = pd.date_range(start=last, end=label, freq=freq)
+            if len(full) < 2 or full[-1] != label:
+                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+            steps.append(len(full) - 1)
+        return tuple(steps)
+
+    raise ValueError("absolute fh requires a RangeIndex or DatetimeIndex in v2")
+
+
+def _normalize_sktime_fh(
+    fh: Any,
+    *,
+    train_index: pd.Index | None = None,
+) -> tuple[int, ...]:
     if fh is None:
         raise ValueError("fh is required")
 
@@ -44,9 +99,10 @@ def _normalize_sktime_fh(fh: Any) -> tuple[int, ...]:
 
     is_relative = getattr(fh, "is_relative", None)
     if is_relative is False:
-        raise ValueError(
-            "SktimeForecasterAdapter only supports relative forecasting horizons in v1"
-        )
+        return _relative_steps_from_absolute_fh(train_index, fh)
+
+    if train_index is not None and isinstance(fh, pd.Index):
+        return _relative_steps_from_absolute_fh(train_index, fh)
 
     if hasattr(fh, "to_numpy"):
         raw = np.asarray(fh.to_numpy(), dtype=int)
@@ -123,7 +179,7 @@ class SktimeForecasterAdapter:
 
         self._forecaster = forecaster
         self._train_index = train_index
-        self._fit_fh = None if fh is None else _normalize_sktime_fh(fh)
+        self._fit_fh = None if fh is None else _normalize_sktime_fh(fh, train_index=train_index)
         return self
 
     def predict(self, fh: Any = None, X: Any = None) -> pd.Series:
@@ -132,7 +188,11 @@ class SktimeForecasterAdapter:
         if self._forecaster is None:
             raise RuntimeError("fit must be called before predict")
 
-        fh_steps = self._fit_fh if fh is None else _normalize_sktime_fh(fh)
+        fh_steps = (
+            self._fit_fh
+            if fh is None
+            else _normalize_sktime_fh(fh, train_index=self._train_index)
+        )
         if fh_steps is None:
             raise ValueError("fh is required")
 

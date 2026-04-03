@@ -27,7 +27,8 @@ object or model key behind a minimal `fit(...)` / `predict(...)` bridge.
 Current v1 contract:
 
 - local point forecasters only
-- relative forecasting horizons only
+- relative forecasting horizons
+- absolute horizons when the training series uses a `RangeIndex` or regular `DatetimeIndex`
 - no `X` exogenous support yet
 
 ## Darts
