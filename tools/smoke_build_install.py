@@ -146,6 +146,15 @@ def main(argv: list[str] | None = None) -> int:
                 [
                     str(py),
                     "-c",
+                    "import foresight.pipeline as pipeline; print(sorted(pipeline.__all__)[:3])",
+                ],
+                cwd=root,
+                env=env,
+            )
+            _run(
+                [
+                    str(py),
+                    "-c",
                     "import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])",
                 ],
                 cwd=root,

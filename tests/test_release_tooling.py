@@ -366,6 +366,7 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     assert "--dist-dir" in script
     assert '"import foresight; print(foresight.__version__)"' in script
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
+    assert '"import foresight.pipeline as pipeline; print(sorted(pipeline.__all__)[:3])"' in script
     assert '"import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script

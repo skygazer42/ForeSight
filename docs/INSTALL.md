@@ -30,6 +30,15 @@ pip install "foresight-ts[stats]"
 # Torch models (including the RNN Paper Zoo / RNN Zoo)
 pip install "foresight-ts[torch]"
 
+# sktime adapter bridge
+pip install "foresight-ts[sktime]"
+
+# Darts data adapter bridge
+pip install "foresight-ts[darts]"
+
+# GluonTS data adapter bridge
+pip install "foresight-ts[gluonts]"
+
 # Everything above
 pip install "foresight-ts[all]"
 ```
@@ -83,6 +92,24 @@ from foresight import (
     tune_model,
 )
 ```
+
+## Beta composition and adapter modules
+
+The stable root package keeps its public surface intentionally narrow. Beta
+platform-style helpers live in named modules:
+
+```python
+from foresight.pipeline import make_ensemble_object, make_pipeline_object
+from foresight.adapters import (
+    make_sktime_forecaster_adapter,
+    to_darts_timeseries,
+    from_darts_timeseries,
+    to_gluonts_list_dataset,
+)
+```
+
+- `foresight.pipeline` exposes local object composition helpers.
+- `foresight.adapters` exposes sktime / Darts / GluonTS bridge functions.
 
 ## Datasets
 

@@ -120,6 +120,29 @@ The Python API and CLI have different output contracts:
 | --- | --- | --- |
 | `__version__` | `foresight.__init__` | Installed ForeSight package version. |
 
+## Beta modules
+
+These modules are intentionally documented as beta integration / composition
+surfaces and are not part of the stable root-package `__all__` contract:
+
+### `foresight.pipeline`
+
+- `make_pipeline_object(...)`
+- `make_ensemble_object(...)`
+
+These build local object-level composition wrappers that can still participate
+in the standard forecaster artifact workflow.
+
+### `foresight.adapters`
+
+- `make_sktime_forecaster_adapter(...)`
+- `to_darts_timeseries(...)`
+- `from_darts_timeseries(...)`
+- `to_gluonts_list_dataset(...)`
+
+These provide interoperability bridges for platform workflows without promoting
+those adapters into the stable root-package surface.
+
 ## Notable data contracts
 
 - `to_long(...)` accepts `historic_x_cols`, `future_x_cols`, and legacy `x_cols` (aliasing future covariates).

@@ -160,12 +160,22 @@ def test_artifact_contract_preserves_current_and_legacy_schema_versions(tmp_path
 def test_support_contract_docs_define_public_surface_and_ci_matrix() -> None:
     repo_root = _repo_root()
     compatibility = (repo_root / "docs" / "compatibility.md").read_text(encoding="utf-8")
+    install = (repo_root / "docs" / "INSTALL.md").read_text(encoding="utf-8")
+    api_doc = (repo_root / "docs" / "api.md").read_text(encoding="utf-8")
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "## Supported Public Surface" in compatibility
     assert "## CI-Backed Support Matrix" in compatibility
     assert "## Artifact Compatibility Contract" in compatibility
     assert "beta integration adapters" in compatibility.lower()
+    assert 'pip install "foresight-ts[sktime]"' in install
+    assert 'pip install "foresight-ts[darts]"' in install
+    assert 'pip install "foresight-ts[gluonts]"' in install
+    assert "foresight.adapters" in install
+    assert "foresight.pipeline" in api_doc
+    assert "make_pipeline_object" in api_doc
+    assert "make_ensemble_object" in api_doc
+    assert "make_sktime_forecaster_adapter" in api_doc
     assert "## Support Contract" in readme
     assert "stable public surface" in readme.lower()
     assert "## Beta Adapters" in readme
