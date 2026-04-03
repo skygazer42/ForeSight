@@ -76,18 +76,18 @@ def test_docs_site_navigation_includes_generated_pages() -> None:
 
     assert "site_name: ForeSight" in mkdocs
     assert "site_url: https://skygazer42.github.io/ForeSight/" in mkdocs
-    assert "Home: index.md" in mkdocs
-    assert "Models: models.md" in mkdocs
-    assert "API: api.md" in mkdocs
-    assert "Adapters: adapters.md" in mkdocs
-    assert "Compatibility: compatibility.md" in mkdocs
-    assert "Choosing Models: model-selection.md" in mkdocs
+    assert "首页: index.md" in mkdocs
+    assert "CLI 参考: cli/index.md" in mkdocs
+    assert "API 参考: api-reference/index.md" in mkdocs
+    assert "RNN Paper Zoo: rnn_paper_zoo.md" in mkdocs
+    assert "RNN Zoo: rnn_zoo.md" in mkdocs
+    assert "兼容性: compatibility.md" in mkdocs
 
-    assert "[Adapters guide](adapters.md)" in index_doc
-    assert "[Model capability matrix](models.md)" in index_doc
-    assert "[Python API reference](api.md)" in index_doc
-    assert "[Compatibility guide](compatibility.md)" in index_doc
-    assert "[How to choose a model](model-selection.md)" in index_doc
+    assert "[快速开始](getting-started/index.md)" in index_doc
+    assert "[使用指南](guide/index.md)" in index_doc
+    assert "[CLI 参考](cli/index.md)" in index_doc
+    assert "[API 参考](api-reference/index.md)" in index_doc
+    assert "[Artifact workflow](artifacts.md)" in index_doc
     assert "foresight.adapters" in adapters_doc
     assert "make_sktime_forecaster_adapter" in adapters_doc
     assert "to_darts_timeseries" in adapters_doc

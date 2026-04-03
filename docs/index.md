@@ -121,6 +121,28 @@ hide:
 
 ---
 
+## Artifact Workflow
+
+需要快速检查模型工件时，可以直接跳到 [Artifact workflow](artifacts.md) 查看完整
+save / load / inspect / diff 说明；中文使用说明仍然保留在
+[模型工件](guide/artifacts.md)。
+
+```bash
+foresight artifact info --artifact /tmp/naive-last.pkl
+foresight artifact info --artifact /tmp/naive-last.pkl --format markdown
+foresight artifact validate --artifact /tmp/naive-last.pkl
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix tracking_summary --format csv
+foresight artifact diff \
+    --left-artifact /tmp/naive-last.pkl \
+    --right-artifact /tmp/naive-last-v2.pkl \
+    --path-prefix future_override_schema --format markdown
+```
+
+---
+
 ## 工作流程
 
 ```mermaid
@@ -141,6 +163,7 @@ graph LR
 |------|------|
 | [快速开始](getting-started/index.md) | 安装、环境验证、5 分钟上手 |
 | [使用指南](guide/index.md) | 数据格式、预测、评估、模型选择、概率预测、异常检测等 |
+| [Artifact workflow](artifacts.md) | 英文版 artifact save / load / inspect / diff 工作流 |
 | [CLI 参考](cli/index.md) | 所有 CLI 子命令的完整参数和示例 |
 | [API 参考](api-reference/index.md) | Python API 完整签名、参数说明、示例 |
 | [进阶主题](advanced/hierarchical.md) | 层级预测、多变量预测、数据工程管道 |

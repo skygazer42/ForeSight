@@ -343,6 +343,13 @@ def test_mypy_targets_include_public_model_support_surfaces() -> None:
     assert '"src/foresight/models/registry.py"' in pyproject
 
 
+def test_dev_dependencies_include_mkdocs_material_for_docs_site() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"mkdocs-material' in pyproject
+
+
 def test_release_docs_warn_about_version_scoped_uploads() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     release_doc = (repo_root / "docs" / "RELEASE.md").read_text(encoding="utf-8")
