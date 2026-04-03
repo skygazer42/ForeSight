@@ -722,6 +722,17 @@ def test_spectral_source_extracts_fft_helpers() -> None:
     assert _function_uses_name(path, "fft_topk_forecast", "_harmonic_regression_design_matrix")
 
 
+def test_ar_source_extracts_contiguous_lag_helpers() -> None:
+    path = "src/foresight/models/ar.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_ar_ols_input(" in source
+    assert "def _ar_ols_design_matrix(" in source
+    assert _function_uses_name(path, "ar_ols_forecast", "_validated_ar_ols_input")
+    assert _function_uses_name(path, "ar_ols_forecast", "_ar_ols_design_matrix")
+    assert _function_uses_name(path, "select_ar_order_aic", "_ar_ols_design_matrix")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 

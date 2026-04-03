@@ -23,26 +23,48 @@ def _raise_unexpected_kwargs(function_name: str, kwargs: dict[str, Any]) -> None
         raise TypeError(f"{function_name}() got unexpected keyword arguments: {sorted(kwargs)}")
 
 
+def _validated_ar_ols_input(
+    train: Any,
+    *,
+    horizon: int,
+    p: int,
+    subject: str,
+) -> tuple[np.ndarray, int, int]:
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    order = int(p)
+    if order <= 0:
+        raise ValueError("p must be >= 1")
+    if x.size <= order:
+        raise ValueError(f"{subject} requires > p points (p={order}), got {x.size}")
+    return x, h, order
+
+
+def _ar_ols_design_matrix(x: np.ndarray, *, p: int) -> tuple[np.ndarray, np.ndarray]:
+    n = int(x.size)
+    order = int(p)
+    y = x[order:]
+    rows = n - order
+    X = np.ones((rows, order + 1), dtype=float)
+    for i in range(1, order + 1):
+        X[:, i] = x[order - i : n - i]
+    return X, np.asarray(y, dtype=float)
+
+
 def ar_ols_forecast(train: Any, horizon: int, *, p: int) -> np.ndarray:
     """
     Autoregression AR(p) fit by OLS, forecast recursively.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if p <= 0:
-        raise ValueError("p must be >= 1")
-    if x.size <= p:
-        raise ValueError(f"ar_ols_forecast requires > p points (p={p}), got {x.size}")
+    x, h, order = _validated_ar_ols_input(
+        train,
+        horizon=horizon,
+        p=p,
+        subject="ar_ols_forecast",
+    )
 
-    n = int(x.size)
-    y = x[p:]
-    rows = n - p
-
-    # Design: [1, y_{t-1}, ..., y_{t-p}]
-    X = np.ones((rows, p + 1), dtype=float)
-    for i in range(1, p + 1):
-        X[:, i] = x[p - i : n - i]
+    X, y = _ar_ols_design_matrix(x, p=order)
 
     coef, *_ = np.linalg.lstsq(X, y, rcond=None)
     intercept = float(coef[0])
@@ -50,8 +72,8 @@ def ar_ols_forecast(train: Any, horizon: int, *, p: int) -> np.ndarray:
 
     history = x.astype(float, copy=True).tolist()
     out: list[float] = []
-    for _h in range(horizon):
-        lags = np.array(history[-p:][::-1], dtype=float)  # most recent first
+    for _step in range(h):
+        lags = np.array(history[-order:][::-1], dtype=float)  # most recent first
         yhat = intercept + float(np.dot(ar, lags))
         out.append(float(yhat))
         history.append(float(yhat))
@@ -179,12 +201,8 @@ def select_ar_order_aic(train: Any, *, max_p: int = 10) -> int:
         if x.size <= p + 1:
             continue
 
-        n = int(x.size)
-        y = x[p:]
-        rows = n - p
-        X = np.ones((rows, p + 1), dtype=float)
-        for i in range(1, p + 1):
-            X[:, i] = x[p - i : n - i]
+        X, y = _ar_ols_design_matrix(x, p=p)
+        rows = int(X.shape[0])
 
         coef, *_ = np.linalg.lstsq(X, y, rcond=None)
         resid = y - X @ coef
