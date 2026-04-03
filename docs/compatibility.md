@@ -5,6 +5,7 @@
 - Python: `>=3.10`
 - Core install: `numpy` + `pandas`
 - Optional extras: `ml`, `xgb`, `lgbm`, `catboost`, `stats`, `torch`, `transformers`
+- Integration extras: `sktime`
 - Default expectation: CPU-only workflows must remain usable without any heavy optional backend installed
 
 ## Supported Public Surface
@@ -51,6 +52,7 @@ pip install "foresight-ts[all]"
 - Choose `stats` for ARIMA / ETS / SARIMAX-style workflows.
 - Choose `ml` for sklearn-style lag models.
 - Choose `torch` for neural local/global/multivariate models.
+- Choose `sktime` when you want the sktime adapter bridge on top of local point forecasters.
 - Choose `all` only when you need the full mixed stack.
 
 ## Stability Levels

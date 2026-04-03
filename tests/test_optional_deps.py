@@ -73,6 +73,13 @@ def test_extra_status_exposes_install_commands() -> None:
     assert status["editable_install_command"] == 'pip install -e ".[torch]"'
 
 
+def test_sktime_extra_status_exposes_install_commands() -> None:
+    status = optional_deps.get_extra_status("sktime").as_dict()
+
+    assert status["package_install_command"] == 'pip install "foresight-ts[sktime]"'
+    assert status["editable_install_command"] == 'pip install -e ".[sktime]"'
+
+
 def test_missing_dependency_message_includes_package_and_editable_commands() -> None:
     msg = optional_deps.missing_dependency_message("ml", subject="ridge_lag_forecast")
 

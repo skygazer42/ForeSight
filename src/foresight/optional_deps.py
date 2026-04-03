@@ -10,6 +10,7 @@ _ALIAS_TO_IMPORT_NAME = {
     "lgbm": "lightgbm",
     "lightgbm": "lightgbm",
     "ml": "sklearn",
+    "sktime": "sktime",
     "sklearn": "sklearn",
     "stats": "statsmodels",
     "statsmodels": "statsmodels",
@@ -28,7 +29,8 @@ _EXTRA_REQUIREMENTS = {
     "stats": ("stats",),
     "torch": ("torch",),
     "transformers": ("transformers", "torch"),
-    "all": ("ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers"),
+    "sktime": ("sktime",),
+    "all": ("ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "sktime"),
 }
 
 _PREFERRED_EXTRA_FOR_DEPENDENCY = {
@@ -36,6 +38,7 @@ _PREFERRED_EXTRA_FOR_DEPENDENCY = {
     "lgbm": "lgbm",
     "lightgbm": "lgbm",
     "ml": "ml",
+    "sktime": "sktime",
     "sklearn": "ml",
     "stats": "stats",
     "statsmodels": "stats",
@@ -50,6 +53,7 @@ _DEPENDENCY_DISPLAY_NAME = {
     "lgbm": "lightgbm",
     "lightgbm": "lightgbm",
     "ml": "scikit-learn",
+    "sktime": "sktime",
     "sklearn": "scikit-learn",
     "stats": "statsmodels",
     "statsmodels": "statsmodels",

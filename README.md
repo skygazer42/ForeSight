@@ -171,6 +171,7 @@ pip install "foresight-ts[lgbm]"        # LightGBM models
 pip install "foresight-ts[catboost]"    # CatBoost models
 pip install "foresight-ts[stats]"       # statsmodels (ARIMA, ETS, VAR, …)
 pip install "foresight-ts[torch]"       # PyTorch neural models
+pip install "foresight-ts[sktime]"      # sktime adapter bridge
 pip install "foresight-ts[all]"         # everything above
 ```
 
