@@ -59,3 +59,29 @@ def test_ensemble_object_can_include_built_ensemble_member() -> None:
     yhat = top.fit(y).predict(1)
 
     assert yhat.tolist() == pytest.approx([57.25])
+
+
+def test_ensemble_object_mean_supports_weights() -> None:
+    y = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+
+    forecaster = make_ensemble_object(
+        members=("mean", "naive-last"),
+        agg="mean",
+        weights=(1.0, 3.0),
+    )
+    yhat = forecaster.fit(y).predict(1)
+
+    assert yhat.tolist() == pytest.approx([3.625])
+
+
+def test_ensemble_object_accepts_named_members_and_exposes_names_in_schema() -> None:
+    y = np.array([1.0, 2.0, 3.0, 4.0], dtype=float)
+
+    forecaster = make_ensemble_object(
+        members={"baseline": "mean", "recent": "naive-last"},
+        agg="mean",
+    ).fit(y)
+    summary = forecaster.train_schema_summary()
+
+    assert summary["composition"]["members"] == ["mean", "naive-last"]
+    assert summary["composition"]["member_names"] == ["baseline", "recent"]

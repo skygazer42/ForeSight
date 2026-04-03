@@ -11845,10 +11845,15 @@ def _normalize_members(members: Any) -> tuple[str, ...]:
 
 
 def _factory_ensemble_mean(
-    *, members: Any = ("naive-last", "seasonal-naive", "theta"), **_p: Any
+    *,
+    members: Any = ("naive-last", "seasonal-naive", "theta"),
+    weights: Any = None,
+    **_p: Any,
 ) -> ForecasterFn:
     def _f(train: Any, horizon: int) -> np.ndarray:
-        return make_ensemble_object(members=members, agg="mean").fit(train).predict(int(horizon))
+        return make_ensemble_object(members=members, agg="mean", weights=weights).fit(train).predict(
+            int(horizon)
+        )
 
     return _f
 

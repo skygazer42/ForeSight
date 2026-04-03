@@ -45,6 +45,13 @@ def _local_forecaster_from_spec(
 def _normalize_member_specs(members: Any) -> tuple[str | BaseForecaster, ...]:
     if members is None:
         raise ValueError("members must be provided")
+    if isinstance(members, dict):
+        parts: list[str | BaseForecaster] = [
+            member for member in members.values() if str(member).strip()
+        ]
+        if not parts:
+            raise ValueError("members must be non-empty")
+        return tuple(parts)
     if isinstance(members, str):
         string_parts = [part.strip() for part in members.split(",") if part.strip()]
         if not string_parts:
@@ -58,6 +65,54 @@ def _normalize_member_specs(members: Any) -> tuple[str | BaseForecaster, ...]:
     if not str(members).strip():
         raise ValueError("members must be non-empty")
     return (members,)
+
+
+def _normalize_member_names(
+    members: Any,
+    *,
+    member_specs: tuple[str | BaseForecaster, ...],
+) -> tuple[str, ...]:
+    if isinstance(members, dict):
+        names = tuple(str(name).strip() for name in members.keys())
+        if any(not name for name in names):
+            raise ValueError("member names must be non-empty")
+        return names
+
+    return tuple(
+        member.model_key if isinstance(member, BaseForecaster) else str(member).strip()
+        for member in member_specs
+    )
+
+
+def _normalize_ensemble_weights(
+    weights: Any,
+    *,
+    member_names: tuple[str, ...],
+    agg: str,
+) -> tuple[float, ...] | None:
+    if weights is None:
+        return None
+    if agg != "mean":
+        raise ValueError("weights are only supported when agg='mean'")
+
+    if isinstance(weights, dict):
+        expected = set(member_names)
+        actual = {str(name).strip() for name in weights}
+        if actual != expected:
+            raise ValueError("weights dict keys must match member names exactly")
+        values = [float(weights[name]) for name in member_names]
+    elif isinstance(weights, list | tuple):
+        values = [float(value) for value in weights]
+    else:
+        values = [float(weights)]
+
+    if len(values) != len(member_names):
+        raise ValueError("weights must have the same length as members")
+    if any(value < 0.0 for value in values):
+        raise ValueError("weights must be non-negative")
+    if float(sum(values)) <= 0.0:
+        raise ValueError("weights must sum to > 0")
+    return tuple(values)
 
 
 class PipelineLocalForecaster(BaseForecaster):
@@ -135,11 +190,18 @@ class EnsembleLocalForecaster(BaseForecaster):
         *,
         members: Any,
         agg: str = "mean",
+        weights: Any = None,
     ) -> None:
         member_specs = _normalize_member_specs(members)
         agg_key = str(agg).strip().lower()
         if agg_key not in {"mean", "median"}:
             raise ValueError("agg must be one of: mean, median")
+        member_names = _normalize_member_names(members, member_specs=member_specs)
+        normalized_weights = _normalize_ensemble_weights(
+            weights,
+            member_names=member_names,
+            agg=agg_key,
+        )
 
         member_keys = [
             member.model_key if isinstance(member, BaseForecaster) else str(member).strip()
@@ -157,12 +219,19 @@ class EnsembleLocalForecaster(BaseForecaster):
             raise ValueError("ensemble-median cannot include itself")
 
         self._member_specs = member_specs
+        self._member_names = member_names
         self._member_forecasters: list[BaseForecaster] = []
         self._agg = agg_key
+        self._weights = normalized_weights
         self._train_y: np.ndarray | None = None
         super().__init__(
             model_key=f"ensemble-{agg_key}",
-            model_params={"members": tuple(member_keys), "agg": agg_key},
+            model_params={
+                "members": tuple(member_keys),
+                "member_names": tuple(member_names),
+                "agg": agg_key,
+                "weights": None if normalized_weights is None else tuple(normalized_weights),
+            },
         )
 
     def fit(self, y: Any) -> EnsembleLocalForecaster:
@@ -184,6 +253,11 @@ class EnsembleLocalForecaster(BaseForecaster):
         ]
         arr = np.stack(preds, axis=0)
         if self._agg == "mean":
+            if self._weights is not None:
+                return np.asarray(
+                    np.average(arr, axis=0, weights=np.asarray(self._weights, dtype=float)),
+                    dtype=float,
+                )
             return np.asarray(np.mean(arr, axis=0), dtype=float)
         return np.asarray(np.median(arr, axis=0), dtype=float)
 
@@ -195,6 +269,8 @@ class EnsembleLocalForecaster(BaseForecaster):
                 "kind": "ensemble",
                 "agg": self._agg,
                 "members": list(self.model_params["members"]),
+                "member_names": list(self._member_names),
+                "weights": None if self._weights is None else list(self._weights),
             },
         }
 
@@ -212,5 +288,6 @@ def make_ensemble_object(
     *,
     members: Any = ("naive-last", "seasonal-naive", "theta"),
     agg: str = "mean",
+    weights: Any = None,
 ) -> EnsembleLocalForecaster:
-    return EnsembleLocalForecaster(members=members, agg=agg)
+    return EnsembleLocalForecaster(members=members, agg=agg, weights=weights)
