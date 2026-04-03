@@ -712,6 +712,16 @@ def test_naive_source_extracts_validation_and_lag_scan_helpers() -> None:
     assert _function_uses_name(path, "seasonal_naive_auto", "_best_seasonal_naive_lag")
 
 
+def test_spectral_source_extracts_fft_helpers() -> None:
+    path = "src/foresight/models/spectral.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_fft_topk_input(" in source
+    assert "def _harmonic_regression_design_matrix(" in source
+    assert _function_uses_name(path, "fft_topk_forecast", "_validated_fft_topk_input")
+    assert _function_uses_name(path, "fft_topk_forecast", "_harmonic_regression_design_matrix")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 

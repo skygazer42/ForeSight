@@ -14,6 +14,24 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _validated_fft_topk_input(
+    train: Any,
+    *,
+    horizon: int,
+    top_k: int,
+) -> tuple[np.ndarray, int, int]:
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    k = int(top_k)
+    if k <= 0:
+        raise ValueError("top_k must be >= 1")
+    if x.size < 4:
+        raise ValueError("fft_topk_forecast requires at least 4 training points")
+    return x, h, k
+
+
 def _fit_linear_trend(x: np.ndarray) -> tuple[float, float]:
     """
     Fit y ~ a + b*t with t = 0..n-1. Returns (a, b).
@@ -23,6 +41,15 @@ def _fit_linear_trend(x: np.ndarray) -> tuple[float, float]:
     X = np.stack([np.ones((n,), dtype=float), t], axis=1)
     coef, *_ = np.linalg.lstsq(X, x, rcond=None)
     return float(coef[0]), float(coef[1])
+
+
+def _harmonic_regression_design_matrix(t: np.ndarray, ws: np.ndarray) -> np.ndarray:
+    tt = np.asarray(t, dtype=float)
+    cols = [np.ones((int(tt.size),), dtype=float)]
+    for w in np.asarray(ws, dtype=float):
+        cols.append(np.sin(float(w) * tt))
+        cols.append(np.cos(float(w) * tt))
+    return np.stack(cols, axis=1)
 
 
 def fft_topk_forecast(
@@ -37,13 +64,7 @@ def fft_topk_forecast(
 
     Roughly inspired by common "FFT forecaster" baselines used in TS libraries.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if top_k <= 0:
-        raise ValueError("top_k must be >= 1")
-    if x.size < 4:
-        raise ValueError("fft_topk_forecast requires at least 4 training points")
+    x, h, k = _validated_fft_topk_input(train, horizon=horizon, top_k=top_k)
 
     n = int(x.size)
     t = np.arange(n, dtype=float)
@@ -62,10 +83,10 @@ def fft_topk_forecast(
         raise ValueError("Unexpected empty FFT result")
     mag[0] = 0.0  # ignore DC component
 
-    k_eff = min(int(top_k), int(np.count_nonzero(mag > 0.0)))
+    k_eff = min(k, int(np.count_nonzero(mag > 0.0)))
     if k_eff <= 0:
         # Residual is (near) constant; fall back to trend-only.
-        tf = np.arange(n, n + int(horizon), dtype=float)
+        tf = np.arange(n, n + h, dtype=float)
         return np.asarray(a0 + b0 * tf, dtype=float)
 
     idx = np.argpartition(mag, -k_eff)[-k_eff:]
@@ -75,19 +96,11 @@ def fft_topk_forecast(
     ws = 2.0 * np.pi * freqs
 
     # Fit sin/cos regression on residuals using the selected frequencies.
-    cols = [np.ones((n,), dtype=float)]
-    for w in ws:
-        cols.append(np.sin(float(w) * t))
-        cols.append(np.cos(float(w) * t))
-    X = np.stack(cols, axis=1)
+    X = _harmonic_regression_design_matrix(t, ws)
     coef, *_ = np.linalg.lstsq(X, resid, rcond=None)
 
-    tf = np.arange(n, n + int(horizon), dtype=float)
-    cols_f = [np.ones((int(horizon),), dtype=float)]
-    for w in ws:
-        cols_f.append(np.sin(float(w) * tf))
-        cols_f.append(np.cos(float(w) * tf))
-    x_future = np.stack(cols_f, axis=1)
+    tf = np.arange(n, n + h, dtype=float)
+    x_future = _harmonic_regression_design_matrix(tf, ws)
     resid_fc = x_future @ coef
 
     trend_fc = a0 + b0 * tf
