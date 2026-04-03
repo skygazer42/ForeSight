@@ -722,6 +722,14 @@ def test_spectral_source_extracts_fft_helpers() -> None:
     assert _function_uses_name(path, "fft_topk_forecast", "_harmonic_regression_design_matrix")
 
 
+def test_specs_source_extracts_base_capability_helper() -> None:
+    path = "src/foresight/models/specs.py"
+    source = _read_repo_file(path)
+
+    assert "def _base_model_capabilities(" in source
+    assert _function_uses_name(path, "capabilities", "_base_model_capabilities")
+
+
 def test_ar_source_extracts_contiguous_lag_helpers() -> None:
     path = "src/foresight/models/ar.py"
     source = _read_repo_file(path)
