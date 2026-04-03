@@ -2812,6 +2812,18 @@ def test_kalman_positive_guard_uses_direct_non_positive_check() -> None:
     assert "if not (vf > 0.0):" not in source
 
 
+def test_kalman_source_extracts_input_and_variance_helpers() -> None:
+    path = "src/foresight/models/kalman.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_kalman_input(" in source
+    assert "def _kalman_base_variance(" in source
+    assert _function_uses_name(path, "kalman_local_level_forecast", "_validated_kalman_input")
+    assert _function_uses_name(path, "kalman_local_level_forecast", "_kalman_base_variance")
+    assert _function_uses_name(path, "kalman_local_linear_trend_forecast", "_validated_kalman_input")
+    assert _function_uses_name(path, "kalman_local_linear_trend_forecast", "_kalman_base_variance")
+
+
 def test_m4_summary_avoids_float_equality_guards() -> None:
     source = _read_repo_file("transformer time series/Time-Series/utils/m4_summary.py")
 

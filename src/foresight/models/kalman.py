@@ -21,6 +21,27 @@ def _require_positive(name: str, v: float) -> float:
     return vf
 
 
+def _validated_kalman_input(
+    train: Any,
+    *,
+    horizon: int,
+    subject: str,
+    min_train_size: int,
+) -> tuple[np.ndarray, int]:
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    if x.size < int(min_train_size):
+        raise ValueError(f"{subject} requires at least {int(min_train_size)} training points")
+    return x, h
+
+
+def _kalman_base_variance(x: np.ndarray) -> float:
+    base = float(np.var(np.diff(x))) if x.size >= 2 else float(np.var(x))
+    return base if base > 0.0 else 1e-6
+
+
 def kalman_local_level_forecast(
     train: Any,
     horizon: int,
@@ -37,14 +58,14 @@ def kalman_local_level_forecast(
 
     Returns the mean forecast (point predictions).
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if x.size == 0:
-        raise ValueError("kalman_local_level_forecast requires at least 1 training point")
+    x, h = _validated_kalman_input(
+        train,
+        horizon=horizon,
+        subject="kalman_local_level_forecast",
+        min_train_size=1,
+    )
 
-    base = float(np.var(np.diff(x))) if x.size >= 2 else float(np.var(x))
-    base = base if base > 0.0 else 1e-6
+    base = _kalman_base_variance(x)
     q = _require_positive(
         "process_variance", base * 0.01 if process_variance is None else process_variance
     )
@@ -64,7 +85,7 @@ def kalman_local_level_forecast(
         level = level_pred + K * (float(y) - level_pred)
         P = (1.0 - K) * p_pred
 
-    return np.full((int(horizon),), float(level), dtype=float)
+    return np.full((h,), float(level), dtype=float)
 
 
 def kalman_local_linear_trend_forecast(
@@ -88,14 +109,14 @@ def kalman_local_linear_trend_forecast(
     Observation:
       y_t = level_t + eps_t, eps_t ~ N(0, r)
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if x.size < 2:
-        raise ValueError("kalman_local_linear_trend_forecast requires at least 2 training points")
+    x, h = _validated_kalman_input(
+        train,
+        horizon=horizon,
+        subject="kalman_local_linear_trend_forecast",
+        min_train_size=2,
+    )
 
-    base = float(np.var(np.diff(x))) if x.size >= 2 else float(np.var(x))
-    base = base if base > 0.0 else 1e-6
+    base = _kalman_base_variance(x)
 
     q_level = _require_positive(
         "level_variance", base * 0.01 if level_variance is None else level_variance
@@ -133,5 +154,5 @@ def kalman_local_linear_trend_forecast(
         level = float(state_upd[0])
         trend = float(state_upd[1])
 
-    steps = np.arange(1, int(horizon) + 1, dtype=float)
+    steps = np.arange(1, h + 1, dtype=float)
     return np.asarray(level + trend * steps, dtype=float)
