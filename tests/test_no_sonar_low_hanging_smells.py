@@ -722,6 +722,16 @@ def test_spectral_source_extracts_fft_helpers() -> None:
     assert _function_uses_name(path, "fft_topk_forecast", "_harmonic_regression_design_matrix")
 
 
+def test_runtime_source_reuses_pipeline_object_layer() -> None:
+    path = "src/foresight/models/runtime.py"
+    source = _read_repo_file(path)
+
+    assert "from ..pipeline import make_ensemble_object, make_pipeline_object" in source
+    assert _function_uses_name(path, "_factory_pipeline", "make_pipeline_object")
+    assert _function_uses_name(path, "_factory_ensemble_mean", "make_ensemble_object")
+    assert _function_uses_name(path, "_factory_ensemble_median", "make_ensemble_object")
+
+
 def test_specs_source_extracts_base_capability_helper() -> None:
     path = "src/foresight/models/specs.py"
     source = _read_repo_file(path)

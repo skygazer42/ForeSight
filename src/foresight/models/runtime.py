@@ -15,6 +15,7 @@ from ..base import (
     BaseGlobalForecaster,
 )
 from ..transforms import fit_transform, inverse_forecast, normalize_transform_list
+from ..pipeline import make_ensemble_object, make_pipeline_object
 from . import specs as _specs
 from .analog import analog_knn_forecast
 from .ar import ar_ols_auto_forecast, ar_ols_forecast, ar_ols_lags_forecast, sar_ols_forecast
@@ -11808,34 +11809,12 @@ def _factory_pipeline(
     transforms: Any = (),
     **base_params: Any,
 ) -> ForecasterFn:
-    base_key = str(base).strip()
-    if base_key == "pipeline":
-        raise ValueError("pipeline base model cannot be 'pipeline'")
-
-    transforms_list = normalize_transform_list(transforms)
-    base_forecaster = make_forecaster(base_key, **base_params)
-
     def _f(train: Any, horizon: int) -> np.ndarray:
-        y = np.asarray(train, dtype=float)
-        if y.ndim != 1:
-            raise ValueError(f"Expected 1D series, got shape {y.shape}")
-
-        states = []
-        yt = y
-        for name in transforms_list:
-            yt, st = fit_transform(str(name), yt)
-            states.append(st)
-
-        yhat_t = np.asarray(base_forecaster(yt, int(horizon)), dtype=float)
-        if yhat_t.shape != (int(horizon),):
-            raise ValueError(
-                f"base forecaster must return shape ({int(horizon)},), got {yhat_t.shape}"
-            )
-
-        yhat = yhat_t
-        for st in reversed(states):
-            yhat = inverse_forecast(st, yhat)
-        return np.asarray(yhat, dtype=float)
+        return make_pipeline_object(
+            base=str(base),
+            transforms=transforms,
+            **base_params,
+        ).fit(train).predict(int(horizon))
 
     return _f
 
@@ -11864,18 +11843,8 @@ def _normalize_members(members: Any) -> tuple[str, ...]:
 def _factory_ensemble_mean(
     *, members: Any = ("naive-last", "seasonal-naive", "theta"), **_p: Any
 ) -> ForecasterFn:
-    member_keys = _normalize_members(members)
-    if not member_keys:
-        raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
-    if any(k == "ensemble-mean" for k in member_keys):
-        raise ValueError("ensemble-mean cannot include itself")
-
-    member_forecasters = [make_forecaster(k) for k in member_keys]
-
     def _f(train: Any, horizon: int) -> np.ndarray:
-        preds = [np.asarray(m(train, horizon), dtype=float) for m in member_forecasters]
-        arr = np.stack(preds, axis=0)
-        return np.mean(arr, axis=0)
+        return make_ensemble_object(members=members, agg="mean").fit(train).predict(int(horizon))
 
     return _f
 
@@ -11883,18 +11852,10 @@ def _factory_ensemble_mean(
 def _factory_ensemble_median(
     *, members: Any = ("naive-last", "seasonal-naive", "theta"), **_p: Any
 ) -> ForecasterFn:
-    member_keys = _normalize_members(members)
-    if not member_keys:
-        raise ValueError(_MEMBERS_NON_EMPTY_ERROR)
-    if any(k == "ensemble-median" for k in member_keys):
-        raise ValueError("ensemble-median cannot include itself")
-
-    member_forecasters = [make_forecaster(k) for k in member_keys]
-
     def _f(train: Any, horizon: int) -> np.ndarray:
-        preds = [np.asarray(m(train, horizon), dtype=float) for m in member_forecasters]
-        arr = np.stack(preds, axis=0)
-        return np.median(arr, axis=0)
+        return make_ensemble_object(members=members, agg="median").fit(train).predict(
+            int(horizon)
+        )
 
     return _f
 

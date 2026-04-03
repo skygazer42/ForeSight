@@ -321,6 +321,7 @@ def test_mypy_targets_include_public_model_support_surfaces() -> None:
 
     assert '"src/foresight/cli.py"' in pyproject
     assert '"src/foresight/cli_catalog.py"' in pyproject
+    assert '"src/foresight/pipeline.py"' in pyproject
     assert '"src/foresight/models/specs.py"' in pyproject
     assert '"src/foresight/models/resolution.py"' in pyproject
     assert '"src/foresight/models/registry.py"' in pyproject
