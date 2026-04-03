@@ -13,6 +13,7 @@ import pytest
 
 import foresight.services.cli_workflows as workflows_mod
 from foresight.models import make_forecaster_object
+from foresight.pipeline import make_ensemble_object, make_pipeline_object
 from foresight.serialization import save_forecaster
 
 
@@ -51,6 +52,54 @@ def test_cli_artifact_info_reports_local_artifact_metadata(tmp_path: Path) -> No
     assert payload["extra"]["unique_id"] == "series=0"
     assert "RUN start" in proc.stderr
     assert "RUN done" in proc.stderr
+
+
+def test_cli_artifact_info_surfaces_pipeline_composition_summary(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "pipeline.pkl"
+    forecaster = make_pipeline_object(
+        base="naive-last",
+        transforms=("diff1", "standardize"),
+    ).fit([1, 2, 3, 4, 5])
+    save_forecaster(forecaster, artifact_path)
+
+    proc = _run_cli("artifact", "info", "--artifact", str(artifact_path))
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert payload["composition_summary"] == {
+        "kind": "pipeline",
+        "base": "naive-last",
+        "transforms": ["diff1", "standardize"],
+    }
+
+
+def test_cli_artifact_info_surfaces_weighted_ensemble_composition_summary_in_markdown(
+    tmp_path: Path,
+) -> None:
+    artifact_path = tmp_path / "ensemble.pkl"
+    forecaster = make_ensemble_object(
+        members={"baseline": "mean", "recent": "naive-last"},
+        agg="mean",
+        weights={"baseline": 1.0, "recent": 3.0},
+    ).fit([1, 2, 3, 4, 5])
+    save_forecaster(forecaster, artifact_path)
+
+    proc = _run_cli(
+        "artifact",
+        "info",
+        "--artifact",
+        str(artifact_path),
+        "--format",
+        "markdown",
+    )
+
+    assert proc.returncode == 0
+    assert "## Composition" in proc.stdout
+    assert "| kind | ensemble |" in proc.stdout
+    assert "| agg | mean |" in proc.stdout
+    assert '| members | ["mean", "naive-last"] |' in proc.stdout
+    assert '| member_names | ["baseline", "recent"] |' in proc.stdout
+    assert "| weights | [1.0, 3.0] |" in proc.stdout
 
 
 def test_cli_artifact_validate_reports_valid_local_artifact(tmp_path: Path) -> None:

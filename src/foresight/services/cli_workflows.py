@@ -126,6 +126,24 @@ def _artifact_tracking_summary(tracking: dict[str, Any]) -> dict[str, str]:
     return summary
 
 
+def _artifact_composition_summary(metadata: dict[str, Any]) -> dict[str, Any]:
+    train_schema = metadata.get("train_schema")
+    if not isinstance(train_schema, dict):
+        return {}
+    composition = train_schema.get("composition")
+    if not isinstance(composition, dict):
+        return {}
+    normalized = _normalize_artifact_info_value(dict(composition))
+    kind = str(normalized.get("kind", "")).strip()
+    if not kind:
+        return {}
+    return {
+        str(key): value
+        for key, value in normalized.items()
+        if value not in ("", None, [], {}, ())
+    }
+
+
 def _artifact_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
     forecaster = payload["forecaster"]
     extra = dict(payload.get("extra", {}))
@@ -136,6 +154,9 @@ def _artifact_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "metadata": metadata,
         "extra": _normalize_artifact_info_value(extra),
     }
+    composition_summary = _artifact_composition_summary(metadata)
+    if composition_summary:
+        summary["composition_summary"] = composition_summary
     future_override_schema = _artifact_future_override_schema(
         forecaster=forecaster,
         extra=extra,
@@ -1537,6 +1558,16 @@ def artifact_info_markdown_workflow(
             columns=["field", "value"],
         )
     ]
+
+    composition_summary = payload.get("composition_summary", {})
+    if isinstance(composition_summary, dict) and composition_summary:
+        sections.append(
+            _render_markdown_section(
+                title="Composition",
+                rows=_flatten_artifact_summary_rows(composition_summary),
+                columns=["field", "value"],
+            )
+        )
 
     tracking = payload.get("tracking", {})
     if isinstance(tracking, dict) and tracking:
