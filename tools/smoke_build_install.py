@@ -17,6 +17,15 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _prepare_storage_env(*, env: dict[str, str]) -> dict[str, str]:
+    tools_dir = Path(__file__).resolve().parent
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from storage_paths import prepare_storage_env
+
+    return prepare_storage_env(env=env)
+
+
 def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
     print(f"+ {' '.join(cmd)}", flush=True)
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
@@ -111,8 +120,14 @@ def main(argv: list[str] | None = None) -> int:
 
     root = _repo_root()
     version = _repo_version(root)
+    env = _prepare_storage_env(env=dict(os.environ))
+    env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
+    tmp_root = Path(str(env["TMPDIR"])).expanduser() if env.get("TMPDIR") else None
 
-    with tempfile.TemporaryDirectory(prefix="foresight_pkg_smoke_") as tmp:
+    with tempfile.TemporaryDirectory(
+        prefix="foresight_pkg_smoke_",
+        dir=str(tmp_root) if tmp_root is not None else None,
+    ) as tmp:
         tmp_path = Path(tmp)
         dist_dir_arg = str(args.dist_dir).strip()
         dist_dir = (
@@ -125,10 +140,6 @@ def main(argv: list[str] | None = None) -> int:
             _run([sys.executable, "-m", "build", "--outdir", str(dist_dir)], cwd=root)
         elif not dist_dir.exists():
             raise RuntimeError(f"--dist-dir does not exist: {dist_dir}")
-
-        # Avoid noisy pip self-update prompts in CI logs.
-        env = dict(os.environ)
-        env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
 
         def _smoke(py: Path) -> None:
             # Import smoke.

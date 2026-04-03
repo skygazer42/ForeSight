@@ -138,9 +138,7 @@ def _artifact_composition_summary(metadata: dict[str, Any]) -> dict[str, Any]:
     if not kind:
         return {}
     return {
-        str(key): value
-        for key, value in normalized.items()
-        if value not in ("", None, [], {}, ())
+        str(key): value for key, value in normalized.items() if value not in ("", None, [], {}, ())
     }
 
 

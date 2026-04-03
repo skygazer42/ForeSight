@@ -46,22 +46,24 @@ def _normalize_member_specs(members: Any) -> tuple[str | BaseForecaster, ...]:
     if members is None:
         raise ValueError("members must be provided")
     if isinstance(members, dict):
-        parts: list[str | BaseForecaster] = [
+        dict_parts: list[str | BaseForecaster] = [
             member for member in members.values() if str(member).strip()
         ]
-        if not parts:
+        if not dict_parts:
             raise ValueError("members must be non-empty")
-        return tuple(parts)
+        return tuple(dict_parts)
     if isinstance(members, str):
         string_parts = [part.strip() for part in members.split(",") if part.strip()]
         if not string_parts:
             raise ValueError("members must be non-empty")
         return tuple(string_parts)
     if isinstance(members, list | tuple):
-        parts: list[str | BaseForecaster] = [member for member in members if str(member).strip()]
-        if not parts:
+        sequence_parts: list[str | BaseForecaster] = [
+            member for member in members if str(member).strip()
+        ]
+        if not sequence_parts:
             raise ValueError("members must be non-empty")
-        return tuple(parts)
+        return tuple(sequence_parts)
     if not str(members).strip():
         raise ValueError("members must be non-empty")
     return (members,)

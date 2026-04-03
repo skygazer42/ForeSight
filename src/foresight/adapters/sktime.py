@@ -57,7 +57,9 @@ def _relative_steps_from_absolute_fh(
         for label in absolute.tolist():
             delta = int(label) - last
             if delta <= 0 or delta % step != 0:
-                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+                raise ValueError(
+                    "absolute fh must be strictly future and aligned to the training index"
+                )
             steps.append(delta // step)
         return tuple(steps)
 
@@ -74,10 +76,14 @@ def _relative_steps_from_absolute_fh(
         steps = []
         for label in absolute_dt:
             if label <= last:
-                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+                raise ValueError(
+                    "absolute fh must be strictly future and aligned to the training index"
+                )
             full = pd.date_range(start=last, end=label, freq=freq)
             if len(full) < 2 or full[-1] != label:
-                raise ValueError("absolute fh must be strictly future and aligned to the training index")
+                raise ValueError(
+                    "absolute fh must be strictly future and aligned to the training index"
+                )
             steps.append(len(full) - 1)
         return tuple(steps)
 
@@ -189,9 +195,7 @@ class SktimeForecasterAdapter:
             raise RuntimeError("fit must be called before predict")
 
         fh_steps = (
-            self._fit_fh
-            if fh is None
-            else _normalize_sktime_fh(fh, train_index=self._train_index)
+            self._fit_fh if fh is None else _normalize_sktime_fh(fh, train_index=self._train_index)
         )
         if fh_steps is None:
             raise ValueError("fh is required")
