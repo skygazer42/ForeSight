@@ -12,25 +12,40 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
+def _validated_poly_trend_inputs(
+    train: Any,
+    *,
+    horizon: int,
+    degree: int,
+) -> tuple[np.ndarray, int, int]:
+    x = _as_1d_float_array(train)
+    h = int(horizon)
+    if h <= 0:
+        raise ValueError("horizon must be >= 1")
+    d = int(degree)
+    if d < 0:
+        raise ValueError("degree must be >= 0")
+    if x.size < d + 2:
+        raise ValueError("poly_trend_forecast requires more points than the polynomial degree")
+    return x, h, d
+
+
+def _poly_design_matrix(t: np.ndarray, *, degree: int) -> np.ndarray:
+    return np.vander(np.asarray(t, dtype=float), N=int(degree) + 1, increasing=True)
+
+
 def poly_trend_forecast(train: Any, horizon: int, *, degree: int = 1) -> np.ndarray:
     """
     Polynomial trend regression on time index t, forecast forward.
     """
-    x = _as_1d_float_array(train)
-    if horizon <= 0:
-        raise ValueError("horizon must be >= 1")
-    if degree < 0:
-        raise ValueError("degree must be >= 0")
-    if x.size < degree + 2:
-        raise ValueError("poly_trend_forecast requires more points than the polynomial degree")
+    x, h, d = _validated_poly_trend_inputs(train, horizon=horizon, degree=degree)
 
     n = int(x.size)
     t = np.arange(n, dtype=float)
-    # Vandermonde with [1, t, t^2, ...]
-    X = np.vander(t, N=int(degree) + 1, increasing=True)
+    X = _poly_design_matrix(t, degree=d)
     coef, *_ = np.linalg.lstsq(X, x, rcond=None)
 
-    tf = np.arange(n, n + int(horizon), dtype=float)
-    x_future = np.vander(tf, N=int(degree) + 1, increasing=True)
+    tf = np.arange(n, n + h, dtype=float)
+    x_future = _poly_design_matrix(tf, degree=d)
     yhat = x_future @ coef
     return np.asarray(yhat, dtype=float)

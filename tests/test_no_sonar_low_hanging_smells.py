@@ -691,6 +691,16 @@ def test_theta_source_extracts_validation_helpers() -> None:
     assert _function_uses_name(path, "theta_auto_forecast", "_validated_theta_grid_size")
 
 
+def test_trend_source_extracts_polynomial_helpers() -> None:
+    path = "src/foresight/models/trend.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_poly_trend_inputs(" in source
+    assert "def _poly_design_matrix(" in source
+    assert _function_uses_name(path, "poly_trend_forecast", "_validated_poly_trend_inputs")
+    assert _function_uses_name(path, "poly_trend_forecast", "_poly_design_matrix")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 
