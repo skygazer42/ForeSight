@@ -657,6 +657,19 @@ def test_baselines_source_extracts_repeated_window_and_fill_helpers() -> None:
     assert _function_uses_name(path, "moving_median_forecast", "_validated_windowed_baseline_input")
 
 
+def test_ssa_source_extracts_validation_and_recurrent_helpers() -> None:
+    path = "src/foresight/models/ssa.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_ssa_window_length(" in source
+    assert "def _validated_ssa_rank(" in source
+    assert "def _ssa_recurrent_forecast(" in source
+    assert _function_uses_name(path, "_trajectory_matrix", "_validated_ssa_window_length")
+    assert _function_uses_name(path, "ssa_forecast", "_validated_ssa_window_length")
+    assert _function_uses_name(path, "ssa_forecast", "_validated_ssa_rank")
+    assert _function_uses_name(path, "ssa_forecast", "_ssa_recurrent_forecast")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 

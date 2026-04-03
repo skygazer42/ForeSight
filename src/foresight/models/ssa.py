@@ -12,12 +12,17 @@ def _as_1d_float_array(train: Any) -> np.ndarray:
     return x
 
 
-def _trajectory_matrix(x: np.ndarray, *, window_length: int) -> np.ndarray:
+def _validated_ssa_window_length(train_size: int, *, window_length: int) -> int:
     L = int(window_length)
     if L <= 1:
         raise ValueError("window_length must be >= 2")
-    if L >= int(x.size):
+    if L >= int(train_size):
         raise ValueError("window_length must be <= len(train)-1")
+    return L
+
+
+def _trajectory_matrix(x: np.ndarray, *, window_length: int) -> np.ndarray:
+    L = _validated_ssa_window_length(int(x.size), window_length=window_length)
 
     try:
         from numpy.lib.stride_tricks import sliding_window_view
@@ -87,6 +92,33 @@ def _ssa_recurrent_coefficients(basis: np.ndarray, *, eps: float = 1e-10) -> np.
     return a
 
 
+def _validated_ssa_rank(rank: int, *, max_rank: int) -> int:
+    r = int(rank)
+    if r <= 0:
+        raise ValueError("rank must be >= 1")
+    return min(r, int(max_rank))
+
+
+def _ssa_recurrent_forecast(
+    history: np.ndarray,
+    *,
+    coeffs: np.ndarray,
+    horizon: int,
+) -> np.ndarray:
+    order = int(coeffs.size)
+    if int(history.size) < order:
+        raise ValueError("Not enough history for SSA recurrent forecast")
+
+    ext = np.empty((int(history.size) + int(horizon),), dtype=float)
+    ext[: history.size] = np.asarray(history, dtype=float)
+    base = int(history.size)
+    for k in range(int(horizon)):
+        t = base + k
+        past = ext[t - order : t]
+        ext[t] = float(np.dot(coeffs, past))
+    return ext[base:]
+
+
 def ssa_forecast(
     train: Any,
     horizon: int,
@@ -112,11 +144,7 @@ def ssa_forecast(
     if x.size < 3:
         raise ValueError("ssa_forecast requires at least 3 training points")
 
-    L = int(window_length)
-    if L <= 1:
-        raise ValueError("window_length must be >= 2")
-    if L >= int(x.size):
-        raise ValueError("window_length must be <= len(train)-1")
+    L = _validated_ssa_window_length(int(x.size), window_length=window_length)
 
     X = _trajectory_matrix(x, window_length=L)  # (L, K)
     u_matrix, s, v_transpose = np.linalg.svd(X, full_matrices=False)
@@ -124,10 +152,7 @@ def ssa_forecast(
     if m <= 0:
         raise ValueError("SSA SVD produced empty decomposition")
 
-    r = int(rank)
-    if r <= 0:
-        raise ValueError("rank must be >= 1")
-    r = min(int(r), int(m))
+    r = _validated_ssa_rank(rank, max_rank=m)
 
     u_rank = u_matrix[:, :r]
     sr = s[:r]
@@ -143,16 +168,4 @@ def ssa_forecast(
     if a is None:
         return np.full((h,), float(y_recon[-1]), dtype=float)
 
-    order = int(L - 1)
-    if int(y_recon.size) < order:
-        raise ValueError("Not enough history for SSA recurrent forecast")
-
-    ext = np.empty((int(y_recon.size) + h,), dtype=float)
-    ext[: y_recon.size] = y_recon.astype(float, copy=False)
-    base = int(y_recon.size)
-    for k in range(h):
-        t = base + k
-        past = ext[t - order : t]
-        ext[t] = float(np.dot(a, past))
-
-    return ext[base:]
+    return _ssa_recurrent_forecast(y_recon, coeffs=a, horizon=h)
