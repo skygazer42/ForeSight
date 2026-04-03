@@ -66,6 +66,12 @@ transformers = [
 sktime = [
   "sktime>=0.30",
 ]
+darts = [
+  "u8darts>=0.30",
+]
+gluonts = [
+  "gluonts>=0.15",
+]
 all = [
   "scikit-learn>=1.0",
   "xgboost>=2.0",
@@ -75,6 +81,8 @@ all = [
   "torch>=2.0",
   "transformers>=4.0",
   "sktime>=0.30",
+  "u8darts>=0.30",
+  "gluonts>=0.15",
 ]
 
 [tool.setuptools]
@@ -117,6 +125,8 @@ files = [
   "src/foresight/base.py",
   "src/foresight/cli.py",
   "src/foresight/cli_catalog.py",
+  "src/foresight/adapters/darts.py",
+  "src/foresight/adapters/gluonts.py",
   "src/foresight/adapters/sktime.py",
   "src/foresight/pipeline.py",
   "src/foresight/datasets/__init__.py",

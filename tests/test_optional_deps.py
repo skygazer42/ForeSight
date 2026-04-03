@@ -80,6 +80,20 @@ def test_sktime_extra_status_exposes_install_commands() -> None:
     assert status["editable_install_command"] == 'pip install -e ".[sktime]"'
 
 
+def test_darts_extra_status_exposes_install_commands() -> None:
+    status = optional_deps.get_extra_status("darts").as_dict()
+
+    assert status["package_install_command"] == 'pip install "foresight-ts[darts]"'
+    assert status["editable_install_command"] == 'pip install -e ".[darts]"'
+
+
+def test_gluonts_extra_status_exposes_install_commands() -> None:
+    status = optional_deps.get_extra_status("gluonts").as_dict()
+
+    assert status["package_install_command"] == 'pip install "foresight-ts[gluonts]"'
+    assert status["editable_install_command"] == 'pip install -e ".[gluonts]"'
+
+
 def test_missing_dependency_message_includes_package_and_editable_commands() -> None:
     msg = optional_deps.missing_dependency_message("ml", subject="ridge_lag_forecast")
 

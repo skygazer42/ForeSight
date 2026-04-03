@@ -7,6 +7,8 @@ from typing import Any
 
 _ALIAS_TO_IMPORT_NAME = {
     "catboost": "catboost",
+    "darts": "darts",
+    "gluonts": "gluonts",
     "lgbm": "lightgbm",
     "lightgbm": "lightgbm",
     "ml": "sklearn",
@@ -26,15 +28,30 @@ _EXTRA_REQUIREMENTS = {
     "xgb": ("xgb",),
     "lgbm": ("lgbm",),
     "catboost": ("catboost",),
+    "darts": ("darts",),
+    "gluonts": ("gluonts",),
     "stats": ("stats",),
     "torch": ("torch",),
     "transformers": ("transformers", "torch"),
     "sktime": ("sktime",),
-    "all": ("ml", "xgb", "lgbm", "catboost", "stats", "torch", "transformers", "sktime"),
+    "all": (
+        "ml",
+        "xgb",
+        "lgbm",
+        "catboost",
+        "stats",
+        "torch",
+        "transformers",
+        "sktime",
+        "darts",
+        "gluonts",
+    ),
 }
 
 _PREFERRED_EXTRA_FOR_DEPENDENCY = {
     "catboost": "catboost",
+    "darts": "darts",
+    "gluonts": "gluonts",
     "lgbm": "lgbm",
     "lightgbm": "lgbm",
     "ml": "ml",
@@ -50,6 +67,8 @@ _PREFERRED_EXTRA_FOR_DEPENDENCY = {
 
 _DEPENDENCY_DISPLAY_NAME = {
     "catboost": "catboost",
+    "darts": "darts",
+    "gluonts": "gluonts",
     "lgbm": "lightgbm",
     "lightgbm": "lightgbm",
     "ml": "scikit-learn",
