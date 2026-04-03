@@ -7,13 +7,24 @@ import numpy as np
 HORIZON_MIN_ERROR = "horizon must be >= 1"
 
 
-def naive_last(train: Any, horizon: int) -> np.ndarray:
+def _validated_naive_input(
+    train: Any,
+    *,
+    horizon: int,
+    subject: str,
+) -> tuple[np.ndarray, int]:
     x = np.asarray(train, dtype=float)
     if x.size == 0:
-        raise ValueError("naive_last requires at least 1 training point")
-    if horizon <= 0:
+        raise ValueError(f"{subject} requires at least 1 training point")
+    h = int(horizon)
+    if h <= 0:
         raise ValueError(HORIZON_MIN_ERROR)
-    return np.full(shape=(horizon,), fill_value=float(x[-1]), dtype=float)
+    return x, h
+
+
+def naive_last(train: Any, horizon: int) -> np.ndarray:
+    x, h = _validated_naive_input(train, horizon=horizon, subject="naive_last")
+    return np.full(shape=(h,), fill_value=float(x[-1]), dtype=float)
 
 
 def seasonal_naive(train: Any, horizon: int, *, season_length: int) -> np.ndarray:
@@ -46,6 +57,30 @@ def _pearson_corr(x0: np.ndarray, x1: np.ndarray) -> float:
     return float(num / denom)
 
 
+def _best_seasonal_naive_lag(
+    scan: np.ndarray,
+    *,
+    min_season_length: int,
+    max_season_length: int,
+) -> tuple[int, float] | None:
+    min_s = int(min_season_length)
+    upper = min(int(max_season_length), int(scan.size // 2))
+    if upper < min_s:
+        return None
+
+    best_lag = int(min_s)
+    best_corr = float("-inf")
+    eps = 1e-12
+    for lag in range(int(min_s), int(upper) + 1):
+        a = scan[:-lag]
+        b = scan[lag:]
+        corr = _pearson_corr(a, b)
+        if (corr > best_corr + eps) or (abs(corr - best_corr) <= eps and lag < best_lag):
+            best_corr = float(corr)
+            best_lag = int(lag)
+    return best_lag, best_corr
+
+
 def seasonal_naive_auto(
     train: Any,
     horizon: int,
@@ -61,11 +96,7 @@ def seasonal_naive_auto(
     If a clear seasonal lag is not detected (or there is insufficient history),
     falls back to `naive_last`.
     """
-    x = np.asarray(train, dtype=float)
-    if x.size == 0:
-        raise ValueError("seasonal_naive_auto requires at least 1 training point")
-    if horizon <= 0:
-        raise ValueError(HORIZON_MIN_ERROR)
+    x, h = _validated_naive_input(train, horizon=horizon, subject="seasonal_naive_auto")
 
     min_s = int(min_season_length)
     max_s = int(max_season_length)
@@ -75,22 +106,16 @@ def seasonal_naive_auto(
         raise ValueError("max_season_length must be >= min_season_length")
 
     scan = np.diff(x) if bool(detrend) and x.size >= 3 else x
-    upper = min(max_s, int(scan.size // 2))
-    if upper < min_s:
-        return naive_last(x, int(horizon))
-
-    best_lag = int(min_s)
-    best_corr = float("-inf")
-    eps = 1e-12
-    for lag in range(int(min_s), int(upper) + 1):
-        a = scan[:-lag]
-        b = scan[lag:]
-        corr = _pearson_corr(a, b)
-        if (corr > best_corr + eps) or (abs(corr - best_corr) <= eps and lag < best_lag):
-            best_corr = float(corr)
-            best_lag = int(lag)
+    best = _best_seasonal_naive_lag(
+        scan,
+        min_season_length=min_s,
+        max_season_length=max_s,
+    )
+    if best is None:
+        return naive_last(x, h)
+    best_lag, best_corr = best
 
     if not np.isfinite(best_corr) or best_corr < float(min_corr):
-        return naive_last(x, int(horizon))
+        return naive_last(x, h)
 
-    return seasonal_naive(x, int(horizon), season_length=int(best_lag))
+    return seasonal_naive(x, h, season_length=int(best_lag))

@@ -701,6 +701,17 @@ def test_trend_source_extracts_polynomial_helpers() -> None:
     assert _function_uses_name(path, "poly_trend_forecast", "_poly_design_matrix")
 
 
+def test_naive_source_extracts_validation_and_lag_scan_helpers() -> None:
+    path = "src/foresight/models/naive.py"
+    source = _read_repo_file(path)
+
+    assert "def _validated_naive_input(" in source
+    assert "def _best_seasonal_naive_lag(" in source
+    assert _function_uses_name(path, "naive_last", "_validated_naive_input")
+    assert _function_uses_name(path, "seasonal_naive_auto", "_validated_naive_input")
+    assert _function_uses_name(path, "seasonal_naive_auto", "_best_seasonal_naive_lag")
+
+
 def test_runtime_source_extracts_reused_literal_constants() -> None:
     source = _read_repo_file("src/foresight/models/runtime.py")
 
