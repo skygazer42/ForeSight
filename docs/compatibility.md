@@ -24,6 +24,10 @@ explicitly documented as a stable entry point. Beta and experimental model
 families remain supported for use, but not with the same compatibility promise
 as the stable public surface.
 
+The one intentional exception is the named `foresight.adapters` module:
+adapter bridges are supported as **beta integration adapters**, but they are not
+promoted into the stable root-package export surface.
+
 ## CI-Backed Support Matrix
 
 The project should only claim support where the repository actually runs checks:
@@ -53,6 +57,8 @@ pip install "foresight-ts[all]"
 - Choose `ml` for sklearn-style lag models.
 - Choose `torch` for neural local/global/multivariate models.
 - Choose `sktime` when you want the sktime adapter bridge on top of local point forecasters.
+- Choose `darts` when you want the Darts data adapter bridge.
+- Choose `gluonts` when you want the GluonTS data adapter bridge.
 - Choose `all` only when you need the full mixed stack.
 
 ## Stability Levels

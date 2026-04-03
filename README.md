@@ -172,6 +172,8 @@ pip install "foresight-ts[catboost]"    # CatBoost models
 pip install "foresight-ts[stats]"       # statsmodels (ARIMA, ETS, VAR, …)
 pip install "foresight-ts[torch]"       # PyTorch neural models
 pip install "foresight-ts[sktime]"      # sktime adapter bridge
+pip install "foresight-ts[darts]"       # Darts data adapter bridge
+pip install "foresight-ts[gluonts]"     # GluonTS data adapter bridge
 pip install "foresight-ts[all]"         # everything above
 ```
 
@@ -221,6 +223,30 @@ obj = make_forecaster_object("moving-average", window=3)
 obj.fit([1, 2, 3, 4, 5, 6])
 yhat = obj.predict(3)
 ```
+
+## Beta Adapters
+
+ForeSight now exposes beta integration adapters through the named
+`foresight.adapters` module rather than the stable root package surface.
+
+```python
+from foresight.adapters import (
+    make_sktime_forecaster_adapter,
+    to_darts_timeseries,
+    from_darts_timeseries,
+    to_gluonts_list_dataset,
+)
+```
+
+- `make_sktime_forecaster_adapter(...)` bridges local point forecaster objects into
+  a minimal sktime-style `fit/predict` interface.
+- `to_darts_timeseries(...)` / `from_darts_timeseries(...)` convert between
+  ForeSight single-series or panel data and Darts `TimeSeries` objects.
+- `to_gluonts_list_dataset(...)` converts canonical long-format history into a
+  GluonTS `ListDataset`.
+
+These adapters are intentionally **beta** and are not part of the root
+`foresight.__all__` contract yet.
 
 ### CLI
 

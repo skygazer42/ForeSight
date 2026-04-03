@@ -165,5 +165,8 @@ def test_support_contract_docs_define_public_surface_and_ci_matrix() -> None:
     assert "## Supported Public Surface" in compatibility
     assert "## CI-Backed Support Matrix" in compatibility
     assert "## Artifact Compatibility Contract" in compatibility
+    assert "beta integration adapters" in compatibility.lower()
     assert "## Support Contract" in readme
     assert "stable public surface" in readme.lower()
+    assert "## Beta Adapters" in readme
+    assert "foresight.adapters" in readme
