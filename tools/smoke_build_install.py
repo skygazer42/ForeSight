@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -53,7 +54,24 @@ def _create_venv(*, venv_dir: Path, cwd: Path, env: dict[str, str]) -> None:
             stderr=proc.stderr,
         )
 
-    if importlib.util.find_spec("virtualenv") is None:
+    virtualenv_cmd: list[str] | None
+    if importlib.util.find_spec("virtualenv") is not None:
+        virtualenv_cmd = [
+            sys.executable,
+            "-m",
+            "virtualenv",
+            "--system-site-packages",
+            str(venv_dir),
+        ]
+    else:
+        virtualenv_exe = shutil.which("virtualenv")
+        virtualenv_cmd = (
+            [str(virtualenv_exe), "--system-site-packages", str(venv_dir)]
+            if virtualenv_exe
+            else None
+        )
+
+    if virtualenv_cmd is None:
         raise RuntimeError(
             "python -m venv failed because ensurepip is unavailable, and `virtualenv` is not installed."
         )
@@ -63,11 +81,7 @@ def _create_venv(*, venv_dir: Path, cwd: Path, env: dict[str, str]) -> None:
         print(proc.stdout, end="", flush=True)
     if proc.stderr:
         print(proc.stderr, end="", flush=True)
-    _run(
-        [sys.executable, "-m", "virtualenv", "--system-site-packages", str(venv_dir)],
-        cwd=cwd,
-        env=env,
-    )
+    _run(virtualenv_cmd, cwd=cwd, env=env)
 
 
 def _repo_version(root: Path) -> str:

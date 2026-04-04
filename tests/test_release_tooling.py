@@ -391,7 +391,8 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
     assert '"foresight", "doctor", "--require-extra", "core"' in script
-    assert 'sys.executable, "-m", "virtualenv"' in script
+    assert '"virtualenv"' in script
+    assert 'shutil.which("virtualenv")' in script
 
 
 def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
@@ -426,6 +427,39 @@ def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
         f"foresight_ts-{current_version}-py3-none-any.whl",
         f"foresight_ts-{current_version}.tar.gz",
     ]
+
+
+def test_smoke_build_install_falls_back_to_virtualenv_executable_when_module_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    module = _load_smoke_build_install_module()
+    venv_dir = tmp_path / "venv"
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(module.importlib.util, "find_spec", lambda name: None)
+    monkeypatch.setattr(module.shutil, "which", lambda name: "/usr/bin/virtualenv")
+
+    def _fake_subprocess_run(cmd, cwd, env, capture_output=False, text=False, check=False):
+        if cmd[:3] == [sys.executable, "-m", "venv"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                1,
+                stdout="",
+                stderr="ensurepip is not available",
+            )
+        raise AssertionError(f"unexpected subprocess.run call: {cmd}")
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+        calls.append(list(cmd))
+
+    monkeypatch.setattr(module.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(module, "_run", _fake_run)
+
+    module._create_venv(venv_dir=venv_dir, cwd=repo_root, env={})
+
+    assert calls == [["/usr/bin/virtualenv", "--system-site-packages", str(venv_dir)]]
 
 
 def test_storage_paths_prepare_storage_env_sets_large_storage_defaults(
