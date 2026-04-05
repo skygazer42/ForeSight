@@ -8,128 +8,135 @@
 
 **Tech Stack:** Conda, pip, Python 3.10, PyPI `foresight-ts`, numpy, pandas, PyTorch CPU, package CLI and Python API.
 
+## Recorded Execution Outcome
+
+- Recorded validation artifacts: `/tmp/foresight_validation_100_20260328/summary.json` and `/tmp/foresight_validation_100_20260328/results.json`
+- Environment snapshot: conda env `foresight-pypi310`, Python `3.10.20`, package `foresight-ts 0.2.11`, `torch 2.11.0+cpu`
+- Outcome summary: `96 / 100` tasks passed; failed tasks were `13`, `14`, `15`, and `48`
+- Scope note: this document records the completed validation run; no package source files were modified as part of this plan
+
 ---
 
 ### Task Group 1: Environment And Package Identity
 
-- [ ] Task 1: Verify `python --version` in `foresight-pypi310`
-- [ ] Task 2: Verify `pip show foresight-ts`
-- [ ] Task 3: Verify `foresight.__version__`
-- [ ] Task 4: Verify `foresight.__file__` points to `site-packages`
-- [ ] Task 5: Verify `numpy` import from the conda env
-- [ ] Task 6: Verify `pandas` import from the conda env
-- [ ] Task 7: Verify root CLI help
-- [ ] Task 8: Verify model registry count
-- [ ] Task 9: Verify datasets list command
-- [ ] Task 10: Verify `models info naive-last`
+- [x] Task 1: Verify `python --version` in `foresight-pypi310`
+- [x] Task 2: Verify `pip show foresight-ts`
+- [x] Task 3: Verify `foresight.__version__`
+- [x] Task 4: Verify `foresight.__file__` points to `site-packages`
+- [x] Task 5: Verify `numpy` import from the conda env
+- [x] Task 6: Verify `pandas` import from the conda env
+- [x] Task 7: Verify root CLI help
+- [x] Task 8: Verify model registry count
+- [x] Task 9: Verify datasets list command
+- [x] Task 10: Verify `models info naive-last`
 
 ### Task Group 2: Dataset And Basic API Checks
 
-- [ ] Task 11: Load `catfish`
-- [ ] Task 12: Load `ice_cream_interest`
-- [ ] Task 13: Attempt load `store_sales`
-- [ ] Task 14: Attempt load `promotion_data`
-- [ ] Task 15: Attempt load `cashflow_data`
-- [ ] Task 16: Python API `eval_model` with `naive-last`
-- [ ] Task 17: Python API `make_forecaster`
-- [ ] Task 18: Python API `make_forecaster_object`
-- [ ] Task 19: Python API `forecast_model`
-- [ ] Task 20: Python API `bootstrap_intervals`
+- [x] Task 11: Load `catfish`
+- [x] Task 12: Load `ice_cream_interest`
+- [ ] Task 13: Attempt load `store_sales` (`FileNotFoundError`: dataset file not found; requires `--data-dir` or `FORESIGHT_DATA_DIR`)
+- [ ] Task 14: Attempt load `promotion_data` (`FileNotFoundError`: dataset file not found; requires `--data-dir` or `FORESIGHT_DATA_DIR`)
+- [ ] Task 15: Attempt load `cashflow_data` (`FileNotFoundError`: dataset file not found; requires `--data-dir` or `FORESIGHT_DATA_DIR`)
+- [x] Task 16: Python API `eval_model` with `naive-last`
+- [x] Task 17: Python API `make_forecaster`
+- [x] Task 18: Python API `make_forecaster_object`
+- [x] Task 19: Python API `forecast_model`
+- [x] Task 20: Python API `bootstrap_intervals`
 
 ### Task Group 3: Core Functional Model Smoke Forecasts A
 
-- [ ] Task 21: `adida`
-- [ ] Task 22: `analog-knn`
-- [ ] Task 23: `ar-ols`
-- [ ] Task 24: `ar-ols-auto`
-- [ ] Task 25: `ar-ols-lags`
-- [ ] Task 26: `croston`
-- [ ] Task 27: `croston-opt`
-- [ ] Task 28: `croston-sba`
-- [ ] Task 29: `croston-sbj`
-- [ ] Task 30: `drift`
-- [ ] Task 31: `fft`
-- [ ] Task 32: `fourier`
-- [ ] Task 33: `fourier-multi`
-- [ ] Task 34: `holt`
-- [ ] Task 35: `holt-auto`
-- [ ] Task 36: `holt-damped`
-- [ ] Task 37: `holt-winters-add`
-- [ ] Task 38: `holt-winters-add-auto`
-- [ ] Task 39: `holt-winters-mul`
-- [ ] Task 40: `holt-winters-mul-auto`
+- [x] Task 21: `adida`
+- [x] Task 22: `analog-knn`
+- [x] Task 23: `ar-ols`
+- [x] Task 24: `ar-ols-auto`
+- [x] Task 25: `ar-ols-lags`
+- [x] Task 26: `croston`
+- [x] Task 27: `croston-opt`
+- [x] Task 28: `croston-sba`
+- [x] Task 29: `croston-sbj`
+- [x] Task 30: `drift`
+- [x] Task 31: `fft`
+- [x] Task 32: `fourier`
+- [x] Task 33: `fourier-multi`
+- [x] Task 34: `holt`
+- [x] Task 35: `holt-auto`
+- [x] Task 36: `holt-damped`
+- [x] Task 37: `holt-winters-add`
+- [x] Task 38: `holt-winters-add-auto`
+- [x] Task 39: `holt-winters-mul`
+- [x] Task 40: `holt-winters-mul-auto`
 
 ### Task Group 4: Core Functional Model Smoke Forecasts B
 
-- [ ] Task 41: `kalman-level`
-- [ ] Task 42: `kalman-trend`
-- [ ] Task 43: `les`
-- [ ] Task 44: `lr-lag`
-- [ ] Task 45: `lr-lag-direct`
-- [ ] Task 46: `mean`
-- [ ] Task 47: `median`
-- [ ] Task 48: `moment`
-- [ ] Task 49: `moving-average`
-- [ ] Task 50: `moving-median`
-- [ ] Task 51: `naive-last`
-- [ ] Task 52: `poly-trend`
-- [ ] Task 53: `sar-ols`
-- [ ] Task 54: `seasonal-drift`
-- [ ] Task 55: `seasonal-mean`
-- [ ] Task 56: `seasonal-naive`
-- [ ] Task 57: `seasonal-naive-auto`
-- [ ] Task 58: `ses`
-- [ ] Task 59: `ses-auto`
-- [ ] Task 60: `ssa`
+- [x] Task 41: `kalman-level`
+- [x] Task 42: `kalman-trend`
+- [x] Task 43: `les`
+- [x] Task 44: `lr-lag`
+- [x] Task 45: `lr-lag-direct`
+- [x] Task 46: `mean`
+- [x] Task 47: `median`
+- [ ] Task 48: `moment` (`ValueError`: `moment` requires `checkpoint_path` or `model_source`)
+- [x] Task 49: `moving-average`
+- [x] Task 50: `moving-median`
+- [x] Task 51: `naive-last`
+- [x] Task 52: `poly-trend`
+- [x] Task 53: `sar-ols`
+- [x] Task 54: `seasonal-drift`
+- [x] Task 55: `seasonal-mean`
+- [x] Task 56: `seasonal-naive`
+- [x] Task 57: `seasonal-naive-auto`
+- [x] Task 58: `ses`
+- [x] Task 59: `ses-auto`
+- [x] Task 60: `ssa`
 
 ### Task Group 5: Core Functional Model Smoke Forecasts C
 
-- [ ] Task 61: `theta`
-- [ ] Task 62: `theta-auto`
-- [ ] Task 63: `tsb`
-- [ ] Task 64: `weighted-moving-average`
-- [ ] Task 65: object API `moving-average`
-- [ ] Task 66: object API `naive-last`
-- [ ] Task 67: object API `theta`
-- [ ] Task 68: object API `holt`
-- [ ] Task 69: object API `ses`
-- [ ] Task 70: object API `seasonal-naive`
+- [x] Task 61: `theta`
+- [x] Task 62: `theta-auto`
+- [x] Task 63: `tsb`
+- [x] Task 64: `weighted-moving-average`
+- [x] Task 65: object API `moving-average`
+- [x] Task 66: object API `naive-last`
+- [x] Task 67: object API `theta`
+- [x] Task 68: object API `holt`
+- [x] Task 69: object API `ses`
+- [x] Task 70: object API `seasonal-naive`
 
 ### Task Group 6: Extended API And CSV Workflow Checks
 
-- [ ] Task 71: object API `drift`
-- [ ] Task 72: object API `kalman-level`
-- [ ] Task 73: object API `fft`
-- [ ] Task 74: object API `fourier`
-- [ ] Task 75: CLI `eval run`
-- [ ] Task 76: CLI `leaderboard models`
-- [ ] Task 77: CLI `forecast csv`
-- [ ] Task 78: CLI `cv csv`
-- [ ] Task 79: CLI `detect csv`
-- [ ] Task 80: Python API `detect_anomalies`
+- [x] Task 71: object API `drift`
+- [x] Task 72: object API `kalman-level`
+- [x] Task 73: object API `fft`
+- [x] Task 74: object API `fourier`
+- [x] Task 75: CLI `eval run`
+- [x] Task 76: CLI `leaderboard models`
+- [x] Task 77: CLI `forecast csv`
+- [x] Task 78: CLI `cv csv`
+- [x] Task 79: CLI `detect csv`
+- [x] Task 80: Python API `detect_anomalies`
 
 ### Task Group 7: Data Utility And Classical Artifact Checks
 
-- [ ] Task 81: Python API `to_long`
-- [ ] Task 82: Python API `validate_long_df`
-- [ ] Task 83: Python API `split_long_df`
-- [ ] Task 84: Python API `infer_series_frequency`
-- [ ] Task 85: classical `save_forecaster`
-- [ ] Task 86: classical `load_forecaster`
-- [ ] Task 87: classical artifact prediction match
-- [ ] Task 88: CLI `artifact validate` on classical artifact
-- [ ] Task 89: CLI `artifact info` on classical artifact
-- [ ] Task 90: CLI `forecast artifact` on classical artifact
+- [x] Task 81: Python API `to_long`
+- [x] Task 82: Python API `validate_long_df`
+- [x] Task 83: Python API `split_long_df`
+- [x] Task 84: Python API `infer_series_frequency`
+- [x] Task 85: classical `save_forecaster`
+- [x] Task 86: classical `load_forecaster`
+- [x] Task 87: classical artifact prediction match
+- [x] Task 88: CLI `artifact validate` on classical artifact
+- [x] Task 89: CLI `artifact info` on classical artifact
+- [x] Task 90: CLI `forecast artifact` on classical artifact
 
 ### Task Group 8: Torch Presence, Training, And Checkpoints
 
-- [ ] Task 91: verify `torch` import
-- [ ] Task 92: verify torch CPU runtime
-- [ ] Task 93: torch model info
-- [ ] Task 94: torch training smoke run
-- [ ] Task 95: torch `best.pt` created
-- [ ] Task 96: torch `last.pt` created
-- [ ] Task 97: torch checkpoint has `state_dict`
-- [ ] Task 98: torch checkpoint has optimizer/training metadata
-- [ ] Task 99: torch checkpoint resume smoke run
-- [ ] Task 100: torch artifact round-trip plus CLI forecast reuse
+- [x] Task 91: verify `torch` import
+- [x] Task 92: verify torch CPU runtime
+- [x] Task 93: torch model info
+- [x] Task 94: torch training smoke run
+- [x] Task 95: torch `best.pt` created
+- [x] Task 96: torch `last.pt` created
+- [x] Task 97: torch checkpoint has `state_dict`
+- [x] Task 98: torch checkpoint has optimizer/training metadata
+- [x] Task 99: torch checkpoint resume smoke run
+- [x] Task 100: torch artifact round-trip plus CLI forecast reuse
