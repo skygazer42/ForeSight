@@ -98,6 +98,7 @@ class ModelSpec:
             "chronos-bolt",
             "lag-llama",
             "moirai",
+            "moment",
             "time-moe",
             "timer-s1",
             "timesfm",

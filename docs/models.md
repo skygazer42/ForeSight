@@ -60,8 +60,8 @@ print(len(list_models()))
 | stability | model_count |
 | --- | ---: |
 | `beta` | 956 |
-| `stable` | 192 |
-| `experimental` | 117 |
+| `stable` | 191 |
+| `experimental` | 118 |
 
 ## Full registry matrix
 
@@ -161,7 +161,7 @@ print(len(list_models()))
 | `mlp-lag` | `local` | `ml` | `ml` | `stable` | no | no | no | yes | no | yes | no |
 | `mlp-step-lag-global` | `global` | `ml` | `ml` | `stable` | yes | no | no | no | no | yes | no |
 | `moirai` | `local` | `core` | `core` | `experimental` | no | no | no | yes | no | yes | no |
-| `moment` | `local` | `core` | `core` | `stable` | no | no | no | yes | no | yes | no |
+| `moment` | `local` | `core` | `core` | `experimental` | no | no | no | yes | no | yes | no |
 | `moving-average` | `local` | `core` | `core` | `stable` | no | no | no | yes | no | yes | no |
 | `moving-median` | `local` | `core` | `core` | `stable` | no | no | no | yes | no | yes | no |
 | `mstl-arima` | `local` | `stats` | `stats` | `stable` | no | no | no | yes | no | yes | no |
