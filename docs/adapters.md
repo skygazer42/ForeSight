@@ -6,7 +6,9 @@ ForeSight exposes interoperability bridges through the named
 
 ```python
 from foresight.adapters import (
+    from_darts_bundle,
     make_sktime_forecaster_adapter,
+    to_darts_bundle,
     to_darts_timeseries,
     from_darts_timeseries,
     to_gluonts_list_dataset,
@@ -29,7 +31,16 @@ Current v1 contract:
 - local point forecasters only
 - relative forecasting horizons
 - absolute horizons when the training series uses a `RangeIndex` or regular `DatetimeIndex`
-- no `X` exogenous support yet
+- beta `X` support for local single-series xreg-compatible forecasters
+- no panel/global sktime wrapper support yet
+- no static-covariate sktime support yet
+
+The beta `X` path is intentionally narrow:
+
+- `fit(y, X=...)` / `predict(fh, X=...)` are supported for compatible local xreg forecasters
+- pandas and array-like `X` are accepted
+- `X` must align with the training or forecast horizon rows
+- `historic_x_cols`-only semantics are still rejected in the sktime beta path
 
 ## Darts
 
@@ -48,6 +59,27 @@ Current v1 contract:
 - single-series `pandas.Series` round-trip
 - panel long-format `unique_id` / `ds` / `y` to mapping-of-series conversion
 - data interop only; no Darts model wrapper
+
+ForeSight now also exposes a richer beta bundle API for covariate-aware workflows:
+
+```python
+from foresight.adapters import to_darts_bundle, from_darts_bundle
+```
+
+Bundle contract:
+
+- `target`
+- `past_covariates`
+- `future_covariates`
+- `freq`
+
+Current beta bundle support:
+
+- canonical long-format input with `historic_x_cols`, `future_x_cols`, and `static_cols`
+- single-series output as `TimeSeries` objects
+- panel/global output as mappings keyed by `unique_id`
+- static covariates attached to target series metadata and restored on round-trip
+- additive beta API only; it does not replace the existing simple `to_darts_timeseries(...)` path
 
 ## GluonTS
 
