@@ -36,6 +36,13 @@ class _FakeLocalXRegForecaster(BaseForecaster):
         return {"kind": "local", "n_obs": 0 if self.fit_y is None else int(self.fit_y.size)}
 
 
+class _FakeHistoricOnlyForecaster(_FakeLocalXRegForecaster):
+    def __init__(self) -> None:
+        super().__init__()
+        self.model_key = "fake-historic-only"
+        self.model_params = {"historic_x_cols": ("promo_hist",)}
+
+
 def test_sktime_adapter_predicts_series_from_local_object(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
 
@@ -151,6 +158,19 @@ def test_sktime_adapter_rejects_unsupported_x_beta_shapes(
     monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
 
     adapter = sktime_adapter_mod.make_sktime_forecaster_adapter("naive-last")
+
+    with pytest.raises(
+        ValueError, match="supports X only for local single-series xreg forecasters in beta"
+    ):
+        adapter.fit([1.0, 2.0, 3.0], X=[[1.0], [2.0], [3.0]])
+
+
+def test_sktime_adapter_rejects_historic_only_xreg_beta_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter(_FakeHistoricOnlyForecaster())
 
     with pytest.raises(
         ValueError, match="supports X only for local single-series xreg forecasters in beta"

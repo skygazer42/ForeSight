@@ -61,7 +61,7 @@ def _normalize_name_tuple(raw: Any) -> tuple[str, ...]:
 def _configured_x_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
     out: list[str] = []
     seen: set[str] = set()
-    for name in ("future_x_cols", "x_cols", "historic_x_cols"):
+    for name in ("future_x_cols", "x_cols"):
         for col in _normalize_name_tuple(model_params.get(name, ())):
             if col not in seen:
                 seen.add(col)
