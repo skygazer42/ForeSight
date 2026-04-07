@@ -96,13 +96,18 @@ def test_sktime_adapter_supports_absolute_datetime_horizon(
     assert yhat.tolist() == pytest.approx([3.0, 3.0])
 
 
-def test_sktime_adapter_rejects_exogenous_X_in_v1(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sktime_adapter_rejects_predict_x_for_unsupported_beta_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
 
     adapter = sktime_adapter_mod.make_sktime_forecaster_adapter("naive-last")
+    adapter.fit([1.0, 2.0, 3.0], fh=2)
 
-    with pytest.raises(ValueError, match="does not support X in v1"):
-        adapter.fit([1.0, 2.0, 3.0], X=[[1.0], [2.0], [3.0]])
+    with pytest.raises(
+        ValueError, match="supports X only for local single-series xreg forecasters in beta"
+    ):
+        adapter.predict(X=[[1.0], [2.0]])
 
 
 def test_sktime_adapter_supports_local_single_series_x_inputs(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import inspect
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
@@ -13,6 +15,10 @@ __all__ = [
     "SktimeForecasterAdapter",
     "make_sktime_forecaster_adapter",
 ]
+
+_BETA_X_SUPPORT_ERROR = (
+    "SktimeForecasterAdapter supports X only for local single-series xreg forecasters in beta"
+)
 
 
 def _require_sktime() -> Any:
@@ -31,6 +37,116 @@ def _coerce_sktime_series(y: Any) -> tuple[np.ndarray, pd.Index | None]:
     if arr.ndim != 1:
         raise ValueError(f"Expected 1D series, got shape {arr.shape}")
     return arr, None
+
+
+def _normalize_name_tuple(raw: Any) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        s = raw.strip()
+        return tuple(part.strip() for part in s.split(",") if part.strip()) if s else ()
+    if isinstance(raw, Iterable):
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in raw:
+            value = str(item).strip()
+            if value and value not in seen:
+                seen.add(value)
+                out.append(value)
+        return tuple(out)
+    value = str(raw).strip()
+    return (value,) if value else ()
+
+
+def _configured_x_cols(model_params: dict[str, Any]) -> tuple[str, ...]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in ("future_x_cols", "x_cols", "historic_x_cols"):
+        for col in _normalize_name_tuple(model_params.get(name, ())):
+            if col not in seen:
+                seen.add(col)
+                out.append(col)
+    return tuple(out)
+
+
+def _coerce_sktime_X(
+    X: Any,
+    *,
+    expected_rows: int,
+    expected_index: pd.Index | None,
+    x_cols: tuple[str, ...],
+) -> pd.DataFrame:
+    if isinstance(X, pd.DataFrame):
+        out = X.copy()
+    elif isinstance(X, pd.Series):
+        out = X.to_frame()
+    else:
+        out = pd.DataFrame(X)
+
+    if len(out) != int(expected_rows):
+        raise ValueError(f"X must contain exactly {int(expected_rows)} rows")
+
+    if (
+        isinstance(expected_index, pd.Index)
+        and len(expected_index) == len(out)
+        and isinstance(out.index, pd.Index)
+        and len(out.index) == len(expected_index)
+        and not out.index.equals(expected_index)
+    ):
+        raise ValueError("X index must align with the forecasting horizon")
+
+    if x_cols and len(out.columns) == len(x_cols) and list(out.columns) != list(x_cols):
+        if isinstance(out.columns, pd.RangeIndex) or all(
+            isinstance(col, (int, np.integer)) for col in out.columns.tolist()
+        ):
+            out.columns = list(x_cols)
+    return out
+
+
+def _forecaster_accepts_X(forecaster: BaseForecaster) -> bool:
+    fit_sig = inspect.signature(forecaster.fit)
+    predict_sig = inspect.signature(forecaster.predict)
+    return "X" in fit_sig.parameters and "X" in predict_sig.parameters
+
+
+def _supports_beta_X_path(
+    *,
+    forecaster_spec: str | BaseForecaster,
+    forecaster: BaseForecaster,
+    model_params: dict[str, Any],
+) -> bool:
+    x_cols = _configured_x_cols(getattr(forecaster, "model_params", {}) or model_params)
+    if not x_cols:
+        return False
+    if not _forecaster_accepts_X(forecaster):
+        return False
+    if isinstance(forecaster_spec, BaseForecaster):
+        return True
+
+    from ..models.registry import get_model_spec
+
+    spec = get_model_spec(str(forecaster_spec).strip())
+    return bool(spec.capabilities.get("supports_x_cols", False))
+
+
+def _fit_forecaster_with_optional_X(
+    forecaster: BaseForecaster,
+    train_y: np.ndarray,
+    X: pd.DataFrame | None,
+) -> BaseForecaster:
+    if X is None:
+        return forecaster.fit(train_y)
+    return forecaster.fit(train_y, X=X)
+
+
+def _predict_forecaster_with_optional_X(
+    forecaster: BaseForecaster,
+    horizon: int,
+    X: pd.DataFrame | None,
+) -> np.ndarray:
+    if X is None:
+        return np.asarray(forecaster.predict(horizon), dtype=float)
+    return np.asarray(forecaster.predict(horizon, X=X), dtype=float)
 
 
 def _relative_steps_from_absolute_fh(
@@ -165,6 +281,8 @@ class SktimeForecasterAdapter:
         self._forecaster: BaseForecaster | None = None
         self._train_index: pd.Index | None = None
         self._fit_fh: tuple[int, ...] | None = None
+        self._x_cols: tuple[str, ...] = ()
+        self._supports_X: bool = False
 
     def _build_forecaster(self) -> BaseForecaster:
         if isinstance(self._forecaster_spec, BaseForecaster):
@@ -177,11 +295,26 @@ class SktimeForecasterAdapter:
         )
 
     def fit(self, y: Any, X: Any = None, fh: Any = None) -> SktimeForecasterAdapter:
-        if X is not None:
-            raise ValueError("SktimeForecasterAdapter does not support X in v1")
-
         train_y, train_index = _coerce_sktime_series(y)
-        forecaster = self._build_forecaster().fit(train_y)
+        forecaster = self._build_forecaster()
+        self._x_cols = _configured_x_cols(getattr(forecaster, "model_params", {}) or self._model_params)
+        self._supports_X = _supports_beta_X_path(
+            forecaster_spec=self._forecaster_spec,
+            forecaster=forecaster,
+            model_params=self._model_params,
+        )
+        X_frame = None
+        if X is not None:
+            if not self._supports_X:
+                raise ValueError(_BETA_X_SUPPORT_ERROR)
+            X_frame = _coerce_sktime_X(
+                X,
+                expected_rows=int(train_y.size),
+                expected_index=train_index,
+                x_cols=self._x_cols,
+            )
+
+        forecaster = _fit_forecaster_with_optional_X(forecaster, train_y, X_frame)
 
         self._forecaster = forecaster
         self._train_index = train_index
@@ -189,8 +322,6 @@ class SktimeForecasterAdapter:
         return self
 
     def predict(self, fh: Any = None, X: Any = None) -> pd.Series:
-        if X is not None:
-            raise ValueError("SktimeForecasterAdapter does not support X in v1")
         if self._forecaster is None:
             raise RuntimeError("fit must be called before predict")
 
@@ -201,10 +332,25 @@ class SktimeForecasterAdapter:
             raise ValueError("fh is required")
 
         full_horizon = int(max(fh_steps))
-        yhat = np.asarray(self._forecaster.predict(full_horizon), dtype=float)
+        future_index = _future_index_from_fh(
+            self._train_index,
+            tuple(range(1, full_horizon + 1)),
+        )
+        X_frame = None
+        if X is not None:
+            if not self._supports_X:
+                raise ValueError(_BETA_X_SUPPORT_ERROR)
+            X_frame = _coerce_sktime_X(
+                X,
+                expected_rows=full_horizon,
+                expected_index=future_index,
+                x_cols=self._x_cols,
+            )
+
+        yhat = _predict_forecaster_with_optional_X(self._forecaster, full_horizon, X_frame)
         picked = np.asarray([yhat[step - 1] for step in fh_steps], dtype=float)
-        future_index = _future_index_from_fh(self._train_index, fh_steps)
-        return pd.Series(picked, index=future_index, dtype=float)
+        output_index = _future_index_from_fh(self._train_index, fh_steps)
+        return pd.Series(picked, index=output_index, dtype=float)
 
 
 def make_sktime_forecaster_adapter(
