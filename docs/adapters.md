@@ -6,9 +6,11 @@ ForeSight exposes interoperability bridges through the named
 
 ```python
 from foresight.adapters import (
+    from_beta_bundle,
     from_darts_bundle,
     from_gluonts_bundle,
     make_sktime_forecaster_adapter,
+    to_beta_bundle,
     to_darts_bundle,
     to_gluonts_bundle,
     to_darts_timeseries,
@@ -16,6 +18,30 @@ from foresight.adapters import (
     to_gluonts_list_dataset,
 )
 ```
+
+## Shared Beta Bundle
+
+ForeSight now exposes an adapter-agnostic richer beta bundle API:
+
+```python
+from foresight.adapters import to_beta_bundle, from_beta_bundle
+```
+
+Shared bundle contract:
+
+- `target: dict[str, pd.DataFrame]`
+- `historic_covariates: dict[str, pd.DataFrame]`
+- `future_covariates: dict[str, pd.DataFrame]`
+- `static_covariates: dict[str, pd.DataFrame]`
+- `freq: dict[str, str]`
+
+Design intent:
+
+- all payloads are keyed by `unique_id`
+- target frames use canonical `ds` / `y`
+- covariate frames preserve ForeSight-native column names
+- this is the ForeSight-centric richer bundle contract
+- Darts and GluonTS richer bundle APIs remain available as adapter-specific projections of the same underlying semantics
 
 ## sktime
 
