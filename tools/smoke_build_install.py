@@ -10,12 +10,59 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 
 _EXTRA_IMPORT_SMOKES = {
     "sktime": "import sktime",
     "darts": "import darts",
     "gluonts": "import gluonts",
+}
+
+_EXTRA_RUNTIME_SMOKE_SYMBOLS = {
+    "darts": ("to_darts_bundle", "from_darts_bundle"),
+    "gluonts": ("to_gluonts_bundle", "from_gluonts_bundle"),
+}
+
+_EXTRA_RUNTIME_SMOKES = {
+    "darts": textwrap.dedent(
+        """
+        import pandas as pd
+        from foresight.adapters import from_darts_bundle, to_darts_bundle
+
+        long_df = pd.DataFrame(
+            {
+                "unique_id": ["series_a", "series_a"],
+                "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "y": [1.0, 2.0],
+            }
+        )
+        bundle = to_darts_bundle(long_df)
+        restored = from_darts_bundle(bundle)
+        assert "target" in bundle
+        assert "freq" in bundle
+        assert list(restored.columns) == ["unique_id", "ds", "y"]
+        """
+    ).strip(),
+    "gluonts": textwrap.dedent(
+        """
+        import pandas as pd
+        from foresight.adapters import from_gluonts_bundle, to_gluonts_bundle
+
+        long_df = pd.DataFrame(
+            {
+                "unique_id": ["series_a", "series_a"],
+                "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                "y": [1.0, 2.0],
+            }
+        )
+        bundle = to_gluonts_bundle(long_df)
+        restored = from_gluonts_bundle(bundle)
+        assert "target" in bundle
+        assert "freq" in bundle
+        assert list(restored.columns) == ["unique_id", "ds", "y"]
+        """
+    ).strip(),
 }
 
 
@@ -243,6 +290,9 @@ def main(argv: list[str] | None = None) -> int:
                     cwd=root,
                     env=env,
                 )
+                runtime_smoke = _EXTRA_RUNTIME_SMOKES.get(str(extra))
+                if runtime_smoke is not None:
+                    _run([str(py), "-c", runtime_smoke], cwd=root, env=env)
             _run(
                 [str(py), "-m", "foresight", "models", "info", "torch-rnnpaper-elman-srn-direct"],
                 cwd=root,

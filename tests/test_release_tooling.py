@@ -395,6 +395,10 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     assert '"import sktime"' in script
     assert '"import darts"' in script
     assert '"import gluonts"' in script
+    assert '"to_darts_bundle"' in script
+    assert '"from_darts_bundle"' in script
+    assert '"to_gluonts_bundle"' in script
+    assert '"from_gluonts_bundle"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
     assert '"foresight", "doctor", "--require-extra", "core"' in script
@@ -447,6 +451,52 @@ def test_smoke_build_install_supports_requested_adapter_extras(tmp_path: Path, m
     assert any(cmd[-2:] == ["--require-extra", "gluonts"] for cmd in calls)
     assert any(cmd[-1] == "import sktime" for cmd in calls if "-c" in cmd)
     assert any(cmd[-1] == "import gluonts" for cmd in calls if "-c" in cmd)
+
+
+def test_smoke_build_install_runs_darts_and_gluonts_adapter_runtime_smokes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    module = _load_smoke_build_install_module()
+    current_version = _repo_version(repo_root)
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+
+    wheel = dist_dir / f"foresight_ts-{current_version}-py3-none-any.whl"
+    sdist = dist_dir / f"foresight_ts-{current_version}.tar.gz"
+    wheel.write_text("", encoding="utf-8")
+    sdist.write_text("", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(module, "_repo_root", lambda: repo_root)
+    monkeypatch.setattr(module, "_create_venv", lambda **kwargs: None)
+    monkeypatch.setattr(module, "_venv_python", lambda venv_dir: venv_dir / "bin" / "python")
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+        calls.append(list(cmd))
+
+    monkeypatch.setattr(module, "_run", _fake_run)
+
+    assert (
+        module.main(
+            [
+                "--sdist",
+                "--dist-dir",
+                str(dist_dir),
+                "--require-extra",
+                "darts",
+                "--require-extra",
+                "gluonts",
+            ]
+        )
+        == 0
+    )
+
+    python_cmds = [cmd[-1] for cmd in calls if "-c" in cmd]
+    assert any("to_darts_bundle" in cmd and "from_darts_bundle" in cmd for cmd in python_cmds)
+    assert any("to_gluonts_bundle" in cmd and "from_gluonts_bundle" in cmd for cmd in python_cmds)
 
 
 def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
