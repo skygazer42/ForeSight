@@ -5,9 +5,12 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.frames import require_long_df
+from .shared import AdapterFrameBundle, require_adapter_frame_bundle
 
 __all__ = [
+    "from_darts_bundle",
     "from_darts_timeseries",
+    "to_darts_bundle",
     "to_darts_timeseries",
 ]
 
@@ -28,6 +31,95 @@ def _to_darts_series(value: Any) -> pd.Series:
     raise TypeError("Darts conversion expects a pandas Series or a canonical long DataFrame")
 
 
+def _timeseries_from_frame(darts_mod: Any, frame: pd.DataFrame) -> Any:
+    index = pd.Index(pd.to_datetime(frame["ds"], errors="raise"), name="ds")
+    value_cols = [str(col) for col in frame.columns if str(col) != "ds"]
+    if len(value_cols) != 1:
+        if hasattr(darts_mod.TimeSeries, "from_dataframe"):
+            df = frame.loc[:, value_cols].copy()
+            df.index = index
+            return darts_mod.TimeSeries.from_dataframe(df)
+        raise TypeError("Darts beta bundle currently requires TimeSeries.from_dataframe for multi-column covariates")
+
+    series = pd.Series(
+        frame[value_cols[0]].to_numpy(dtype=float, copy=False),
+        index=index,
+        name=value_cols[0],
+        dtype=float,
+    )
+    return darts_mod.TimeSeries.from_series(series)
+
+
+def _set_timeseries_unique_id(timeseries: Any, *, unique_id: str) -> Any:
+    setattr(timeseries, "_foresight_unique_id", str(unique_id))
+    return timeseries
+
+
+def _apply_static_covariates(timeseries: Any, static_frame: pd.DataFrame | None) -> Any:
+    if static_frame is None or static_frame.empty:
+        return timeseries
+    if hasattr(timeseries, "with_static_covariates"):
+        return timeseries.with_static_covariates(static_frame)
+    setattr(timeseries, "static_covariates", static_frame.copy())
+    return timeseries
+
+
+def _extract_static_covariates(timeseries: Any) -> pd.DataFrame | None:
+    static_covariates = getattr(timeseries, "static_covariates", None)
+    if isinstance(static_covariates, pd.DataFrame):
+        return static_covariates.copy()
+    return None
+
+
+def _timeseries_to_frame(timeseries: Any, *, default_name: str) -> pd.DataFrame:
+    series = _pandas_series_from_timeseries(timeseries)
+    return pd.DataFrame({"ds": pd.Index(series.index), str(series.name or default_name): series.to_numpy(dtype=float, copy=False)})
+
+
+def _bundle_payload_for_group(
+    darts_mod: Any,
+    *,
+    bundle: AdapterFrameBundle,
+    unique_id: str,
+) -> tuple[Any, Any | None, Any | None]:
+    group = bundle.long_df.loc[
+        bundle.long_df["unique_id"].astype("string") == str(unique_id)
+    ].reset_index(drop=True)
+    target = _timeseries_from_frame(darts_mod, group.loc[:, ["ds", "y"]])
+
+    static_frame = None
+    if bundle.covariates.static_cols:
+        static_frame = pd.DataFrame(
+            [{col: group[col].iloc[0] for col in bundle.covariates.static_cols}]
+        )
+    target = _set_timeseries_unique_id(
+        _apply_static_covariates(target, static_frame),
+        unique_id=str(unique_id),
+    )
+
+    past = None
+    if bundle.covariates.historic_x_cols:
+        past = _set_timeseries_unique_id(
+            _timeseries_from_frame(
+                darts_mod,
+                group.loc[:, ["ds", *bundle.covariates.historic_x_cols]],
+            ),
+            unique_id=str(unique_id),
+        )
+
+    future = None
+    if bundle.covariates.future_x_cols:
+        future = _set_timeseries_unique_id(
+            _timeseries_from_frame(
+                darts_mod,
+                group.loc[:, ["ds", *bundle.covariates.future_x_cols]],
+            ),
+            unique_id=str(unique_id),
+        )
+
+    return target, past, future
+
+
 def to_darts_timeseries(data: Any) -> Any:
     darts_mod = _require_darts()
 
@@ -44,6 +136,45 @@ def to_darts_timeseries(data: Any) -> Any:
         )
         out[str(unique_id)] = darts_mod.TimeSeries.from_series(series)
     return out
+
+
+def to_darts_bundle(data: Any) -> dict[str, Any]:
+    darts_mod = _require_darts()
+    bundle = require_adapter_frame_bundle(data)
+
+    if len(bundle.unique_ids) == 1:
+        target, past, future = _bundle_payload_for_group(
+            darts_mod,
+            bundle=bundle,
+            unique_id=bundle.unique_ids[0],
+        )
+        return {
+            "target": target,
+            "past_covariates": past,
+            "future_covariates": future,
+            "freq": bundle.freq,
+        }
+
+    target_out: dict[str, Any] = {}
+    past_out: dict[str, Any] = {}
+    future_out: dict[str, Any] = {}
+    for unique_id in bundle.unique_ids:
+        target, past, future = _bundle_payload_for_group(
+            darts_mod,
+            bundle=bundle,
+            unique_id=unique_id,
+        )
+        target_out[str(unique_id)] = target
+        if past is not None:
+            past_out[str(unique_id)] = past
+        if future is not None:
+            future_out[str(unique_id)] = future
+    return {
+        "target": target_out,
+        "past_covariates": past_out,
+        "future_covariates": future_out,
+        "freq": bundle.freq,
+    }
 
 
 def _pandas_series_from_timeseries(timeseries: Any) -> pd.Series:
@@ -68,3 +199,56 @@ def from_darts_timeseries(data: Any) -> Any:
         return pd.DataFrame(rows, columns=["unique_id", "ds", "y"])
 
     return _pandas_series_from_timeseries(data)
+
+
+def _bundle_items(value: Any) -> list[tuple[str, Any]]:
+    if isinstance(value, dict):
+        return [(str(unique_id), value[unique_id]) for unique_id in sorted(value)]
+    unique_id = str(getattr(value, "_foresight_unique_id", "series=0"))
+    return [(unique_id, value)]
+
+
+def from_darts_bundle(data: Any) -> pd.DataFrame:
+    if not isinstance(data, dict):
+        raise TypeError("Darts beta bundle conversion expects a dict-like bundle")
+
+    target_items = _bundle_items(data.get("target"))
+    past_lookup = {str(unique_id): value for unique_id, value in _bundle_items(data.get("past_covariates", {}))}
+    future_lookup = {str(unique_id): value for unique_id, value in _bundle_items(data.get("future_covariates", {}))}
+
+    frames: list[pd.DataFrame] = []
+    historic_cols: list[str] = []
+    future_cols: list[str] = []
+    static_cols: list[str] = []
+
+    for unique_id, target_ts in target_items:
+        target_frame = _timeseries_to_frame(target_ts, default_name="y")
+        target_frame = target_frame.rename(columns={target_frame.columns[1]: "y"})
+        target_frame.insert(0, "unique_id", str(unique_id))
+
+        past_ts = past_lookup.get(str(unique_id))
+        if past_ts is not None:
+            past_frame = _timeseries_to_frame(past_ts, default_name="x")
+            historic_cols.extend([str(col) for col in past_frame.columns if str(col) != "ds"])
+            target_frame = target_frame.merge(past_frame, on="ds", how="left")
+
+        future_ts = future_lookup.get(str(unique_id))
+        if future_ts is not None:
+            future_frame = _timeseries_to_frame(future_ts, default_name="x")
+            future_cols.extend([str(col) for col in future_frame.columns if str(col) != "ds"])
+            target_frame = target_frame.merge(future_frame, on="ds", how="left")
+
+        static_frame = _extract_static_covariates(target_ts)
+        if static_frame is not None:
+            for col in static_frame.columns:
+                target_frame[str(col)] = static_frame.iloc[0][col]
+                static_cols.append(str(col))
+
+        frames.append(target_frame)
+
+    out = pd.concat(frames, axis=0, ignore_index=True, sort=False)
+    out = out.loc[:, ["unique_id", "ds", "y", *[col for col in out.columns if col not in {"unique_id", "ds", "y"}]]]
+    out.attrs["historic_x_cols"] = tuple(dict.fromkeys(historic_cols))
+    out.attrs["future_x_cols"] = tuple(dict.fromkeys(future_cols))
+    out.attrs["static_cols"] = tuple(dict.fromkeys(static_cols))
+    return out
