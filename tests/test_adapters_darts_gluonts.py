@@ -311,6 +311,123 @@ def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
     ]
 
 
+def test_gluonts_bundle_exports_panel_covariates_and_static_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gluonts_adapter_mod,
+        "_require_gluonts",
+        lambda: type(
+            "_FakeGluonTSModule",
+            (),
+            {
+                "dataset": type(
+                    "_Dataset",
+                    (),
+                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
+                )
+            },
+        )(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a", "b", "b"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0, 10.0, 11.0],
+            "stock": [5.0, 6.0, 7.0, 8.0],
+            "promo": [0.0, 1.0, 1.0, 0.0],
+            "store_size": [100.0, 100.0, 150.0, 150.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ("stock",)
+    long_df.attrs["future_x_cols"] = ("promo",)
+    long_df.attrs["static_cols"] = ("store_size",)
+
+    bundle = gluonts_adapter_mod.to_gluonts_bundle(long_df)
+
+    assert sorted(bundle) == [
+        "feat_dynamic_real",
+        "feat_static_real",
+        "feature_names",
+        "freq",
+        "past_feat_dynamic_real",
+        "target",
+    ]
+    assert sorted(bundle["target"]) == ["a", "b"]
+    assert bundle["freq"] == {"a": "D", "b": "D"}
+    assert bundle["past_feat_dynamic_real"]["a"] == [[5.0, 6.0]]
+    assert bundle["feat_dynamic_real"]["a"] == [[0.0, 1.0]]
+    assert bundle["feat_static_real"]["a"] == [100.0]
+    assert bundle["feature_names"] == {
+        "historic_x_cols": ("stock",),
+        "future_x_cols": ("promo",),
+        "static_cols": ("store_size",),
+    }
+
+
+def test_gluonts_bundle_round_trips_back_to_long_df(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gluonts_adapter_mod,
+        "_require_gluonts",
+        lambda: type(
+            "_FakeGluonTSModule",
+            (),
+            {
+                "dataset": type(
+                    "_Dataset",
+                    (),
+                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
+                )
+            },
+        )(),
+    )
+    bundle = {
+        "target": {
+            "a": {
+                "start": pd.Timestamp("2024-01-01"),
+                "target": [1.0, 2.0],
+                "item_id": "a",
+            }
+        },
+        "past_feat_dynamic_real": {"a": [[5.0, 6.0]]},
+        "feat_dynamic_real": {"a": [[0.0, 1.0]]},
+        "feat_static_real": {"a": [100.0]},
+        "feature_names": {
+            "historic_x_cols": ("stock",),
+            "future_x_cols": ("promo",),
+            "static_cols": ("store_size",),
+        },
+        "freq": {"a": "D"},
+    }
+
+    restored = gluonts_adapter_mod.from_gluonts_bundle(bundle)
+
+    assert list(restored.columns) == ["unique_id", "ds", "y", "stock", "promo", "store_size"]
+    assert restored.attrs["historic_x_cols"] == ("stock",)
+    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert restored.attrs["static_cols"] == ("store_size",)
+    assert restored.to_dict("records") == [
+        {
+            "unique_id": "a",
+            "ds": pd.Timestamp("2024-01-01"),
+            "y": 1.0,
+            "stock": 5.0,
+            "promo": 0.0,
+            "store_size": 100.0,
+        },
+        {
+            "unique_id": "a",
+            "ds": pd.Timestamp("2024-01-02"),
+            "y": 2.0,
+            "stock": 6.0,
+            "promo": 1.0,
+            "store_size": 100.0,
+        },
+    ]
+
+
 def test_gluonts_adapter_normalizes_two_point_daily_frequency_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
