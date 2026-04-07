@@ -38,6 +38,9 @@ python tools/generate_rnn_docs.py
 python -m pytest -q tests/test_public_contract.py
 python benchmarks/run_benchmarks.py --smoke
 python tools/smoke_build_install.py --sdist
+python tools/smoke_build_install.py --sdist --require-extra sktime
+python tools/smoke_build_install.py --sdist --require-extra darts
+python tools/smoke_build_install.py --sdist --require-extra gluonts
 mkdocs build --strict
 python tools/release_check.py
 ```

@@ -12,6 +12,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+_EXTRA_IMPORT_SMOKES = {
+    "sktime": "import sktime",
+    "darts": "import darts",
+    "gluonts": "import gluonts",
+}
+
 
 def _repo_root() -> Path:
     # tools/smoke_build_install.py -> repo root is parent of tools/
@@ -114,6 +120,32 @@ def _select_artifact(*, dist_dir: Path, glob_pattern: str, version: str, label: 
     )
 
 
+def _normalize_required_extras(raw: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        value = str(item).strip()
+        if value and value not in seen:
+            seen.add(value)
+            out.append(value)
+    return out
+
+
+def _artifact_requirement(*, artifact: Path, extras: list[str]) -> str:
+    if not extras:
+        return str(artifact)
+    joined = ",".join(extras)
+    return f"foresight-ts[{joined}] @ {artifact.resolve().as_uri()}"
+
+
+def _install_artifact(*, py: Path, artifact: Path, extras: list[str], cwd: Path, env: dict[str, str]) -> None:
+    cmd = [str(py), "-m", "pip", "install", "--progress-bar", "off"]
+    if not extras:
+        cmd.append("--no-deps")
+    cmd.append(_artifact_requirement(artifact=artifact, extras=extras))
+    _run(cmd, cwd=cwd, env=env)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="smoke_build_install",
@@ -130,10 +162,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also install from sdist (slower; may require network for build isolation).",
     )
+    p.add_argument(
+        "--require-extra",
+        action="append",
+        default=[],
+        help="Optional extra to install and verify from the built artifact. Repeatable.",
+    )
     args = p.parse_args(argv)
 
     root = _repo_root()
     version = _repo_version(root)
+    required_extras = _normalize_required_extras(list(args.require_extra))
     env = _prepare_storage_env(env=dict(os.environ))
     env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
     tmp_root = Path(str(env["TMPDIR"])).expanduser() if env.get("TMPDIR") else None
@@ -195,6 +234,15 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=root,
                 env=env,
             )
+            for extra in required_extras:
+                import_smoke = _EXTRA_IMPORT_SMOKES.get(str(extra))
+                if import_smoke is not None:
+                    _run([str(py), "-c", import_smoke], cwd=root, env=env)
+                _run(
+                    [str(py), "-m", "foresight", "doctor", "--require-extra", str(extra)],
+                    cwd=root,
+                    env=env,
+                )
             _run(
                 [str(py), "-m", "foresight", "models", "info", "torch-rnnpaper-elman-srn-direct"],
                 cwd=root,
@@ -302,17 +350,10 @@ def main(argv: list[str] | None = None) -> int:
         # Create a clean venv and install the wheel.
         _create_venv(venv_dir=venv_wheel_dir, cwd=root, env=env)
         py_wheel = _venv_python(venv_wheel_dir)
-        _run(
-            [
-                str(py_wheel),
-                "-m",
-                "pip",
-                "install",
-                "--progress-bar",
-                "off",
-                "--no-deps",
-                str(wheel),
-            ],
+        _install_artifact(
+            py=py_wheel,
+            artifact=wheel,
+            extras=required_extras,
             cwd=root,
             env=env,
         )
@@ -330,17 +371,10 @@ def main(argv: list[str] | None = None) -> int:
             venv_sdist_dir = tmp_path / "venv_sdist"
             _create_venv(venv_dir=venv_sdist_dir, cwd=root, env=env)
             py_sdist = _venv_python(venv_sdist_dir)
-            _run(
-                [
-                    str(py_sdist),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--progress-bar",
-                    "off",
-                    "--no-deps",
-                    str(sdist),
-                ],
+            _install_artifact(
+                py=py_sdist,
+                artifact=sdist,
+                extras=required_extras,
                 cwd=root,
                 env=env,
             )

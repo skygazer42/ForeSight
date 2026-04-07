@@ -309,6 +309,9 @@ def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:
     assert "python -m pytest -q tests/test_public_contract.py" in release_doc
     assert "python benchmarks/run_benchmarks.py --smoke" in release_doc
     assert "python tools/smoke_build_install.py --sdist" in release_doc
+    assert "python tools/smoke_build_install.py --sdist --require-extra sktime" in release_doc
+    assert "python tools/smoke_build_install.py --sdist --require-extra darts" in release_doc
+    assert "python tools/smoke_build_install.py --sdist --require-extra gluonts" in release_doc
     assert "foresight doctor" in release_doc
     assert "python -m foresight doctor --format text" in release_doc
     assert "doctor --strict" in release_doc
@@ -384,15 +387,66 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     script = (repo_root / "tools" / "smoke_build_install.py").read_text(encoding="utf-8")
 
     assert "--dist-dir" in script
+    assert "--require-extra" in script
     assert '"import foresight; print(foresight.__version__)"' in script
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
     assert '"import foresight.pipeline as pipeline; print(sorted(pipeline.__all__)[:3])"' in script
     assert '"import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])"' in script
+    assert '"import sktime"' in script
+    assert '"import darts"' in script
+    assert '"import gluonts"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
     assert '"foresight", "doctor", "--require-extra", "core"' in script
     assert '"virtualenv"' in script
     assert 'shutil.which("virtualenv")' in script
+
+
+def test_smoke_build_install_supports_requested_adapter_extras(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    module = _load_smoke_build_install_module()
+    current_version = _repo_version(repo_root)
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+
+    wheel = dist_dir / f"foresight_ts-{current_version}-py3-none-any.whl"
+    sdist = dist_dir / f"foresight_ts-{current_version}.tar.gz"
+    wheel.write_text("", encoding="utf-8")
+    sdist.write_text("", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(module, "_repo_root", lambda: repo_root)
+    monkeypatch.setattr(module, "_create_venv", lambda **kwargs: None)
+    monkeypatch.setattr(module, "_venv_python", lambda venv_dir: venv_dir / "bin" / "python")
+
+    def _fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+        calls.append(list(cmd))
+
+    monkeypatch.setattr(module, "_run", _fake_run)
+
+    assert (
+        module.main(
+            [
+                "--sdist",
+                "--dist-dir",
+                str(dist_dir),
+                "--require-extra",
+                "sktime",
+                "--require-extra",
+                "gluonts",
+            ]
+        )
+        == 0
+    )
+
+    install_specs = [cmd[-1] for cmd in calls if len(cmd) >= 4 and cmd[1:4] == ["-m", "pip", "install"]]
+    assert any("foresight-ts[sktime,gluonts] @" in spec and wheel.name in spec for spec in install_specs)
+    assert any("foresight-ts[sktime,gluonts] @" in spec and sdist.name in spec for spec in install_specs)
+    assert any(cmd[-2:] == ["--require-extra", "sktime"] for cmd in calls)
+    assert any(cmd[-2:] == ["--require-extra", "gluonts"] for cmd in calls)
+    assert any(cmd[-1] == "import sktime" for cmd in calls if "-c" in cmd)
+    assert any(cmd[-1] == "import gluonts" for cmd in calls if "-c" in cmd)
 
 
 def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(
