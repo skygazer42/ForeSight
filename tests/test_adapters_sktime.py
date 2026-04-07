@@ -152,6 +152,31 @@ def test_sktime_adapter_supports_array_like_x_inputs_for_datetime_index(
     assert yhat.tolist() == pytest.approx([6.0, 6.0])
 
 
+def test_sktime_adapter_rejects_x_columns_that_do_not_match_configured_x_cols(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter(_FakeLocalXRegForecaster())
+    y = pd.Series([1.0, 2.0, 3.0], index=pd.RangeIndex(start=0, stop=3))
+
+    with pytest.raises(ValueError, match="X columns must match configured x_cols"):
+        adapter.fit(y, X=pd.DataFrame({"wrong_col": [0.0, 1.0, 0.0]}))
+
+
+def test_sktime_adapter_rejects_sparse_horizon_x_without_full_future_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter(_FakeLocalXRegForecaster())
+    y = pd.Series([1.0, 2.0, 3.0], index=pd.RangeIndex(start=0, stop=3))
+    adapter.fit(y, X=pd.DataFrame({"promo": [0.0, 1.0, 0.0]}, index=y.index))
+
+    with pytest.raises(ValueError, match="one row per step up to max fh"):
+        adapter.predict([1, 3], X=pd.DataFrame({"promo": [1.0, 2.0]}, index=pd.Index([3, 5])))
+
+
 def test_sktime_adapter_rejects_unsupported_x_beta_shapes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

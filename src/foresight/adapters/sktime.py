@@ -85,7 +85,9 @@ def _coerce_sktime_X(
         out = pd.DataFrame(X)
 
     if len(out) != int(expected_rows):
-        raise ValueError(f"X must contain exactly {int(expected_rows)} rows")
+        raise ValueError(
+            f"X must contain exactly {int(expected_rows)} rows (one row per step up to max fh)"
+        )
 
     if (
         explicit_index
@@ -97,21 +99,25 @@ def _coerce_sktime_X(
     ):
         raise ValueError("X index must align with the forecasting horizon")
 
-    if (
-        x_cols
-        and len(out.columns) == len(x_cols)
-        and list(out.columns) != list(x_cols)
-    ):
+    if x_cols and len(out.columns) != len(x_cols):
+        raise ValueError("X columns must match configured x_cols")
+
+    if x_cols and list(out.columns) != list(x_cols):
         if isinstance(out.columns, pd.RangeIndex) or all(
             isinstance(col, (int, np.integer)) for col in out.columns.tolist()
         ):
             out.columns = list(x_cols)
+        else:
+            raise ValueError("X columns must match configured x_cols")
     return out
 
 
 def _forecaster_accepts_X(forecaster: BaseForecaster) -> bool:
-    fit_sig = inspect.signature(forecaster.fit)
-    predict_sig = inspect.signature(forecaster.predict)
+    try:
+        fit_sig = inspect.signature(forecaster.fit)
+        predict_sig = inspect.signature(forecaster.predict)
+    except (TypeError, ValueError):
+        return False
     return "X" in fit_sig.parameters and "X" in predict_sig.parameters
 
 
