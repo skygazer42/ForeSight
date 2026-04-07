@@ -123,10 +123,12 @@ def test_darts_bundle_round_trips_single_series_future_covariates(
     bundle = darts_adapter_mod.to_darts_bundle(long_df)
 
     assert sorted(bundle) == ["freq", "future_covariates", "past_covariates", "target"]
-    assert bundle["past_covariates"] is None
-    assert isinstance(bundle["target"], _FakeTimeSeries)
-    assert isinstance(bundle["future_covariates"], _FakeTimeSeries)
-    assert bundle["freq"] == "D"
+    assert bundle["past_covariates"] == {}
+    assert sorted(bundle["target"]) == ["s0"]
+    assert sorted(bundle["future_covariates"]) == ["s0"]
+    assert bundle["freq"] == {"s0": "D"}
+    assert isinstance(bundle["target"]["s0"], _FakeTimeSeries)
+    assert isinstance(bundle["future_covariates"]["s0"], _FakeTimeSeries)
 
     restored = darts_adapter_mod.from_darts_bundle(bundle)
 
@@ -135,6 +137,47 @@ def test_darts_bundle_round_trips_single_series_future_covariates(
     assert restored.attrs["future_x_cols"] == ("promo",)
     assert restored.attrs["static_cols"] == ()
     assert restored["promo"].tolist() == pytest.approx([0.0, 1.0, 0.0])
+
+
+def test_darts_bundle_import_accepts_legacy_single_series_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
+    )
+    target = _FakeTimeSeries.from_series(
+        pd.Series(
+            [1.0, 2.0, 3.0],
+            index=pd.date_range("2024-01-01", periods=3, freq="D"),
+            name="y",
+        )
+    )
+    setattr(target, "_foresight_unique_id", "s0")
+    future = _FakeTimeSeries.from_series(
+        pd.Series(
+            [0.0, 1.0, 0.0],
+            index=pd.date_range("2024-01-01", periods=3, freq="D"),
+            name="promo",
+        )
+    )
+    setattr(future, "_foresight_unique_id", "s0")
+
+    restored = darts_adapter_mod.from_darts_bundle(
+        {
+            "target": target,
+            "past_covariates": None,
+            "future_covariates": future,
+            "freq": "D",
+        }
+    )
+
+    assert list(restored.columns) == ["unique_id", "ds", "y", "promo"]
+    assert restored.attrs["historic_x_cols"] == ()
+    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert restored.attrs["static_cols"] == ()
+    assert restored["unique_id"].tolist() == ["s0", "s0", "s0"]
 
 
 def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
