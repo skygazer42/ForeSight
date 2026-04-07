@@ -8,8 +8,14 @@ import foresight.adapters.gluonts as gluonts_adapter_mod
 
 
 class _FakeTimeSeries:
-    def __init__(self, series: pd.Series) -> None:
+    def __init__(
+        self,
+        series: pd.Series,
+        *,
+        static_covariates: pd.DataFrame | None = None,
+    ) -> None:
         self._series = series.astype(float)
+        self.static_covariates = static_covariates
 
     @classmethod
     def from_series(cls, series: pd.Series):
@@ -17,6 +23,9 @@ class _FakeTimeSeries:
 
     def pd_series(self) -> pd.Series:
         return self._series.copy()
+
+    def with_static_covariates(self, static_covariates: pd.DataFrame):
+        return type(self)(self._series.copy(), static_covariates=static_covariates.copy())
 
 
 class _FakeListDataset(list):
@@ -72,6 +81,82 @@ def test_darts_adapter_converts_panel_long_df_to_mapping_and_back(
         {"unique_id": "b", "ds": pd.Timestamp("2024-01-01"), "y": 10.0},
         {"unique_id": "b", "ds": pd.Timestamp("2024-01-02"), "y": 11.0},
     ]
+
+
+def test_darts_bundle_round_trips_single_series_future_covariates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+            "y": [1.0, 2.0, 3.0],
+            "promo": [0.0, 1.0, 0.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ()
+    long_df.attrs["future_x_cols"] = ("promo",)
+    long_df.attrs["static_cols"] = ()
+
+    bundle = darts_adapter_mod.to_darts_bundle(long_df)
+
+    assert sorted(bundle) == ["freq", "future_covariates", "past_covariates", "target"]
+    assert bundle["past_covariates"] is None
+    assert isinstance(bundle["target"], _FakeTimeSeries)
+    assert isinstance(bundle["future_covariates"], _FakeTimeSeries)
+    assert bundle["freq"] == "D"
+
+    restored = darts_adapter_mod.from_darts_bundle(bundle)
+
+    assert list(restored.columns) == ["unique_id", "ds", "y", "promo"]
+    assert restored.attrs["historic_x_cols"] == ()
+    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert restored.attrs["static_cols"] == ()
+    assert restored["promo"].tolist() == pytest.approx([0.0, 1.0, 0.0])
+
+
+def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a", "b", "b"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0, 10.0, 11.0],
+            "stock": [5.0, 6.0, 7.0, 8.0],
+            "promo": [0.0, 1.0, 1.0, 0.0],
+            "store_size": [100.0, 100.0, 150.0, 150.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ("stock",)
+    long_df.attrs["future_x_cols"] = ("promo",)
+    long_df.attrs["static_cols"] = ("store_size",)
+
+    bundle = darts_adapter_mod.to_darts_bundle(long_df)
+
+    assert sorted(bundle) == ["freq", "future_covariates", "past_covariates", "target"]
+    assert sorted(bundle["target"]) == ["a", "b"]
+    assert sorted(bundle["past_covariates"]) == ["a", "b"]
+    assert sorted(bundle["future_covariates"]) == ["a", "b"]
+    assert bundle["target"]["a"].static_covariates is not None
+
+    restored = darts_adapter_mod.from_darts_bundle(bundle)
+
+    assert list(restored.columns) == ["unique_id", "ds", "y", "stock", "promo", "store_size"]
+    assert restored.attrs["historic_x_cols"] == ("stock",)
+    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert restored.attrs["static_cols"] == ("store_size",)
+    assert restored["store_size"].tolist() == pytest.approx([100.0, 100.0, 150.0, 150.0])
 
 
 def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
