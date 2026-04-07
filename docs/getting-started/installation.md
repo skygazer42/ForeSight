@@ -36,6 +36,9 @@ ForeSight 将重量级后端拆分为多个 extras，按需安装即可：
 | `catboost` | `pip install foresight-ts[catboost]` | CatBoost | >= 1.2 |
 | `stats` | `pip install foresight-ts[stats]` | statsmodels | >= 0.14 |
 | `torch` | `pip install foresight-ts[torch]` | PyTorch | >= 2.0 |
+| `sktime` | `pip install foresight-ts[sktime]` | sktime | >= 0.30 |
+| `darts` | `pip install foresight-ts[darts]` | u8darts | >= 0.30 |
+| `gluonts` | `pip install foresight-ts[gluonts]` | gluonts | >= 0.15 |
 | `all` | `pip install foresight-ts[all]` | 以上全部 | — |
 
 可以组合多个 extras：
@@ -48,6 +51,14 @@ pip install foresight-ts[ml,xgb,stats]
 
 ```bash
 pip install foresight-ts[all]
+```
+
+适配器相关 extras 可以单独安装，例如：
+
+```bash
+pip install foresight-ts[sktime]
+pip install foresight-ts[darts]
+pip install foresight-ts[gluonts]
 ```
 
 ---
