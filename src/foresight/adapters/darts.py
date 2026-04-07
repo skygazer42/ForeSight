@@ -72,8 +72,20 @@ def _extract_static_covariates(timeseries: Any) -> pd.DataFrame | None:
 
 
 def _timeseries_to_frame(timeseries: Any, *, default_name: str) -> pd.DataFrame:
+    if hasattr(timeseries, "pd_dataframe"):
+        frame = timeseries.pd_dataframe()
+        if isinstance(frame, pd.DataFrame):
+            out = frame.copy()
+            out = out.reset_index()
+            first_col = str(out.columns[0])
+            return out.rename(columns={first_col: "ds"})
     series = _pandas_series_from_timeseries(timeseries)
-    return pd.DataFrame({"ds": pd.Index(series.index), str(series.name or default_name): series.to_numpy(dtype=float, copy=False)})
+    return pd.DataFrame(
+        {
+            "ds": pd.Index(series.index),
+            str(series.name or default_name): series.to_numpy(dtype=float, copy=False),
+        }
+    )
 
 
 def _bundle_payload_for_group(
@@ -82,38 +94,24 @@ def _bundle_payload_for_group(
     bundle: AdapterFrameBundle,
     unique_id: str,
 ) -> tuple[Any, Any | None, Any | None]:
-    group = bundle.long_df.loc[
-        bundle.long_df["unique_id"].astype("string") == str(unique_id)
-    ].reset_index(drop=True)
-    target = _timeseries_from_frame(darts_mod, group.loc[:, ["ds", "y"]])
-
-    static_frame = None
-    if bundle.covariates.static_cols:
-        static_frame = pd.DataFrame(
-            [{col: group[col].iloc[0] for col in bundle.covariates.static_cols}]
-        )
+    payload = bundle.payloads[str(unique_id)]
+    target = _timeseries_from_frame(darts_mod, payload.target)
     target = _set_timeseries_unique_id(
-        _apply_static_covariates(target, static_frame),
+        _apply_static_covariates(target, payload.static_covariates),
         unique_id=str(unique_id),
     )
 
     past = None
-    if bundle.covariates.historic_x_cols:
+    if payload.historic_covariates is not None:
         past = _set_timeseries_unique_id(
-            _timeseries_from_frame(
-                darts_mod,
-                group.loc[:, ["ds", *bundle.covariates.historic_x_cols]],
-            ),
+            _timeseries_from_frame(darts_mod, payload.historic_covariates),
             unique_id=str(unique_id),
         )
 
     future = None
-    if bundle.covariates.future_x_cols:
+    if payload.future_covariates is not None:
         future = _set_timeseries_unique_id(
-            _timeseries_from_frame(
-                darts_mod,
-                group.loc[:, ["ds", *bundle.covariates.future_x_cols]],
-            ),
+            _timeseries_from_frame(darts_mod, payload.future_covariates),
             unique_id=str(unique_id),
         )
 

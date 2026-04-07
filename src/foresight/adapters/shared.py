@@ -10,11 +10,20 @@ from ..contracts.frames import require_long_df
 
 
 @dataclass(frozen=True)
+class AdapterSeriesPayload:
+    target: pd.DataFrame
+    historic_covariates: pd.DataFrame | None = None
+    future_covariates: pd.DataFrame | None = None
+    static_covariates: pd.DataFrame | None = None
+    freq: str = "D"
+
+
+@dataclass(frozen=True)
 class AdapterFrameBundle:
-    long_df: pd.DataFrame
     covariates: CovariateSpec
-    freq: str
+    freq: str | dict[str, str]
     unique_ids: tuple[str, ...]
+    payloads: dict[str, AdapterSeriesPayload]
 
 
 def infer_adapter_frequency(ds: pd.Series) -> str:
@@ -47,16 +56,64 @@ def require_adapter_frame_bundle(data: Any) -> AdapterFrameBundle:
     )
     unique_ids = tuple(str(uid) for uid in long_df["unique_id"].astype("string").unique().tolist())
 
+    payloads: dict[str, AdapterSeriesPayload] = {}
     if long_df.empty:
-        freq = "D"
+        freq: str | dict[str, str] = "D"
+    elif len(unique_ids) == 1:
+        uid_series = long_df["unique_id"].astype("string")
+        unique_id = unique_ids[0]
+        group = long_df.loc[uid_series == str(unique_id)].reset_index(drop=True)
+        group_freq = infer_adapter_frequency(pd.Series(group["ds"]).reset_index(drop=True))
+        payloads[str(unique_id)] = AdapterSeriesPayload(
+            target=group.loc[:, ["ds", "y"]].copy(),
+            historic_covariates=(
+                None
+                if not covariates.historic_x_cols
+                else group.loc[:, ["ds", *covariates.historic_x_cols]].copy()
+            ),
+            future_covariates=(
+                None
+                if not covariates.future_x_cols
+                else group.loc[:, ["ds", *covariates.future_x_cols]].copy()
+            ),
+            static_covariates=(
+                None
+                if not covariates.static_cols
+                else pd.DataFrame([{col: group[col].iloc[0] for col in covariates.static_cols}])
+            ),
+            freq=group_freq,
+        )
+        freq = group_freq
     else:
-        first_uid = unique_ids[0]
-        first_group = long_df.loc[long_df["unique_id"].astype("string") == first_uid, "ds"]
-        freq = infer_adapter_frequency(pd.Series(first_group).reset_index(drop=True))
+        freq = {}
+        uid_series = long_df["unique_id"].astype("string")
+        for unique_id in unique_ids:
+            group = long_df.loc[uid_series == str(unique_id)].reset_index(drop=True)
+            group_freq = infer_adapter_frequency(pd.Series(group["ds"]).reset_index(drop=True))
+            freq[str(unique_id)] = group_freq
+            payloads[str(unique_id)] = AdapterSeriesPayload(
+                target=group.loc[:, ["ds", "y"]].copy(),
+                historic_covariates=(
+                    None
+                    if not covariates.historic_x_cols
+                    else group.loc[:, ["ds", *covariates.historic_x_cols]].copy()
+                ),
+                future_covariates=(
+                    None
+                    if not covariates.future_x_cols
+                    else group.loc[:, ["ds", *covariates.future_x_cols]].copy()
+                ),
+                static_covariates=(
+                    None
+                    if not covariates.static_cols
+                    else pd.DataFrame([{col: group[col].iloc[0] for col in covariates.static_cols}])
+                ),
+                freq=group_freq,
+            )
 
     return AdapterFrameBundle(
-        long_df=long_df,
         covariates=covariates,
         freq=freq,
         unique_ids=unique_ids,
+        payloads=payloads,
     )

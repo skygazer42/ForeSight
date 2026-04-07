@@ -10,22 +10,39 @@ import foresight.adapters.gluonts as gluonts_adapter_mod
 class _FakeTimeSeries:
     def __init__(
         self,
-        series: pd.Series,
+        data: pd.Series | pd.DataFrame,
         *,
         static_covariates: pd.DataFrame | None = None,
     ) -> None:
-        self._series = series.astype(float)
+        if isinstance(data, pd.Series):
+            self._data = data.astype(float)
+        else:
+            self._data = data.astype(float)
         self.static_covariates = static_covariates
 
     @classmethod
     def from_series(cls, series: pd.Series):
         return cls(series)
 
+    @classmethod
+    def from_dataframe(cls, frame: pd.DataFrame):
+        return cls(frame.copy())
+
     def pd_series(self) -> pd.Series:
-        return self._series.copy()
+        if isinstance(self._data, pd.Series):
+            return self._data.copy()
+        if self._data.shape[1] != 1:
+            raise TypeError("fake TimeSeries needs pd_dataframe() for multi-column data")
+        return self._data.iloc[:, 0].copy()
+
+    def pd_dataframe(self) -> pd.DataFrame:
+        if isinstance(self._data, pd.Series):
+            return self._data.to_frame()
+        return self._data.copy()
 
     def with_static_covariates(self, static_covariates: pd.DataFrame):
-        return type(self)(self._series.copy(), static_covariates=static_covariates.copy())
+        data = self._data.copy() if hasattr(self._data, "copy") else self._data
+        return type(self)(data, static_covariates=static_covariates.copy())
 
 
 class _FakeListDataset(list):
@@ -134,17 +151,20 @@ def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
             "ds": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-02"]),
             "y": [1.0, 2.0, 10.0, 11.0],
             "stock": [5.0, 6.0, 7.0, 8.0],
+            "stock_lag2": [4.0, 5.0, 6.0, 7.0],
             "promo": [0.0, 1.0, 1.0, 0.0],
+            "future_temp": [20.0, 21.0, 18.0, 19.0],
             "store_size": [100.0, 100.0, 150.0, 150.0],
         }
     )
-    long_df.attrs["historic_x_cols"] = ("stock",)
-    long_df.attrs["future_x_cols"] = ("promo",)
+    long_df.attrs["historic_x_cols"] = ("stock", "stock_lag2")
+    long_df.attrs["future_x_cols"] = ("promo", "future_temp")
     long_df.attrs["static_cols"] = ("store_size",)
 
     bundle = darts_adapter_mod.to_darts_bundle(long_df)
 
     assert sorted(bundle) == ["freq", "future_covariates", "past_covariates", "target"]
+    assert bundle["freq"] == {"a": "D", "b": "D"}
     assert sorted(bundle["target"]) == ["a", "b"]
     assert sorted(bundle["past_covariates"]) == ["a", "b"]
     assert sorted(bundle["future_covariates"]) == ["a", "b"]
@@ -152,9 +172,18 @@ def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
 
     restored = darts_adapter_mod.from_darts_bundle(bundle)
 
-    assert list(restored.columns) == ["unique_id", "ds", "y", "stock", "promo", "store_size"]
-    assert restored.attrs["historic_x_cols"] == ("stock",)
-    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert list(restored.columns) == [
+        "unique_id",
+        "ds",
+        "y",
+        "stock",
+        "stock_lag2",
+        "promo",
+        "future_temp",
+        "store_size",
+    ]
+    assert restored.attrs["historic_x_cols"] == ("stock", "stock_lag2")
+    assert restored.attrs["future_x_cols"] == ("promo", "future_temp")
     assert restored.attrs["static_cols"] == ("store_size",)
     assert restored["store_size"].tolist() == pytest.approx([100.0, 100.0, 150.0, 150.0])
 
