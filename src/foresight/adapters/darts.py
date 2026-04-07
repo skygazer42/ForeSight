@@ -140,22 +140,10 @@ def to_darts_bundle(data: Any) -> dict[str, Any]:
     darts_mod = _require_darts()
     bundle = require_adapter_frame_bundle(data)
 
-    if len(bundle.unique_ids) == 1:
-        target, past, future = _bundle_payload_for_group(
-            darts_mod,
-            bundle=bundle,
-            unique_id=bundle.unique_ids[0],
-        )
-        return {
-            "target": target,
-            "past_covariates": past,
-            "future_covariates": future,
-            "freq": bundle.freq,
-        }
-
     target_out: dict[str, Any] = {}
     past_out: dict[str, Any] = {}
     future_out: dict[str, Any] = {}
+    freq_out: dict[str, str] = {}
     for unique_id in bundle.unique_ids:
         target, past, future = _bundle_payload_for_group(
             darts_mod,
@@ -163,6 +151,10 @@ def to_darts_bundle(data: Any) -> dict[str, Any]:
             unique_id=unique_id,
         )
         target_out[str(unique_id)] = target
+        if isinstance(bundle.freq, dict):
+            freq_out[str(unique_id)] = str(bundle.freq[str(unique_id)])
+        else:
+            freq_out[str(unique_id)] = str(bundle.freq)
         if past is not None:
             past_out[str(unique_id)] = past
         if future is not None:
@@ -171,7 +163,7 @@ def to_darts_bundle(data: Any) -> dict[str, Any]:
         "target": target_out,
         "past_covariates": past_out,
         "future_covariates": future_out,
-        "freq": bundle.freq,
+        "freq": freq_out,
     }
 
 
