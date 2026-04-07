@@ -26,6 +26,14 @@ class AdapterFrameBundle:
     payloads: dict[str, AdapterSeriesPayload]
 
 
+def _normalize_bundle_freq(bundle: AdapterFrameBundle) -> dict[str, str]:
+    if isinstance(bundle.freq, dict):
+        return {str(unique_id): str(value) for unique_id, value in bundle.freq.items()}
+    if not bundle.unique_ids:
+        return {}
+    return {str(bundle.unique_ids[0]): str(bundle.freq)}
+
+
 def infer_adapter_frequency(ds: pd.Series) -> str:
     values = pd.to_datetime(ds, errors="raise")
     if len(values) < 2:
@@ -140,3 +148,98 @@ def require_adapter_frame_bundle(data: Any) -> AdapterFrameBundle:
         unique_ids=unique_ids,
         payloads=payloads,
     )
+
+
+def to_beta_bundle(data: Any) -> dict[str, Any]:
+    bundle = require_adapter_frame_bundle(data)
+
+    target: dict[str, pd.DataFrame] = {}
+    historic_covariates: dict[str, pd.DataFrame] = {}
+    future_covariates: dict[str, pd.DataFrame] = {}
+    static_covariates: dict[str, pd.DataFrame] = {}
+
+    for unique_id in bundle.unique_ids:
+        payload = bundle.payloads[str(unique_id)]
+        target[str(unique_id)] = payload.target.copy()
+        if payload.historic_covariates is not None:
+            historic_covariates[str(unique_id)] = payload.historic_covariates.copy()
+        if payload.future_covariates is not None:
+            future_covariates[str(unique_id)] = payload.future_covariates.copy()
+        if payload.static_covariates is not None:
+            static_covariates[str(unique_id)] = payload.static_covariates.copy()
+
+    return {
+        "target": target,
+        "historic_covariates": historic_covariates,
+        "future_covariates": future_covariates,
+        "static_covariates": static_covariates,
+        "freq": _normalize_bundle_freq(bundle),
+    }
+
+
+def from_beta_bundle(data: Any) -> pd.DataFrame:
+    if not isinstance(data, dict):
+        raise TypeError("shared beta bundle conversion expects a dict-like bundle")
+    if "target" not in data or data.get("target") is None:
+        raise ValueError("shared beta bundle must include a non-empty 'target' payload")
+
+    target = dict(data.get("target", {}))
+    historic_covariates = {
+        str(unique_id): value
+        for unique_id, value in dict(data.get("historic_covariates", {})).items()
+    }
+    future_covariates = {
+        str(unique_id): value
+        for unique_id, value in dict(data.get("future_covariates", {})).items()
+    }
+    static_covariates = {
+        str(unique_id): value
+        for unique_id, value in dict(data.get("static_covariates", {})).items()
+    }
+
+    frames: list[pd.DataFrame] = []
+    historic_cols: list[str] = []
+    future_cols: list[str] = []
+    static_cols: list[str] = []
+
+    for unique_id, target_frame in sorted(target.items(), key=lambda item: str(item[0])):
+        if not isinstance(target_frame, pd.DataFrame):
+            raise TypeError("shared beta bundle target payloads must be pandas DataFrames")
+        if list(target_frame.columns) != ["ds", "y"]:
+            raise ValueError("shared beta bundle target payloads must use columns ['ds', 'y']")
+        frame = target_frame.copy()
+        frame.insert(0, "unique_id", str(unique_id))
+
+        historic_frame = historic_covariates.get(str(unique_id))
+        if historic_frame is not None:
+            if not isinstance(historic_frame, pd.DataFrame):
+                raise TypeError("shared beta bundle historic_covariates payloads must be DataFrames")
+            historic_cols.extend([str(col) for col in historic_frame.columns if str(col) != "ds"])
+            frame = frame.merge(historic_frame.copy(), on="ds", how="left")
+
+        future_frame = future_covariates.get(str(unique_id))
+        if future_frame is not None:
+            if not isinstance(future_frame, pd.DataFrame):
+                raise TypeError("shared beta bundle future_covariates payloads must be DataFrames")
+            future_cols.extend([str(col) for col in future_frame.columns if str(col) != "ds"])
+            frame = frame.merge(future_frame.copy(), on="ds", how="left")
+
+        static_frame = static_covariates.get(str(unique_id))
+        if static_frame is not None:
+            if not isinstance(static_frame, pd.DataFrame):
+                raise TypeError("shared beta bundle static_covariates payloads must be DataFrames")
+            for col in static_frame.columns:
+                frame[str(col)] = static_frame.iloc[0][col]
+                static_cols.append(str(col))
+
+        frames.append(frame)
+
+    out = pd.concat(frames, axis=0, ignore_index=True, sort=False)
+    out = out.loc[
+        :,
+        ["unique_id", "ds", "y", *[col for col in out.columns if col not in {"unique_id", "ds", "y"}]],
+    ]
+    out.attrs["historic_x_cols"] = tuple(dict.fromkeys(historic_cols))
+    out.attrs["future_x_cols"] = tuple(dict.fromkeys(future_cols))
+    out.attrs["static_cols"] = tuple(dict.fromkeys(static_cols))
+    return out
