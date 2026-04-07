@@ -76,6 +76,7 @@ def _coerce_sktime_X(
     expected_index: pd.Index | None,
     x_cols: tuple[str, ...],
 ) -> pd.DataFrame:
+    explicit_index = isinstance(X, (pd.DataFrame, pd.Series))
     if isinstance(X, pd.DataFrame):
         out = X.copy()
     elif isinstance(X, pd.Series):
@@ -87,7 +88,8 @@ def _coerce_sktime_X(
         raise ValueError(f"X must contain exactly {int(expected_rows)} rows")
 
     if (
-        isinstance(expected_index, pd.Index)
+        explicit_index
+        and isinstance(expected_index, pd.Index)
         and len(expected_index) == len(out)
         and isinstance(out.index, pd.Index)
         and len(out.index) == len(expected_index)
@@ -95,7 +97,11 @@ def _coerce_sktime_X(
     ):
         raise ValueError("X index must align with the forecasting horizon")
 
-    if x_cols and len(out.columns) == len(x_cols) and list(out.columns) != list(x_cols):
+    if (
+        x_cols
+        and len(out.columns) == len(x_cols)
+        and list(out.columns) != list(x_cols)
+    ):
         if isinstance(out.columns, pd.RangeIndex) or all(
             isinstance(col, (int, np.integer)) for col in out.columns.tolist()
         ):

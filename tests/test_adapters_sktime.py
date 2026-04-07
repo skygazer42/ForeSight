@@ -127,6 +127,24 @@ def test_sktime_adapter_supports_local_single_series_x_inputs(
     assert yhat.tolist() == pytest.approx([6.0, 6.0])
 
 
+def test_sktime_adapter_supports_array_like_x_inputs_for_datetime_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sktime_adapter_mod, "_require_sktime", lambda: object())
+
+    adapter = sktime_adapter_mod.make_sktime_forecaster_adapter(_FakeLocalXRegForecaster())
+    y = pd.Series(
+        [1.0, 2.0, 3.0],
+        index=pd.date_range("2024-01-01", periods=3, freq="D"),
+    )
+
+    yhat = adapter.fit(y, X=[[0.0], [1.0], [0.0]]).predict([1, 2], X=[[1.0], [2.0]])
+
+    assert isinstance(yhat, pd.Series)
+    assert list(yhat.index) == list(pd.DatetimeIndex(["2024-01-04", "2024-01-05"]))
+    assert yhat.tolist() == pytest.approx([6.0, 6.0])
+
+
 def test_sktime_adapter_rejects_unsupported_x_beta_shapes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
