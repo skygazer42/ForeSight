@@ -29,7 +29,9 @@ class AdapterFrameBundle:
 def infer_adapter_frequency(ds: pd.Series) -> str:
     values = pd.to_datetime(ds, errors="raise")
     if len(values) < 2:
-        raise ValueError("adapter conversion requires at least 2 timestamps to infer freq")
+        raise ValueError(
+            "Darts beta bundle conversion requires explicit freq or at least 2 timestamps per series"
+        )
 
     if len(values) >= 3:
         inferred = pd.infer_freq(values)
@@ -44,6 +46,27 @@ def infer_adapter_frequency(ds: pd.Series) -> str:
 
     offset = pd.tseries.frequencies.to_offset(delta)
     return str(offset.freqstr)
+
+
+def _build_static_covariates_frame(
+    group: pd.DataFrame,
+    *,
+    static_cols: tuple[str, ...],
+    unique_id: str,
+) -> pd.DataFrame | None:
+    if not static_cols:
+        return None
+
+    values: dict[str, Any] = {}
+    for col in static_cols:
+        observed = pd.Series(group[col]).dropna()
+        if observed.empty:
+            raise ValueError(f"static_cols column {col!r} has no observed value for unique_id={unique_id!r}")
+        unique_values = pd.unique(observed.to_numpy(copy=False))
+        if len(unique_values) != 1:
+            raise ValueError(f"static_cols column {col!r} must be constant within unique_id={unique_id!r}")
+        values[str(col)] = unique_values[0]
+    return pd.DataFrame([values])
 
 
 def require_adapter_frame_bundle(data: Any) -> AdapterFrameBundle:
@@ -76,10 +99,10 @@ def require_adapter_frame_bundle(data: Any) -> AdapterFrameBundle:
                 if not covariates.future_x_cols
                 else group.loc[:, ["ds", *covariates.future_x_cols]].copy()
             ),
-            static_covariates=(
-                None
-                if not covariates.static_cols
-                else pd.DataFrame([{col: group[col].iloc[0] for col in covariates.static_cols}])
+            static_covariates=_build_static_covariates_frame(
+                group,
+                static_cols=covariates.static_cols,
+                unique_id=str(unique_id),
             ),
             freq=group_freq,
         )
@@ -103,10 +126,10 @@ def require_adapter_frame_bundle(data: Any) -> AdapterFrameBundle:
                     if not covariates.future_x_cols
                     else group.loc[:, ["ds", *covariates.future_x_cols]].copy()
                 ),
-                static_covariates=(
-                    None
-                    if not covariates.static_cols
-                    else pd.DataFrame([{col: group[col].iloc[0] for col in covariates.static_cols}])
+                static_covariates=_build_static_covariates_frame(
+                    group,
+                    static_cols=covariates.static_cols,
+                    unique_id=str(unique_id),
                 ),
                 freq=group_freq,
             )

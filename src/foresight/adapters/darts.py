@@ -33,7 +33,7 @@ def _to_darts_series(value: Any) -> pd.Series:
 
 def _timeseries_from_frame(darts_mod: Any, frame: pd.DataFrame) -> Any:
     index = pd.Index(pd.to_datetime(frame["ds"], errors="raise"), name="ds")
-    value_cols = [str(col) for col in frame.columns if str(col) != "ds"]
+    value_cols = [col for col in frame.columns if col != "ds"]
     if len(value_cols) != 1:
         if hasattr(darts_mod.TimeSeries, "from_dataframe"):
             df = frame.loc[:, value_cols].copy()
@@ -201,7 +201,7 @@ def from_darts_timeseries(data: Any) -> Any:
 
 def _bundle_items(value: Any) -> list[tuple[str, Any]]:
     if isinstance(value, dict):
-        return [(str(unique_id), value[unique_id]) for unique_id in sorted(value)]
+        return [(str(unique_id), obj) for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))]
     unique_id = str(getattr(value, "_foresight_unique_id", "series=0"))
     return [(unique_id, value)]
 
@@ -209,6 +209,8 @@ def _bundle_items(value: Any) -> list[tuple[str, Any]]:
 def from_darts_bundle(data: Any) -> pd.DataFrame:
     if not isinstance(data, dict):
         raise TypeError("Darts beta bundle conversion expects a dict-like bundle")
+    if "target" not in data or data.get("target") is None:
+        raise ValueError("Darts beta bundle must include a non-empty 'target' payload")
 
     target_items = _bundle_items(data.get("target"))
     past_lookup = {str(unique_id): value for unique_id, value in _bundle_items(data.get("past_covariates", {}))}

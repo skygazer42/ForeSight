@@ -188,6 +188,50 @@ def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
     assert restored["store_size"].tolist() == pytest.approx([100.0, 100.0, 150.0, 150.0])
 
 
+def test_darts_bundle_rejects_non_constant_static_covariates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0],
+            "store_size": [100.0, 101.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ()
+    long_df.attrs["future_x_cols"] = ()
+    long_df.attrs["static_cols"] = ("store_size",)
+
+    with pytest.raises(ValueError, match="static_cols column 'store_size' must be constant"):
+        darts_adapter_mod.to_darts_bundle(long_df)
+
+
+def test_darts_bundle_requires_two_points_per_series_to_infer_freq(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a"],
+            "ds": pd.to_datetime(["2024-01-01"]),
+            "y": [1.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires explicit freq or at least 2 timestamps per series"):
+        darts_adapter_mod.to_darts_bundle(long_df)
+
+
 def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
