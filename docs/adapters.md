@@ -7,8 +7,10 @@ ForeSight exposes interoperability bridges through the named
 ```python
 from foresight.adapters import (
     from_darts_bundle,
+    from_gluonts_bundle,
     make_sktime_forecaster_adapter,
     to_darts_bundle,
+    to_gluonts_bundle,
     to_darts_timeseries,
     from_darts_timeseries,
     to_gluonts_list_dataset,
@@ -98,3 +100,26 @@ Current v1 contract:
 - single-series and panel long-format history conversion
 - inferred or explicit `freq`
 - data interop only; no GluonTS predictor wrapper
+
+ForeSight now also exposes a richer beta bundle API for GluonTS-oriented workflows:
+
+```python
+from foresight.adapters import to_gluonts_bundle, from_gluonts_bundle
+```
+
+Bundle contract:
+
+- `target: dict[str, dict[str, object]]`
+- `past_feat_dynamic_real: dict[str, list[list[float]]]`
+- `feat_dynamic_real: dict[str, list[list[float]]]`
+- `feat_static_real: dict[str, list[float]]`
+- `feature_names: dict[str, tuple[str, ...]]`
+- `freq: dict[str, str]`
+
+Current beta bundle support:
+
+- canonical long-format input with `historic_x_cols`, `future_x_cols`, and `static_cols`
+- panel/global payloads keyed by `unique_id`
+- GluonTS-style dynamic/static feature naming without introducing predictor wrappers
+- round-trip restoration back into canonical long-format plus covariate attrs
+- additive beta API only; it does not replace `to_gluonts_list_dataset(...)`
