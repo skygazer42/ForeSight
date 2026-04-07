@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.frames import require_long_df
-from .shared import AdapterFrameBundle, require_adapter_frame_bundle
+from .shared import AdapterFrameBundle, infer_adapter_frequency, require_adapter_frame_bundle
 
 __all__ = [
     "from_darts_bundle",
@@ -31,8 +31,13 @@ def _to_darts_series(value: Any) -> pd.Series:
     raise TypeError("Darts conversion expects a pandas Series or a canonical long DataFrame")
 
 
+def _datetime_index_with_frequency(ds_values: pd.Series) -> pd.DatetimeIndex:
+    values = pd.Series(pd.to_datetime(ds_values, errors="raise")).reset_index(drop=True)
+    return pd.DatetimeIndex(values, freq=infer_adapter_frequency(values), name="ds")
+
+
 def _timeseries_from_frame(darts_mod: Any, frame: pd.DataFrame) -> Any:
-    index = pd.Index(pd.to_datetime(frame["ds"], errors="raise"), name="ds")
+    index = _datetime_index_with_frequency(pd.Series(frame["ds"]))
     value_cols = [col for col in frame.columns if col != "ds"]
     if len(value_cols) != 1:
         if hasattr(darts_mod.TimeSeries, "from_dataframe"):
@@ -129,7 +134,7 @@ def to_darts_timeseries(data: Any) -> Any:
     for unique_id, group in long_df.groupby("unique_id", sort=True):
         series = pd.Series(
             group["y"].to_numpy(dtype=float, copy=False),
-            index=pd.Index(group["ds"]),
+            index=_datetime_index_with_frequency(pd.Series(group["ds"])),
             name="y",
         )
         out[str(unique_id)] = darts_mod.TimeSeries.from_series(series)

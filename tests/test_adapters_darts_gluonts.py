@@ -45,6 +45,20 @@ class _FakeTimeSeries:
         return type(self)(data, static_covariates=static_covariates.copy())
 
 
+class _FreqCheckingFakeTimeSeries(_FakeTimeSeries):
+    @classmethod
+    def from_series(cls, series: pd.Series):
+        if getattr(series.index, "freq", None) is None:
+            raise ValueError("missing freq")
+        return cls(series)
+
+    @classmethod
+    def from_dataframe(cls, frame: pd.DataFrame):
+        if getattr(frame.index, "freq", None) is None:
+            raise ValueError("missing freq")
+        return cls(frame.copy())
+
+
 class _FakeListDataset(list):
     def __init__(self, data_iter, *, freq: str):
         super().__init__(list(data_iter))
@@ -100,6 +114,27 @@ def test_darts_adapter_converts_panel_long_df_to_mapping_and_back(
     ]
 
 
+def test_darts_adapter_preserves_frequency_when_exporting_panel_long_df(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FreqCheckingFakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0],
+        }
+    )
+
+    mapping = darts_adapter_mod.to_darts_timeseries(long_df)
+
+    assert sorted(mapping) == ["a"]
+
+
 def test_darts_bundle_round_trips_single_series_future_covariates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -137,6 +172,30 @@ def test_darts_bundle_round_trips_single_series_future_covariates(
     assert restored.attrs["future_x_cols"] == ("promo",)
     assert restored.attrs["static_cols"] == ()
     assert restored["promo"].tolist() == pytest.approx([0.0, 1.0, 0.0])
+
+
+def test_darts_bundle_preserves_frequency_when_exporting_target_series(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "_require_darts",
+        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FreqCheckingFakeTimeSeries})(),
+    )
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ()
+    long_df.attrs["future_x_cols"] = ()
+    long_df.attrs["static_cols"] = ()
+
+    bundle = darts_adapter_mod.to_darts_bundle(long_df)
+
+    assert bundle["freq"] == {"s0": "D"}
 
 
 def test_darts_bundle_import_accepts_legacy_single_series_shape(
