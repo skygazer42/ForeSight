@@ -8,10 +8,12 @@ def test_adapters_namespace_exports_beta_bridge_symbols() -> None:
 
     assert sorted(adapters.__all__) == [
         "SktimeForecasterAdapter",
+        "from_beta_bundle",
         "from_darts_bundle",
         "from_darts_timeseries",
         "from_gluonts_bundle",
         "make_sktime_forecaster_adapter",
+        "to_beta_bundle",
         "to_darts_bundle",
         "to_darts_timeseries",
         "to_gluonts_bundle",

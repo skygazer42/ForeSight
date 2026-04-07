@@ -428,6 +428,100 @@ def test_gluonts_bundle_round_trips_back_to_long_df(
     ]
 
 
+def test_shared_beta_bundle_exports_panel_covariates_and_static_columns() -> None:
+    import foresight.adapters as adapters_mod
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["a", "a", "b", "b"],
+            "ds": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-01", "2024-01-02"]),
+            "y": [1.0, 2.0, 10.0, 11.0],
+            "stock": [5.0, 6.0, 7.0, 8.0],
+            "promo": [0.0, 1.0, 1.0, 0.0],
+            "store_size": [100.0, 100.0, 150.0, 150.0],
+        }
+    )
+    long_df.attrs["historic_x_cols"] = ("stock",)
+    long_df.attrs["future_x_cols"] = ("promo",)
+    long_df.attrs["static_cols"] = ("store_size",)
+
+    bundle = adapters_mod.to_beta_bundle(long_df)
+
+    assert sorted(bundle) == [
+        "freq",
+        "future_covariates",
+        "historic_covariates",
+        "static_covariates",
+        "target",
+    ]
+    assert bundle["freq"] == {"a": "D", "b": "D"}
+    assert sorted(bundle["target"]) == ["a", "b"]
+    assert list(bundle["target"]["a"].columns) == ["ds", "y"]
+    assert list(bundle["historic_covariates"]["a"].columns) == ["ds", "stock"]
+    assert list(bundle["future_covariates"]["a"].columns) == ["ds", "promo"]
+    assert list(bundle["static_covariates"]["a"].columns) == ["store_size"]
+
+
+def test_shared_beta_bundle_round_trips_back_to_canonical_long_df() -> None:
+    import foresight.adapters as adapters_mod
+
+    bundle = {
+        "target": {
+            "a": pd.DataFrame(
+                {
+                    "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                    "y": [1.0, 2.0],
+                }
+            )
+        },
+        "historic_covariates": {
+            "a": pd.DataFrame(
+                {
+                    "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                    "stock": [5.0, 6.0],
+                }
+            )
+        },
+        "future_covariates": {
+            "a": pd.DataFrame(
+                {
+                    "ds": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+                    "promo": [0.0, 1.0],
+                }
+            )
+        },
+        "static_covariates": {
+            "a": pd.DataFrame([{"store_size": 100.0}])
+        },
+        "freq": {"a": "D"},
+    }
+
+    restored = adapters_mod.from_beta_bundle(bundle)
+
+    assert list(restored.columns) == ["unique_id", "ds", "y", "stock", "promo", "store_size"]
+    assert restored.attrs["historic_x_cols"] == ("stock",)
+    assert restored.attrs["future_x_cols"] == ("promo",)
+    assert restored.attrs["static_cols"] == ("store_size",)
+    assert restored.to_dict("records") == [
+        {
+            "unique_id": "a",
+            "ds": pd.Timestamp("2024-01-01"),
+            "y": 1.0,
+            "stock": 5.0,
+            "promo": 0.0,
+            "store_size": 100.0,
+        },
+        {
+            "unique_id": "a",
+            "ds": pd.Timestamp("2024-01-02"),
+            "y": 2.0,
+            "stock": 6.0,
+            "promo": 1.0,
+            "store_size": 100.0,
+        },
+    ]
+
+
 def test_gluonts_adapter_normalizes_two_point_daily_frequency_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
