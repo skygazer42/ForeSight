@@ -38,6 +38,8 @@ def test_adapter_docs_cover_minimal_examples_and_install_paths() -> None:
     assert "restored = from_darts_bundle(bundle)" in adapters_doc
     assert "bundle = to_gluonts_bundle(long_df)" in adapters_doc
     assert "restored = from_gluonts_bundle(bundle)" in adapters_doc
+    assert "mapping-based schema keyed by `unique_id`" in adapters_doc
+    assert "older single-series beta shape" not in adapters_doc
 
 
 def test_installation_docs_list_adapter_extras() -> None:

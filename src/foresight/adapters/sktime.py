@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ..base import BaseForecaster
-from ..optional_deps import missing_dependency_message
+from ..optional_deps import require_dependency
 
 __all__ = [
     "SktimeForecasterAdapter",
@@ -19,16 +19,6 @@ __all__ = [
 _BETA_X_SUPPORT_ERROR = (
     "SktimeForecasterAdapter supports X only for local single-series xreg forecasters in beta"
 )
-
-
-def _require_sktime() -> Any:
-    try:
-        import sktime
-    except Exception as e:  # noqa: BLE001
-        raise ImportError(missing_dependency_message("sktime", subject="sktime adapter")) from e
-    return sktime
-
-
 def _coerce_sktime_series(y: Any) -> tuple[np.ndarray, pd.Index | None]:
     if isinstance(y, pd.Series):
         return np.asarray(y.to_numpy(dtype=float, copy=False), dtype=float), y.index.copy()
@@ -284,7 +274,7 @@ def _clone_local_forecaster(forecaster: BaseForecaster) -> BaseForecaster:
 
 class SktimeForecasterAdapter:
     def __init__(self, forecaster: str | BaseForecaster, **model_params: Any) -> None:
-        _require_sktime()
+        require_dependency("sktime", subject="sktime adapter")
         if isinstance(forecaster, BaseForecaster) and model_params:
             raise ValueError("model_params are only supported when forecaster is a model key")
 

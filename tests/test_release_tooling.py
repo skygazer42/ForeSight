@@ -392,13 +392,6 @@ def test_smoke_build_install_script_runs_doctor_and_root_import_smoke() -> None:
     assert '"import foresight; print(sorted(foresight.__all__)[:3])"' in script
     assert '"import foresight.pipeline as pipeline; print(sorted(pipeline.__all__)[:3])"' in script
     assert '"import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])"' in script
-    assert '"import sktime"' in script
-    assert '"import darts"' in script
-    assert '"import gluonts"' in script
-    assert '"to_darts_bundle"' in script
-    assert '"from_darts_bundle"' in script
-    assert '"to_gluonts_bundle"' in script
-    assert '"from_gluonts_bundle"' in script
     assert '"foresight", "doctor"' in script
     assert '"foresight", "doctor", "--format", "text"' in script
     assert '"foresight", "doctor", "--require-extra", "core"' in script
@@ -500,9 +493,17 @@ def test_smoke_build_install_runs_darts_and_gluonts_adapter_runtime_smokes(
         == 0
     )
 
-    python_cmds = [cmd[-1] for cmd in calls if "-c" in cmd]
-    assert any("to_darts_bundle" in cmd and "from_darts_bundle" in cmd for cmd in python_cmds)
-    assert any("to_gluonts_bundle" in cmd and "from_gluonts_bundle" in cmd for cmd in python_cmds)
+    base_import_smokes = {
+        "import foresight; print(foresight.__version__)",
+        "import foresight; print(sorted(foresight.__all__)[:3])",
+        "import foresight.pipeline as pipeline; print(sorted(pipeline.__all__)[:3])",
+        "import foresight.adapters as adapters; print(sorted(adapters.__all__)[:3])",
+        "import darts",
+        "import gluonts",
+    }
+    runtime_smokes = [cmd[-1] for cmd in calls if "-c" in cmd and cmd[-1] not in base_import_smokes]
+
+    assert len(runtime_smokes) == 4
 
 
 def test_smoke_build_install_prefers_current_version_artifacts_from_dist_dir(

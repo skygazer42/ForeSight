@@ -103,6 +103,18 @@ def test_missing_dependency_message_includes_package_and_editable_commands() -> 
     )
 
 
+def test_require_dependency_supports_subject_specific_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(optional_deps, "_find_spec", lambda name: None)
+
+    with pytest.raises(
+        ImportError,
+        match='darts adapter requires darts\\. Install with: pip install "foresight-ts\\[darts\\]" or pip install -e "\\.\\[darts\\]"',
+    ):
+        optional_deps.require_dependency("darts", subject="darts adapter")
+
+
 def _patch_import_error(
     monkeypatch: pytest.MonkeyPatch,
     *,

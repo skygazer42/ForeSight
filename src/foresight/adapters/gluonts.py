@@ -5,21 +5,10 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.frames import require_long_df
+from ..optional_deps import require_dependency
 from .shared import require_adapter_frame_bundle
 
 __all__ = ["from_gluonts_bundle", "to_gluonts_bundle", "to_gluonts_list_dataset"]
-
-
-def _require_gluonts() -> Any:
-    try:
-        import gluonts
-    except Exception as e:  # noqa: BLE001
-        from ..optional_deps import missing_dependency_message
-
-        raise ImportError(missing_dependency_message("gluonts", subject="gluonts adapter")) from e
-    return gluonts
-
-
 def _infer_series_frequency(ds: pd.Series) -> str:
     if len(ds) < 2:
         raise ValueError("freq must be provided when a series has fewer than 2 timestamps")
@@ -47,7 +36,7 @@ def to_gluonts_list_dataset(
     *,
     freq: str | None = None,
 ) -> Any:
-    gluonts_mod = _require_gluonts()
+    gluonts_mod = require_dependency("gluonts", subject="gluonts adapter")
     ListDataset = gluonts_mod.dataset.common.ListDataset
 
     if isinstance(data, pd.Series):
@@ -81,7 +70,7 @@ def _frame_to_feature_major_lists(frame: pd.DataFrame | None) -> list[list[float
 
 
 def to_gluonts_bundle(data: Any) -> dict[str, Any]:
-    _require_gluonts()
+    require_dependency("gluonts", subject="gluonts adapter")
     bundle = require_adapter_frame_bundle(data)
 
     target: dict[str, dict[str, object]] = {}

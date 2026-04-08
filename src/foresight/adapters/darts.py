@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 
 from ..contracts.frames import require_long_df
+from ..optional_deps import require_dependency
 from .shared import AdapterFrameBundle, infer_adapter_frequency, require_adapter_frame_bundle
 
 __all__ = [
@@ -13,18 +14,6 @@ __all__ = [
     "to_darts_bundle",
     "to_darts_timeseries",
 ]
-
-
-def _require_darts() -> Any:
-    try:
-        import darts
-    except Exception as e:  # noqa: BLE001
-        from ..optional_deps import missing_dependency_message
-
-        raise ImportError(missing_dependency_message("darts", subject="darts adapter")) from e
-    return darts
-
-
 def _to_darts_series(value: Any) -> pd.Series:
     if isinstance(value, pd.Series):
         return value.astype(float, copy=False)
@@ -126,7 +115,7 @@ def _bundle_payload_for_group(
 
 
 def to_darts_timeseries(data: Any) -> Any:
-    darts_mod = _require_darts()
+    darts_mod = require_dependency("darts", subject="darts adapter")
 
     if isinstance(data, pd.Series):
         return darts_mod.TimeSeries.from_series(_to_darts_series(data))
@@ -144,7 +133,7 @@ def to_darts_timeseries(data: Any) -> Any:
 
 
 def to_darts_bundle(data: Any) -> dict[str, Any]:
-    darts_mod = _require_darts()
+    darts_mod = require_dependency("darts", subject="darts adapter")
     bundle = require_adapter_frame_bundle(data)
 
     target_out: dict[str, Any] = {}
@@ -198,14 +187,15 @@ def from_darts_timeseries(data: Any) -> Any:
     return _pandas_series_from_timeseries(data)
 
 
-def _bundle_items(value: Any) -> list[tuple[str, Any]]:
-    if isinstance(value, dict):
-        return [
-            (str(unique_id), obj)
-            for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))
-        ]
-    unique_id = str(getattr(value, "_foresight_unique_id", "series=0"))
-    return [(unique_id, value)]
+def _bundle_items(value: Any, *, field_name: str) -> list[tuple[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, dict):
+        raise TypeError(f"Darts beta bundle {field_name} payload must be a mapping keyed by unique_id")
+    return [
+        (str(unique_id), obj)
+        for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))
+    ]
 
 
 def from_darts_bundle(data: Any) -> pd.DataFrame:
@@ -214,13 +204,20 @@ def from_darts_bundle(data: Any) -> pd.DataFrame:
     if "target" not in data or data.get("target") is None:
         raise ValueError("Darts beta bundle must include a non-empty 'target' payload")
 
-    target_items = _bundle_items(data.get("target"))
+    target_items = _bundle_items(data.get("target"), field_name="target")
     past_lookup = {
-        str(unique_id): value for unique_id, value in _bundle_items(data.get("past_covariates", {}))
+        str(unique_id): value
+        for unique_id, value in _bundle_items(
+            data.get("past_covariates", {}),
+            field_name="past_covariates",
+        )
     }
     future_lookup = {
         str(unique_id): value
-        for unique_id, value in _bundle_items(data.get("future_covariates", {}))
+        for unique_id, value in _bundle_items(
+            data.get("future_covariates", {}),
+            field_name="future_covariates",
+        )
     }
 
     frames: list[pd.DataFrame] = []

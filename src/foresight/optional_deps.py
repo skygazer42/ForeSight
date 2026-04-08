@@ -258,10 +258,21 @@ def is_dependency_available(name: str) -> bool:
     return bool(get_dependency_status(name).available)
 
 
-def require_dependency(name: str, *, install_hint: str | None = None) -> Any:
+def require_dependency(
+    name: str,
+    *,
+    install_hint: str | None = None,
+    subject: str | None = None,
+) -> Any:
     normalized = _normalize_dependency_name(name)
     status = get_dependency_status(normalized)
     if not status.available:
+        if subject is not None:
+            display = dependency_display_name(normalized)
+            resolved_hint = install_hint or dependency_install_hint(normalized)
+            hint = f" Install with: {resolved_hint}" if resolved_hint else ""
+            target = str(subject).strip() or display
+            raise ImportError(f"{target} requires {display}.{hint}".strip())
         resolved_hint = install_hint or dependency_install_hint(normalized)
         hint = f" Install with: {resolved_hint}" if resolved_hint else ""
         raise ImportError(

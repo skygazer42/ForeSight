@@ -179,7 +179,6 @@ Current beta bundle support:
 - single-series and panel/global exports both use the same mapping-based schema keyed by `unique_id`
 - empty covariate roles are emitted as empty dicts
 - static covariates attached to target series metadata and restored on round-trip
-- `from_darts_bundle(...)` remains backward-compatible with the older single-series beta shape
 - additive beta API only; it does not replace the existing simple `to_darts_timeseries(...)` path
 
 Minimal example:

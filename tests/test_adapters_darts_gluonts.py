@@ -7,6 +7,42 @@ import foresight.adapters.darts as darts_adapter_mod
 import foresight.adapters.gluonts as gluonts_adapter_mod
 
 
+def _patch_darts_loader(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    time_series_cls: type,
+) -> None:
+    fake_module = type("_FakeDartsModule", (), {"TimeSeries": time_series_cls})()
+    monkeypatch.setattr(darts_adapter_mod, "_require_darts", lambda: fake_module, raising=False)
+    monkeypatch.setattr(
+        darts_adapter_mod,
+        "require_dependency",
+        lambda name, **kwargs: fake_module,
+        raising=False,
+    )
+
+
+def _patch_gluonts_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_module = type(
+        "_FakeGluonTSModule",
+        (),
+        {
+            "dataset": type(
+                "_Dataset",
+                (),
+                {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
+            )
+        },
+    )()
+    monkeypatch.setattr(gluonts_adapter_mod, "_require_gluonts", lambda: fake_module, raising=False)
+    monkeypatch.setattr(
+        gluonts_adapter_mod,
+        "require_dependency",
+        lambda name, **kwargs: fake_module,
+        raising=False,
+    )
+
+
 class _FakeTimeSeries:
     def __init__(
         self,
@@ -66,11 +102,7 @@ class _FakeListDataset(list):
 
 
 def test_darts_adapter_round_trips_single_series(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     series = pd.Series(
         [1.0, 2.0, 3.0],
         index=pd.date_range("2024-01-01", periods=3, freq="D"),
@@ -88,11 +120,7 @@ def test_darts_adapter_round_trips_single_series(monkeypatch: pytest.MonkeyPatch
 def test_darts_adapter_converts_panel_long_df_to_mapping_and_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a", "b", "b"],
@@ -117,11 +145,7 @@ def test_darts_adapter_converts_panel_long_df_to_mapping_and_back(
 def test_darts_adapter_preserves_frequency_when_exporting_panel_long_df(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FreqCheckingFakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FreqCheckingFakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a"],
@@ -138,11 +162,7 @@ def test_darts_adapter_preserves_frequency_when_exporting_panel_long_df(
 def test_darts_bundle_round_trips_single_series_future_covariates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["s0", "s0", "s0"],
@@ -177,11 +197,7 @@ def test_darts_bundle_round_trips_single_series_future_covariates(
 def test_darts_bundle_preserves_frequency_when_exporting_target_series(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FreqCheckingFakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FreqCheckingFakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["s0", "s0"],
@@ -198,14 +214,10 @@ def test_darts_bundle_preserves_frequency_when_exporting_target_series(
     assert bundle["freq"] == {"s0": "D"}
 
 
-def test_darts_bundle_import_accepts_legacy_single_series_shape(
+def test_darts_bundle_rejects_legacy_single_series_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     target = _FakeTimeSeries.from_series(
         pd.Series(
             [1.0, 2.0, 3.0],
@@ -223,30 +235,21 @@ def test_darts_bundle_import_accepts_legacy_single_series_shape(
     )
     setattr(future, "_foresight_unique_id", "s0")
 
-    restored = darts_adapter_mod.from_darts_bundle(
-        {
-            "target": target,
-            "past_covariates": None,
-            "future_covariates": future,
-            "freq": "D",
-        }
-    )
-
-    assert list(restored.columns) == ["unique_id", "ds", "y", "promo"]
-    assert restored.attrs["historic_x_cols"] == ()
-    assert restored.attrs["future_x_cols"] == ("promo",)
-    assert restored.attrs["static_cols"] == ()
-    assert restored["unique_id"].tolist() == ["s0", "s0", "s0"]
+    with pytest.raises(TypeError, match="mapping keyed by unique_id"):
+        darts_adapter_mod.from_darts_bundle(
+            {
+                "target": target,
+                "past_covariates": None,
+                "future_covariates": future,
+                "freq": "D",
+            }
+        )
 
 
 def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a", "b", "b"],
@@ -293,11 +296,7 @@ def test_darts_bundle_round_trips_panel_covariates_and_static_columns(
 def test_darts_bundle_rejects_non_constant_static_covariates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a"],
@@ -317,11 +316,7 @@ def test_darts_bundle_rejects_non_constant_static_covariates(
 def test_darts_bundle_requires_two_points_per_series_to_infer_freq(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        darts_adapter_mod,
-        "_require_darts",
-        lambda: type("_FakeDartsModule", (), {"TimeSeries": _FakeTimeSeries})(),
-    )
+    _patch_darts_loader(monkeypatch, time_series_cls=_FakeTimeSeries)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a"],
@@ -339,21 +334,7 @@ def test_darts_bundle_requires_two_points_per_series_to_infer_freq(
 def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        gluonts_adapter_mod,
-        "_require_gluonts",
-        lambda: type(
-            "_FakeGluonTSModule",
-            (),
-            {
-                "dataset": type(
-                    "_Dataset",
-                    (),
-                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
-                )
-            },
-        )(),
-    )
+    _patch_gluonts_loader(monkeypatch)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a", "b", "b"],
@@ -375,21 +356,7 @@ def test_gluonts_adapter_builds_list_dataset_from_panel_long_df(
 def test_gluonts_bundle_exports_panel_covariates_and_static_columns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        gluonts_adapter_mod,
-        "_require_gluonts",
-        lambda: type(
-            "_FakeGluonTSModule",
-            (),
-            {
-                "dataset": type(
-                    "_Dataset",
-                    (),
-                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
-                )
-            },
-        )(),
-    )
+    _patch_gluonts_loader(monkeypatch)
     long_df = pd.DataFrame(
         {
             "unique_id": ["a", "a", "b", "b"],
@@ -429,21 +396,7 @@ def test_gluonts_bundle_exports_panel_covariates_and_static_columns(
 def test_gluonts_bundle_round_trips_back_to_long_df(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        gluonts_adapter_mod,
-        "_require_gluonts",
-        lambda: type(
-            "_FakeGluonTSModule",
-            (),
-            {
-                "dataset": type(
-                    "_Dataset",
-                    (),
-                    {"common": type("_Common", (), {"ListDataset": _FakeListDataset})},
-                )
-            },
-        )(),
-    )
+    _patch_gluonts_loader(monkeypatch)
     bundle = {
         "target": {
             "a": {
@@ -605,13 +558,14 @@ def test_darts_adapter_missing_dependency_uses_darts_install_hint(
 ) -> None:
     monkeypatch.setattr(
         darts_adapter_mod,
-        "_require_darts",
-        lambda: (_ for _ in ()).throw(
+        "require_dependency",
+        lambda name, **kwargs: (_ for _ in ()).throw(
             ImportError(
                 "darts adapter requires darts. Install with: "
                 'pip install "foresight-ts[darts]" or pip install -e ".[darts]"'
             )
         ),
+        raising=False,
     )
 
     with pytest.raises(ImportError, match='pip install "foresight-ts\\[darts\\]"'):
@@ -623,13 +577,14 @@ def test_gluonts_adapter_missing_dependency_uses_gluonts_install_hint(
 ) -> None:
     monkeypatch.setattr(
         gluonts_adapter_mod,
-        "_require_gluonts",
-        lambda: (_ for _ in ()).throw(
+        "require_dependency",
+        lambda name, **kwargs: (_ for _ in ()).throw(
             ImportError(
                 "gluonts adapter requires gluonts. Install with: "
                 'pip install "foresight-ts[gluonts]" or pip install -e ".[gluonts]"'
             )
         ),
+        raising=False,
     )
 
     with pytest.raises(ImportError, match='pip install "foresight-ts\\[gluonts\\]"'):
