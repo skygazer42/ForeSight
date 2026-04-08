@@ -330,7 +330,9 @@ def test_darts_bundle_requires_two_points_per_series_to_infer_freq(
         }
     )
 
-    with pytest.raises(ValueError, match="requires explicit freq or at least 2 timestamps per series"):
+    with pytest.raises(
+        ValueError, match="requires explicit freq or at least 2 timestamps per series"
+    ):
         darts_adapter_mod.to_darts_bundle(long_df)
 
 
@@ -549,9 +551,7 @@ def test_shared_beta_bundle_round_trips_back_to_canonical_long_df() -> None:
                 }
             )
         },
-        "static_covariates": {
-            "a": pd.DataFrame([{"store_size": 100.0}])
-        },
+        "static_covariates": {"a": pd.DataFrame([{"store_size": 100.0}])},
         "freq": {"a": "D"},
     }
 

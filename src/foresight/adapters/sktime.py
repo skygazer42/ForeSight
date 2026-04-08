@@ -142,7 +142,7 @@ def _supports_beta_X_path(
 
 
 def _fit_forecaster_with_optional_X(
-    forecaster: BaseForecaster,
+    forecaster: Any,
     train_y: np.ndarray,
     X: pd.DataFrame | None,
 ) -> BaseForecaster:
@@ -152,7 +152,7 @@ def _fit_forecaster_with_optional_X(
 
 
 def _predict_forecaster_with_optional_X(
-    forecaster: BaseForecaster,
+    forecaster: Any,
     horizon: int,
     X: pd.DataFrame | None,
 ) -> np.ndarray:
@@ -309,7 +309,9 @@ class SktimeForecasterAdapter:
     def fit(self, y: Any, X: Any = None, fh: Any = None) -> SktimeForecasterAdapter:
         train_y, train_index = _coerce_sktime_series(y)
         forecaster = self._build_forecaster()
-        self._x_cols = _configured_x_cols(getattr(forecaster, "model_params", {}) or self._model_params)
+        self._x_cols = _configured_x_cols(
+            getattr(forecaster, "model_params", {}) or self._model_params
+        )
         self._supports_X = _supports_beta_X_path(
             forecaster_spec=self._forecaster_spec,
             forecaster=forecaster,

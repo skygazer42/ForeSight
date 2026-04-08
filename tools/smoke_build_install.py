@@ -185,7 +185,9 @@ def _artifact_requirement(*, artifact: Path, extras: list[str]) -> str:
     return f"foresight-ts[{joined}] @ {artifact.resolve().as_uri()}"
 
 
-def _install_artifact(*, py: Path, artifact: Path, extras: list[str], cwd: Path, env: dict[str, str]) -> None:
+def _install_artifact(
+    *, py: Path, artifact: Path, extras: list[str], cwd: Path, env: dict[str, str]
+) -> None:
     cmd = [str(py), "-m", "pip", "install", "--progress-bar", "off"]
     if not extras:
         cmd.append("--no-deps")

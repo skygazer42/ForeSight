@@ -444,9 +444,15 @@ def test_smoke_build_install_supports_requested_adapter_extras(tmp_path: Path, m
         == 0
     )
 
-    install_specs = [cmd[-1] for cmd in calls if len(cmd) >= 4 and cmd[1:4] == ["-m", "pip", "install"]]
-    assert any("foresight-ts[sktime,gluonts] @" in spec and wheel.name in spec for spec in install_specs)
-    assert any("foresight-ts[sktime,gluonts] @" in spec and sdist.name in spec for spec in install_specs)
+    install_specs = [
+        cmd[-1] for cmd in calls if len(cmd) >= 4 and cmd[1:4] == ["-m", "pip", "install"]
+    ]
+    assert any(
+        "foresight-ts[sktime,gluonts] @" in spec and wheel.name in spec for spec in install_specs
+    )
+    assert any(
+        "foresight-ts[sktime,gluonts] @" in spec and sdist.name in spec for spec in install_specs
+    )
     assert any(cmd[-2:] == ["--require-extra", "sktime"] for cmd in calls)
     assert any(cmd[-2:] == ["--require-extra", "gluonts"] for cmd in calls)
     assert any(cmd[-1] == "import sktime" for cmd in calls if "-c" in cmd)

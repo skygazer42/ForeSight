@@ -77,10 +77,7 @@ def _frame_to_feature_major_lists(frame: pd.DataFrame | None) -> list[list[float
     if frame is None:
         return []
     value_cols = [str(col) for col in frame.columns if str(col) != "ds"]
-    return [
-        frame[str(col)].to_numpy(dtype=float, copy=False).tolist()
-        for col in value_cols
-    ]
+    return [frame[str(col)].to_numpy(dtype=float, copy=False).tolist() for col in value_cols]
 
 
 def to_gluonts_bundle(data: Any) -> dict[str, Any]:
@@ -139,10 +136,12 @@ def from_gluonts_bundle(data: Any) -> pd.DataFrame:
 
     target = dict(data.get("target", {}))
     past_feat_dynamic_real = {
-        str(unique_id): value for unique_id, value in dict(data.get("past_feat_dynamic_real", {})).items()
+        str(unique_id): value
+        for unique_id, value in dict(data.get("past_feat_dynamic_real", {})).items()
     }
     feat_dynamic_real = {
-        str(unique_id): value for unique_id, value in dict(data.get("feat_dynamic_real", {})).items()
+        str(unique_id): value
+        for unique_id, value in dict(data.get("feat_dynamic_real", {})).items()
     }
     feat_static_real = {
         str(unique_id): value for unique_id, value in dict(data.get("feat_static_real", {})).items()
@@ -180,7 +179,15 @@ def from_gluonts_bundle(data: Any) -> pd.DataFrame:
             rows.append(row)
 
     out = pd.DataFrame(rows)
-    out = out.loc[:, ["unique_id", "ds", "y", *[col for col in out.columns if col not in {"unique_id", "ds", "y"}]]]
+    out = out.loc[
+        :,
+        [
+            "unique_id",
+            "ds",
+            "y",
+            *[col for col in out.columns if col not in {"unique_id", "ds", "y"}],
+        ],
+    ]
     out.attrs["historic_x_cols"] = historic_cols
     out.attrs["future_x_cols"] = future_cols
     out.attrs["static_cols"] = static_cols

@@ -69,10 +69,14 @@ def _build_static_covariates_frame(
     for col in static_cols:
         observed = pd.Series(group[col]).dropna()
         if observed.empty:
-            raise ValueError(f"static_cols column {col!r} has no observed value for unique_id={unique_id!r}")
+            raise ValueError(
+                f"static_cols column {col!r} has no observed value for unique_id={unique_id!r}"
+            )
         unique_values = pd.unique(observed.to_numpy(copy=False))
         if len(unique_values) != 1:
-            raise ValueError(f"static_cols column {col!r} must be constant within unique_id={unique_id!r}")
+            raise ValueError(
+                f"static_cols column {col!r} must be constant within unique_id={unique_id!r}"
+            )
         values[str(col)] = unique_values[0]
     return pd.DataFrame([values])
 
@@ -213,7 +217,9 @@ def from_beta_bundle(data: Any) -> pd.DataFrame:
         historic_frame = historic_covariates.get(str(unique_id))
         if historic_frame is not None:
             if not isinstance(historic_frame, pd.DataFrame):
-                raise TypeError("shared beta bundle historic_covariates payloads must be DataFrames")
+                raise TypeError(
+                    "shared beta bundle historic_covariates payloads must be DataFrames"
+                )
             historic_cols.extend([str(col) for col in historic_frame.columns if str(col) != "ds"])
             frame = frame.merge(historic_frame.copy(), on="ds", how="left")
 
@@ -237,7 +243,12 @@ def from_beta_bundle(data: Any) -> pd.DataFrame:
     out = pd.concat(frames, axis=0, ignore_index=True, sort=False)
     out = out.loc[
         :,
-        ["unique_id", "ds", "y", *[col for col in out.columns if col not in {"unique_id", "ds", "y"}]],
+        [
+            "unique_id",
+            "ds",
+            "y",
+            *[col for col in out.columns if col not in {"unique_id", "ds", "y"}],
+        ],
     ]
     out.attrs["historic_x_cols"] = tuple(dict.fromkeys(historic_cols))
     out.attrs["future_x_cols"] = tuple(dict.fromkeys(future_cols))

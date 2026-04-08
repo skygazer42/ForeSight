@@ -44,7 +44,9 @@ def _timeseries_from_frame(darts_mod: Any, frame: pd.DataFrame) -> Any:
             df = frame.loc[:, value_cols].copy()
             df.index = index
             return darts_mod.TimeSeries.from_dataframe(df)
-        raise TypeError("Darts beta bundle currently requires TimeSeries.from_dataframe for multi-column covariates")
+        raise TypeError(
+            "Darts beta bundle currently requires TimeSeries.from_dataframe for multi-column covariates"
+        )
 
     series = pd.Series(
         frame[value_cols[0]].to_numpy(dtype=float, copy=False),
@@ -198,7 +200,10 @@ def from_darts_timeseries(data: Any) -> Any:
 
 def _bundle_items(value: Any) -> list[tuple[str, Any]]:
     if isinstance(value, dict):
-        return [(str(unique_id), obj) for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))]
+        return [
+            (str(unique_id), obj)
+            for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))
+        ]
     unique_id = str(getattr(value, "_foresight_unique_id", "series=0"))
     return [(unique_id, value)]
 
@@ -210,8 +215,13 @@ def from_darts_bundle(data: Any) -> pd.DataFrame:
         raise ValueError("Darts beta bundle must include a non-empty 'target' payload")
 
     target_items = _bundle_items(data.get("target"))
-    past_lookup = {str(unique_id): value for unique_id, value in _bundle_items(data.get("past_covariates", {}))}
-    future_lookup = {str(unique_id): value for unique_id, value in _bundle_items(data.get("future_covariates", {}))}
+    past_lookup = {
+        str(unique_id): value for unique_id, value in _bundle_items(data.get("past_covariates", {}))
+    }
+    future_lookup = {
+        str(unique_id): value
+        for unique_id, value in _bundle_items(data.get("future_covariates", {}))
+    }
 
     frames: list[pd.DataFrame] = []
     historic_cols: list[str] = []
@@ -244,7 +254,15 @@ def from_darts_bundle(data: Any) -> pd.DataFrame:
         frames.append(target_frame)
 
     out = pd.concat(frames, axis=0, ignore_index=True, sort=False)
-    out = out.loc[:, ["unique_id", "ds", "y", *[col for col in out.columns if col not in {"unique_id", "ds", "y"}]]]
+    out = out.loc[
+        :,
+        [
+            "unique_id",
+            "ds",
+            "y",
+            *[col for col in out.columns if col not in {"unique_id", "ds", "y"}],
+        ],
+    ]
     out.attrs["historic_x_cols"] = tuple(dict.fromkeys(historic_cols))
     out.attrs["future_x_cols"] = tuple(dict.fromkeys(future_cols))
     out.attrs["static_cols"] = tuple(dict.fromkeys(static_cols))
