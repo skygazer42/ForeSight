@@ -1,4 +1,3 @@
-
 **A lightweight, batteries-included time-series forecasting toolkit for Python.**
 
 Unified model registry &bull; Walk-forward backtesting &bull; Probabilistic forecasting &bull; CLI + Python API
@@ -122,7 +121,7 @@ See [Compatibility guide](docs/compatibility.md) for the detailed support policy
 ## ⚙️ How It Works
 
 <div align="center">
-<img src="docs/assets/pipeline.svg" alt="ForeSight Pipeline" width="800"/>
+<img src="https://raw.githubusercontent.com/skygazer42/ForeSight/main/docs/assets/pipeline.svg" alt="ForeSight Pipeline" width="800"/>
 </div>
 
 <br/>
@@ -655,7 +654,7 @@ graph LR
 ## 🏗️ Architecture
 
 <div align="center">
-<img src="docs/assets/architecture.svg" alt="ForeSight Architecture" width="800"/>
+<img src="https://raw.githubusercontent.com/skygazer42/ForeSight/main/docs/assets/architecture.svg" alt="ForeSight Architecture" width="800"/>
 </div>
 
 <br/>

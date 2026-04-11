@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -186,3 +187,18 @@ def test_compatibility_docs_list_all_beta_integration_extras() -> None:
     compatibility = (_repo_root() / "docs" / "compatibility.md").read_text(encoding="utf-8")
 
     assert "- Integration extras: `sktime`, `darts`, `gluonts`" in compatibility
+
+
+def test_readme_uses_absolute_image_urls_for_external_renderers() -> None:
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    image_sources = [
+        match.group(1) or match.group(2)
+        for match in re.finditer(
+            r'(?:src|srcset)="([^"]+)"|!\[[^\]]*\]\(([^)]+)\)',
+            readme,
+        )
+        if (match.group(1) or match.group(2))
+    ]
+
+    assert image_sources
+    assert all(source.startswith("https://") for source in image_sources)
