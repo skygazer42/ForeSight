@@ -1,12 +1,3 @@
-<div align="center">
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner.svg">
-  <img alt="ForeSight" src="docs/assets/banner.svg" width="800">
-</picture>
-
-<br/>
 
 **A lightweight, batteries-included time-series forecasting toolkit for Python.**
 
