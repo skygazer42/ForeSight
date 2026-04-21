@@ -11,6 +11,9 @@ Use `save_forecaster(...)` to persist a fitted object, `load_forecaster(...)` to
 reconstruct it for prediction, and `load_forecaster_artifact(...)` when you want
 to inspect the structured payload before rebuilding the runtime object.
 
+Only load artifacts from trusted sources. ForeSight artifacts use Python pickle
+under the hood, so loading a malicious artifact can execute arbitrary code.
+
 ## Python example
 
 ```python

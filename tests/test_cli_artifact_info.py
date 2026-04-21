@@ -971,6 +971,7 @@ def test_readme_documents_artifact_inspection_commands() -> None:
     assert "--path-prefix tracking_summary" in readme
     assert "--path-prefix future_override_schema" in readme
     assert "tracking_summary" in readme
+    assert "Only load artifacts from trusted sources." in readme
 
 
 def test_docs_index_documents_artifact_inspection_commands() -> None:
@@ -983,6 +984,7 @@ def test_docs_index_documents_artifact_inspection_commands() -> None:
     assert "foresight artifact diff" in docs_index
     assert "--path-prefix tracking_summary" in docs_index
     assert "--path-prefix future_override_schema" in docs_index
+    assert "Only load artifacts from trusted sources." in docs_index
 
 
 def test_docs_artifacts_page_documents_artifact_workflow() -> None:
@@ -999,6 +1001,56 @@ def test_docs_artifacts_page_documents_artifact_workflow() -> None:
     assert "--path-prefix future_override_schema" in artifacts_doc
     assert "tracking_summary" in artifacts_doc
     assert "load_forecaster_artifact" in artifacts_doc
+    assert "Only load artifacts from trusted sources." in artifacts_doc
+
+
+def test_cli_and_legacy_docs_warn_about_trusted_artifacts() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    cli_index = (repo_root / "docs" / "cli" / "index.md").read_text(encoding="utf-8")
+    legacy_index = (repo_root / "docs" / "legacy-index.md").read_text(encoding="utf-8")
+
+    assert "Only load artifacts from trusted sources." in cli_index
+    assert "Only load artifacts from trusted sources." in legacy_index
+
+
+def test_api_docs_describe_artifact_loading_as_pickle_backed_and_trusted_only() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    api_doc = (repo_root / "docs" / "api.md").read_text(encoding="utf-8")
+    api_reference = (repo_root / "docs" / "api-reference" / "index.md").read_text(encoding="utf-8")
+
+    assert "pickle-backed artifact payload" in api_doc
+    assert "Only load artifacts from trusted sources." in api_reference
+    assert "不恢复预测器对象" not in api_reference
+
+
+def test_guide_and_cli_reference_warn_on_artifact_inspection_commands() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    guide = (repo_root / "docs" / "guide" / "artifacts.md").read_text(encoding="utf-8")
+    cli_index = (repo_root / "docs" / "cli" / "index.md").read_text(encoding="utf-8")
+
+    diff_start = cli_index.index("## artifact diff")
+    diff_end = cli_index.find("\n---", diff_start)
+    diff_section = cli_index[diff_start : diff_end if diff_end != -1 else len(cli_index)]
+
+    assert "Only load artifacts from trusted sources." in guide
+    assert "可信来源" in guide
+    assert "Only load artifacts from trusted sources." in diff_section
+
+
+def test_cli_artifact_help_warns_about_trusted_artifacts() -> None:
+    commands = [
+        ("artifact", "--help"),
+        ("forecast", "artifact", "--help"),
+        ("artifact", "info", "--help"),
+        ("artifact", "validate", "--help"),
+        ("artifact", "diff", "--help"),
+    ]
+
+    for args in commands:
+        proc = _run_cli(*args)
+        assert proc.returncode == 0
+        normalized_help = " ".join(proc.stdout.split())
+        assert "Only load artifacts from trusted sources." in normalized_help
 
 
 @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="torch not installed")

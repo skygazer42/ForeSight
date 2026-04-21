@@ -371,6 +371,8 @@ foresight forecast csv --model naive-last --path ./my.csv \
     --save-artifact /tmp/naive-last.pkl
 foresight forecast artifact --artifact /tmp/naive-last.pkl --horizon 3
 
+# Only load artifacts from trusted sources.
+
 # Save and reuse a local x_cols artifact with the saved future covariates
 foresight forecast csv --model sarimax --path ./my_exog.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \

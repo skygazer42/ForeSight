@@ -9,6 +9,8 @@ from ..optional_deps import require_dependency
 from .shared import require_adapter_frame_bundle
 
 __all__ = ["from_gluonts_bundle", "to_gluonts_bundle", "to_gluonts_list_dataset"]
+
+
 def _infer_series_frequency(ds: pd.Series) -> str:
     if len(ds) < 2:
         raise ValueError("freq must be provided when a series has fewer than 2 timestamps")

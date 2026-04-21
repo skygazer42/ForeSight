@@ -492,7 +492,7 @@ Extend the local Torch categories so the new keys are discoverable:
 
 **Step 3: Tighten the roadmap note**
 
-Update [the research roadmap](/data/temp42/ForeSight/docs/plans/2026-03-09-algorithm-clusters-2001-2026-roadmap.md) so Wave 1 explicitly says:
+Update [the research roadmap](2026-03-09-algorithm-clusters-2001-2026-roadmap.md) so Wave 1 explicitly says:
 - `TimeXer` is deferred to a covariate-aware local interface phase
 - Wave 1A covers the nine direct models in this plan
 

@@ -94,6 +94,13 @@ def test_gluonts_extra_status_exposes_install_commands() -> None:
     assert status["editable_install_command"] == 'pip install -e ".[gluonts]"'
 
 
+def test_transformers_extra_status_only_requires_transformers_dependency() -> None:
+    status = optional_deps.get_extra_status("transformers").as_dict()
+
+    assert status["requirements"] == ["transformers"]
+    assert set(status["details"]) == {"transformers"}
+
+
 def test_missing_dependency_message_includes_package_and_editable_commands() -> None:
     msg = optional_deps.missing_dependency_message("ml", subject="ridge_lag_forecast")
 

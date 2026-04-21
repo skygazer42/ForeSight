@@ -19,6 +19,8 @@ __all__ = [
 _BETA_X_SUPPORT_ERROR = (
     "SktimeForecasterAdapter supports X only for local single-series xreg forecasters in beta"
 )
+
+
 def _coerce_sktime_series(y: Any) -> tuple[np.ndarray, pd.Index | None]:
     if isinstance(y, pd.Series):
         return np.asarray(y.to_numpy(dtype=float, copy=False), dtype=float), y.index.copy()

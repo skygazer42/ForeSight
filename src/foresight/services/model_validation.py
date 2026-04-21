@@ -978,10 +978,6 @@ def _train_local_or_global_model(
                 future_x_cols=x_cols,
                 horizon=_VALIDATION_HORIZON,
             )
-        checkpoint_path = _existing_checkpoint_path(artifact_paths)
-        if checkpoint_path is not None:
-            artifact_kind = "checkpoint"
-            artifact_path = checkpoint_path
         duration_seconds = time.perf_counter() - started
         return _ok_training_row(
             model=str(model),
@@ -1032,7 +1028,7 @@ def _train_multivariate_model(
     started = time.perf_counter()
     try:
         if str(model) == "var":
-            artifact_path = _persist_var_artifact(
+            _persist_var_artifact(
                 wide_df=model_wide_df,
                 target_cols=model_target_cols,
                 params=params,
@@ -1045,8 +1041,8 @@ def _train_multivariate_model(
                 requires=tuple(spec.requires),
                 device=str(device),
                 duration_seconds=duration_seconds,
-                artifact_kind="var_pickle",
-                artifact_path=str(artifact_path),
+                artifact_kind="none",
+                artifact_path="",
                 n_points=int(_VALIDATION_HORIZON * len(model_target_cols)),
             )
 

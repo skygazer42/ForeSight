@@ -940,6 +940,130 @@ def test_train_multivariate_model_reuses_base_wide_frame_when_transform_is_noop(
     assert captured["target_cols"] == ["s0", "s1"]
 
 
+def test_train_local_or_global_model_reports_reusable_forecast_artifact_even_when_checkpoint_exists(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from foresight.contracts import params as params_mod
+    from foresight.services import cli_workflows as cli_workflows_mod
+    from foresight.services import forecasting as forecasting_mod
+    from foresight.services import model_validation as mod
+
+    @dataclass(frozen=True)
+    class _Spec:
+        key: str = "torch-demo"
+        interface: str = "local"
+        requires: tuple[str, ...] = ("torch",)
+        default_params: dict[str, Any] = field(default_factory=dict)
+        param_help: dict[str, str] = field(default_factory=dict)
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s0"],
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13", "2020-01-20"]),
+            "y": [1.0, 2.0, 3.0],
+        }
+    )
+    artifact_paths = mod.build_training_artifact_paths(output_dir=tmp_path, model="torch-demo")
+
+    monkeypatch.setattr(mod, "build_training_model_params", lambda *args, **kwargs: {})
+    monkeypatch.setattr(mod, "transform_validation_long_df_for_model", lambda df, model: df)
+    monkeypatch.setattr(mod, "_select_representative_local_long_df", lambda df: df)
+    monkeypatch.setattr(params_mod, "normalize_covariate_roles", lambda params: ((), ()))
+    monkeypatch.setattr(
+        forecasting_mod,
+        "forecast_model_long_df",
+        lambda **kwargs: pd.DataFrame(
+            {
+                "unique_id": ["s0", "s0", "s0"],
+                "ds": pd.to_datetime(["2020-01-27", "2020-02-03", "2020-02-10"]),
+                "yhat": [3.0, 3.0, 3.0],
+            }
+        ),
+    )
+
+    def _fake_save_local_forecast_artifact(**kwargs: Any) -> None:
+        artifact_path = Path(str(kwargs["artifact_path"]))
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text("forecast", encoding="utf-8")
+        best = artifact_paths["best_checkpoint_path"]
+        best.parent.mkdir(parents=True, exist_ok=True)
+        best.write_text("checkpoint", encoding="utf-8")
+
+    monkeypatch.setattr(
+        cli_workflows_mod,
+        "_save_local_forecast_artifact",
+        _fake_save_local_forecast_artifact,
+    )
+
+    row = mod._train_local_or_global_model(
+        model="torch-demo",
+        spec=_Spec(),
+        long_df=long_df,
+        device="cpu",
+        artifact_paths=artifact_paths,
+        foundation_fixture_path=tmp_path / "fixture.json",
+    )
+
+    assert row["status"] == "ok"
+    assert row["artifact_kind"] == "forecast_artifact"
+    assert row["artifact_path"] == str(artifact_paths["forecast_artifact_path"])
+
+
+def test_train_multivariate_var_does_not_claim_reusable_forecast_artifact_path(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from foresight.services import model_validation as mod
+
+    @dataclass(frozen=True)
+    class _Spec:
+        key: str = "var"
+        interface: str = "multivariate"
+        requires: tuple[str, ...] = ("stats",)
+        default_params: dict[str, Any] = field(default_factory=dict)
+        param_help: dict[str, str] = field(default_factory=dict)
+
+    long_df = pd.DataFrame(
+        {
+            "unique_id": ["s0", "s0", "s1", "s1"],
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13", "2020-01-06", "2020-01-13"]),
+            "y": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    wide_df = pd.DataFrame(
+        {
+            "ds": pd.to_datetime(["2020-01-06", "2020-01-13"]),
+            "s0": [1.0, 2.0],
+            "s1": [3.0, 4.0],
+        }
+    )
+    artifact_paths = mod.build_training_artifact_paths(output_dir=tmp_path, model="var")
+
+    def _fake_persist_var_artifact(**kwargs: Any) -> Path:
+        artifact_path = Path(str(kwargs["artifact_path"]))
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text("var", encoding="utf-8")
+        return artifact_path
+
+    monkeypatch.setattr(mod, "_persist_var_artifact", _fake_persist_var_artifact)
+    monkeypatch.setattr(mod, "build_training_model_params", lambda *args, **kwargs: {})
+
+    row = mod._train_multivariate_model(
+        model="var",
+        spec=_Spec(),
+        long_df=long_df,
+        wide_df=wide_df,
+        target_cols=["s0", "s1"],
+        device="cpu",
+        artifact_paths=artifact_paths,
+        foundation_fixture_path=tmp_path / "fixture.json",
+    )
+
+    assert row["status"] == "ok"
+    assert row["artifact_kind"] == "none"
+    assert row["artifact_path"] == ""
+    assert artifact_paths["var_artifact_path"].exists()
+
+
 def test_build_training_artifact_paths_returns_expected_layout(tmp_path: Path) -> None:
     from foresight.services.model_validation import build_training_artifact_paths
 

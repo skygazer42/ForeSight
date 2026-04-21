@@ -32,7 +32,7 @@ _EXTRA_REQUIREMENTS = {
     "gluonts": ("gluonts",),
     "stats": ("stats",),
     "torch": ("torch",),
-    "transformers": ("transformers", "torch"),
+    "transformers": ("transformers",),
     "sktime": ("sktime",),
     "all": (
         "ml",

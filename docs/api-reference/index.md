@@ -634,7 +634,7 @@ yhat = obj.predict(3)
 
 ### `load_forecaster_artifact`
 
-加载工件元数据（不恢复预测器对象）。
+加载完整工件载荷（会通过 Python pickle 反序列化模型对象）。Only load artifacts from trusted sources.
 
 ```python
 def load_forecaster_artifact(path: str) -> dict
@@ -644,7 +644,7 @@ def load_forecaster_artifact(path: str) -> dict
 |------|------|:----:|--------|------|
 | `path` | `str` | :white_check_mark: | — | 工件文件路径 |
 
-**返回值：** `dict` — 工件元数据字典。
+**返回值：** `dict` — 完整工件载荷字典，包含元数据、附加信息和反序列化后的预测器对象。
 
 ---
 

@@ -41,6 +41,9 @@ def _quality_commands() -> list[list[str]]:
         [sys.executable, "-m", "pytest", "-q"],
         [sys.executable, "benchmarks/run_benchmarks.py", "--smoke"],
         [sys.executable, "tools/smoke_build_install.py", "--sdist"],
+        [sys.executable, "tools/smoke_build_install.py", "--sdist", "--require-extra", "sktime"],
+        [sys.executable, "tools/smoke_build_install.py", "--sdist", "--require-extra", "darts"],
+        [sys.executable, "tools/smoke_build_install.py", "--sdist", "--require-extra", "gluonts"],
         ["mkdocs", "build", "--strict"],
     ]
 

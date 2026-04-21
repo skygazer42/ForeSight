@@ -623,3 +623,27 @@ def test_release_and_smoke_tooling_use_storage_paths_helper() -> None:
 
     assert "prepare_storage_env" in release_script
     assert "prepare_storage_env" in smoke_script
+
+
+def test_release_check_plan_includes_optional_backend_smoke_installs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, "tools/release_check.py", "--plan"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "python tools/smoke_build_install.py --sdist --require-extra sktime" in proc.stdout
+    assert "python tools/smoke_build_install.py --sdist --require-extra darts" in proc.stdout
+    assert "python tools/smoke_build_install.py --sdist --require-extra gluonts" in proc.stdout
+
+
+def test_plan_docs_do_not_contain_workspace_absolute_links() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    plan_doc = (
+        repo_root / "docs" / "plans" / "2026-03-09-wave1-torch-local-parity-implementation.md"
+    ).read_text(encoding="utf-8")
+
+    assert re.search(r"\]\(/(?:data|home|tmp|workspace|workspaces|Users)/", plan_doc) is None

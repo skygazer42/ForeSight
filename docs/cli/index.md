@@ -333,6 +333,8 @@ foresight forecast csv --model MODEL --path FILE --time-col COL --y-col COL --ho
 
 从已保存的模型工件生成预测。
 
+Only load artifacts from trusted sources.
+
 ```bash
 foresight forecast artifact --artifact PATH --horizon N [选项]
 ```
@@ -366,6 +368,8 @@ foresight forecast artifact \
 
 查看模型工件的详细信息。
 
+Only load artifacts from trusted sources.
+
 ```bash
 foresight artifact info --artifact PATH [选项]
 ```
@@ -386,6 +390,8 @@ foresight artifact info --artifact ./model.artifact --format md
 
 验证模型工件的完整性。
 
+Only load artifacts from trusted sources.
+
 ```bash
 foresight artifact validate --artifact PATH [选项]
 ```
@@ -405,6 +411,8 @@ foresight artifact validate --artifact ./model.artifact
 ## artifact diff
 
 对比两个模型工件的差异。
+
+Only load artifacts from trusted sources.
 
 ```bash
 foresight artifact diff --left-artifact PATH --right-artifact PATH [选项]

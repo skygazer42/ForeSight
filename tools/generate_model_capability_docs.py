@@ -167,7 +167,7 @@ _API_METADATA: dict[str, dict[str, str]] = {
     "load_forecaster_artifact": {
         "group": "Artifacts",
         "source": SOURCE_FORESIGHT_SERIALIZATION,
-        "purpose": "Inspect the structured artifact payload before reconstructing an object.",
+        "purpose": "Load the full pickle-backed artifact payload from disk. Only load artifacts from trusted sources.",
     },
     "make_panel_sequence_blocks": {
         "group": GROUP_DATA_PREPARATION,

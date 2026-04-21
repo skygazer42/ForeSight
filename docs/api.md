@@ -60,7 +60,7 @@ The Python API and CLI have different output contracts:
 | symbol | source | purpose |
 | --- | --- | --- |
 | `load_forecaster` | `foresight.serialization` | Load a persisted forecaster object from disk. |
-| `load_forecaster_artifact` | `foresight.serialization` | Inspect the structured artifact payload before reconstructing an object. |
+| `load_forecaster_artifact` | `foresight.serialization` | Load the full pickle-backed artifact payload from disk. Only load artifacts from trusted sources. |
 | `save_forecaster` | `foresight.serialization` | Persist a fitted forecaster and its schema/version metadata to disk. |
 
 ## Data preparation

@@ -34,6 +34,7 @@ _MODEL_PARAM_EXAMPLE_HELP = (
     "Model parameter as key=value (repeatable). Example: --model-param season_length=12"
 )
 _METRICS_OUTPUT_PATH_HELP = "Optional path to write metrics output"
+_TRUSTED_ARTIFACT_WARNING = "Only load artifacts from trusted sources."
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -292,9 +293,15 @@ def build_parser() -> argparse.ArgumentParser:
     forecast_csv.set_defaults(_handler=_cmd_forecast_csv)
 
     forecast_artifact = forecast_sub.add_parser(
-        "artifact", help="Forecast from a previously saved artifact"
+        "artifact",
+        help="Forecast from a previously saved artifact",
+        description=(f"Forecast from a previously saved artifact. {_TRUSTED_ARTIFACT_WARNING}"),
     )
-    forecast_artifact.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    forecast_artifact.add_argument(
+        "--artifact",
+        required=True,
+        help=f"Path to a saved artifact. {_TRUSTED_ARTIFACT_WARNING}",
+    )
     forecast_artifact.add_argument(
         "--horizon", type=int, required=True, help=_FORECAST_HORIZON_HELP
     )
@@ -368,11 +375,23 @@ def build_parser() -> argparse.ArgumentParser:
     _cli_runtime.register_runtime_logging_args(forecast_artifact)
     forecast_artifact.set_defaults(_handler=_cmd_forecast_artifact)
 
-    artifact_p = sub.add_parser("artifact", help="Artifact utilities")
+    artifact_p = sub.add_parser(
+        "artifact",
+        help="Artifact utilities",
+        description=f"Artifact utilities. {_TRUSTED_ARTIFACT_WARNING}",
+    )
     artifact_sub = artifact_p.add_subparsers(dest="artifact_command", required=True)
 
-    artifact_info = artifact_sub.add_parser("info", help="Show metadata about a saved artifact")
-    artifact_info.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    artifact_info = artifact_sub.add_parser(
+        "info",
+        help="Show metadata about a saved artifact",
+        description=(f"Show metadata about a saved artifact. {_TRUSTED_ARTIFACT_WARNING}"),
+    )
+    artifact_info.add_argument(
+        "--artifact",
+        required=True,
+        help=f"Path to a saved artifact. {_TRUSTED_ARTIFACT_WARNING}",
+    )
     artifact_info.add_argument(
         "--format",
         choices=["json", "md", "markdown"],
@@ -391,8 +410,16 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_validate = artifact_sub.add_parser(
         "validate",
         help="Validate a saved artifact against the supported artifact contract",
+        description=(
+            "Validate a saved artifact against the supported artifact contract. "
+            f"{_TRUSTED_ARTIFACT_WARNING}"
+        ),
     )
-    artifact_validate.add_argument("--artifact", required=True, help="Path to a saved artifact")
+    artifact_validate.add_argument(
+        "--artifact",
+        required=True,
+        help=f"Path to a saved artifact. {_TRUSTED_ARTIFACT_WARNING}",
+    )
     artifact_validate.add_argument(
         "--format",
         choices=["json"],
@@ -411,16 +438,20 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_diff = artifact_sub.add_parser(
         "diff",
         help="Compare two saved artifacts by metadata and extra payload",
+        description=(
+            "Compare two saved artifacts by metadata and extra payload. "
+            f"{_TRUSTED_ARTIFACT_WARNING}"
+        ),
     )
     artifact_diff.add_argument(
         "--left-artifact",
         required=True,
-        help="Path to the left artifact",
+        help=f"Path to the left artifact. {_TRUSTED_ARTIFACT_WARNING}",
     )
     artifact_diff.add_argument(
         "--right-artifact",
         required=True,
-        help="Path to the right artifact",
+        help=f"Path to the right artifact. {_TRUSTED_ARTIFACT_WARNING}",
     )
     artifact_diff.add_argument(
         "--path-prefix",

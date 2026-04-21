@@ -127,6 +127,8 @@ hide:
 save / load / inspect / diff 说明；中文使用说明仍然保留在
 [模型工件](guide/artifacts.md)。
 
+Only load artifacts from trusted sources.
+
 ```bash
 foresight artifact info --artifact /tmp/naive-last.pkl
 foresight artifact info --artifact /tmp/naive-last.pkl --format markdown

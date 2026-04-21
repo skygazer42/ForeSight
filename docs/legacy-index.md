@@ -46,6 +46,8 @@ foresight --data-dir /path/to/root doctor --format text --strict
 
 Use the artifact workflow to save, inspect, validate, and compare fitted models:
 
+Only load artifacts from trusted sources.
+
 ```bash
 foresight forecast csv --model naive-last --path ./my.csv \
     --time-col ds --y-col y --parse-dates --horizon 3 \

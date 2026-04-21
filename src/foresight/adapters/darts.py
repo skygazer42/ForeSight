@@ -14,6 +14,8 @@ __all__ = [
     "to_darts_bundle",
     "to_darts_timeseries",
 ]
+
+
 def _to_darts_series(value: Any) -> pd.Series:
     if isinstance(value, pd.Series):
         return value.astype(float, copy=False)
@@ -191,7 +193,9 @@ def _bundle_items(value: Any, *, field_name: str) -> list[tuple[str, Any]]:
     if value is None:
         return []
     if not isinstance(value, dict):
-        raise TypeError(f"Darts beta bundle {field_name} payload must be a mapping keyed by unique_id")
+        raise TypeError(
+            f"Darts beta bundle {field_name} payload must be a mapping keyed by unique_id"
+        )
     return [
         (str(unique_id), obj)
         for unique_id, obj in sorted(value.items(), key=lambda item: str(item[0]))
