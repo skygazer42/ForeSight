@@ -112,7 +112,7 @@ When a workflow needs external datasets, ForeSight resolves paths in this order:
 
 1. `--data-dir`
 2. `FORESIGHT_DATA_DIR`
-3. packaged demo datasets under `foresight/data/`
+3. packaged demo datasets under `foresight/data/resources/`
 4. repo-root fallback when running from source
 
 Use `foresight doctor` and `foresight datasets path <key>` to confirm which location is being used.

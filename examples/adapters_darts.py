@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import pandas as pd
-
 from foresight.adapters import from_darts_bundle, to_darts_bundle
 
 

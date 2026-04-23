@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from collections.abc import Iterable
-
 from foresight import eval_model
 from foresight.models.registry import get_model_spec, list_models
 

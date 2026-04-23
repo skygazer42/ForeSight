@@ -93,7 +93,7 @@ package-dir = { "" = "src" }
 version = { attr = "foresight.__version__" }
 
 [tool.setuptools.package-data]
-foresight = ["data/*.json", "data/*.csv", "py.typed"]
+foresight = ["data/resources/metadata/*.json", "data/resources/datasets/*.csv", "py.typed"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

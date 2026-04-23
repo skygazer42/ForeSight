@@ -9,58 +9,8 @@ from pathlib import Path
 
 import yaml
 
-_SONAR_SCAN_ACTION_SHA = "a31c9398be7ace6bbfaf30c0bd5d415f843d45e9"
-
-_SONAR_CURRENT_HOTSPOT_EXCLUSIONS = (
-    "src/foresight/cli.py",
-    "src/foresight/cli_leaderboard.py",
-    "src/foresight/cv.py",
-    "src/foresight/models/catalog/torch_global.py",
-    "src/foresight/models/statsmodels_wrap.py",
-    "src/foresight/serialization.py",
-    "src/foresight/services/detection.py",
-    "src/foresight/services/forecasting.py",
-    "src/foresight/services/model_validation.py",
-)
-
-
 def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
-
-
-def _parse_properties(path: Path) -> dict[str, str]:
-    props: dict[str, str] = {}
-    pending = ""
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.endswith("\\"):
-            pending += line[:-1]
-            continue
-        logical_line = pending + line
-        pending = ""
-        key, value = logical_line.split("=", 1)
-        props[key.strip()] = value.strip()
-    return props
-
-
-def _csv_property_items(value: str) -> set[str]:
-    return {item.strip() for item in value.split(",") if item.strip()}
-
-
-def _workflow_sonar_args(workflow: dict[str, object]) -> dict[str, str]:
-    sonar_job = workflow["jobs"]["sonar"]
-    scan_step = next(
-        step
-        for step in sonar_job["steps"]
-        if str(step.get("uses", "")).startswith("SonarSource/sonarqube-scan-action@")
-    )
-    args = str(scan_step["with"]["args"])
-    parsed: dict[str, str] = {}
-    for match in re.finditer(r"-D([^\s=]+)=(.*?)(?=\s-D[^\s=]+=|\s*$)", args, re.DOTALL):
-        parsed[match.group(1).strip()] = match.group(2).strip()
-    return parsed
 
 
 def _repo_version(repo_root: Path) -> str:
@@ -159,55 +109,6 @@ def test_release_workflow_pins_publish_action_to_full_sha() -> None:
     assert "pypa/gh-action-pypi-publish@release/v1" not in workflow
 
 
-def test_ci_workflow_includes_sonar_analysis_job() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    workflow = _load_workflow(repo_root / ".github" / "workflows" / "ci.yml")
-    sonar_job = workflow["jobs"]["sonar"]
-
-    steps = sonar_job["steps"]
-    checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v4")
-    install_step = next(step for step in steps if step.get("name") == "Install")
-    test_step = next(step for step in steps if step.get("name") == "Tests")
-    scan_step = next(
-        step
-        for step in steps
-        if str(step.get("uses", "")).startswith("SonarSource/sonarqube-scan-action@")
-    )
-
-    assert checkout["with"]["fetch-depth"] == 0
-    assert "pip install -e .[dev,torch,stats]" in install_step["run"]
-    assert (
-        test_step["run"].strip()
-        == "python tools/run_sonar_test_suite.py --coverage-path coverage.xml"
-    )
-    scan_args = str(scan_step["with"]["args"])
-    assert "-Dsonar.sources=src,tools,.github/workflows" in scan_args
-    assert "-Dsonar.tests=tests" in scan_args
-    assert "-Dsonar.test.inclusions=tests/**/*.py" in scan_args
-    assert "-Dsonar.issue.ignore.multicriteria=e1,e2" in scan_args
-    assert "-Dsonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in scan_args
-    assert (
-        "-Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py"
-        in scan_args
-    )
-    assert "src/foresight/models/regression.py" in scan_args
-    assert "src/foresight/models/global_regression.py" in scan_args
-    assert "src/foresight/models/statsmodels_wrap.py" in scan_args
-    assert "src/foresight/models/multivariate.py" in scan_args
-    assert "src/foresight/models/torch_ct_rnn.py" in scan_args
-    assert "src/foresight/models/torch_global.py" in scan_args
-    assert "src/foresight/models/torch_rnn_paper_zoo.py" in scan_args
-    assert "src/foresight/models/torch_probabilistic.py" in scan_args
-    assert "src/foresight/models/torch_rnn_zoo.py" in scan_args
-    assert "src/foresight/models/torch_seq2seq.py" in scan_args
-    assert "src/foresight/models/torch_ssm.py" in scan_args
-    assert "src/foresight/models/torch_xformer.py" in scan_args
-    assert "tests/**" in scan_args
-    assert scan_step["uses"] == f"SonarSource/sonarqube-scan-action@{_SONAR_SCAN_ACTION_SHA}"
-    assert scan_step["env"]["SONAR_TOKEN"] == "${{ secrets.SONAR_TOKEN }}"
-    assert scan_step["env"]["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
-
-
 def test_ci_quality_workflow_formats_full_source_directories() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -224,80 +125,17 @@ def test_ci_workflow_runs_public_contract_suite() -> None:
     assert "python -m pytest -q tests/test_public_contract.py" in workflow
 
 
-def test_sonar_project_configuration_targets_maintained_code() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    config = (repo_root / "sonar-project.properties").read_text(encoding="utf-8")
-
-    assert "sonar.organization=skygazer42" in config
-    assert "sonar.projectKey=skygazer42_ForeSight" in config
-    assert "sonar.sources=src,tools,.github/workflows" in config
-    assert "sonar.tests=tests" in config
-    assert "sonar.python.coverage.reportPaths=coverage.xml" in config
-    assert "src/foresight/cli_catalog.py" in config
-    assert "sonar.cpd.exclusions=" in config
-    assert "src/foresight/cli.py" in config
-    assert "src/foresight/cli_leaderboard.py" in config
-    assert "src/foresight/models/runtime.py" in config
-    assert "src/foresight/models/catalog/**" in config
-    assert "src/foresight/models/regression.py" in config
-    assert "src/foresight/models/global_regression.py" in config
-    assert "src/foresight/models/statsmodels_wrap.py" in config
-    assert "src/foresight/models/multivariate.py" in config
-    assert "src/foresight/models/torch_ct_rnn.py" in config
-    assert "src/foresight/models/torch_global.py" in config
-    assert "src/foresight/models/torch_rnn_paper_zoo.py" in config
-    assert "src/foresight/models/torch_probabilistic.py" in config
-    assert "src/foresight/models/torch_rnn_zoo.py" in config
-    assert "src/foresight/models/torch_seq2seq.py" in config
-    assert "src/foresight/models/torch_ssm.py" in config
-    assert "src/foresight/models/torch_xformer.py" in config
-    assert "tests/**" in config
-    assert "sonar.issue.ignore.multicriteria=e1,e2" in config
-    assert "sonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083" in config
-    assert "sonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083" in config
-    assert (
-        "sonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py"
-        in config
-    )
-
-
-def test_automatic_analysis_configuration_scopes_autoscan() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    config = (repo_root / ".sonarcloud.properties").read_text(encoding="utf-8")
-
-    assert "sonar.organization=skygazer42" in config
-    assert "sonar.projectKey=skygazer42_ForeSight" in config
-    assert "sonar.sources=src,tools,.github/workflows" in config
-    assert "sonar.tests=tests" in config
-    assert "src/foresight/cli_catalog.py" in config
-    assert "src/foresight/models/runtime.py" in config
-    assert "src/foresight/models/regression.py" in config
-    assert "src/foresight/models/global_regression.py" in config
-    assert "src/foresight/models/torch_global.py" in config
-    assert "src/foresight/models/torch_nn.py" in config
-    assert "src/foresight/models/torch_seq2seq.py" in config
-    assert "src/foresight/models/torch_xformer.py" in config
-    assert "sonar.cpd.exclusions=" in config
-    assert "src/foresight/models/catalog/ml.py" in config
-    assert "src/foresight/models/catalog/torch_global.py" in config
-    assert "src/foresight/models/statsmodels_wrap.py" in config
-
-
-def test_sonar_configs_exclude_current_hotspot_files_consistently() -> None:
+def test_ci_workflow_includes_expected_core_jobs() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow = _load_workflow(repo_root / ".github" / "workflows" / "ci.yml")
-    workflow_args = _workflow_sonar_args(workflow)
-    sonar_props = _parse_properties(repo_root / "sonar-project.properties")
-    autoscan_props = _parse_properties(repo_root / ".sonarcloud.properties")
+    jobs = set((workflow.get("jobs") or {}).keys())
 
-    workflow_exclusions = _csv_property_items(workflow_args["sonar.exclusions"])
-    sonar_exclusions = _csv_property_items(sonar_props["sonar.exclusions"])
-    autoscan_exclusions = _csv_property_items(autoscan_props["sonar.exclusions"])
-
-    for path in _SONAR_CURRENT_HOTSPOT_EXCLUSIONS:
-        assert path in workflow_exclusions
-        assert path in sonar_exclusions
-        assert path in autoscan_exclusions
+    assert "quality" in jobs
+    assert "contract" in jobs
+    assert "test-core" in jobs
+    assert "test-optional" in jobs
+    assert "package" in jobs
+    assert "sonar" not in jobs
 
 
 def test_release_docs_cover_docs_site_and_benchmark_smoke() -> None:

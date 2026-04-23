@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import sys
 from pathlib import Path
-
+import torch
 import numpy as np
 
 # Allow running this example without requiring an editable install.
@@ -20,11 +18,6 @@ def main() -> None:
       pip install -e ".[dev,torch]"
       python examples/rnn_paper_zoo.py
     """
-    try:
-        import torch  # noqa: F401
-    except Exception:
-        print('This example requires torch. Install with: pip install -e ".[dev,torch]"')
-        return
 
     # Simple synthetic series
     rng = np.random.default_rng(0)

@@ -106,8 +106,10 @@ ForeSight has two related but separate data layers.
 
 ### Generic formatting helpers
 
-- `src/foresight/data/format.py` converts raw frames into the package's long format
-- `src/foresight/data/prep.py` and feature helpers support preprocessing workflows
+- `src/foresight/data_processing/format.py` converts raw frames into the package's long format
+- `src/foresight/data_processing/prep.py` and workflow helpers support preprocessing workflows
+- `src/foresight/data/format.py`, `src/foresight/data/prep.py`, and `src/foresight/data/workflows.py`
+  remain as compatibility shims for legacy imports.
 
 If a dataset command fails, check the dataset registry first. If a custom CSV forecast/eval path fails, inspect the format helpers.
 

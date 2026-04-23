@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import numpy as np
-
 from foresight.models.intermittent import adida_forecast, croston_classic_forecast, tsb_forecast
 
 

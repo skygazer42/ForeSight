@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import numpy as np
 import pandas as pd
-
+import torch
 from foresight.models.registry import make_global_forecaster
 
 DEFAULT_QUANTILES = "0.1,0.5,0.9"
@@ -16,12 +14,6 @@ def main() -> None:
       pip install -e ".[dev,torch]"
       python examples/torch_global_models.py
     """
-    try:
-        import torch  # noqa: F401
-    except Exception:
-        print('This example requires torch. Install with: pip install -e ".[dev,torch]"')
-        return
-
     rng = np.random.default_rng(0)
     ds = pd.date_range("2020-01-01", periods=220, freq="D")
 

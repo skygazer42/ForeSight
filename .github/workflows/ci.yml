@@ -62,49 +62,6 @@ jobs:
       - name: Contract tests
         run: python -m pytest -q tests/test_public_contract.py
 
-  sonar:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev,torch,stats]
-
-      - name: Tests
-        run: python tools/run_sonar_test_suite.py --coverage-path coverage.xml
-
-      - name: SonarQube Scan
-        if: ${{ vars.ENABLE_SONAR_SCAN == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
-        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
-        with:
-          projectBaseDir: .
-          args: >
-            -Dsonar.sources=src,tools,.github/workflows
-            -Dsonar.tests=tests
-            -Dsonar.test.inclusions=tests/**/*.py
-            -Dsonar.exclusions=**/__pycache__/**,src/foresight_ts.egg-info/**,src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_leaderboard.py,src/foresight/cv.py,src/foresight/models/runtime.py,src/foresight/models/regression.py,src/foresight/models/global_regression.py,src/foresight/models/torch_global.py,src/foresight/models/torch_nn.py,src/foresight/models/torch_ct_rnn.py,src/foresight/models/torch_ssm.py,src/foresight/models/torch_seq2seq.py,src/foresight/models/torch_rnn_zoo.py,src/foresight/models/torch_rnn_paper_zoo.py,src/foresight/models/torch_xformer.py,src/foresight/models/torch_structured_rnn.py,src/foresight/models/torch_reservoir.py,src/foresight/models/torch_probabilistic.py,src/foresight/models/torch_graph_structure.py,src/foresight/models/torch_graph_spectral.py,src/foresight/models/torch_graph_attention.py,src/foresight/models/multivariate.py,src/foresight/models/hf_time_series.py,src/foresight/models/foundation_wrappers_a.py,src/foresight/models/foundation_wrappers_b.py,src/foresight/models/catalog/torch_local.py,src/foresight/models/catalog/multivariate.py,src/foresight/models/catalog/torch_global.py,src/foresight/models/statsmodels_wrap.py,src/foresight/serialization.py,src/foresight/services/cli_workflows.py,src/foresight/services/detection.py,src/foresight/services/forecasting.py,src/foresight/services/model_validation.py,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
-            -Dsonar.cpd.exclusions=src/foresight/cli.py,src/foresight/cli_catalog.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cv.py,src/foresight/models/global_regression.py,src/foresight/models/multivariate.py,src/foresight/models/regression.py,src/foresight/models/runtime.py,src/foresight/models/statsmodels_wrap.py,src/foresight/models/catalog/**,src/foresight/models/torch_ct_rnn.py,src/foresight/models/torch_global.py,src/foresight/models/torch_nn.py,src/foresight/models/torch_probabilistic.py,src/foresight/models/torch_rnn_paper_zoo.py,src/foresight/models/torch_rnn_zoo.py,src/foresight/models/torch_seq2seq.py,src/foresight/models/torch_ssm.py,src/foresight/models/torch_xformer.py,tests/**,**/src/foresight/cli_catalog.py,**/src/foresight/models/runtime.py
-            -Dsonar.coverage.exclusions=tools/**,.github/workflows/**,src/foresight/base.py,src/foresight/cli.py,src/foresight/cli_data.py,src/foresight/cli_leaderboard.py,src/foresight/cli_shared.py,src/foresight/contracts/**,src/foresight/cv.py,src/foresight/data/format.py,src/foresight/data/prep.py,src/foresight/eval_forecast.py,src/foresight/forecast.py,src/foresight/models/factories.py,src/foresight/models/global_regression.py,src/foresight/models/regression.py,src/foresight/models/torch_nn.py,src/foresight/services/cli_workflows.py,src/foresight/services/evaluation.py,src/foresight/services/forecasting.py,src/foresight/services/model_execution.py
-            -Dsonar.issue.ignore.multicriteria=e1,e2
-            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=pythonsecurity:S2083
-            -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/src/foresight/cli_shared.py
-            -Dsonar.issue.ignore.multicriteria.e2.ruleKey=pythonsecurity:S2083
-            -Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/tools/fetch_rnn_paper_metadata.py
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
   test-core:
     runs-on: ubuntu-latest
     strategy:

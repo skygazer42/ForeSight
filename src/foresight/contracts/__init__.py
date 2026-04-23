@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from .capabilities import require_x_cols_if_needed
 from .covariates import CovariateSpec, resolve_covariate_roles, resolve_model_param_covariates
 from .frames import (

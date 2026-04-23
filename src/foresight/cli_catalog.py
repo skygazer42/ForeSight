@@ -307,7 +307,13 @@ def _load_rnn_paper_metadata() -> dict[str, dict[str, Any]]:
     if env_path:
         candidates.append(Path(env_path))
     try:
-        candidates.append(Path(__file__).resolve().parent / "data" / _RNN_PAPER_METADATA_FILENAME)
+        candidates.append(
+            Path(__file__).resolve().parent
+            / "data"
+            / "resources"
+            / "metadata"
+            / _RNN_PAPER_METADATA_FILENAME
+        )
     except Exception:  # noqa: BLE001
         pass
     candidates.append(Path.cwd() / "docs" / _RNN_PAPER_METADATA_FILENAME)

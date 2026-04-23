@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import json
-
 from foresight.conformal import apply_conformal_intervals, fit_conformal_intervals
 from foresight.cv import cross_validation_predictions
 from foresight.eval_predictions import evaluate_predictions

@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from typing import Any
-
 import pandas as pd
 
 from ..contracts.frames import require_long_df

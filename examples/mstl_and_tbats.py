@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 import numpy as np
-
 from foresight.models.registry import make_forecaster
-
+import statsmodels
 
 def main() -> None:
     """
@@ -13,12 +10,6 @@ def main() -> None:
       pip install -e ".[dev,stats]"
       python examples/mstl_and_tbats.py
     """
-    try:
-        import statsmodels  # noqa: F401
-    except Exception:
-        print('This example requires statsmodels. Install with: pip install -e ".[dev,stats]"')
-        return
-
     rng = np.random.default_rng(0)
 
     # Dense series with two seasonalities: weekly + ~monthly

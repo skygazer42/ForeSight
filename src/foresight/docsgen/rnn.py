@@ -150,7 +150,9 @@ def _rnn_paper_metadata_candidate_paths() -> list[Path]:
         candidates.append(root / "docs" / RNN_PAPER_METADATA_FILENAME)
 
     candidates.append(Path.cwd() / "docs" / RNN_PAPER_METADATA_FILENAME)
-    candidates.append(_package_root() / "data" / RNN_PAPER_METADATA_FILENAME)
+    candidates.append(
+        _package_root() / "data" / "resources" / "metadata" / RNN_PAPER_METADATA_FILENAME
+    )
     return candidates
 
 

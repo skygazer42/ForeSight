@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import numpy as np
-
+import torch
 from foresight.models.registry import make_forecaster
 
 
@@ -13,12 +11,6 @@ def main() -> None:
       pip install -e ".[dev,torch]"
       python examples/torch_models.py
     """
-    try:
-        import torch  # noqa: F401
-    except Exception:
-        print('This example requires torch. Install with: pip install -e ".[dev,torch]"')
-        return
-
     rng = np.random.default_rng(0)
     t = np.arange(250, dtype=float)
     y = 0.02 * t + np.sin(2.0 * np.pi * t / 30.0) + 0.2 * rng.standard_normal(t.shape[0])

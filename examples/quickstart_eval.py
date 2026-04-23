@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import json
-
 from foresight import eval_model, forecast_model
 from foresight.datasets.loaders import load_dataset
 from foresight.datasets.registry import get_dataset_spec

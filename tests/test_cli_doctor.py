@@ -68,7 +68,7 @@ def test_doctor_text_reports_sections() -> None:
 
 def test_doctor_uses_explicit_data_dir_when_provided(tmp_path: Path) -> None:
     data_root = tmp_path / "data-root"
-    catfish_dir = data_root / "statistics time series"
+    catfish_dir = data_root / "data"
     catfish_dir.mkdir(parents=True)
     csv_path = catfish_dir / "catfish.csv"
     csv_path.write_text("Date,Total\n2020-01-01,1\n", encoding="utf-8")
@@ -85,7 +85,7 @@ def test_doctor_uses_explicit_data_dir_when_provided(tmp_path: Path) -> None:
 
 def test_doctor_strict_returns_one_when_warnings_present(tmp_path: Path) -> None:
     data_root = tmp_path / "data-root"
-    catfish_dir = data_root / "statistics time series"
+    catfish_dir = data_root / "data"
     catfish_dir.mkdir(parents=True)
     (catfish_dir / "catfish.csv").write_text("Date,Total\n2020-01-01,1\n", encoding="utf-8")
 

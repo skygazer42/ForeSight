@@ -147,26 +147,3 @@ python3 benchmarks/run_benchmarks.py --smoke --jobs 2 --backend thread --chunk-s
 python3 benchmarks/run_benchmarks.py --config production_v1 --budget-mode fail --format md
 python3 benchmarks/run_benchmarks.py --config production_v1 --format md
 ```
-
-## Local Sonar
-
-The repository's SonarCloud job can be reproduced locally with the same focused
-pytest suite that CI uses.
-
-```bash
-# Build the local Sonar test image and run the Sonar pytest suite in Docker.
-python3 tools/run_sonar_local.py --skip-scan --branch feat/local-sonar
-
-# Run the full local Sonar flow (tests + scanner) with a token in the env.
-SONAR_TOKEN=... python3 tools/run_sonar_local.py --branch feat/local-sonar
-
-# Fetch Sonar issues for the project or a specific branch after analysis.
-SONAR_TOKEN=... python3 tools/fetch_sonar_issues.py --component-key skygazer42_ForeSight --branch main --format text
-```
-
-Files involved:
-
-- `docker/sonar-test.Dockerfile`: local test image with Python, Java, and the Sonar test dependencies
-- `tools/run_sonar_test_suite.py`: the focused pytest+coverage command shared with CI
-- `tools/run_sonar_local.py`: local Docker orchestration for the Sonar workflow
-- `tools/fetch_sonar_issues.py`: fetch SonarCloud issues through the Web API

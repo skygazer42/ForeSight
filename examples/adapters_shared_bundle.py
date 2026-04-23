@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pandas as pd
 
 from foresight.adapters import from_beta_bundle, to_beta_bundle
