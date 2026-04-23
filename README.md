@@ -1,3 +1,7 @@
+<p align="center">
+<img src="docs/assets/readme/hero.png" alt="ForeSight hero banner" width="1200"/>
+</p>
+
 **A lightweight, batteries-included time-series forecasting toolkit for Python.**
 
 Unified model registry &bull; Walk-forward backtesting &bull; Probabilistic forecasting &bull; CLI + Python API
@@ -8,164 +12,60 @@ Unified model registry &bull; Walk-forward backtesting &bull; Probabilistic fore
 [![GitHub stars](https://img.shields.io/github/stars/skygazer42/ForeSight?style=for-the-badge&color=f59e0b&logo=github)](https://github.com/skygazer42/ForeSight)
 [![Last commit](https://img.shields.io/github/last-commit/skygazer42/ForeSight?style=for-the-badge&color=10b981)](https://github.com/skygazer42/ForeSight/commits/main)
 
-<br/>
+[Installation](#installation) · [Quick Start](#quick-start) · [Model Zoo](#model-zoo) · [Architecture](#architecture) · [Docs](https://skygazer42.github.io/ForeSight/) · [Contributing](#contributing)
 
-[Installation](#-installation) · [Quick Start](#-quick-start) · [Model Zoo](#-model-zoo) · [Architecture](#-architecture) · [Docs](https://skygazer42.github.io/ForeSight/) · [Contributing](#-contributing)
+`250+ models · 7 backends · 20+ metrics · 1 unified interface`
 
-</div>
+## Overview
 
-<br/>
-
-<div align="center">
-
-```
-  250+ models · 7 backends · 20+ metrics · 1 unified interface
-```
-
-</div>
-
-## Highlights
-
-<table>
-<tr>
-<td width="50%">
-
-### 🧠 250+ Models, One Interface
-
-Statistical, ML, and deep learning models all share the same
-`forecaster(train, horizon) → ŷ` contract. From naive baselines
-to Transformers and Mamba — unified under one API.
-
-</td>
-<td width="50%">
-
-### 🔄 Backtesting-First Design
-
-Walk-forward evaluation with expanding or rolling windows,
-full cross-validation predictions table, per-step metrics,
-and conformal prediction intervals — all built in.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 📊 Panel & Global Models
-
-First-class multi-series support via `unique_id / ds / y` long
-format. Global models train across thousands of series with
-covariate-aware feature engineering.
-
-</td>
-<td width="50%">
-
-### ⚡ Minimal by Default
-
-Core depends only on `numpy` + `pandas`. Heavy backends
-(PyTorch, XGBoost, LightGBM, CatBoost, statsmodels, scikit-learn)
-are all opt-in extras.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 📐 Probabilistic Forecasting
-
-Quantile regression, conformal intervals, bootstrap intervals,
-CRPS, pinball loss — production-ready uncertainty quantification
-across all model families.
-
-</td>
-<td width="50%">
-
-### 🏭 Production-Friendly
-
-`fit` / `predict` object API, model artifact save/load with
-schema versioning, hierarchical reconciliation, grid-search
-tuning, and a full-featured CLI.
-
-</td>
-</tr>
-</table>
-
-> **Design inspired by** [StatsForecast](https://github.com/Nixtla/statsforecast) · [Darts](https://github.com/unit8co/darts) · [sktime](https://www.sktime.org/) · [NeuralForecast](https://github.com/Nixtla/neuralforecast) · [Prophet](https://facebook.github.io/prophet/)
+- One interface across statistical, ML, and deep learning forecasters.
+- Backtesting-first workflows with walk-forward CV, leaderboards, and intervals.
+- First-class panel and global modeling with `unique_id / ds / y` long format.
+- Minimal core install; heavier runtimes stay optional.
+- Python API, CLI workflows, and reusable model artifacts share the same contracts.
 
 ---
 
 ## Support Contract
 
-ForeSight exposes a broad model catalog, but the stable public surface is narrower
-than the full implementation footprint.
+ForeSight exposes a broad catalog, but the **stable public surface** is narrower than the full implementation footprint.
 
-- The **stable public surface** is the root `foresight` Python API documented in
-  [docs/api.md](docs/api.md), the model registry metadata surfaced by
-  `foresight models list/info`, the artifact schema/load contract, and the
-  documented core CLI workflows such as `doctor`, `models`, `forecast`, `eval`,
-  `leaderboard`, and `artifact`.
-- Default docs, examples, and release checks target the stable public surface
-  first. Beta and experimental model families remain available, but they are not
-  held to the same compatibility promise as the stable core workflows.
-- The current CI-backed support matrix is:
-  Python 3.10 and 3.11 for the core install and contract checks;
-  Python 3.10 for release packaging and artifact smoke;
-  Python 3.10 smoke coverage for the `stats` and `ml` extras.
-- Torch, transformers, foundation wrappers, and frontier paper-zoo style models
-  remain available, but their maturity level is communicated through
-  `stable`, `beta`, and `experimental` rather than a blanket platform guarantee.
+- Stable surface: the root `foresight` Python API, model registry metadata from `foresight models list/info`, the artifact schema/load contract, and the documented CLI workflows.
+- CI-backed matrix: Python 3.10 and 3.11 for core installs and contract checks, plus packaging smoke on Python 3.10 and smoke coverage for `stats` and `ml`.
+- Beta and experimental families remain available, but they are not covered by the same compatibility promise as the stable core workflows.
 
 See [Compatibility guide](docs/compatibility.md) for the detailed support policy.
 
 ---
 
-## ⚙️ How It Works
+## How It Works
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/skygazer42/ForeSight/main/docs/assets/pipeline.svg" alt="ForeSight Pipeline" width="800"/>
+<img src="docs/assets/readme/how-it-works.png" alt="ForeSight workflow overview" width="1100"/>
 </div>
-
-<br/>
-
-```mermaid
-graph LR
-    A["📊 Raw Data<br/><small>CSV / DataFrame</small>"] --> B["🔧 Prepare<br/><small>to_long · validate</small>"]
-    B --> C["🧠 Model<br/><small>250+ choices</small>"]
-    C --> D["🔄 Backtest<br/><small>walk-forward CV</small>"]
-    D --> E["📈 Metrics<br/><small>MAE · CRPS · ...</small>"]
-    C --> F["🚀 Forecast<br/><small>point + intervals</small>"]
-    F --> G["💾 Artifacts<br/><small>save · load · deploy</small>"]
-
-    style A fill:#fef3c7,stroke:#fbbf24,color:#92400e
-    style B fill:#fef3c7,stroke:#fbbf24,color:#92400e
-    style C fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    style D fill:#d1fae5,stroke:#10b981,color:#065f46
-    style E fill:#fce7f3,stroke:#ec4899,color:#9d174d
-    style F fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6
-    style G fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6
-```
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install foresight-ts                # core (numpy + pandas only)
 ```
 
-Install optional backends as needed:
+Optional extras:
 
-```bash
-pip install "foresight-ts[ml]"          # scikit-learn models
-pip install "foresight-ts[xgb]"         # XGBoost models
-pip install "foresight-ts[lgbm]"        # LightGBM models
-pip install "foresight-ts[catboost]"    # CatBoost models
-pip install "foresight-ts[stats]"       # statsmodels (ARIMA, ETS, VAR, …)
-pip install "foresight-ts[torch]"       # PyTorch neural models
-pip install "foresight-ts[sktime]"      # sktime adapter bridge
-pip install "foresight-ts[darts]"       # Darts data adapter bridge
-pip install "foresight-ts[gluonts]"     # GluonTS data adapter bridge
-pip install "foresight-ts[all]"         # everything above
-```
+| Extra | Install | Use for |
+|-------|---------|---------|
+| `ml` | `pip install "foresight-ts[ml]"` | scikit-learn models |
+| `xgb` | `pip install "foresight-ts[xgb]"` | XGBoost models |
+| `lgbm` | `pip install "foresight-ts[lgbm]"` | LightGBM models |
+| `catboost` | `pip install "foresight-ts[catboost]"` | CatBoost models |
+| `stats` | `pip install "foresight-ts[stats]"` | statsmodels models |
+| `torch` | `pip install "foresight-ts[torch]"` | PyTorch models |
+| `sktime` | `pip install "foresight-ts[sktime]"` | sktime adapter bridge |
+| `darts` | `pip install "foresight-ts[darts]"` | Darts adapter bridge |
+| `gluonts` | `pip install "foresight-ts[gluonts]"` | GluonTS adapter bridge |
+| `all` | `pip install "foresight-ts[all]"` | everything above |
 
 Check the active environment, optional dependencies, and dataset resolution:
 
@@ -190,25 +90,25 @@ pip install -e ".[dev]"     # editable install + pytest, ruff, mypy
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Python API
 
 ```python
 from foresight import eval_model, make_forecaster, make_forecaster_object
 
-# 1️⃣ Walk-forward evaluation on a built-in dataset
+# Walk-forward evaluation on a built-in dataset
 metrics = eval_model(
     model="theta", dataset="catfish", y_col="Total",
     horizon=3, step=3, min_train_size=12,
 )
 print(metrics)  # {'mae': ..., 'rmse': ..., 'mape': ..., 'smape': ...}
 
-# 2️⃣ Functional API — stateless forecaster
+# Functional API — stateless forecaster
 f = make_forecaster("holt", alpha=0.3, beta=0.1)
 yhat = f([112, 118, 132, 129, 121, 135, 148, 148], horizon=3)
 
-# 3️⃣ Object API — fit / predict / save / load
+# Object API — fit / predict / save / load
 obj = make_forecaster_object("moving-average", window=3)
 obj.fit([1, 2, 3, 4, 5, 6])
 yhat = obj.predict(3)
@@ -216,8 +116,7 @@ yhat = obj.predict(3)
 
 ## Beta Adapters
 
-ForeSight now exposes beta integration adapters through the named
-`foresight.adapters` module rather than the stable root package surface.
+Beta integration adapters live under `foresight.adapters` rather than the stable root package surface.
 
 ```python
 from foresight.adapters import (
@@ -228,15 +127,11 @@ from foresight.adapters import (
 )
 ```
 
-- `make_sktime_forecaster_adapter(...)` bridges local point forecaster objects into
-  a minimal sktime-style `fit/predict` interface.
-- `to_darts_timeseries(...)` / `from_darts_timeseries(...)` convert between
-  ForeSight single-series or panel data and Darts `TimeSeries` objects.
-- `to_gluonts_list_dataset(...)` converts canonical long-format history into a
-  GluonTS `ListDataset`.
+- `make_sktime_forecaster_adapter(...)` provides a minimal sktime-style `fit/predict` bridge.
+- `to_darts_timeseries(...)` and `from_darts_timeseries(...)` convert between ForeSight data and Darts `TimeSeries`.
+- `to_gluonts_list_dataset(...)` converts long-format history into a GluonTS `ListDataset`.
 
-These adapters are intentionally **beta** and are not part of the root
-`foresight.__all__` contract yet.
+These adapters are intentionally **beta** and are not part of the root `foresight.__all__` contract yet.
 
 ### CLI
 
@@ -455,76 +350,25 @@ foresight cv csv --model sarimax --path ./my_exog.csv \
 
 ---
 
-## 🧠 Model Zoo
+## Model Zoo
 
-ForeSight organizes **250+** registered models into families. Core models are dependency-free; optional models activate with the corresponding extra.
+ForeSight organizes **250+** registered models into a few clear families. Use `foresight models list` and `foresight models info <key>` for the full catalog.
 
 ### Model Landscape
 
-```mermaid
-mindmap
-  root((ForeSight<br/>250+ Models))
-    Statistical
-      Naive & Baseline
-        naive-last
-        seasonal-naive
-        drift
-        moving-average
-      Exponential Smoothing
-        SES / Holt / Holt-Winters
-      Theta
-        theta / theta-auto
-      Fourier & Spectral
-        fourier / FFT
-      Kalman Filter
-      Intermittent Demand
-        Croston / TSB / ADIDA
-    Machine Learning
-      scikit-learn
-        Ridge / RF / GBR
-        20+ lag regressors
-      XGBoost
-        Direct / Recursive / DirRec / MIMO
-        Custom objectives
-      LightGBM
-      CatBoost
-    Deep Learning
-      MLP & Linear
-        NLinear / DLinear / TiDE
-      RNN
-        LSTM / GRU / DeepAR
-      CNN
-        TCN / WaveNet / SCINet
-      Transformer
-        PatchTST / Informer / Autoformer
-        TFT / iTransformer / FEDformer
-      SSM
-        Mamba / RWKV / Hyena
-      Residual Blocks
-        N-BEATS / N-HiTS
-    Global & Panel
-      sklearn global
-      XGB / LGBM / CatBoost global
-      Torch global
-        TFT / Informer / TimesNet
-    Multivariate
-      VAR
-    Ensemble
-      Mean / Median / Pipeline
-```
+<div align="center">
+<img src="docs/assets/readme/model-landscape.png" alt="ForeSight model landscape across statistical, ML, deep learning, panel, multivariate, and ensemble families" width="1100"/>
+</div>
 
-### Core Models (no extra dependencies)
+### Model Families
 
-| Family | Models | Key Parameters |
-|--------|--------|---------------|
-| **Naive / Baseline** | `naive-last`, `seasonal-naive`, `mean`, `median`, `drift`, `moving-average`, `weighted-moving-average`, `moving-median`, `seasonal-mean`, `seasonal-drift` | `season_length`, `window` |
-| **Exponential Smoothing** | `ses`, `ses-auto`, `holt`, `holt-auto`, `holt-damped`, `holt-winters-add`, `holt-winters-add-auto` | `alpha`, `beta`, `gamma`, `season_length` |
-| **Theta** | `theta`, `theta-auto` | `alpha`, `grid_size` |
-| **AR / Regression** | `ar-ols`, `ar-ols-lags`, `sar-ols`, `ar-ols-auto`, `lr-lag`, `lr-lag-direct` | `p`, `lags`, `season_length` |
-| **Fourier / Spectral** | `fourier`, `fourier-multi`, `poly-trend`, `fft` | `period`, `order`, `top_k` |
-| **Kalman Filter** | `kalman-level`, `kalman-trend` | `process_variance`, `obs_variance` |
-| **Intermittent Demand** | `croston`, `croston-sba`, `croston-sbj`, `croston-opt`, `tsb`, `les`, `adida` | `alpha`, `beta` |
-| **Meta / Ensemble** | `pipeline`, `ensemble-mean`, `ensemble-median` | `base`, `members`, `transforms` |
+| Family | Coverage |
+|--------|----------|
+| Statistical | naive baselines, moving averages, ETS/Holt-Winters, theta, Fourier, Kalman, intermittent demand |
+| Machine learning | scikit-learn, XGBoost, LightGBM, CatBoost |
+| Deep learning | MLP, RNN, CNN, Transformer, SSM, residual blocks |
+| Panel/global | sklearn global, tree global, torch global |
+| Multivariate / ensemble | VAR, mean, median, pipeline |
 
 ### Optional Models
 
@@ -625,23 +469,9 @@ Train across all series in long-format; supports covariates (`x_cols`), time fea
 
 ### Multi-horizon Strategies
 
-```mermaid
-graph LR
-    subgraph strategies ["Multi-horizon Forecasting Strategies"]
-        direction TB
-        D["<b>Direct</b><br/><small>One model per step</small>"]
-        R["<b>Recursive</b><br/><small>One-step, re-fed iteratively</small>"]
-        S["<b>Step-index</b><br/><small>Single model, step as feature</small>"]
-        DR["<b>DirRec</b><br/><small>Per-step + prev-step features</small>"]
-        M["<b>MIMO</b><br/><small>Single model → full horizon</small>"]
-    end
-
-    style D fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    style R fill:#d1fae5,stroke:#10b981,color:#065f46
-    style S fill:#fef3c7,stroke:#f59e0b,color:#92400e
-    style DR fill:#fce7f3,stroke:#ec4899,color:#9d174d
-    style M fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6
-```
+<div align="center">
+<img src="docs/assets/readme/multi-horizon-strategies.png" alt="Multi-horizon forecasting strategies: Direct, Recursive, Step-index, DirRec, and MIMO" width="1200"/>
+</div>
 
 | Strategy | How it works | Suffix |
 |----------|-------------|--------|
@@ -653,72 +483,15 @@ graph LR
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/skygazer42/ForeSight/main/docs/assets/architecture.svg" alt="ForeSight Architecture" width="800"/>
+<img src="docs/assets/readme/architecture-overview.png" alt="ForeSight layered architecture overview" width="1100"/>
 </div>
-
-<br/>
-
-```mermaid
-graph TB
-    subgraph surface ["User Surface"]
-        API["Python API<br/><small>eval_model · make_forecaster</small>"]
-        CLI["CLI<br/><small>foresight eval · forecast · cv</small>"]
-        OOP["OOP Interface<br/><small>fit · predict · save · load</small>"]
-    end
-
-    subgraph facades ["Facades"]
-        FC["forecast.py"]
-        EV["eval_forecast.py"]
-        TN["tuning.py"]
-        CV["cv.py"]
-        HR["hierarchical.py"]
-    end
-
-    subgraph services ["Services"]
-        FS["Forecasting Service"]
-        ES["Evaluation Service"]
-    end
-
-    subgraph models ["Model Registry (250+)"]
-        CAT["Catalog<br/><small>classical · ml · stats<br/>torch_local · torch_global</small>"]
-        FAC["Factories"]
-        RUN["Runtime"]
-    end
-
-    subgraph contracts ["Contracts"]
-        VAL["Validation"]
-        NORM["Normalization"]
-        CAP["Capability Checks"]
-    end
-
-    subgraph data ["Data Layer"]
-        LONG["Long Format I/O"]
-        FEAT["Feature Engineering"]
-        TRANS["Transforms"]
-        DS["Datasets"]
-    end
-
-    surface --> facades
-    facades --> services
-    services --> models
-    services --> contracts
-    models --> contracts
-    services --> data
-
-    style surface fill:#ede9fe,stroke:#8b5cf6
-    style facades fill:#f5f3ff,stroke:#c4b5fd
-    style services fill:#d1fae5,stroke:#6ee7b7
-    style models fill:#dbeafe,stroke:#93c5fd
-    style contracts fill:#fef3c7,stroke:#fcd34d
-    style data fill:#fef3c7,stroke:#fbbf24
-```
 
 ---
 
-## 📐 Data Format
+## Data Format
 
 ForeSight uses a panel-friendly **long format** compatible with StatsForecast and Prophet:
 
@@ -731,20 +504,9 @@ ForeSight uses a panel-friendly **long format** compatible with StatsForecast an
 
 ### Covariate Roles
 
-```mermaid
-graph LR
-    subgraph covariates ["Covariate System"]
-        Y["<b>y</b><br/>Forecast target"]
-        HX["<b>historic_x_cols</b><br/>Observed up to cutoff"]
-        FX["<b>future_x_cols</b><br/>Known through horizon"]
-        XC["<b>x_cols</b><br/>Alias for future_x_cols"]
-    end
-
-    style Y fill:#fce7f3,stroke:#ec4899,color:#9d174d
-    style HX fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    style FX fill:#d1fae5,stroke:#10b981,color:#065f46
-    style XC fill:#f5f3ff,stroke:#c4b5fd,color:#6d28d9
-```
+- `historic_x_cols`: observed only up to the forecast cutoff.
+- `future_x_cols`: known through the forecast horizon.
+- `x_cols`: shorthand alias for `future_x_cols`.
 
 ```python
 from foresight.data import to_long, prepare_long_df
@@ -766,41 +528,15 @@ prepared = prepare_long_df(
 
 ---
 
-## 📊 Evaluation & Backtesting
+## Evaluation & Backtesting
 
 ### Capabilities
 
-```mermaid
-graph TB
-    subgraph eval ["Evaluation Toolkit"]
-        direction LR
-        BT["🔄 Walk-forward<br/>Backtesting"]
-        CVT["📋 Cross-validation<br/>Table"]
-        LB["🏆 Leaderboard<br/>Comparison"]
-        SW["🌐 Multi-dataset<br/>Sweep"]
-        TU["🎯 Grid Search<br/>Tuning"]
-        CI["📐 Conformal<br/>Intervals"]
-        BI["📊 Bootstrap<br/>Intervals"]
-    end
-
-    style BT fill:#d1fae5,stroke:#10b981,color:#065f46
-    style CVT fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    style LB fill:#fef3c7,stroke:#f59e0b,color:#92400e
-    style SW fill:#fce7f3,stroke:#ec4899,color:#9d174d
-    style TU fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6
-    style CI fill:#d1fae5,stroke:#10b981,color:#065f46
-    style BI fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-```
-
-| Capability | Description |
-|-----------|-------------|
-| **Walk-forward backtesting** | Expanding or rolling-window evaluation (`horizon`, `step`, `min_train_size`, `max_train_size`) |
-| **Cross-validation table** | Full predictions DataFrame: `unique_id, ds, cutoff, step, y, yhat, model` |
-| **Leaderboard** | Multi-model comparison on a single dataset |
-| **Sweep** | Multi-dataset × multi-model benchmark with parallel workers + resume |
-| **Tuning** | Grid search over model parameters, scored via backtesting |
-| **Conformal intervals** | Symmetric prediction intervals from backtesting residuals |
-| **Bootstrap intervals** | Non-parametric prediction intervals |
+- Walk-forward backtesting with expanding or rolling windows.
+- Full cross-validation tables with `unique_id, ds, cutoff, step, y, yhat, model`.
+- Single-dataset leaderboards and multi-dataset sweeps.
+- Grid-search tuning scored through backtesting.
+- Conformal and bootstrap prediction intervals.
 
 ### Metrics
 
@@ -828,7 +564,7 @@ Produces `yhat_p10`, `yhat_p50`, `yhat_p90` columns alongside `yhat` (defaults t
 
 ---
 
-## 📦 Optional Dependencies
+## Optional Dependencies
 
 | Extra | Backend | Version | Example Models |
 |-------|---------|---------|---------------|
@@ -842,7 +578,7 @@ Produces `yhat_p10`, `yhat_p50`, `yhat_p90` columns alongside `yhat` (defaults t
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```
 ForeSight/
@@ -875,9 +611,12 @@ ForeSight/
 
 ---
 
-## 🔬 Model Capability Flags
+## Model Capability Flags
 
-Model discovery surfaces machine-readable capability flags:
+Model discovery surfaces machine-readable capability flags. Use them through `foresight models list` and `foresight models info`.
+
+<details>
+<summary><b>Capability keys</b></summary>
 
 | Flag | Meaning |
 |------|---------|
@@ -898,13 +637,15 @@ Model discovery surfaces machine-readable capability flags:
 | `supports_artifact_save` | Can be saved and reused through the artifact workflow |
 | `requires_future_covariates` | Requires known future covariates |
 
+</details>
+
 ```bash
 foresight models info holt-winters-add    # see all flags & defaults
 ```
 
 ---
 
-## 🧪 Benchmarks
+## Benchmarks
 
 ForeSight ships a reproducible benchmark harness for packaged datasets:
 
@@ -915,7 +656,7 @@ python benchmarks/run_benchmarks.py --config baseline --format md
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Here's how to get started:
 
@@ -933,7 +674,7 @@ See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for detailed guidelines and [`d
 
 ---
 
-## 🔗 Related Projects
+## Related Projects
 
 ForeSight draws design inspiration from these excellent projects:
 
@@ -950,7 +691,7 @@ ForeSight draws design inspiration from these excellent projects:
 
 ---
 
-## 📖 Citing ForeSight
+## Citing ForeSight
 
 If you find ForeSight useful in your research, please consider citing:
 
@@ -966,20 +707,6 @@ If you find ForeSight useful in your research, please consider citing:
 
 ---
 
-<div align="center">
+**License:** [GPL-3.0-only](LICENSE)
 
-**⚖️ License:** [GPL-3.0-only](LICENSE)
-
-<br/>
-
-Made with ❤️ by the ForeSight community
-
-<br/>
-
-<sub>
-
-[Report Bug](https://github.com/skygazer42/ForeSight/issues) · [Request Feature](https://github.com/skygazer42/ForeSight/issues) · [Documentation](https://skygazer42.github.io/ForeSight/)
-
-</sub>
-
-</div>
+[Issues](https://github.com/skygazer42/ForeSight/issues) · [Documentation](https://skygazer42.github.io/ForeSight/)

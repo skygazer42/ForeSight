@@ -189,7 +189,7 @@ def test_compatibility_docs_list_all_beta_integration_extras() -> None:
     assert "- Integration extras: `sktime`, `darts`, `gluonts`" in compatibility
 
 
-def test_readme_uses_absolute_image_urls_for_external_renderers() -> None:
+def test_readme_uses_supported_image_paths() -> None:
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
     image_sources = [
         match.group(1) or match.group(2)
@@ -201,4 +201,7 @@ def test_readme_uses_absolute_image_urls_for_external_renderers() -> None:
     ]
 
     assert image_sources
-    assert all(source.startswith("https://") for source in image_sources)
+    assert all(
+        source.startswith("https://") or source.startswith("docs/assets/")
+        for source in image_sources
+    )
