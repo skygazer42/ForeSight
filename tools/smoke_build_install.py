@@ -189,8 +189,6 @@ def _install_artifact(
     *, py: Path, artifact: Path, extras: list[str], cwd: Path, env: dict[str, str]
 ) -> None:
     cmd = [str(py), "-m", "pip", "install", "--progress-bar", "off"]
-    if not extras:
-        cmd.append("--no-deps")
     cmd.append(_artifact_requirement(artifact=artifact, extras=extras))
     _run(cmd, cwd=cwd, env=env)
 
