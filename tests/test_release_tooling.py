@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+
 def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 

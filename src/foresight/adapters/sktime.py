@@ -66,7 +66,7 @@ def _coerce_sktime_X(
     expected_index: pd.Index | None,
     x_cols: tuple[str, ...],
 ) -> pd.DataFrame:
-    explicit_index = isinstance(X, (pd.DataFrame, pd.Series))
+    explicit_index = isinstance(X, pd.DataFrame | pd.Series)
     if isinstance(X, pd.DataFrame):
         out = X.copy()
     elif isinstance(X, pd.Series):
@@ -94,7 +94,7 @@ def _coerce_sktime_X(
 
     if x_cols and list(out.columns) != list(x_cols):
         if isinstance(out.columns, pd.RangeIndex) or all(
-            isinstance(col, (int, np.integer)) for col in out.columns.tolist()
+            isinstance(col, int | np.integer) for col in out.columns.tolist()
         ):
             out.columns = list(x_cols)
         else:
@@ -262,7 +262,7 @@ def _future_index_from_fh(train_index: pd.Index | None, fh_steps: tuple[int, ...
         offset = pd.tseries.frequencies.to_offset(inferred)
         return pd.Index([last + fh * offset for fh in fh_steps], name=train_index.name)
 
-    if isinstance(last, (int, np.integer)):
+    if isinstance(last, int | np.integer):
         return pd.Index([int(last) + fh for fh in fh_steps], name=train_index.name)
 
     return pd.Index(fh_steps, name=train_index.name)
@@ -296,7 +296,7 @@ class SktimeForecasterAdapter:
             str(self._forecaster_spec).strip(), **dict(self._model_params)
         )
 
-    def fit(self, y: Any, X: Any = None, fh: Any = None) -> SktimeForecasterAdapter:
+    def fit(self, y: Any, X: Any = None, fh: Any = None) -> "SktimeForecasterAdapter":
         train_y, train_index = _coerce_sktime_series(y)
         forecaster = self._build_forecaster()
         self._x_cols = _configured_x_cols(
@@ -360,5 +360,5 @@ class SktimeForecasterAdapter:
 def make_sktime_forecaster_adapter(
     forecaster: str | BaseForecaster,
     **model_params: Any,
-) -> SktimeForecasterAdapter:
+) -> "SktimeForecasterAdapter":
     return SktimeForecasterAdapter(forecaster, **model_params)

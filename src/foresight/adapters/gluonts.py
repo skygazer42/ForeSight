@@ -1,4 +1,5 @@
 from typing import Any
+
 import pandas as pd
 
 from ..contracts.frames import require_long_df
