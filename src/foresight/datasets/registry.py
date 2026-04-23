@@ -58,7 +58,7 @@ _SPECS: dict[str, DatasetSpec] = {
     "catfish": DatasetSpec(
         key="catfish",
         description="Catfish sales",
-        rel_path=Path("data/resources/datasets/catfish.csv"),
+        rel_path=Path("data/catfish.csv"),
         package_rel_path=Path("data/resources/datasets/catfish.csv"),
         expected_columns={"Date", "Total"},
         parse_dates=["Date"],
@@ -69,7 +69,7 @@ _SPECS: dict[str, DatasetSpec] = {
     "ice_cream_interest": DatasetSpec(
         key="ice_cream_interest",
         description="Ice cream interest",
-        rel_path=Path("data/resources/datasets/ice_cream_interest.csv"),
+        rel_path=Path("data/ice_cream_interest.csv"),
         package_rel_path=Path("data/resources/datasets/ice_cream_interest.csv"),
         expected_columns={"month", "interest"},
         parse_dates=["month"],
