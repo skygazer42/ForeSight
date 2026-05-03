@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,39 @@ def _prepare_storage_env(*, env: dict[str, str]) -> dict[str, str]:
 def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
     print(f"+ {' '.join(cmd)}", flush=True)
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+
+
+def _repo_version(root: Path) -> str:
+    init_py = (root / "src" / "foresight" / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"\s*$', init_py, re.MULTILINE)
+    if match is None:
+        raise RuntimeError(
+            f"Could not determine package version from {root / 'src' / 'foresight' / '__init__.py'}"
+        )
+    return match.group(1)
+
+
+def _git_output(cmd: list[str], *, cwd: Path) -> str:
+    proc = subprocess.run(cmd, cwd=str(cwd), check=True, capture_output=True, text=True)
+    return proc.stdout.strip()
+
+
+def _validate_release_version_tag(root: Path) -> None:
+    version = _repo_version(root)
+    expected_tag = f"v{version}"
+    raw_tags = _git_output(["git", "tag", "--points-at", "HEAD"], cwd=root)
+    release_tags = sorted(
+        tag
+        for tag in raw_tags.splitlines()
+        if re.fullmatch(r"v\d+\.\d+\.\d+(?:[A-Za-z0-9._-]+)?", tag)
+    )
+
+    if release_tags != [expected_tag]:
+        found = ", ".join(release_tags) if release_tags else "none"
+        raise RuntimeError(
+            f"Package version {version} does not match release tag {found}; "
+            f"update foresight.__version__ or tag HEAD as {expected_tag} before publishing."
+        )
 
 
 def _quality_commands() -> list[list[str]]:
@@ -93,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                 flush=True,
             )
     else:
+        _validate_release_version_tag(root)
         for cmd in quality_cmds:
             _run(cmd, cwd=root, env=env)
 

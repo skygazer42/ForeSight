@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -45,6 +46,57 @@ def _load_storage_paths_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_release_check_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "release_check_for_test",
+        repo_root / "tools" / "release_check.py",
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _make_tagged_release_fixture(tmp_path: Path, *, version: str, tag: str) -> Path:
+    root = tmp_path / "repo"
+    package_dir = root / "src" / "foresight"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Release Test",
+            "-c",
+            "user.email=release-test@example.invalid",
+            "commit",
+            "-m",
+            "release fixture",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "tag", tag], cwd=root, check=True, capture_output=True, text=True)
+    return root
+
+
+def test_release_version_check_rejects_head_tag_mismatch(tmp_path: Path) -> None:
+    module = _load_release_check_module()
+    root = _make_tagged_release_fixture(tmp_path, version="0.2.12", tag="v0.3.0")
+
+    with pytest.raises(
+        RuntimeError, match="Package version 0\\.2\\.12 does not match release tag v0\\.3\\.0"
+    ):
+        module._validate_release_version_tag(root)
 
 
 def test_release_check_plan_mentions_docs_and_benchmark_steps() -> None:

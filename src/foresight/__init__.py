@@ -60,7 +60,7 @@ __all__ = [
     "validate_long_df",
 ]
 
-__version__ = "0.2.12"
+__version__ = "0.3.1"
 
 
 def __getattr__(name: str) -> Any:

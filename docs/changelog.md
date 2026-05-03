@@ -7,6 +7,15 @@
 
 ## 未发布
 
+- 暂无
+
+## 0.3.1
+
+- 修复发布门禁：发布前校验 Git release tag 必须与 `foresight.__version__` 一致，避免从错误 tag 构建出旧版本号包。
+- 将包版本提升到 `0.3.1`，用于替代误标的远程 `v0.3.0` 发布路径。
+
+## 0.3.0
+
 - 新增 artifact composition summary 输出
 - 新增 weighted named ensemble 组合预测
 - 支持嵌套 composition 对象

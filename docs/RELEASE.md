@@ -20,6 +20,14 @@ python3 -m pip index versions foresight-ts
 - Rule: never reuse a version that already exists on PyPI or TestPyPI.
 - Rule: if the published artifact has drifted from `main`, the fix still ships as
   a new version, not as a rebuild of the old one.
+- Commit the version bump, then tag that exact commit as `v<version>`:
+
+```bash
+git tag v<version>
+```
+
+`python tools/release_check.py` refuses to publish from a commit whose release
+tag does not exactly match `foresight.__version__`.
 
 ## 2) Regenerate derived docs (if needed)
 
