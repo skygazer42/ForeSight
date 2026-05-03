@@ -162,6 +162,16 @@ def test_release_workflow_pins_publish_action_to_full_sha() -> None:
     assert "pypa/gh-action-pypi-publish@release/v1" not in workflow
 
 
+def test_release_workflow_grants_oidc_for_trusted_publishing() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow = _load_workflow(repo_root / ".github" / "workflows" / "release.yml")
+
+    permissions = workflow["jobs"]["build"].get("permissions") or {}
+
+    assert permissions.get("contents") == "read"
+    assert permissions.get("id-token") == "write"
+
+
 def test_ci_quality_workflow_formats_full_source_directories() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
